@@ -1,6 +1,6 @@
 {
   "name": "bugbottle",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "In-app bug reports that arrive with the evidence attached: console errors, page context and an optional screenshot.",
   "keywords": [
     "bug-report",

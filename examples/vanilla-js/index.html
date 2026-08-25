@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>bugbottle — vanilla JS example</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.6; }
+  form { display: grid; gap: .75rem; }
+  textarea, button { font: inherit; }
+  textarea { min-height: 6rem; padding: .5rem; }
+  button { padding: .5rem 1rem; cursor: pointer; }
+  [data-bugbottle] img { max-width: 100%; border: 1px solid #8888; }
+  [role="status"] { min-height: 1.5em; color: gray; }
+</style>
+</head>
+<body>
+<h1>Report a problem</h1>
+<p>This page is the bugbottle vanilla-JS example. Anything you log to the
+console as an error before submitting rides along with the report.</p>
+<form data-bugbottle>
+  <label>Type
+    <select name="type">
+      <option value="bug">Bug</option>
+      <option value="idea">Idea</option>
+      <option value="other">Other</option>
+    </select>
+  </label>
+  <label>What happened?
+    <textarea name="message" required></textarea>
+  </label>
+  <label>
+    <input type="checkbox" name="screenshot" checked />
+    Attach a picture of this page (uses html-to-image from esm.sh)
+  </label>
+  <button type="submit">Send</button>
+  <p role="status"></p>
+</form>
+<script type="module">
+  import { initConsoleBuffer } from "https://esm.sh/bugbottle@0.1";
+  initConsoleBuffer();
+
+  // Prove the buffer works even though nothing is visibly wrong:
+  setTimeout(() => console.error(new Error("example: something looked wrong")), 500);
+
+  const form = document.querySelector("form");
+  const statusEl = form.querySelector("[role=status]");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    statusEl.textContent = "Sending…";
+
+    let screenshotDataUrl;
+    if (fd.get("screenshot")) {
+      try {
+        const { toPng } = await import("https://esm.sh/html-to-image@1?bundle");
+        screenshotDataUrl = await toPng(document.body, {
+          filter: (n) => !(n instanceof HTMLElement && n.dataset.bugbottle !== undefined),
+        });
+      } catch {
+        statusEl.textContent = "Could not take the picture — sending without it.";
+      }
+    }
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: fd.get("type"),
+          message: fd.get("message"),
+          screenshotDataUrl,
+          console: [],
+          context: {
+            url: location.pathname,
+            viewport: innerWidth + "x" + innerHeight,
+            userAgent: navigator.userAgent,
+          },
+        }),
+      });
+      const body = await res.json();
+      statusEl.textContent = res.ok ? "Sent — thank you." : body.error || "Failed.";
+      if (res.ok) form.reset();
+    } catch {
+      statusEl.textContent = "The report could not be sent.";
+    }
+  });
+</script>
+</body>
+</html>
