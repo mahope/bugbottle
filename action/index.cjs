@@ -74,7 +74,10 @@ function validateReport(report, { requireScreenshot }) {
     problems.push('context missing');
   } else {
     for (const k of ['url', 'viewport', 'userAgent']) {
-      if (typeof ctx[k] !== 'string') problems.push(`context.${k} must be a string`);
+      // Match bugbottle/server semantics: absent fields are tolerated
+      // (normaliseContext coerces them to ""), only present-but-not-a-string
+      // is genuinely malformed.
+      if (ctx[k] !== undefined && typeof ctx[k] !== 'string') problems.push(`context.${k} must be a string`);
     }
   }
   if (report.console !== undefined) {
