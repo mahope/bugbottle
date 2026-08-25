@@ -1,7 +1,9 @@
 # Benchmarks
 
 ```bash
-npm run bench
+npm run bench            # console buffer
+npm run bench:capture    # screenshot capture — needs a headless Chromium,
+                          # see the "capture-screenshot" section below
 ```
 
 ## console-buffer
@@ -46,3 +48,44 @@ captures a stack trace) or object literal on every call.
   application would feel, even under an error burst. This issue is
   measurement-only, per its acceptance criteria — closing without a code
   change to `console-buffer.ts`.
+
+## capture-screenshot
+
+`captureScreenshot` (issue #4) renders the whole DOM to PNG via
+`html-to-image`, and retries once at half scale (`pixelRatio: 0.5`) if the
+first result is over the size ceiling — so the worst case is two full
+renders. `html-to-image` draws the DOM through an SVG `foreignObject` onto a
+canvas, which needs real layout and a real canvas — jsdom provides neither
+(see issue #6, blocked for the same reason), so this drives an actual
+headless Chromium via `playwright-core` rather than `node:test`.
+
+Measured on a 1280×800 viewport, median of 8 runs per case (one warmup run
+discarded). Both the primary render and the retry are always measured for
+every case, regardless of whether a real capture would be large enough to
+trigger a retry — the goal is knowing what the retry *costs*, not
+reproducing the (payload-size-dependent) decision to take it.
+
+| page                     | primary render (p50) | retry render (p50) |
+| ------------------------ | --------------------- | -------------------- |
+| small page               | ~8 ms                 | ~8 ms                 |
+| long page (400 sections) | ~760 ms               | ~765 ms               |
+| many images (300 imgs)   | ~185 ms                | ~183 ms                |
+
+### Findings
+
+- Page size dominates completely: a long page (400 text sections, well within
+  what a real app's scrollable content could look like) takes ~760 ms to
+  capture — long enough that a reporter would notice the wait. A small,
+  form-sized page captures in single-digit milliseconds.
+- **The retry is not a cheap discount.** Halving `pixelRatio` only changes the
+  final canvas raster step; the expensive part — walking the live DOM,
+  inlining computed styles and images into an SVG `foreignObject` — happens
+  identically both times. Retry render time tracks primary render time within
+  measurement noise on every page size tested. The issue's "worst case is two
+  full renders" framing is accurate, not pessimistic.
+- **This means an oversized first capture roughly doubles the wait**, on top
+  of already being the slowest thing the widget does. That is a real cost on
+  long or image-heavy pages, worth fixing — but per this issue's acceptance
+  criteria, the fix itself is out of scope here. Follow-up opened: #8, picking
+  the scale up front from a size estimate (e.g. DOM node count or serialised
+  content length) rather than rendering twice.
