@@ -15,6 +15,18 @@ npm install bugbottle
 npm install html-to-image   # optional, only if you want screenshots
 ```
 
+**No npm account? Install straight from GitHub.**
+
+```bash
+npm install github:mahope/bugbottle#v0.2.1-no-npm-needed
+```
+
+or import the built files directly from the jsDelivr CDN:
+
+```js
+import { recordConsoleErrors, collectReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.2.1-no-npm-needed/dist/index.js";
+```
+
 - **Headless.** You render the form. The chrome around a feedback widget is
   exactly the part that differs between applications, so this owns the state,
   the capture and the submit — not your markup.
