@@ -151,6 +151,11 @@ Requiring people to be signed in is worth considering too. An anonymous
 screenshot is one nobody can be asked about later, and nobody can be told has
 been deleted.
 
+[`examples/receiving-endpoint`](examples/receiving-endpoint) is a complete,
+runnable version of the above: auth, validation, upload to a private
+S3-compatible bucket with a guard against public-policy buckets, and an
+authenticated route that streams the picture back.
+
 The capture renders from the DOM, not from the screen, so it can only ever show
 the page the reporter is on — never another tab, another window, or the desktop
 behind it. That is a deliberate limit rather than a missing feature.

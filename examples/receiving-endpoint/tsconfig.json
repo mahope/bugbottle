@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["node"],
+    // Resolves against the library's own build output so this example is
+    // typechecked against real bugbottle types while it lives in this repo.
+    // A copy of this example outside the repo would drop this in favour of
+    // the "bugbottle" dependency declared in package.json.
+    "paths": {
+      "bugbottle": ["../../dist/index.d.ts"],
+      "bugbottle/server": ["../../dist/server/index.d.ts"],
+      "bugbottle/react": ["../../dist/react/index.d.ts"]
+    }
+  },
+  "include": ["."]
+}

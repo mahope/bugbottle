@@ -1,0 +1,13 @@
+{
+  "name": "bugbottle-example-receiving-endpoint",
+  "private": true,
+  "type": "module",
+  "description": "Standalone example — not part of the published bugbottle package. See README.md.",
+  "dependencies": {
+    "bugbottle": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
