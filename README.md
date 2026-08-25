@@ -195,3 +195,20 @@ node server.mjs
 
 Open http://localhost:8787, write a message, send, and watch the server print
 the validated report.
+
+## GitHub Action
+
+Validate bug reports collected by the widget inside CI — useful when your
+endpoint exports reports as JSON files (e.g. into a repository or artifact)
+and you want malformed ones caught before they reach your issue tracker.
+
+```yaml
+- uses: mahope/bugbottle@v0
+  with:
+    reports-glob: "reports/*.json"     # required
+    require-screenshot: false          # fail reports without a screenshot
+    max-report-size-kb: 4096           # reject oversized report files
+```
+
+Outputs `valid-count` and `invalid-count`. The job fails if any report is
+malformed or no files match. Zero dependencies — installs in about a second.
