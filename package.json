@@ -40,6 +40,7 @@
     "build": "tsc -p tsconfig.build.json",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "bench": "node --experimental-strip-types bench/console-buffer.bench.ts",
+    "size": "node scripts/check-bundle-size.mjs",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run test && npm run build"
   },

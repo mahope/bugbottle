@@ -155,6 +155,18 @@ The capture renders from the DOM, not from the screen, so it can only ever show
 the page the reporter is on — never another tab, another window, or the desktop
 behind it. That is a deliberate limit rather than a missing feature.
 
+## Bundle size
+
+The widget's size is a feature, so it's checked in CI (`npm run size`,
+`scripts/check-bundle-size.mjs`). There's no bundler step here — `dist/`
+ships the ESM files tsc emits — so "the bundle" means `dist/index.js` plus
+everything it statically imports: currently `console-buffer.js`,
+`capture.js` and `report-core.js`, **~10.2 KB** total, against a 16 KB
+budget. The check also fails if `html-to-image` ever becomes a static
+import — it must stay the dynamic `import()` in `capture.ts`, which is the
+whole reason it stays out of a consumer's bundle until someone actually
+takes a screenshot.
+
 ## API
 
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
