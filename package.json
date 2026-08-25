@@ -58,8 +58,10 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "@types/react-test-renderer": "^19.1.0",
     "html-to-image": "^1.11.13",
     "react": "^19.2.8",
+    "react-test-renderer": "^19.2.8",
     "typescript": "^5.7.0"
   },
   "engines": {
