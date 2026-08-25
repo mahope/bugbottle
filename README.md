@@ -18,7 +18,7 @@ npm install html-to-image   # optional, only if you want screenshots
 **No npm account? Install straight from GitHub.**
 
 ```bash
-npm install github:mahope/bugbottle#v0.2.1-no-npm-needed
+npm install github:mahope/bugbottle#v0.2.4
 ```
 
 or import the built files directly from the jsDelivr CDN:
