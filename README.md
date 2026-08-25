@@ -86,6 +86,29 @@ trigger button.
 
 Pass your own translated strings through `messages`; the defaults are English.
 
+### Just want it to work?
+
+```tsx
+import { BugBottleBubble } from "bugbottle/react/bubble";
+
+function App() {
+  return (
+    <>
+      {/* the rest of your app */}
+      <BugBottleBubble endpoint="/api/feedback" />
+    </>
+  );
+}
+```
+
+A working, unstyled-but-presentable trigger and panel built on `useBugReport`
+— for evaluating the library in five minutes, or for an app that doesn't need
+its own bug-report chrome. It's a separate entry on purpose: importing
+`useBugReport` from `bugbottle/react` never pulls this along, so the headless
+path stays exactly as small as before. Escape closes the panel, focus moves
+into it on open and back to the trigger on close, and the report-type picker
+is a real `radiogroup` with arrow-key navigation.
+
 ## Receiving a report
 
 ```ts
@@ -164,13 +187,19 @@ behind it. That is a deliberate limit rather than a missing feature.
 
 The widget's size is a feature, so it's checked in CI (`npm run size`,
 `scripts/check-bundle-size.mjs`). There's no bundler step here — `dist/`
-ships the ESM files tsc emits — so "the bundle" means `dist/index.js` plus
-everything it statically imports: currently `console-buffer.js`,
-`capture.js` and `report-core.js`, **~10.2 KB** total, against a 16 KB
-budget. The check also fails if `html-to-image` ever becomes a static
-import — it must stay the dynamic `import()` in `capture.ts`, which is the
-whole reason it stays out of a consumer's bundle until someone actually
-takes a screenshot.
+ships the ESM files tsc emits — so "the bundle" means an entry file plus
+everything it statically imports.
+
+- **`bugbottle`** (`dist/index.js` + `console-buffer.js`, `capture.js`,
+  `report-core.js`): **~10.2 KB**, budget 16 KB. Fails if `html-to-image`
+  ever becomes a static import — it must stay the dynamic `import()` in
+  `capture.ts`, the whole reason it stays out of a consumer's bundle until
+  someone actually takes a screenshot.
+- **`bugbottle/react`** (`dist/react/index.js` + the same graph as above,
+  since `useBugReport` uses all of it): **~14.6 KB**, budget 24 KB. Fails if
+  `dist/react/bubble.js` — the optional prebuilt bubble — is ever found in
+  this graph: importing `useBugReport` alone must never pull its markup and
+  styling along.
 
 ## API
 
@@ -178,6 +207,8 @@ takes a screenshot.
 `captureScreenshot`, `collectContext`, and the shared types and limits.
 
 **`bugbottle/react`** — `useBugReport`.
+
+**`bugbottle/react/bubble`** — `BugBottleBubble`.
 
 **`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `isReportType`, `InvalidScreenshotError`.

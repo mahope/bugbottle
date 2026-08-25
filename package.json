@@ -31,6 +31,10 @@
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
     },
+    "./react/bubble": {
+      "types": "./dist/react/bubble.d.ts",
+      "default": "./dist/react/bubble.js"
+    },
     "./server": {
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
@@ -58,12 +62,16 @@
     }
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.2.5",
     "@types/react-test-renderer": "^19.1.0",
     "html-to-image": "^1.11.13",
+    "jsdom": "^30.0.1",
     "playwright-core": "^1.62.1",
     "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-test-renderer": "^19.2.8",
     "typescript": "^5.7.0"
   },
