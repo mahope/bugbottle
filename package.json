@@ -39,6 +39,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
+    "bench": "node --experimental-strip-types bench/console-buffer.bench.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run test && npm run build"
   },
