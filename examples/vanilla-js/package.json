@@ -1,0 +1,8 @@
+{
+  "name": "bugbottle-example-vanilla",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "bugbottle": "file:../../"
+  }
+}

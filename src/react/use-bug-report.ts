@@ -53,6 +53,9 @@ const FALLBACK_MESSAGES = {
   sent: "Thank you — the report is on its way",
 } as const;
 
+/** How long to wait for the endpoint before giving the reporter an error. */
+const SEND_TIMEOUT_MS = 15_000;
+
 export function useBugReport(options: UseBugReportOptions) {
   const {
     endpoint,
@@ -124,18 +127,29 @@ export function useBugReport(options: UseBugReportOptions) {
     }
     setStatus({ kind: "sending" });
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...options.extra,
-          type,
-          message: message.trim(),
-          screenshotDataUrl: includeScreenshot && screenshot ? screenshot : undefined,
-          console: consoleFor(type) ? getConsoleBuffer() : undefined,
-          context: collectContext(),
-        }),
-      });
+      // A hung request must not leave the form stuck on "sending" forever: the
+      // reporter closes the tab and the report is lost. Abort after a bounded
+      // wait and say so, so they can retry instead of assuming it went through.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...options.extra,
+            type,
+            message: message.trim(),
+            screenshotDataUrl: includeScreenshot && screenshot ? screenshot : undefined,
+            console: consoleFor(type) ? getConsoleBuffer() : undefined,
+            context: collectContext(),
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       const body: unknown = await res.json().catch(() => null);
       if (!res.ok) {
         const parsed = options.parseError?.(res, body);

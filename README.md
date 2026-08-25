@@ -168,3 +168,18 @@ behind it. That is a deliberate limit rather than a missing feature.
 ## Licence
 
 MIT
+
+## A working example
+
+`examples/vanilla-js` is a complete round trip with no build step: a Node
+http server that receives and validates a report using `bugbottle/server`,
+and a plain HTML form that captures a screenshot and posts it.
+
+```bash
+cd examples/vanilla-js
+npm install
+node server.mjs
+```
+
+Open http://localhost:8787, write a message, send, and watch the server print
+the validated report.
