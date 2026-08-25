@@ -1,0 +1,67 @@
+{
+  "name": "bugbottle",
+  "version": "0.1.0",
+  "description": "In-app bug reports that arrive with the evidence attached: console errors, page context and an optional screenshot.",
+  "keywords": [
+    "bug-report",
+    "feedback",
+    "feedback-widget",
+    "screenshot",
+    "console",
+    "react"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mahope/bugbottle.git"
+  },
+  "homepage": "https://github.com/mahope/bugbottle#readme",
+  "bugs": "https://github.com/mahope/bugbottle/issues",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run test && npm run build"
+  },
+  "peerDependencies": {
+    "html-to-image": "^1.11.0",
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "html-to-image": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "html-to-image": "^1.11.13",
+    "react": "^19.2.8",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
