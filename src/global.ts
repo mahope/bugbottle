@@ -18,6 +18,7 @@
  * is only ever consumed through esbuild, which replaces the version constant.
  */
 
+import { createAnnotator } from "./annotate.ts";
 import { initBreadcrumbs } from "./breadcrumbs.ts";
 import { initConsoleBuffer } from "./console-buffer.ts";
 import { pickElement } from "./element-picker.ts";
@@ -46,6 +47,9 @@ const api = {
   buildReport,
   sendReport,
   pickElement,
+  // The panel already carries the annotator, so exposing it costs nothing and
+  // lets a page with its own form mark a picture the same way.
+  createAnnotator,
   // The panel wires both of these itself; they are exposed for the page that
   // wants a shortcut without the panel, and they cost nothing extra here.
   onShortcut,
@@ -115,6 +119,10 @@ function autoMount(data: DOMStringMap): void {
   // Masking is on by default, so the attribute only exists to switch it off:
   // a page that wants the screenshot exactly as the reporter sees it says so.
   if (data.mask === "off") options.mask = false;
+  // Marking the picture is on by default wherever there is a picture, so, like
+  // masking, the attribute exists only to switch it off. This build ships no
+  // renderer, so it matters only once a page passes one to `mount` itself.
+  if (data.annotate === "off") options.annotate = false;
   // Any value enables the scrubber, including the empty string of a bare
   // `data-scrub` attribute — the point is that ticking it is one word.
   if (data.scrub !== undefined) options.scrub = scrubReport;

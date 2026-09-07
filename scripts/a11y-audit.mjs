@@ -5,8 +5,9 @@
  * and the accessibility tree can only be checked in a real browser. This
  * serves `dist/` on a scratch page, mounts the panel with everything showing —
  * the screenshot row, an attached element and its remove button — and runs
- * axe-core over three states: closed, open in the light scheme, open in the
- * dark one. It exits non-zero on any violation.
+ * axe-core over five states: closed, open in the light scheme, open in the
+ * dark one, and the picture annotator open in each scheme. It exits non-zero
+ * on any violation.
  *
  *     npm run build
  *     node scripts/a11y-audit.mjs --out <directory>
@@ -24,7 +25,12 @@ import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const outDir = resolve(process.argv[process.argv.indexOf("--out") + 1] ?? join(root, "a11y-reports"));
+// `indexOf` returns -1 when the flag is absent, and argv[-1 + 1] is the path to
+// node itself, so the flag has to be found before its value is read.
+const outFlag = process.argv.indexOf("--out");
+const outDir = resolve(
+  (outFlag === -1 ? undefined : process.argv[outFlag + 1]) ?? join(root, "a11y-reports"),
+);
 const chromePath =
   process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 
@@ -58,12 +64,20 @@ function page(scheme) {
 </main>
 <script type="module">
   import { mountBugbottle } from "/dist/ui/index.js";
+  // A picture rather than a photograph of the page: the screenshot row, its
+  // note and the annotator all have to be on the page to be audited, and the
+  // annotator needs a PNG that really decodes. Nothing here renders the DOM.
+  const shot = document.createElement("canvas");
+  shot.width = 320;
+  shot.height = 200;
+  const paint = shot.getContext("2d");
+  paint.fillStyle = "#94a3b8";
+  paint.fillRect(0, 0, 320, 200);
+  const picture = shot.toDataURL("image/png");
   window.bb = mountBugbottle({
     endpoint: "/api/reports",
     theme: { scheme: ${JSON.stringify(scheme)} },
-    // A renderer that takes no picture: the screenshot row and its note have
-    // to be on the page to be audited, but nothing needs to be photographed.
-    screenshot: async () => "data:image/png;base64,iVBORw0KGgo=",
+    screenshot: async () => picture,
     screenshotFor: () => false,
     fetch: async () => new Response("{}", { status: 201 }),
   });
@@ -131,10 +145,33 @@ const openWithEverything = async (tab) => {
   });
 };
 
+/** Opens the panel, attaches the picture and opens the annotator over it. */
+const openAnnotator = async (tab) => {
+  await tab.evaluate(async () => {
+    const root = document.querySelector("[data-bugbottle=ui]").shadowRoot;
+    root.querySelector(".trigger").click();
+    const box = root.querySelector(".check input");
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 100));
+    root.querySelector(".edit").click();
+    await new Promise((r) => setTimeout(r, 100));
+  });
+  // The toolbar, the canvas and the two actions are all inside the panel, so a
+  // state that stops short of them audits the wrong thing.
+  await tab.waitForFunction(() => {
+    const root = document.querySelector("[data-bugbottle=ui]").shadowRoot;
+    const editor = root.querySelector(".editor");
+    return editor && !editor.hidden && root.querySelector("canvas").width > 0;
+  });
+};
+
 let failures = 0;
 failures += await audit("closed-light", "light");
 failures += await audit("open-light", "light", openWithEverything);
 failures += await audit("open-dark", "dark", openWithEverything);
+failures += await audit("annotate-light", "light", openAnnotator);
+failures += await audit("annotate-dark", "dark", openAnnotator);
 
 await browser.close();
 server.close();

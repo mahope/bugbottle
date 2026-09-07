@@ -13,6 +13,7 @@
  * outside without touching JavaScript.
  */
 
+import { createAnnotator, type AnnotateTool, type Annotator } from "../annotate.ts";
 import {
   captureScreenshot,
   ScreenshotTooLargeError,
@@ -98,6 +99,13 @@ export type MountOptions = {
   /** Offer the element picker. Default true. */
   elementPicker?: boolean;
   /**
+   * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
+   * arrow and a blur that pixelates what it covers. Default true. `false`
+   * renders no button — the annotator is still in the bundle, since the panel
+   * imports it, but nothing on screen leads to it.
+   */
+  annotate?: boolean;
+  /**
    * `false` renders no floating button — call `open()` from your own control.
    * An element or selector makes that element the trigger instead.
    */
@@ -177,6 +185,9 @@ const POSITIONS: Record<NonNullable<Theme["position"]>, string> = {
  * and leaves `--bb-primary` alone, so the trigger keeps its brand colour.
  * `.close` and `.rm` carry a minimum size because 24x24 is the smallest
  * target WCAG 2.2 accepts and an icon button is otherwise smaller than that.
+ * The `canvas` rule sets a width and leaves the height automatic so the box
+ * keeps the picture's own shape: the annotator maps a pointer position onto a
+ * pixel through that box, and a letterboxed canvas would map it wrongly.
  */
 const CSS = `
 :host{
@@ -202,7 +213,8 @@ button,textarea,input{font:inherit;color:inherit}
   border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.2);font-weight:600;
 }
 .trigger:focus-visible,.send:focus-visible,.close:focus-visible,.type:focus-visible,.pick:focus-visible,
-textarea:focus-visible,input:focus-visible,.rm:focus-visible{outline:2px solid var(--bb-accent-text);outline-offset:2px}
+textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible,.tool:focus-visible,
+.act:focus-visible,canvas:focus-visible{outline:2px solid var(--bb-accent-text);outline-offset:2px}
 .logo{display:inline-flex;width:18px;height:18px}
 .logo img,.logo svg{width:100%;height:100%;object-fit:contain}
 .panel{
@@ -230,6 +242,15 @@ label.field{display:block;font-weight:600;margin:8px 0 4px}
 textarea{width:100%;min-height:88px;resize:vertical;padding:8px 10px;border:1px solid var(--bb-border);border-radius:calc(var(--bb-radius) - 4px);background:transparent}
 .check{display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;min-height:24px}
 .preview{display:block;max-width:100%;max-height:120px;border:1px solid var(--bb-border);border-radius:6px;margin:6px 0}
+.edit,.act{border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;padding:6px 10px}
+.edit{margin:0 0 6px}
+.tools{display:flex;gap:6px;margin:0 0 6px}
+.tool{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;min-width:24px}
+.tool[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
+canvas{display:block;width:100%;height:auto;border:1px solid var(--bb-border);border-radius:6px;touch-action:none;cursor:crosshair}
+.acts{display:flex;gap:6px;margin-top:6px}
+.act{flex:1}
+.act:disabled{opacity:.6;cursor:default}
 .pick{margin-top:8px;padding:6px 10px;border:1px dashed var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;width:100%;text-align:left}
 .pick[aria-pressed="true"]{border-style:solid;border-color:var(--bb-primary)}
 ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}
@@ -289,6 +310,44 @@ function merge<T extends object>(base: T, over: DeepPartial<T> | undefined): T {
 
 const bugsOnly = (t: ReportType) => t === "bug";
 
+const ARROWS: Record<string, number | undefined> = {
+  ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1,
+};
+
+/**
+ * Makes a row of buttons behave as a radio group: one stop in the tab order,
+ * the arrow keys moving inside it and wrapping at both ends. The panel has two
+ * of these — the report types and the drawing tools — and they behave the same
+ * because they are the same code.
+ */
+function rovingGroup<T>(
+  row: HTMLElement,
+  buttons: Map<T, HTMLButtonElement>,
+  current: () => T,
+  select: (value: T) => void,
+): void {
+  row.addEventListener("keydown", (e) => {
+    const step = ARROWS[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const order = [...buttons.keys()];
+    const next = order[(order.indexOf(current()) + step + order.length) % order.length];
+    if (next === undefined) return;
+    select(next);
+    buttons.get(next)?.focus();
+  });
+}
+
+/** Marks one button of a group checked, and makes it the group's tab stop. */
+function checkOne<T>(buttons: Map<T, HTMLButtonElement>, chosen: T): void {
+  for (const [value, button] of buttons) {
+    const on = value === chosen;
+    button.setAttribute("aria-checked", String(on));
+    // Roving tabindex: only the checked radio is in the tab order.
+    button.setAttribute("tabindex", on ? "0" : "-1");
+  }
+}
+
 /** Mounts the panel and returns a handle. Call once per page. */
 export function mountBugbottle(options: MountOptions): BugbottleWidget {
   if (typeof document === "undefined") {
@@ -297,6 +356,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   const types = options.types ?? REPORT_TYPES;
   const consoleFor = options.consoleFor ?? bugsOnly;
   const screenshotFor = options.screenshotFor ?? bugsOnly;
+  const annotateOn = options.annotate !== false;
   const theme = options.theme ?? {};
   const container = options.container ?? document.body;
 
@@ -307,6 +367,10 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   // ---- state
   let type: ReportType = options.initialType ?? types[0] ?? "bug";
   let screenshot: string | null = null;
+  // Live only while the editor is open; the marked picture is folded back into
+  // `screenshot` when it closes, so the rest of the panel never knows about it.
+  let annotator: Annotator | null = null;
+  let tool: AnnotateTool = "rect";
   let elements: ElementRef[] = [];
   let pickController: AbortController | null = null;
   let sending = false;
@@ -357,12 +421,24 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   const shotRow = el("label", { class: "check" }, shotBox, shotText);
   const shotNote = el("p", { class: "note", id: "bb-shot-note" });
   const preview = el("img", { class: "preview", alt: "", hidden: "" });
+  const editBtn = el("button", { class: "edit", type: "button", hidden: "" });
+  const toolsRow = el("div", { class: "tools", role: "radiogroup" });
+  // `role="img"` rather than no role at all: a canvas has no implicit role, so
+  // an accessible name on it is a prohibited attribute, and the name is where
+  // the annotator's two keys are written down. Drawing needs a pointer; undo
+  // and done are buttons, so the keyboard is not left with nothing.
+  const canvas = el("canvas", { role: "img", tabindex: "0" });
+  const undoBtn = el("button", { class: "act", type: "button" });
+  const doneBtn = el("button", { class: "act", type: "button" });
+  const editor = el("div", { class: "editor", hidden: "" },
+    toolsRow, canvas, el("div", { class: "acts" }, undoBtn, doneBtn));
   const pickBtn = el("button", { class: "pick", type: "button", "aria-pressed": "false" });
   const list = el("ul", { hidden: "" });
   const status = el("p", { class: "status", role: "status", "aria-live": "polite" });
   const sendBtn = el("button", { class: "send", type: "button" });
   const form = el("div", { class: "form" },
-    intro, typesRow, messageLabel, textarea, shotRow, shotNote, preview, pickBtn, list, status, sendBtn);
+    intro, typesRow, messageLabel, textarea, shotRow, shotNote, preview, editBtn, editor,
+    pickBtn, list, status, sendBtn);
   const thanksText = el("p");
   const thanksClose = el("button", { class: "send", type: "button" });
   const thanks = el("div", { class: "thanks", hidden: "" }, thanksText, thanksClose);
@@ -393,17 +469,21 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     typesRow.append(b);
   }
 
-  // A radio group is one stop in the tab order; the arrows move within it.
-  typesRow.addEventListener("keydown", (e) => {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    const order = [...typeButtons.keys()];
-    const next = order[(order.indexOf(type) + step + order.length) % order.length];
-    if (!next) return;
-    setType(next);
-    typeButtons.get(next)?.focus();
-  });
+  rovingGroup(typesRow, typeButtons, () => type, setType);
+
+  // The tools are the same shape of control as the report types: one stop in
+  // the tab order, the arrows moving inside it.
+  const TOOLS: readonly AnnotateTool[] = ["rect", "arrow", "blur"];
+  const toolButtons = new Map<AnnotateTool, HTMLButtonElement>();
+  for (const t of TOOLS) {
+    const b = el("button", {
+      class: "tool", type: "button", role: "radio", "aria-checked": "false", tabindex: "-1",
+    });
+    b.addEventListener("click", () => setTool(t));
+    toolButtons.set(t, b);
+    toolsRow.append(b);
+  }
+  rovingGroup(toolsRow, toolButtons, () => tool, setTool);
 
   if (options.brand?.logo) {
     trigger.prepend(logoNode(options.brand.logo));
@@ -430,6 +510,15 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     shotText.textContent = ui.screenshot;
     shotNote.textContent = ui.screenshotNote;
     shotNote.hidden = !options.screenshot || !ui.screenshotNote;
+    editBtn.textContent = ui.annotate;
+    toolsRow.setAttribute("aria-label", ui.toolLabel);
+    canvas.setAttribute("aria-label", ui.annotateArea);
+    const toolText: Record<AnnotateTool, string> = {
+      rect: ui.toolRect, arrow: ui.toolArrow, blur: ui.toolBlur,
+    };
+    for (const [t, b] of toolButtons) b.textContent = toolText[t];
+    undoBtn.textContent = ui.undo;
+    doneBtn.textContent = ui.done;
     pickBtn.textContent = pickController ? ui.picking : ui.pickElement;
     sendBtn.textContent = sending ? ui.sending : ui.send;
     thanksText.textContent = ui.thanks;
@@ -450,16 +539,63 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
 
   function setType(next: ReportType) {
     type = next;
-    for (const [t, b] of typeButtons) {
-      const on = t === next;
-      b.setAttribute("aria-checked", String(on));
-      // Roving tabindex: only the checked radio is in the tab order.
-      b.setAttribute("tabindex", on ? "0" : "-1");
-    }
+    checkOne(typeButtons, next);
     if (options.screenshot && screenshotFor(next) && !shotBox.checked) {
       shotBox.checked = true;
       void capture();
     }
+  }
+
+  function setTool(next: AnnotateTool) {
+    tool = next;
+    annotator?.setTool(next);
+    checkOne(toolButtons, next);
+  }
+
+  /** Replaces the preview with the canvas and hands the picture to the annotator. */
+  async function openEditor() {
+    if (annotator || !screenshot) return;
+    editBtn.hidden = true;
+    preview.hidden = true;
+    editor.hidden = false;
+    undoBtn.disabled = true;
+    const open = createAnnotator(canvas, screenshot, {
+      tool,
+      onChange: (marks) => {
+        undoBtn.disabled = marks === 0;
+      },
+    });
+    annotator = open;
+    setTool(tool);
+    toolButtons.get(tool)?.focus();
+    try {
+      await open.ready;
+    } catch (err) {
+      // A picture the browser will not decode cannot be marked. Say so once
+      // and put the preview back; the report still has the screenshot on it.
+      if (annotator === open) closeEditor(false);
+      setStatus(msg.screenshotFailed, "error");
+      options.onError?.(err);
+    }
+  }
+
+  /**
+   * Closes the editor. `keep` exports the marked picture over the screenshot —
+   * the blur has already destroyed the pixels it covered, so there is nothing
+   * to keep on the other side of it.
+   */
+  function closeEditor(keep: boolean) {
+    const open = annotator;
+    if (!open) return;
+    annotator = null;
+    if (keep) {
+      screenshot = open.toDataUrl();
+      preview.src = screenshot;
+    }
+    open.destroy();
+    editor.hidden = true;
+    preview.hidden = !screenshot;
+    editBtn.hidden = !screenshot || !annotateOn;
   }
 
   async function capture() {
@@ -469,6 +605,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       screenshot = await captureScreenshot(render, { mask: options.mask });
       preview.src = screenshot;
       preview.hidden = false;
+      editBtn.hidden = !annotateOn;
     } catch (err) {
       shotBox.checked = false;
       setStatus(err instanceof ScreenshotTooLargeError ? msg.screenshotTooLarge : msg.screenshotFailed, "error");
@@ -477,9 +614,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   }
 
   function clearScreenshot() {
+    closeEditor(false);
     screenshot = null;
     preview.hidden = true;
     preview.removeAttribute("src");
+    editBtn.hidden = true;
   }
 
   function renderElements() {
@@ -608,7 +747,8 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
    */
   function focusable(): HTMLElement[] {
     const nodes = panel.querySelectorAll<HTMLElement>(
-      'button:not([disabled]):not([tabindex="-1"]),textarea:not([disabled]),input:not([disabled])',
+      'button:not([disabled]):not([tabindex="-1"]),textarea:not([disabled]),input:not([disabled]),' +
+        'canvas:not([tabindex="-1"])',
     );
     return [...nodes].filter((n) => !n.hidden && !n.closest("[hidden]"));
   }
@@ -634,6 +774,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     isOpen = false;
     openedByError = false;
     pickController?.abort();
+    // Marks already drawn are part of the draft, like the text in the box, so
+    // they survive the panel being closed and reopened.
+    closeEditor(true);
     panel.hidden = true;
     trigger.setAttribute("aria-expanded", "false");
     if (!thanks.hidden) resetForm();
@@ -648,6 +791,13 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   thanksClose.addEventListener("click", close);
   sendBtn.addEventListener("click", () => void submit());
   pickBtn.addEventListener("click", () => void pick());
+  editBtn.addEventListener("click", () => void openEditor());
+  undoBtn.addEventListener("click", () => annotator?.undo());
+  doneBtn.addEventListener("click", () => {
+    closeEditor(true);
+    // Back to the control that opened the editor, not to the top of the panel.
+    editBtn.focus();
+  });
   shotBox.addEventListener("change", () => {
     if (shotBox.checked) void capture();
     else clearScreenshot();
@@ -724,6 +874,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       applyTexts();
     },
     destroy() {
+      closeEditor(false);
       pickController?.abort();
       for (const off of unsubscribes) off();
       externalTrigger?.removeEventListener("click", toggle);

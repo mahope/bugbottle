@@ -36,6 +36,23 @@ export type UiTexts = {
   screenshot: string;
   /** Shown next to the screenshot checkbox; say what the picture may contain. */
   screenshotNote: string;
+  /** Button that opens the annotator over the attached picture. */
+  annotate: string;
+  /**
+   * Accessible name of the drawing canvas. It is the only place the keyboard
+   * shortcuts of the annotator are said, so it says them: nothing on screen
+   * mentions Backspace or Escape.
+   */
+  annotateArea: string;
+  /** Accessible name of the tool radio group. Never shown. */
+  toolLabel: string;
+  toolRect: string;
+  toolArrow: string;
+  toolBlur: string;
+  /** Removes the last mark drawn on the picture. */
+  undo: string;
+  /** Closes the annotator and keeps the marked picture. */
+  done: string;
   pickElement: string;
   picking: string;
   /**
@@ -112,6 +129,15 @@ export const en: Locale = {
     messagePlaceholder: "What is wrong, missing or confusing?",
     screenshot: "Attach a picture of this page",
     screenshotNote: "The picture shows this page as you see it now.",
+    annotate: "Edit picture",
+    annotateArea:
+      "Drawing area. Drag to mark the picture with the chosen tool. Backspace undoes, Escape cancels the mark you are drawing.",
+    toolLabel: "Drawing tool",
+    toolRect: "Rectangle",
+    toolArrow: "Arrow",
+    toolBlur: "Blur",
+    undo: "Undo",
+    done: "Done",
     pickElement: "Point at the element",
     picking: "Click anything to attach it — Esc to stop",
     pickingAnnounce:
@@ -153,6 +179,15 @@ export const da: Locale = {
     messagePlaceholder: "Hvad er galt, mangler eller er forvirrende?",
     screenshot: "Vedhæft et billede af denne side",
     screenshotNote: "Billedet viser siden som du ser den nu.",
+    annotate: "Rediger billedet",
+    annotateArea:
+      "Tegneområde. Træk for at markere billedet med det valgte værktøj. Backspace fortryder, Esc annullerer den markering, du er i gang med.",
+    toolLabel: "Tegneværktøj",
+    toolRect: "Rektangel",
+    toolArrow: "Pil",
+    toolBlur: "Slør",
+    undo: "Fortryd",
+    done: "Færdig",
     pickElement: "Peg på elementet",
     picking: "Klik på det, der skal vedhæftes — Esc for at stoppe",
     pickingAnnounce:
@@ -194,6 +229,15 @@ export const sv: Locale = {
     messagePlaceholder: "Vad är fel, saknas eller är förvirrande?",
     screenshot: "Bifoga en bild av den här sidan",
     screenshotNote: "Bilden visar sidan som du ser den nu.",
+    annotate: "Redigera bilden",
+    annotateArea:
+      "Ritområde. Dra för att markera bilden med det valda verktyget. Backsteg ångrar, Esc avbryter markeringen du håller på med.",
+    toolLabel: "Ritverktyg",
+    toolRect: "Rektangel",
+    toolArrow: "Pil",
+    toolBlur: "Oskärpa",
+    undo: "Ångra",
+    done: "Klar",
     pickElement: "Peka på elementet",
     picking: "Klicka på det som ska bifogas — Esc för att avbryta",
     pickingAnnounce:
@@ -235,6 +279,15 @@ export const nb: Locale = {
     messagePlaceholder: "Hva er galt, mangler eller er forvirrende?",
     screenshot: "Legg ved et bilde av denne siden",
     screenshotNote: "Bildet viser siden slik du ser den nå.",
+    annotate: "Rediger bildet",
+    annotateArea:
+      "Tegneområde. Dra for å markere bildet med det valgte verktøyet. Rettetast angrer, Esc avbryter markeringen du holder på med.",
+    toolLabel: "Tegneverktøy",
+    toolRect: "Rektangel",
+    toolArrow: "Pil",
+    toolBlur: "Uskarphet",
+    undo: "Angre",
+    done: "Ferdig",
     pickElement: "Pek på elementet",
     picking: "Klikk på det som skal legges ved — Esc for å avbryte",
     pickingAnnounce:
@@ -276,6 +329,15 @@ export const de: Locale = {
     messagePlaceholder: "Was ist falsch, fehlt oder ist verwirrend?",
     screenshot: "Bild dieser Seite anhängen",
     screenshotNote: "Das Bild zeigt diese Seite so, wie Sie sie jetzt sehen.",
+    annotate: "Bild bearbeiten",
+    annotateArea:
+      "Zeichenfläche. Ziehen Sie, um das Bild mit dem gewählten Werkzeug zu markieren. Die Rücktaste macht rückgängig, Esc bricht die begonnene Markierung ab.",
+    toolLabel: "Zeichenwerkzeug",
+    toolRect: "Rechteck",
+    toolArrow: "Pfeil",
+    toolBlur: "Weichzeichnen",
+    undo: "Rückgängig",
+    done: "Fertig",
     pickElement: "Auf das Element zeigen",
     picking: "Klicken Sie auf das Element — Esc zum Abbrechen",
     pickingAnnounce:
@@ -318,6 +380,15 @@ export const nl: Locale = {
     messagePlaceholder: "Wat is er mis, ontbreekt of is verwarrend?",
     screenshot: "Een afbeelding van deze pagina bijvoegen",
     screenshotNote: "De afbeelding toont deze pagina zoals je die nu ziet.",
+    annotate: "Afbeelding bewerken",
+    annotateArea:
+      "Tekengebied. Sleep om de afbeelding te markeren met het gekozen gereedschap. Backspace maakt ongedaan, Esc annuleert de markering waar je mee bezig bent.",
+    toolLabel: "Tekengereedschap",
+    toolRect: "Rechthoek",
+    toolArrow: "Pijl",
+    toolBlur: "Vervagen",
+    undo: "Ongedaan maken",
+    done: "Klaar",
     pickElement: "Wijs het element aan",
     picking: "Klik op wat je wilt bijvoegen — Esc om te stoppen",
     pickingAnnounce:
@@ -359,6 +430,15 @@ export const fr: Locale = {
     messagePlaceholder: "Qu'est-ce qui est faux, manquant ou déroutant ?",
     screenshot: "Joindre une image de cette page",
     screenshotNote: "L'image montre cette page telle que vous la voyez.",
+    annotate: "Modifier l'image",
+    annotateArea:
+      "Zone de dessin. Faites glisser pour marquer l'image avec l'outil choisi. La touche Retour arrière annule, Échap abandonne la marque en cours.",
+    toolLabel: "Outil de dessin",
+    toolRect: "Rectangle",
+    toolArrow: "Flèche",
+    toolBlur: "Flou",
+    undo: "Annuler la marque",
+    done: "Terminé",
     pickElement: "Désigner l'élément",
     picking: "Cliquez sur l'élément à joindre — Échap pour arrêter",
     pickingAnnounce:
@@ -401,6 +481,15 @@ export const es: Locale = {
     messagePlaceholder: "¿Qué está mal, falta o resulta confuso?",
     screenshot: "Adjuntar una imagen de esta página",
     screenshotNote: "La imagen muestra esta página tal como la ves ahora.",
+    annotate: "Editar la imagen",
+    annotateArea:
+      "Área de dibujo. Arrastra para marcar la imagen con la herramienta elegida. Retroceso deshace, Esc cancela la marca que estás haciendo.",
+    toolLabel: "Herramienta de dibujo",
+    toolRect: "Rectángulo",
+    toolArrow: "Flecha",
+    toolBlur: "Desenfoque",
+    undo: "Deshacer",
+    done: "Hecho",
     pickElement: "Señalar el elemento",
     picking: "Haz clic en lo que quieras adjuntar — Esc para cancelar",
     pickingAnnounce:

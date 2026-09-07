@@ -34,6 +34,7 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `src/react/` | `useBugReport` hook — `useSyncExternalStore` over report-state | report-state, report-core |
 | `src/vue/` | `useBugReport` composable — refs and computeds over report-state, `vue` an optional peer (>=3). Own entry point | report-state, report-core |
 | `src/svelte/` | `createBugReport` — a readable store (the contract implemented here, not imported) plus the actions, `svelte` an optional peer (>=4) and only for its `Readable` type. Own entry point | report-state, report-core |
+| `src/annotate.ts` | `createAnnotator(canvas, dataUrl, options)` — rectangle, arrow and blur over the attached picture, undo, pointer and keyboard input, `toDataUrl()`. Own entry point. The blur pixelates by reading the region back out of the canvas, so the original pixels leave with it. No strings: the panel supplies the labels | nothing |
 | `src/ui/` | `mountBugbottle` — optional shadow-DOM panel over the same core; themed via `--bb-*` vars | everything above |
 | `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
 | `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
@@ -44,16 +45,17 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express` | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
-| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over three states through `puppeteer-core`. `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
+| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over five states through `puppeteer-core`. `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
+| `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate` | dist (at run time) |
 | `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts` | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Twelve entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Thirteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./server`,
-`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
-`./queue`, `./triggers` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
+`./html-to-image`, `./locales`, `./ui`, `./annotate`, `./breadcrumbs`,
+`./network`, `./queue`, `./triggers` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -106,7 +108,7 @@ not closed and a branch is not merged with the docs lagging.
   announces: it is a locale string or it is not said. The panel is a dialog
   with a focus trap, so a control added outside `panel` is unreachable while
   it is open; check `tests/ui-a11y.test.ts` and re-run
-  `node scripts/a11y-audit.mjs` (zero axe violations, three states).
+  `node scripts/a11y-audit.mjs` (zero axe violations, five states).
 - **Source files must not contain literal null bytes.** Use `\u0000` in code
   and `String.fromCharCode(0)` in tests. A literal NUL breaks tooling.
 
@@ -118,15 +120,17 @@ npm test            # node --test on tests/*.test.ts (needs Node 22+)
 npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → IIFE
 npm run build:docs  # site/docs/ from README.md; fails on an ungrouped `##` section
 npm run a11y        # axe-core over the panel in a real Chrome; needs a build first
+npm run smoke:annotate  # the blur really pixelates, in a real Chrome; needs a build first
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
 
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5632 bytes gzipped and `bugbottle/ui` under 10 kB (CI enforces both;
-about 5.4 kB and 10.0 kB with masking, the queued state, the triggers, the
-accessibility pass and the 0.6 evidence), and the bare core under 1536 bytes
+stay under 5632 bytes gzipped and `bugbottle/ui` under 12 kB (CI enforces both;
+about 5.4 kB and 12.0 kB with masking, the queued state, the triggers, the
+accessibility pass, the 0.6 evidence and the annotator), and the bare core
+under 1536 bytes
 (about 1.4 kB). The core budget was 1 kB and 0.8 kB measured until 0.6: the
 stack parser costs about 250 bytes gzipped and the six optional context facts
 about 190, and both are on by default, so the core, the hook, the panel and the
@@ -157,14 +161,27 @@ pass); masking, the queue and the triggers each cost it roughly half a
 kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35: the
 focus trap and return, the radiogroup and its arrow keys, the live region and
 the two-scheme colours are about 0.7 kB, and five new locale strings are the
-rest — in the IIFE, times eight languages.
+rest — in the IIFE, times eight languages. `bugbottle/annotate` is budgeted at
+2048 bytes and measures 1441: a canvas, three tools and an undo stack, with
+nothing imported. #36 then took the panel budget from 10 kB to 12 kB and the
+IIFE from 18432 to 20992 bytes (measured 11971 and 20450). The panel imports
+the annotator unconditionally, so those 1441 bytes are paid by every
+application that mounts the panel — `annotate: false` hides the button, it does
+not shrink the bundle, and a dynamic import would only move the cost onto a
+network round trip in the middle of a report. The toolbar and the editor state
+are about 300 bytes more, and the IIFE carries the eight new locale strings in
+eight languages on top, one of them a sentence because it is where the
+annotator says its keys to a screen reader.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 `puppeteer-core` and Chrome, and check the posted body.
 `scripts/a11y-audit.mjs` is that procedure written down: it serves `dist/`,
 mounts the panel with everything showing and runs the pinned `axe-core` over
-three states (closed, open light, open dark), exiting non-zero on a violation.
+five states (closed, open light, open dark, annotator light, annotator dark),
+exiting non-zero on a violation. `scripts/annotate-smoke.mjs` is the same
+procedure aimed at pixels rather than at the accessibility tree: only a real
+canvas can say whether the blur destroyed what it covered.
 
 ## Conventions
 
