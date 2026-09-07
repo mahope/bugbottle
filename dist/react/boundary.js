@@ -66,7 +66,18 @@ async function sendRenderError(options, error, componentStack) {
  * person, and sending one on their behalf without asking is telemetry.
  */
 export class BugReportBoundary extends Component {
-    state = { error: null, componentStack: null };
+    state = { error: null, componentStack: null, sending: false };
+    /**
+     * The send that is in flight, or the one that succeeded. A fallback button is
+     * a button a worried person clicks twice, and the render error behind it is
+     * the same error every time: the second click must join the first send rather
+     * than start a second POST of the same report. A failed send clears this, so
+     * trying again is still possible; a successful one does not, so "sent" stays
+     * sent.
+     */
+    inFlight = null;
+    /** setState after unmount is a no-op React complains about. */
+    mounted = true;
     static getDerivedStateFromError(error) {
         return { error: error instanceof Error ? error : new Error(String(error)) };
     }
@@ -74,10 +85,10 @@ export class BugReportBoundary extends Component {
         this.setState({ componentStack: info.componentStack ?? null });
         this.props.onError?.(error);
     }
-    report = async () => {
-        const { error, componentStack } = this.state;
-        if (!error)
-            return false;
+    componentWillUnmount() {
+        this.mounted = false;
+    }
+    async send(error, componentStack) {
         try {
             const id = await sendRenderError(this.props, error, componentStack);
             this.props.onReport?.(error, id);
@@ -89,10 +100,30 @@ export class BugReportBoundary extends Component {
             this.props.onError?.(err);
             return false;
         }
+    }
+    report = () => {
+        const { error, componentStack } = this.state;
+        if (!error)
+            return Promise.resolve(false);
+        if (this.inFlight)
+            return this.inFlight;
+        const attempt = this.send(error, componentStack).then((ok) => {
+            // A failure is worth another try, so the guard is lifted again. A success
+            // is not: the report is filed, and the second click was the same click.
+            if (!ok && this.inFlight === attempt)
+                this.inFlight = null;
+            if (this.mounted)
+                this.setState({ sending: false });
+            return ok;
+        });
+        this.inFlight = attempt;
+        if (this.mounted)
+            this.setState({ sending: true });
+        return attempt;
     };
     render() {
         if (this.state.error)
-            return this.props.fallback(this.state.error, this.report);
+            return this.props.fallback(this.state.error, this.report, this.state.sending);
         return this.props.children ?? null;
     }
 }

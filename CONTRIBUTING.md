@@ -29,8 +29,8 @@ need Node 18.
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
   `bugbottle/react` 5.5 kB, `bugbottle/ui` 10 kB, `bugbottle/breadcrumbs`
-  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/queue` 1 kB,
-  `bugbottle/triggers` 1200 bytes,
+  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/queue` 1330 bytes,
+  `bugbottle/triggers` 1300 bytes,
   `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
   are small; the core they share is not), `dist/bugbottle.js` 18 kB. The

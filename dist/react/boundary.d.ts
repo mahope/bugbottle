@@ -46,8 +46,10 @@ export type BugReportBoundaryProps = ReportErrorOptions & {
     /**
      * What to show instead of the broken subtree. `report()` sends the report and
      * resolves true when the endpoint accepted it, so a button can say "sent".
+     * `sending` is true while a send is in flight, for a button that should say
+     * "sending…" and be disabled rather than queue up a second POST.
      */
-    fallback: (error: Error, report: () => Promise<boolean>) => ReactNode;
+    fallback: (error: Error, report: () => Promise<boolean>, sending: boolean) => ReactNode;
     /** Called after a successful send, with the id the server returned. */
     onReport?: (error: Error, id: string | undefined) => void;
     /** Called when the boundary catches, and again if a send fails. */
@@ -56,6 +58,7 @@ export type BugReportBoundaryProps = ReportErrorOptions & {
 type BoundaryState = {
     error: Error | null;
     componentStack: string | null;
+    sending: boolean;
 };
 /**
  * Catches a render error and offers to report it.
@@ -73,8 +76,21 @@ type BoundaryState = {
  */
 export declare class BugReportBoundary extends Component<BugReportBoundaryProps, BoundaryState> {
     state: BoundaryState;
+    /**
+     * The send that is in flight, or the one that succeeded. A fallback button is
+     * a button a worried person clicks twice, and the render error behind it is
+     * the same error every time: the second click must join the first send rather
+     * than start a second POST of the same report. A failed send clears this, so
+     * trying again is still possible; a successful one does not, so "sent" stays
+     * sent.
+     */
+    private inFlight;
+    /** setState after unmount is a no-op React complains about. */
+    private mounted;
     static getDerivedStateFromError(error: unknown): Partial<BoundaryState>;
     componentDidCatch(error: unknown, info: ErrorInfo): void;
+    componentWillUnmount(): void;
+    private send;
     private readonly report;
     render(): ReactNode;
 }

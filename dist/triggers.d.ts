@@ -75,6 +75,26 @@ export declare function matchesShortcut(event: ShortcutEvent, shortcut: Shortcut
  * iframe or a shadow root whose `HTMLElement` is not this realm's.
  */
 export declare function isEditableTarget(target: unknown): boolean;
+/**
+ * The element a keystroke actually came from.
+ *
+ * An event that crosses a shadow boundary is retargeted on the way out: by the
+ * time a `keydown` from a textarea inside a shadow root reaches `document`, its
+ * `target` is the host element, which is not editable and would let the
+ * shortcut fire over somebody's sentence. `composedPath()[0]` is the node the
+ * event started at, before any of that. It is missing on older browsers and on
+ * synthetic events, so `target` remains the fallback.
+ */
+export declare function eventSource(event: unknown): unknown;
+/**
+ * The deepest focused element, following `activeElement` down through every
+ * shadow root on the way.
+ *
+ * `document.activeElement` stops at the host of a shadow tree, so a panel that
+ * lives in one reports itself as focused however deep the caret really is. The
+ * chain is what says whether the reporter is typing.
+ */
+export declare function deepActiveElement(root?: unknown): unknown;
 export type ShortcutOptions = {
     /** What to listen on. Default `document`. */
     target?: ListenerHost;

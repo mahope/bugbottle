@@ -154,10 +154,16 @@ jobs:
             exit 1
           fi
           # The queue imports nothing but a type, so this number is the module
-          # itself: storage, backoff, the listeners and one fetch.
+          # itself: storage, backoff, the listeners and one fetch. It was 986
+          # bytes against a 1 kB budget until two tabs sharing one localStorage
+          # were taken seriously: every write now re-reads and merges by item
+          # id, and a report is claimed before it goes out. That is a
+          # read-modify-write, a claim and a release where there used to be one
+          # setItem, and it is what stops a second tab losing, duplicating or
+          # resurrecting reports.
           queue=$(gzip -c out-queue.js | wc -c)
-          if [ "$queue" -gt 1024 ]; then
-            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1024" >&2
+          if [ "$queue" -gt 1330 ]; then
+            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1330" >&2
             exit 1
           fi
           # Two listeners, a shortcut parser and the shared fingerprint hash.
@@ -167,10 +173,13 @@ jobs:
           # `mod` platform split, the editable-target check, the two event
           # shapes, the dedupe map) is behaviour the panel relies on. It still
           # imports nothing but the fingerprint hash, which is what the budget
-          # is really guarding.
+          # is really guarding. 1300 rather than 1200 since the shortcut learnt
+          # about shadow roots: the composed path of the event and the focus
+          # chain through `shadowRoot.activeElement`, without which the panel's
+          # own textarea ate the shortcut it was typing into.
           triggers=$(gzip -c out-triggers.js | wc -c)
-          if [ "$triggers" -gt 1200 ]; then
-            echo "bugbottle/triggers is $triggers bytes gzipped; the budget is 1200" >&2
+          if [ "$triggers" -gt 1300 ]; then
+            echo "bugbottle/triggers is $triggers bytes gzipped; the budget is 1300" >&2
             exit 1
           fi
           # The two adapters are budgeted on what they add, not on what they

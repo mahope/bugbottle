@@ -122,6 +122,46 @@ export function isEditableTarget(target: unknown): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+/**
+ * The element a keystroke actually came from.
+ *
+ * An event that crosses a shadow boundary is retargeted on the way out: by the
+ * time a `keydown` from a textarea inside a shadow root reaches `document`, its
+ * `target` is the host element, which is not editable and would let the
+ * shortcut fire over somebody's sentence. `composedPath()[0]` is the node the
+ * event started at, before any of that. It is missing on older browsers and on
+ * synthetic events, so `target` remains the fallback.
+ */
+export function eventSource(event: unknown): unknown {
+  const e = event as { composedPath?: () => unknown; target?: unknown } | null;
+  const path = typeof e?.composedPath === "function" ? e.composedPath() : null;
+  return (Array.isArray(path) && path.length > 0 ? path[0] : e?.target) ?? null;
+}
+
+/**
+ * The deepest focused element, following `activeElement` down through every
+ * shadow root on the way.
+ *
+ * `document.activeElement` stops at the host of a shadow tree, so a panel that
+ * lives in one reports itself as focused however deep the caret really is. The
+ * chain is what says whether the reporter is typing.
+ */
+export function deepActiveElement(root?: unknown): unknown {
+  type Focusable = { activeElement?: unknown; shadowRoot?: Focusable | null; isConnected?: unknown };
+  const doc = typeof document === "undefined" ? null : (document as unknown as Focusable);
+  let active = ((root ?? doc) as Focusable | null)?.activeElement;
+  // A shadow root with no focus of its own reports null, and then the host it
+  // belongs to is the answer.
+  for (;;) {
+    const inner = (active as Focusable | null)?.shadowRoot?.activeElement;
+    if (!inner || inner === active) break;
+    active = inner;
+  }
+  // A node taken out of the document is not where anybody is typing, whatever
+  // the browser still remembers about it.
+  return active && (active as Focusable).isConnected !== false ? active : null;
+}
+
 export type ShortcutOptions = {
   /** What to listen on. Default `document`. */
   target?: ListenerHost;
@@ -152,7 +192,11 @@ export function onShortcut(
       target?: unknown;
       preventDefault?: () => void;
     };
-    if (!matchesShortcut(key, shortcut) || isEditableTarget(key.target)) return;
+    if (!matchesShortcut(key, shortcut)) return;
+    // Two questions, because either can be the one that knows: the composed
+    // path says where the keystroke came from, and the focus chain says where
+    // the caret is when the event is synthetic or the path has been lost.
+    if (isEditableTarget(eventSource(key)) || isEditableTarget(deepActiveElement())) return;
     key.preventDefault?.();
     handler(event as unknown as KeyboardEvent);
   };

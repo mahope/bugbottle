@@ -189,6 +189,94 @@ test("the root handlers report each distinct error once per window", async () =>
   assert.match(String(bodies[1]?.message), /a different failure/);
 });
 
+test("clicking report twice files one report, and the fallback is told it is sending", async () => {
+  let release!: () => void;
+  const bodies: Record<string, unknown>[] = [];
+  const fn = (async (_input: unknown, init?: { body?: unknown }) => {
+    bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    await new Promise<void>((resolve) => (release = resolve));
+    return new Response(JSON.stringify({ id: "rep_1" }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as unknown as typeof globalThis.fetch;
+
+  let report!: () => Promise<boolean>;
+  const { container } = await renderQuietly(
+    createElement(
+      BugReportBoundary,
+      {
+        endpoint: ENDPOINT,
+        fetch: fn,
+        fallback: (_error, send, sending) => {
+          report = send;
+          return createElement(
+            "button",
+            { type: "button", disabled: sending, onClick: () => void send() },
+            sending ? "sending" : "tell us",
+          );
+        },
+      },
+      createElement(Boom),
+    ),
+  );
+
+  // A worried person clicks the button twice. It is the same render error both
+  // times, so it must be the same send.
+  let first!: Promise<boolean>;
+  let second!: Promise<boolean>;
+  await act(async () => {
+    first = report();
+    second = report();
+  });
+  assert.equal(first, second, "the second call joined the first send");
+  assert.equal(bodies.length, 1, "one POST, not two");
+  assert.equal(container.querySelector("button")?.textContent, "sending");
+
+  await act(async () => {
+    release();
+    await flush();
+  });
+  assert.equal(await first, true);
+  assert.equal(container.querySelector("button")?.textContent, "tell us", "and it is over");
+
+  // The report is filed. Clicking again is the same click.
+  await act(async () => {
+    void report();
+    await flush();
+  });
+  assert.equal(bodies.length, 1, "a click after a successful send files nothing new");
+  cleanup();
+});
+
+test("a send that failed can be tried again", async () => {
+  const { fn, bodies } = fakeFetch(500);
+  let report!: () => Promise<boolean>;
+  await renderQuietly(
+    createElement(
+      BugReportBoundary,
+      {
+        endpoint: ENDPOINT,
+        fetch: fn,
+        fallback: (_error, send) => {
+          report = send;
+          return createElement("p", null, "broken");
+        },
+      },
+      createElement(Boom),
+    ),
+  );
+
+  await act(async () => {
+    assert.equal(await report(), false);
+  });
+  await act(async () => {
+    assert.equal(await report(), false);
+  });
+  assert.equal(bodies.length, 2, "the guard is lifted by a failure, not by a success");
+  cleanup();
+});
+
 test("a render error is described with its stack and its component stack", () => {
   const described = describeRenderError(new TypeError("nope"), "\n    at Row\n    at Table");
   assert.match(described, /^TypeError: nope/);

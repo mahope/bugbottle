@@ -133,9 +133,12 @@ about 190, and both are on by default, so the core, the hook, the panel and the
 script tag all carry them. The react budget is measured on the hook
 alone; `BugReportBoundary` costs about 370 bytes more for the applications that
 import it. `bugbottle/ui` moved from 8 kB to 9 kB when the panel started
-importing `bugbottle/triggers`, so a keyboard shortcut works with no wiring.
-`bugbottle/triggers` is budgeted at 1200 bytes (measures about 1130): a
-standalone 2.3 kB minified module has no compression dictionary to share.
+importing `bugbottle/triggers`, so a keyboard shortcut works with no wiring,
+and to 9.25 kB when those triggers learnt about shadow roots.
+`bugbottle/triggers` is budgeted at 1300 bytes (measures about 1265): a
+standalone 2.7 kB minified module has no compression dictionary to share, and
+the shadow-DOM fix — the composed path plus the focus chain through
+`shadowRoot.activeElement` — added about 130 bytes to the 1133 it used to be.
 `bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
 of its bundle is `buildSelector`, which an app that also points at elements
 already pays for — the marginal cost there is around 0.55 kB.
@@ -143,21 +146,19 @@ already pays for — the marginal cost there is around 0.55 kB.
 the review fixes (one `loadend` listener per instance, an era guard on
 in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
-tree-shaken away. `bugbottle/queue` is budgeted at 1024 bytes and measures
-about 1000: it imports only a type, so that number is the module itself.
-`bugbottle/vue` and `bugbottle/svelte` are budgeted at 1536 bytes each, but
-*marginally*: a bundle of either weighs about 5.2 kB, nearly all of it the
-capture, the picker and the send that any form pays for, so CI subtracts a
-bundle of `buildReport`/`sendReport`/`captureScreenshot`/`pickElement`
-(4004 bytes) and checks the difference — 1315 bytes for Vue and 1186 for
-Svelte when they landed. The refactor onto `src/report-state.ts` cost
-`bugbottle/react` 66 bytes (5174 → 5240). The IIFE budget is 17920 bytes
-gzipped (about 17.2 kB with the queue, the triggers and the accessibility
-pass); masking, the queue and the triggers each cost it roughly half a
-kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35: the
-focus trap and return, the radiogroup and its arrow keys, the live region and
-the two-scheme colours are about 0.7 kB, and five new locale strings are the
-rest — in the IIFE, times eight languages.
+tree-shaken away. `bugbottle/queue` is budgeted at 1330 bytes and measures
+about 1290: it imports only a type, so that number is the module itself. It was
+986 against a 1024 budget until the multi-tab fix — every write re-reads
+storage and merges by report id, and a report is claimed before it is
+delivered — which is a read-modify-write, a claim and a release where there
+used to be one `setItem`. `bugbottle/vue` and `bugbottle/svelte` are budgeted
+at 1536 bytes each, but *marginally*: a bundle of either weighs about 5.4 kB,
+nearly all of it the capture, the picker and the send that any form pays for,
+so CI subtracts a bundle of `buildReport`/`sendReport`/`captureScreenshot`/
+`pickElement` and checks the difference. The IIFE budget is 18432 bytes gzipped
+(about 18 kB with the queue, the triggers, the accessibility pass and the 0.6
+evidence); masking, the queue and the triggers each cost it roughly half a
+kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

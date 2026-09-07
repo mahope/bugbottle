@@ -285,10 +285,12 @@ import { BugReportBoundary } from "bugbottle/react";
 
 <BugReportBoundary
   endpoint="/api/feedback"
-  fallback={(error, report) => (
+  fallback={(error, report, sending) => (
     <div role="alert">
       <p>This part of the page stopped working.</p>
-      <button onClick={report}>Tell us what happened</button>
+      <button onClick={report} disabled={sending}>
+        {sending ? "Sending…" : "Tell us what happened"}
+      </button>
     </div>
   )}
 >
@@ -302,6 +304,12 @@ button can say "sent". Nothing is sent until it is called: a report is a
 message from a person, and sending one on their behalf without asking is
 telemetry, which this library is not. `onReport(error, id)` and
 `onError(error)` are there for the surrounding application.
+
+Calling it twice files one report: a second call while the first is in flight
+gets the same promise, and a call after a successful send does nothing, because
+it is the same render error either way. A send that failed can be tried again.
+The third argument, `sending`, is true while one is in flight, for a button
+that should say so.
 
 For the errors that reach the root, React 19 takes two handlers, and
 `createRootErrorHandlers` builds both:
@@ -338,7 +346,12 @@ const offErrors = onUncaughtError((error) => {
 `mod` is Command on a Mac and Control everywhere else, so one string covers
 both. The shortcut never fires while the reporter is typing in a field or a
 `contenteditable` region, and a match is `preventDefault`ed so the browser does
-not also act on it. `onUncaughtError` listens for `error` and
+not also act on it. "Typing" includes typing inside a shadow root: a keystroke
+that crosses a shadow boundary is retargeted to the host on the way out, so the
+check reads `event.composedPath()[0]` as well as `target`, and follows
+`document.activeElement` down through every `shadowRoot.activeElement`. That
+covers the panel this package ships, which lives in one. `onUncaughtError`
+listens for `error` and
 `unhandledrejection`, describes each one the same way, and calls you at most
 once per fingerprint (message plus the first stack frame) per `dedupeMs` —
 60 000 by default — which is what makes it safe to open a panel from. Pass
@@ -353,6 +366,10 @@ const widget = mountBugbottle({
   openOnError: { prefill: true },
 });
 ```
+
+The shortcut opens the panel and closes it again — except while the caret is in
+the panel's own box, where the keystroke belongs to the reporter and Escape or
+the close button is the way out.
 
 `openOnError` is off unless you ask for it: a panel that appears uninvited is a
 decision about your product, not a default. Switched on, an uncaught error
@@ -451,7 +468,27 @@ two with one, so a queued item that would not fit — over 1 MB serialised —
 loses its screenshot and keeps everything else: the message, the console, the
 breadcrumbs, the requests. If `localStorage` is unavailable at all, as in
 Safari's private mode, the queue stays in memory for the life of the page
-rather than refusing to work.
+rather than refusing to work. A full quota is not the same thing: what is
+already stored is still read and still delivered, and only the writes go
+memory-only.
+
+### Two tabs, one queue
+
+`localStorage` belongs to the origin, not the tab, and it cannot be changed
+atomically. The queue takes that seriously: each report is given a random id
+when it is queued, and every write re-reads the stored array and merges by id
+rather than replacing it. Before a report is delivered it is claimed — a
+timestamp written into storage that asks the other tabs to leave it alone for
+30 seconds — and a successful delivery removes it by id from a freshly read
+array. So a second tab does not lose your reports, deliver them again, or put
+back one you have just sent.
+
+The honest limit: this is a lease, not a lock. Two tabs that read, decide and
+write within the same few milliseconds can both claim one report and post it
+twice. The window is the length of one read-modify-write, the failure is a
+duplicate rather than a loss, and `fingerprint(report)` is there if duplicates
+matter to your storage. A tab closed mid-delivery leaves its claim behind, and
+the next tab picks the report up 30 seconds later.
 
 Without a queue, a send can still survive the page closing under it:
 
@@ -1391,7 +1428,8 @@ post type with an admin list, and emails them if you want. One activation.
 `QueuedReport` types. See "When the network is down".
 
 **`bugbottle/triggers`** — `onShortcut`, `onUncaughtError`, `parseShortcut`,
-`matchesShortcut`, `isEditableTarget`, `isApplePlatform`, `describeUncaught`,
+`matchesShortcut`, `isEditableTarget`, `eventSource`, `deepActiveElement`,
+`isApplePlatform`, `describeUncaught`,
 `DEFAULT_SHORTCUT`, `DEFAULT_DEDUPE_MS`, and the `Shortcut`, `ShortcutEvent`,
 `ShortcutOptions`, `UncaughtError`, `UncaughtErrorOptions` and `ListenerHost`
 types.
