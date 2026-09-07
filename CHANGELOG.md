@@ -17,7 +17,8 @@ change the API; the changelog says so when they do.
   report endpoint are skipped. `buildReport` attaches them as `network`
   (`includeNetwork: false` leaves them out), `toMarkdown` renders a "Requests"
   table, and `normaliseNetwork` with `MAX_NETWORK_ENTRIES` validates them on
-  the server. Its own entry point, 1174 bytes gzipped, budgeted at 1228 in CI.
+  the server. Its own entry point, 1174 bytes gzipped when it landed, budgeted
+  at 1330 in CI after the fixes below.
   Request and response bodies and headers are never recorded, in either
   direction; sensitive query values in the URL are redacted, and a cross-origin
   URL keeps its origin.
@@ -25,16 +26,7 @@ change the API; the changelog says so when they do.
   its own, so a module can redact a URL without carrying the whole scrubber.
 - `window.bugbottle.initNetwork` in the script-tag build, with a `data-network`
   attribute that turns the network log on from the tag. The IIFE budget moves
-  from 12288 to 13824 bytes gzipped to make room; the bundle is 12600.
-
-### Changed
-
-- The canonical address of the project is now <https://bugbottle.dev>: canonical,
-  `hreflang` and OpenGraph tags on the landing page, the README link and the
-  npm `homepage` point there. bugbottle.mahoje.dk stays as an alias for the
-  same deployment.
-
-### Added
+  from 12288 to 14336 bytes gzipped to make room; the bundle measures 13754.
 
 - Screenshot masking, on by default. `captureScreenshot` now hides what the
   reporter typed before it calls the renderer and puts it back in a `finally`,
@@ -61,6 +53,11 @@ change the API; the changelog says so when they do.
   application measures what capture costs it.
 
 ### Changed
+
+- The canonical address of the project is now <https://bugbottle.dev>: canonical,
+  `hreflang` and OpenGraph tags on the landing page, the README link and the
+  npm `homepage` point there. bugbottle.mahoje.dk stays as an alias for the
+  same deployment.
 
 - The budget for `bugbottle/react` rises from 4 kB gzipped to 5 kB and the
   script-tag build from 12 kB to 13 kB, both measured after masking landed
@@ -104,6 +101,43 @@ change the API; the changelog says so when they do.
 - `site/og.png` (1200x630, rendered from the new `site/og.svg` with headless
   Chrome) is wired as `og:image` and `twitter:image` on both pages, and the
   Dockerfile copies it into the image.
+
+### Fixed
+
+- `data-bugbottle-block` on a replaced element — `img`, `canvas`, `video`,
+  `iframe`, `input`, `embed`, `object`, `svg` — did nothing at all. None of
+  them render children, so the overlay was appended into a tree nobody paints
+  and the region was photographed in full while looking annotated. Those
+  elements are now hidden for the render and covered by a sibling rectangle
+  positioned over the box they occupied; both are put back afterwards.
+- Inputs inside a web component were photographed unmasked.
+  `querySelectorAll` does not cross a shadow boundary, but a renderer clones
+  `shadowRoot` children into the picture, so every pass now walks open shadow
+  roots as well. Closed roots still cannot be masked, and the README says so.
+- An overlay could be painted over from underneath: a positioned descendant of
+  a blocked element, or content overflowing its box, came out on top. The
+  overlay now carries `z-index: 2147483647` and the blocked element is clipped
+  with `overflow: hidden` for the length of the render.
+- A mask pass that threw part way through left the page half masked. `applyMask`
+  now unwinds what it had already changed before rethrowing, and
+  `captureScreenshot` applies the mask inside the `try` that its restoring
+  `finally` belongs to. Masking is the one part of a capture that does not fail
+  open: an unmasked picture is worse than no picture.
+- A reused `XMLHttpRequest` recorded itself once per `send` it had ever had.
+  The `loadend` listener was registered on every `send`, so the second request
+  produced two entries and the third produced three, each copy timed from an
+  older `send` and therefore longer than the request took. The listener is now
+  registered once per instance and reads the start time from the record `send`
+  sets.
+- `resetNetwork` uninstalled other people's instrumentation. It assigned the
+  originals back over whatever was in `fetch`, `open` and `send`, which
+  silently removed any wrapper another library had put on top of ours. It now
+  restores only what is still ours and leaves a stranger's wrapper alone;
+  `record` is a no-op while nothing is initialised, so a wrapper still calling
+  through costs a function call and nothing more.
+- A request still in flight when the recorder was reset used to land in the
+  buffer of the next `initNetwork`. Each patch now remembers which run it
+  belongs to, and `initNetwork` starts from an empty buffer.
 
 ## 0.4.0
 

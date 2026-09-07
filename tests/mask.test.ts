@@ -237,3 +237,78 @@ test("a nonsense selector costs nothing but its own pass", async () => {
   assert.equal(value, "•••••••");
   assert.equal(field().value, "hunter2");
 });
+
+test("a blocked replaced element is hidden and covered from the outside", async () => {
+  const root = page(`<div id="frame"><img data-bugbottle-block src="avatar.png"></div>`);
+  const image = () => document.querySelector("img") as HTMLElement;
+  let children = -1;
+  let overlays = -1;
+  let visibility = "unset";
+  await capture(root, () => {
+    // An `img` renders no children, so an overlay appended to it would be in
+    // the tree and in nobody's picture.
+    children = image().querySelectorAll("[data-bugbottle-mask-overlay]").length;
+    overlays = document.querySelectorAll("[data-bugbottle-mask-overlay]").length;
+    visibility = image().style.visibility;
+  });
+  assert.equal(children, 0, "there is nowhere inside a replaced element to put an overlay");
+  assert.equal(overlays, 1, "so the overlay is a sibling positioned over its box");
+  assert.equal(visibility, "hidden", "and the image itself is out of the picture");
+  assert.equal(image().style.visibility, "", "restored afterwards");
+  assert.equal(document.querySelectorAll("[data-bugbottle-mask-overlay]").length, 0);
+});
+
+test("an input inside an open shadow root is masked too", async () => {
+  const root = page(`<div id="host"></div>`);
+  const host = document.querySelector("#host") as HTMLElement;
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `<input value="hunter2"><p data-bugbottle-mask>Ada</p>`;
+  const inner = () => shadow.querySelector("input") as HTMLInputElement;
+  const marked = () => shadow.querySelector("p") as HTMLElement;
+  let value = "";
+  let text = "";
+  await capture(root, () => {
+    value = inner().value;
+    text = marked().textContent ?? "";
+  });
+  assert.equal(value, "•••••••", "querySelectorAll stops at the boundary; the renderer does not");
+  assert.equal(text, "•••");
+  assert.equal(inner().value, "hunter2");
+  assert.equal(marked().textContent, "Ada");
+});
+
+test("the overlay outranks positioned content and the block element clips", async () => {
+  const root = page(`<div data-bugbottle-block>chart</div>`);
+  const blocked = () => document.querySelector("[data-bugbottle-block]") as HTMLElement;
+  let zIndex = "";
+  let overflow = "";
+  await capture(root, () => {
+    const overlay = document.querySelector("[data-bugbottle-mask-overlay]") as HTMLElement;
+    zIndex = overlay.style.zIndex;
+    overflow = blocked().style.overflow;
+  });
+  assert.equal(zIndex, "2147483647", "a positioned descendant must not paint over the mask");
+  assert.equal(overflow, "hidden", "and neither must content spilling out of the box");
+  assert.equal(blocked().style.overflow, "", "both restored");
+});
+
+test("a mask pass that throws still puts back what it had already changed", async () => {
+  const root = page(`<input value="hunter2"><p data-bugbottle-mask>Ada</p>`);
+  const text = (document.querySelector("p") as HTMLElement).firstChild as Text;
+  Object.defineProperty(text, "data", {
+    configurable: true,
+    get: () => "Ada",
+    set: () => {
+      throw new Error("mask is broken");
+    },
+  });
+  await assert.rejects(
+    captureScreenshot(async () => "data:image/png;base64,AAAA", {
+      root,
+      maxDataUrlLength: 1_000_000,
+    }),
+    /mask is broken/,
+    "masking is the one pass that must not fail open",
+  );
+  assert.equal(field().value, "hunter2", "the input the first pass had already bulleted");
+});

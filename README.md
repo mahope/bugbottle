@@ -748,6 +748,23 @@ into a `div` is only hidden if you mark it. Buttons, checkboxes and the other
 inputs that hold no typed text are left readable on purpose, because a
 screenshot of a form with every label blacked out helps nobody.
 
+Three limits worth knowing before you rely on it:
+
+- **A closed shadow root cannot be masked.** Masking walks open shadow roots,
+  so an input inside an ordinary web component is covered. A component that
+  attached its root with `{ mode: "closed" }` exposes no `shadowRoot` to walk,
+  and nothing inside it can be reached — by us or by anything else. Use
+  `exclude` on the host element instead.
+- **A focused textarea loses its caret position during the capture.** Swapping
+  the value for bullets and back moves the selection to the end of the field.
+  The text is unchanged; the cursor is not where it was.
+- **A blocked replaced element is hidden rather than overlaid.** An `img`,
+  `canvas`, `video`, `iframe`, `input`, `embed`, `object` or `svg` renders no
+  children, so `data-bugbottle-block` hides the element for the length of the
+  render and draws the rectangle over the box it occupied. The layout still
+  holds, but the covered area is a flat rectangle rather than the element with
+  a rectangle on top of it.
+
 ### Scrubbing
 
 The text of a report is written in a hurry, and it arrives carrying whatever was
