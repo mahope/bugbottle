@@ -54,6 +54,8 @@ const widget = mountBugbottle({
     out.textContent = lastReport
       ? toMarkdown(lastReport, { facts: { Demo: "bugbottle.dev" } })
       : "";
+    const copyPayload = out.parentElement.querySelector(".copy");
+    if (copyPayload) copyPayload.hidden = !out.textContent;
     out.scrollIntoView({ block: "nearest", behavior: "smooth" });
   },
 });
@@ -105,4 +107,46 @@ if (trigger) {
     attributeFilter: ["aria-expanded"],
   });
   sync();
+}
+
+// A copy button on every code slab, including the payload the demo renders.
+// It is built here rather than written into the two HTML files so the label
+// follows the page language in one place, and so a browser without a
+// clipboard never gets a button that cannot do anything.
+if (navigator.clipboard && window.isSecureContext) {
+  const copyLabel = danish ? "Kopi\u00e9r" : "Copy";
+  const copiedLabel = danish ? "Kopieret" : "Copied";
+  const failedLabel = danish ? "Kunne ikke kopiere" : "Could not copy";
+
+  for (const slab of document.querySelectorAll(".slab")) {
+    const tab = slab.querySelector(".slab-tab");
+    const pre = slab.querySelector("pre");
+    if (!tab || !pre) continue;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "copy";
+    button.textContent = copyLabel;
+    // The slab tab names the file, so the button says which one it copies.
+    button.setAttribute("aria-label", `${copyLabel}: ${tab.textContent.trim()}`);
+    // The payload starts empty; its button appears when there is a report.
+    if (pre.id === "payload" && !pre.textContent) button.hidden = true;
+    tab.append(button);
+
+    let restore;
+    button.addEventListener("click", async () => {
+      clearTimeout(restore);
+      try {
+        await navigator.clipboard.writeText(pre.textContent);
+        button.textContent = copiedLabel;
+        button.dataset.copied = "true";
+      } catch {
+        button.textContent = failedLabel;
+      }
+      restore = setTimeout(() => {
+        button.textContent = copyLabel;
+        delete button.dataset.copied;
+      }, 2000);
+    });
+  }
 }

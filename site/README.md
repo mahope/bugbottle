@@ -11,7 +11,7 @@ and the favicon is an inline SVG.
 | `index.html` | English page |
 | `da/index.html` | Danish page — same structure, same sections, written for a Danish reader rather than translated |
 | `style.css` | Shared. Colour tokens on `:root`, redefined once for dark mode |
-| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal |
+| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
 | `og.svg` | Source of the OpenGraph picture. Not served |
 | `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
@@ -40,7 +40,14 @@ renderer is given and the panel does not offer the checkbox.
 page, message filled in, an element pointed at, taken headless at 2x with the
 global `puppeteer-core` and Chrome and saved at `site/panel.png`. It carries
 `width`/`height` on the `<img>` so the hero does not shift while it loads, and
-it must stay under 150 kB. Re-capture it whenever the panel's own look changes
+it must stay under 150 kB.
+
+The `<img>` sits inside a `.shot-frame`, which is what actually reserves the
+space: the frame owns the aspect ratio (16/11 on a desktop, 5/4 on a phone)
+and the picture fills it with `object-fit: cover` anchored to its right edge,
+where the panel is. So the crop comes off the left, which is only the page
+behind the panel at a size nobody can read. A replacement capture should keep
+the panel at the right of the frame or the crop will cut it. Re-capture it whenever the panel's own look changes
 enough that the screenshot stops matching — there is no build step that keeps
 it in sync automatically.
 
@@ -56,6 +63,15 @@ await page.setViewport({ width: 1200, height: 630 });
 await page.setContent(`<!doctype html><meta charset="utf-8">` + svgSource);
 await page.screenshot({ path: "site/og.png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
 ```
+
+## The copy buttons
+
+Every `.slab` on the page gets a copy button, built in `demo.js` rather than
+written into the two HTML files: the label then follows
+`document.documentElement.lang` in one place, and a browser without
+`navigator.clipboard` — or a page served over plain HTTP — never gets a button
+that cannot do anything. The button on the demo payload starts hidden and
+appears when there is a report to copy.
 
 ## Motion
 

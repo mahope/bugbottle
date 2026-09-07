@@ -36,15 +36,14 @@
       </svg>
       bugbottle
     </a>
-    <nav aria-label="Websted">
+    <nav class="site-nav" aria-label="Websted">
+      <a href="/docs/" hreflang="en">Dokumentation</a>
       <a href="https://github.com/mahope/bugbottle">GitHub</a>
       <a href="https://www.npmjs.com/package/bugbottle">npm</a>
-      <a href="https://github.com/mahope/bugbottle#readme" hreflang="en">Dokumentation</a>
-      <span class="lang">
-        <a href="/" lang="en" hreflang="en">EN</a>
-        <span aria-hidden="true">/</span>
-        <a href="/da/" aria-current="true" lang="da" hreflang="da">DA</a>
-      </span>
+    </nav>
+    <nav class="lang" aria-label="Sprog">
+      <a href="/" lang="en" hreflang="en">EN</a>
+      <a href="/da/" aria-current="page" lang="da" hreflang="da">DA</a>
     </nav>
   </div>
 </header>
@@ -71,7 +70,7 @@
         <div class="actions">
           <a class="button primary" href="#demo">Åbn panelet</a>
           <a class="button" href="#start">Installér det</a>
-          <a class="button" href="https://github.com/mahope/bugbottle#readme" hreflang="en">Læs dokumentationen</a>
+          <a class="button" href="/docs/" hreflang="en">Læs dokumentationen</a>
         </div>
         <p class="stamp">
           Version 0.5.0, udgivet 7. september 2026. Ingen afhængigheder.
@@ -80,7 +79,9 @@
       </div>
 
       <figure class="shot">
-        <img src="/panel.png" width="1760" height="1074" alt="bugbottle-panelet åbent oven på denne side: en besked om en gem-knap, der ikke gør noget, elementet brugeren har peget på, og en send-knap." loading="eager" decoding="async">
+        <div class="shot-frame">
+          <img src="/panel.png" width="1760" height="1074" alt="bugbottle-panelet åbent oven på denne side: en besked om en gem-knap, der ikke gør noget, elementet brugeren har peget på, og en send-knap." loading="eager" decoding="async">
+        </div>
         <figcaption>
           Panelet fra <code>bugbottle/ui</code>, taget her på siden. Knappen i hjørnet
           åbner det samme.
@@ -268,28 +269,34 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
   <section id="demo" class="reveal">
     <div class="wrap">
       <h2>Åbn panelet, og læs hvad der ville være blevet sendt</h2>
-      <div class="demo-grid">
-        <div>
-          <p>
-            Knappen i hjørnet er det rigtige <code>bugbottle/ui</code>-panel med den
-            danske sprogfil, kørende fra den samme <code>dist/</code>, som npm sender ud.
-            Åbn det, skriv en linje, peg på noget her på siden, og tryk send.
-          </p>
-          <p>
-            Der er ingen server bag. Demoen giver biblioteket sit eget
-            <code>fetch</code>, gemmer den rapport, der ville være blevet sendt, og viser
-            den her med <code>toMarkdown</code> fra <code>bugbottle/server</code>, som er
-            den samme funktion, du ville bruge til teksten i en sag. Intet forlader din
-            browser. Skærmbilleder er slået fra her, fordi demoen ikke har noget privat
-            sted at lægge dem.
-          </p>
-          <p><button type="button" class="button primary" id="demo-open">Åbn panelet</button></p>
-        </div>
-        <div>
-          <h3 id="payload-heading">Rapporten som Markdown</h3>
-          <div class="slab">
-            <div class="slab-tab">toMarkdown(rapport)</div>
-            <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send en rapport, så står den her."></pre>
+      <div class="demo-plate">
+        <div class="demo-grid">
+          <div>
+            <p class="demo-lede">
+              Knappen i hjørnet er det rigtige <code>bugbottle/ui</code>-panel med den
+              danske sprogfil, kørende fra den samme <code>dist/</code>, som npm sender
+              ud. Åbn det, skriv en linje, peg på noget her på siden, og tryk send.
+            </p>
+            <p>
+              Der er ingen server bag. Demoen giver biblioteket sit eget
+              <code>fetch</code>, gemmer den rapport, der ville være blevet sendt, og
+              viser den her med <code>toMarkdown</code> fra <code>bugbottle/server</code>,
+              som er den samme funktion, du ville bruge til teksten i en sag.
+              Skærmbilleder er slået fra her, fordi demoen ikke har noget privat sted at
+              lægge dem.
+            </p>
+            <p><button type="button" class="button primary" id="demo-open">Åbn panelet</button></p>
+          </div>
+          <div class="demo-out">
+            <h3 id="payload-heading">Rapporten som Markdown</h3>
+            <div class="slab">
+              <div class="slab-tab">toMarkdown(rapport)</div>
+              <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send en rapport, så står den her."></pre>
+            </div>
+            <p class="demo-note">
+              Der bliver ikke sendt noget. Der findes ingen server bag siden: rapporten
+              bliver bygget og vist i din egen browser, og lukker du fanen, er den væk.
+            </p>
           </div>
         </div>
       </div>
