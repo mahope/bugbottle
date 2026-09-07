@@ -13,6 +13,24 @@
 
 export { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 
+// The sinks live here and nowhere else: they carry API keys and webhook URLs,
+// neither of which has any business in a browser bundle.
+export { SinkError, type FetchLike } from "../sinks/error.ts";
+
+export {
+  sendReportEmail,
+  type SendReportEmailOptions,
+  type SendReportEmailResult,
+} from "../sinks/resend.ts";
+
+export {
+  sendReportWebhook,
+  DISCORD_MAX_CONTENT,
+  type SendReportWebhookOptions,
+  type SendReportWebhookResult,
+  type WebhookFormat,
+} from "../sinks/webhook.ts";
+
 export {
   decodeScreenshotDataUrl,
   InvalidScreenshotError,
