@@ -25,6 +25,7 @@ import { locales, resolveLocale, type Locale } from "./locales.ts";
 import { initNetwork } from "./network.ts";
 import { scrubReport } from "./scrub.ts";
 import { buildReport, sendReport } from "./send.ts";
+import { onShortcut, onUncaughtError } from "./triggers.ts";
 import { mountBugbottle, type MountOptions, type Theme } from "./ui/index.ts";
 
 /** Replaced by esbuild with the version in `package.json`. */
@@ -43,6 +44,10 @@ const api = {
   buildReport,
   sendReport,
   pickElement,
+  // The panel wires both of these itself; they are exposed for the page that
+  // wants a shortcut without the panel, and they cost nothing extra here.
+  onShortcut,
+  onUncaughtError,
 };
 
 declare global {
@@ -97,6 +102,14 @@ function autoMount(data: DOMStringMap): void {
     if (data.logo) options.brand.logo = data.logo;
   }
   if (data.trigger) options.trigger = data.trigger;
+  // `data-shortcut="off"` is the only way to have none: the combination is on
+  // by default, so an attribute that merely set it would never be written.
+  if (data.shortcut) options.shortcut = data.shortcut === "off" ? false : data.shortcut;
+  // Any value opens the panel on an uncaught error; `"prefill"` also puts the
+  // error message in the box.
+  if (data.openOnError !== undefined) {
+    options.openOnError = data.openOnError === "prefill" ? { prefill: true } : true;
+  }
   // Masking is on by default, so the attribute only exists to switch it off:
   // a page that wants the screenshot exactly as the reporter sees it says so.
   if (data.mask === "off") options.mask = false;

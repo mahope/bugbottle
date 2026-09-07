@@ -6,8 +6,8 @@ Short version. The reasoning is in `research-features.md` and
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1 kB gzipped, `bugbottle/react` under 5 kB, `bugbottle/ui`
-under 8 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
-1.2 kB, the script-tag build under 14 kB.
+under 9 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
+1.2 kB, `bugbottle/triggers` under 1.2 kB, the script-tag build under 15 kB.
 
 ## Already shipped
 
@@ -40,6 +40,16 @@ review: a body deadline as well as a body ceiling, a per-sink deadline, a
 capped and clipped rate-limit map, 405 for anything that is not a POST, and a
 screenshot store that may fail without taking the report with it.
 
+**0.6** — `bugbottle/triggers`: a keyboard shortcut (`mod+shift+b`, quiet
+while the reporter is typing) and an opt-in auto-open on uncaught errors,
+deduplicated by fingerprint so a render loop opens one panel. `shortcut` and
+`openOnError` on `mountBugbottle`, `data-shortcut` and `data-open-on-error` on
+the script tag, and `ui.openedByError` in all eight locales. `BugReportBoundary`
+and React 19's `createRootErrorHandlers` in `bugbottle/react`. And the shared
+`fingerprint(report)`, which `handleReport` uses for `dedupe: { windowMs }` —
+a repeat answers 200 `{ id, duplicate: true }` without storing or delivering it
+twice.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -50,17 +60,17 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
   frames alongside the raw stack.
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
   `localStorage`, flushed on `online`.
-- Dedup and rate limit by fingerprint.
+- Rate limit by fingerprint. (Dedup by fingerprint shipped, client and server.)
 - `report.schema.json` generated from the types, so a receiver can be built
   without the library.
 
 ## 0.6 — adapters and triggers
 
 - Vue, Svelte and Solid adapters, each a few lines over `buildReport`.
-- Triggers: keyboard shortcut, auto-open on uncaught error (opt-in, deduped),
-  shake-to-report in its own entry.
-- React error boundary adapter; performance snapshot from buffered
-  `PerformanceObserver` entries; storage snapshot (keys and lengths only).
+- Shake-to-report in its own entry. (The keyboard shortcut, the auto-open and
+  the React error boundary shipped; see "Already shipped".)
+- Performance snapshot from buffered `PerformanceObserver` entries; storage
+  snapshot (keys and lengths only).
 - Optional HMAC signature (WebCrypto) verified by the server helper. Documented
   honestly as spam deterrence, not authentication.
 - More sinks: Linear, Jira, GitLab. Sentry envelope.

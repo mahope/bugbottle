@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   handleReport,
+  resetDedupe,
   resetRateLimits,
   toGithub,
   toResend,
@@ -310,6 +311,73 @@ test("the rate limit counts callers separately", async () => {
   caller = "b";
   assert.equal((await handleReport(post(body), options)).status, 202);
   resetRateLimits();
+});
+
+test("a duplicate is answered 200 without storing or delivering it again", async () => {
+  resetDedupe();
+  const stored: string[] = [];
+  const delivered: string[] = [];
+  const options = {
+    dedupe: { windowMs: 60_000 },
+    store: async () => {
+      stored.push("row");
+      return { id: "rep_7" };
+    },
+    sinks: [
+      async () => {
+        delivered.push("sink");
+      },
+    ],
+  };
+
+  const first = await handleReport(post(body), options);
+  assert.equal(first.status, 201);
+  assert.deepEqual(await first.json(), { id: "rep_7" });
+
+  const second = await handleReport(post(body), options);
+  assert.equal(second.status, 200);
+  assert.deepEqual(await second.json(), { id: "rep_7", duplicate: true });
+  assert.deepEqual(stored, ["row"], "the second copy is not written");
+  assert.deepEqual(delivered, ["sink"], "and nobody is emailed about it twice");
+  resetDedupe();
+});
+
+test("a different report is not a duplicate, and a short window lets one through", async () => {
+  resetDedupe();
+  const options = { dedupe: { windowMs: 20 } };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 200);
+
+  const other = await handleReport(post({ ...body, message: "Something else entirely" }), options);
+  assert.equal(other.status, 202, "a different message is a different report");
+
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal((await handleReport(post(body), options)).status, 202, "the window has passed");
+  resetDedupe();
+});
+
+test("a duplicate without a stored id says so without inventing one", async () => {
+  resetDedupe();
+  const options = { dedupe: { windowMs: 60_000 } };
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  const second = await handleReport(post(body), options);
+  assert.deepEqual(await second.json(), { duplicate: true });
+  resetDedupe();
+});
+
+test("a custom dedupe key decides what counts as the same report", async () => {
+  resetDedupe();
+  const options = {
+    dedupe: { windowMs: 60_000, key: (report: ValidatedReport) => report.type },
+    store: async () => ({ id: "rep_8" }),
+  };
+  assert.equal((await handleReport(post(body), options)).status, 201);
+  // Same type, entirely different message: this key says they are one report.
+  const second = await handleReport(post({ ...body, message: "Nothing alike" }), options);
+  assert.equal(second.status, 200);
+  assert.deepEqual(await second.json(), { id: "rep_8", duplicate: true });
+  resetDedupe();
 });
 
 test("extra keeps unknown scalars, clips strings and drops nested objects", async () => {

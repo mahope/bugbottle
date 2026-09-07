@@ -21,6 +21,9 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
 | `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |
+| `src/triggers.ts` | `onShortcut(combo, handler)` and `onUncaughtError(handler, options)` — the two ways into the panel that need no button. Own entry point. Listeners only: never renders, never sends | fingerprint |
+| `src/fingerprint.ts` | `fingerprint(report)` + `stableHash(text)` — one identity for a report, computed the same way in the browser and on the server. Imported by nothing in the core entry, so it is tree-shaken when unused | nothing |
+| `src/react/boundary.ts` | `BugReportBoundary` (catches a render error, renders your fallback with a `report()`) and `createRootErrorHandlers` for React 19. No JSX — `tsc` alone builds this package | send, fingerprint |
 | `src/registry.ts` | Two slots: `initBreadcrumbs` and `initNetwork` register getters, `send.ts` reads them. Keeps the core free of the recorders | report-core (types) |
 | `src/send.ts` | `buildReport`, `sendReport` — framework-agnostic | capture, console-buffer, report-core |
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
@@ -39,8 +42,9 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Eight entry points in `package.json#exports`: `.`, `./react`, `./server`,
-`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`. Keep them separate:
+Nine entry points in `package.json#exports`: `.`, `./react`, `./server`,
+`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
+`./triggers`. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -93,9 +97,16 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5 kB gzipped and `bugbottle/ui` under 8 kB (CI enforces both;
-4.5 kB and 7.4 kB with masking), and the bare core under 1 kB (0.9 kB).
-The script-tag build is budgeted at 13 kB and measures 12.2 kB.
+stay under 5 kB gzipped and `bugbottle/ui` under 9 kB (CI enforces both;
+5008 and 9043 bytes as of the triggers release), and the bare core under 1 kB
+(801 bytes). The `bugbottle/react` budget is measured on the hook alone, which
+is what CI bundles; adding `BugReportBoundary` to that import costs about
+370 bytes more. `bugbottle/ui` moved from 8 kB to 9 kB when the panel started
+importing `bugbottle/triggers`, so that a keyboard shortcut works with no
+wiring — the panel and the triggers are now bought together.
+`bugbottle/triggers` is budgeted at 1200 bytes and measures 1133: the roadmap
+aimed at 1 kB, but a standalone 2.3 kB minified module has no compression
+dictionary to share and lands at about half its raw size.
 `bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
 of its bundle is `buildSelector`, which an app that also points at elements
 already pays for — the marginal cost there is around 0.55 kB.
@@ -103,9 +114,10 @@ already pays for — the marginal cost there is around 0.55 kB.
 the review fixes (one `loadend` listener per instance, an era guard on
 in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
-tree-shaken away. The IIFE budget is 14336 bytes gzipped and the bundle
-measures 13754; masking replaced elements and shadow roots costs about 500 of
-those, and about 390 of the react and ui bundles.
+tree-shaken away. The IIFE budget is 15360 bytes gzipped and the bundle
+measures 15111; masking replaced elements and shadow roots costs about 500 of
+those, and about 390 of the react and ui bundles, and the triggers plus the
+ninth locale string cost about 1330 more.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

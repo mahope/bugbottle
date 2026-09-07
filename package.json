@@ -56,6 +56,10 @@
       "types": "./dist/network.d.ts",
       "default": "./dist/network.js"
     },
+    "./triggers": {
+      "types": "./dist/triggers.d.ts",
+      "default": "./dist/triggers.js"
+    },
     "./locales": {
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"
