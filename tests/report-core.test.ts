@@ -4,8 +4,11 @@ import {
   decodeScreenshotDataUrl,
   InvalidScreenshotError,
   isReportType,
+  normaliseConsole,
   normaliseContext,
   normaliseMessage,
+  MAX_CONSOLE_ENTRIES,
+  MAX_CONSOLE_MESSAGE_LENGTH,
   MAX_MESSAGE_LENGTH,
   MAX_SCREENSHOT_BYTES,
   REPORT_TYPES,
@@ -114,4 +117,51 @@ test("missing or nonsense context does not throw", () => {
   assert.deepEqual(normaliseContext(null), empty);
   assert.deepEqual(normaliseContext("nonsense"), empty);
   assert.deepEqual(normaliseContext(42), empty);
+});
+
+const NUL = String.fromCharCode(0);
+
+test("malformed base64 is refused with InvalidScreenshotError, not a DOMException", () => {
+  assert.throws(
+    () => decodeScreenshotDataUrl("data:image/png;base64,!!!not base64!!!"),
+    InvalidScreenshotError,
+  );
+});
+
+test("null bytes are stripped so a database insert cannot fail on them", () => {
+  assert.equal(normaliseMessage(`save ${NUL}failed`), "save failed");
+  assert.equal(normaliseMessage(` ${NUL}${NUL} `), null, "only null bytes means empty");
+  assert.equal(normaliseContext({ url: `/a${NUL}b` }).url, "/ab");
+  assert.equal(normaliseConsole([{ ts: "", level: "error", message: `x${NUL}y` }])[0]?.message, "xy");
+});
+
+test("console entries are validated, clipped and capped at the most recent", () => {
+  const raw = [
+    { ts: "2026-09-07T08:00:00.000Z", level: "error", message: "real" },
+    { ts: "not a date", level: "warn", message: "odd timestamp is kept as empty" },
+    { ts: "", level: "log", message: "unknown level is dropped" },
+    { ts: "", level: "error", message: 42 },
+    { ts: "", level: "error" },
+    "a string",
+    null,
+    { ts: "", level: "error", message: "m".repeat(2000) },
+  ];
+  const entries = normaliseConsole(raw);
+  assert.equal(entries.length, 3);
+  assert.deepEqual(entries[0], { ts: "2026-09-07T08:00:00.000Z", level: "error", message: "real" });
+  assert.equal(entries[1]?.ts, "");
+  assert.equal(entries[2]?.message.length, MAX_CONSOLE_MESSAGE_LENGTH);
+  assert.equal(Object.keys(entries[0] ?? {}).length, 3, "no extra keys are carried through");
+
+  const many = Array.from({ length: 80 }, (_, i) => ({ ts: "", level: "error", message: `e${i}` }));
+  const capped = normaliseConsole(many);
+  assert.equal(capped.length, MAX_CONSOLE_ENTRIES);
+  assert.equal(capped[0]?.message, "e30", "the oldest are dropped");
+  assert.equal(normaliseConsole(many, { maxEntries: 5 }).length, 5);
+});
+
+test("a missing or nonsense console section is an empty list, never a throw", () => {
+  for (const bad of [undefined, null, "x", 1, {}, [{}]]) {
+    assert.deepEqual(normaliseConsole(bad), []);
+  }
 });

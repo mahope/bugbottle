@@ -6,7 +6,26 @@ on:
   pull_request:
 
 jobs:
-  test:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    name: Node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm pack --dry-run
+
+  bundle:
+    name: Bundles without html-to-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,6 +34,28 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
       - run: npm run build
+      - run: npm pack --pack-destination /tmp
+      - name: Install the tarball in a project that has no html-to-image
+        run: |
+          mkdir /tmp/consumer && cd /tmp/consumer
+          npm init -y >/dev/null
+          npm i --silent /tmp/bugbottle-*.tgz esbuild@0.24.0
+          echo 'import { initConsoleBuffer, buildReport } from "bugbottle"; initConsoleBuffer(); buildReport({ type: "bug", message: "x" });' > core.js
+          echo 'import { useBugReport } from "bugbottle/react"; export { useBugReport };' > react.js
+          echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
+      - name: Bundle each entry and report gzipped sizes
+        working-directory: /tmp/consumer
+        run: |
+          set -e
+          npx esbuild core.js --bundle --minify --format=esm --outfile=out-core.js
+          npx esbuild react.js --bundle --minify --format=esm --external:react --outfile=out-react.js
+          npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
+          for f in out-core out-react out-server; do
+            echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
+          done
+          react=$(gzip -c out-react.js | wc -c)
+          if [ "$react" -gt 3584 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 3584" >&2
+            exit 1
+          fi

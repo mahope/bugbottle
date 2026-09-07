@@ -13,14 +13,14 @@
  * disappears from the developer console.
  */
 
-export type ConsoleLevel = "error" | "warn";
+import {
+  MAX_CONSOLE_ENTRIES,
+  MAX_CONSOLE_MESSAGE_LENGTH,
+  type ConsoleEntry,
+  type ConsoleLevel,
+} from "./report-core.ts";
 
-export type ConsoleEntry = {
-  /** ISO 8601 timestamp. */
-  ts: string;
-  level: ConsoleLevel;
-  message: string;
-};
+export type { ConsoleEntry, ConsoleLevel };
 
 export type ConsoleBufferOptions = {
   /** How many entries to keep. Oldest are dropped first. Default 50. */
@@ -31,13 +31,18 @@ export type ConsoleBufferOptions = {
 
 type Limits = { maxEntries: number; maxMessageLength: number };
 
-const DEFAULTS: Limits = { maxEntries: 50, maxMessageLength: 500 };
+const DEFAULTS: Limits = {
+  maxEntries: MAX_CONSOLE_ENTRIES,
+  maxMessageLength: MAX_CONSOLE_MESSAGE_LENGTH,
+};
 
 let buffer: ConsoleEntry[] = [];
 let initialised = false;
 let limits: Limits = { ...DEFAULTS };
 let originalError: typeof console.error | null = null;
 let originalWarn: typeof console.warn | null = null;
+let onError: ((e: ErrorEvent) => void) | null = null;
+let onRejection: ((e: PromiseRejectionEvent) => void) | null = null;
 
 function serialise(args: unknown[], maxLength: number): string {
   return args
@@ -69,7 +74,9 @@ function push(level: ConsoleLevel, args: unknown[]): void {
  * Starts recording. Call once, as early as your app can manage — anything that
  * happens before this is not in the buffer.
  *
- * Safe to call more than once; only the first call patches the console.
+ * Safe to call more than once; only the first call patches the console. In a
+ * server-rendered app, call it from client-only code: it patches whichever
+ * `console` it finds, and on the server that is the server's.
  */
 export function initConsoleBuffer(options: ConsoleBufferOptions = {}): void {
   if (initialised) return;
@@ -94,12 +101,14 @@ export function initConsoleBuffer(options: ConsoleBufferOptions = {}): void {
   if (typeof window !== "undefined") {
     // Uncaught errors do not reach console.error in every browser, so they are
     // recorded directly.
-    window.addEventListener("error", (e) => {
+    onError = (e) => {
       push("error", [`Uncaught: ${e.message} (${e.filename}:${e.lineno})`]);
-    });
-    window.addEventListener("unhandledrejection", (e) => {
+    };
+    onRejection = (e) => {
       push("error", [`Unhandled rejection: ${serialise([e.reason], limits.maxMessageLength)}`]);
-    });
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
   }
 }
 
@@ -111,10 +120,15 @@ export function getConsoleBuffer(): ConsoleEntry[] {
 /** Empties the buffer and restores the real console functions. */
 export function resetConsoleBuffer(): void {
   buffer = [];
-  if (initialised) {
-    if (originalError) console.error = originalError;
-    if (originalWarn) console.warn = originalWarn;
-    initialised = false;
-    limits = { ...DEFAULTS };
+  if (!initialised) return;
+  if (originalError) console.error = originalError;
+  if (originalWarn) console.warn = originalWarn;
+  if (typeof window !== "undefined") {
+    if (onError) window.removeEventListener("error", onError);
+    if (onRejection) window.removeEventListener("unhandledrejection", onRejection);
   }
+  onError = null;
+  onRejection = null;
+  initialised = false;
+  limits = { ...DEFAULTS };
 }

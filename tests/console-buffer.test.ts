@@ -108,3 +108,30 @@ test("the returned buffer is a copy", () => {
   snapshot.push({ ts: "", level: "error", message: "injected" });
   assert.equal(getConsoleBuffer().length, 1, "callers cannot mutate the buffer");
 });
+
+test("uncaught errors are recorded once, even after a reset and re-init", () => {
+  // Node has EventTarget but no window; a bare one is enough to stand in.
+  const fakeWindow = new EventTarget();
+  (globalThis as { window?: unknown }).window = fakeWindow;
+  try {
+    const fire = () =>
+      fakeWindow.dispatchEvent(
+        Object.assign(new Event("error"), { message: "boom", filename: "app.js", lineno: 7 }),
+      );
+    withSilencedConsole(() => {
+      initConsoleBuffer();
+      resetConsoleBuffer();
+      initConsoleBuffer();
+      fire();
+    });
+    const entries = getConsoleBuffer();
+    assert.equal(entries.length, 1, "the old listener was removed on reset");
+    assert.equal(entries[0]?.message, "Uncaught: boom (app.js:7)");
+
+    resetConsoleBuffer();
+    fire();
+    assert.equal(getConsoleBuffer().length, 0, "nothing is recorded after a reset");
+  } finally {
+    delete (globalThis as { window?: unknown }).window;
+  }
+});
