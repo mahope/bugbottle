@@ -81,6 +81,27 @@ change the API; the changelog says so when they do.
   server validators, and `toMarkdown` renders a "What happened before" list
   between the elements and the console.
 
+### Changed
+
+- The landing page in `site/` is redesigned in both languages. It is laid out
+  as a case file rather than a README: one column of prose in the system serif
+  against a hairline margin rule that every heading sits on, the seal red as
+  the only accent, and code shown on dark slabs with the file they belong in.
+  The hero now shows the product — a stylised report card that assembles itself
+  once on load, row by row in the order the library collects them, and seals
+  with the 201 the endpoint answers. Section reveals use one
+  `IntersectionObserver` in `demo.js`, which also flags the demo section while
+  the panel is open; the class that hides a section is set from JavaScript, so
+  a page without it hides nothing, and `prefers-reduced-motion` switches every
+  animation and transition off. Install grew into a "get started" block with
+  the three ways in (bundler, one script tag, WordPress plugin on the way), and
+  a first-person "Built by Mahope" section links to mahope.dk. Still no
+  framework, no analytics, no cookies and no external request: system fonts
+  only, about 50 kB of HTML, CSS and JavaScript.
+- `site/og.png` (1200x630, rendered from the new `site/og.svg` with headless
+  Chrome) is wired as `og:image` and `twitter:image` on both pages, and the
+  Dockerfile copies it into the image.
+
 ## 0.3.1
 
 ### Added
