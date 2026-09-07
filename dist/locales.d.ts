@@ -44,6 +44,17 @@ export type UiTexts = {
     /** Shown after a successful send, with a button to close. */
     thanks: string;
 };
+/**
+ * The wording of a report sent on by email — read by whoever receives it, not
+ * by the reporter, but written in the same language so a Danish team is not
+ * handed an English subject line.
+ */
+export type EmailTexts = {
+    /** Subject line. `{title}` is replaced with the report's title. */
+    subject: string;
+    /** One line above the rendered report. */
+    intro: string;
+};
 export type Locale = {
     /** BCP 47 tag, set on the panel's `lang` attribute. */
     code: string;
@@ -51,6 +62,7 @@ export type Locale = {
     dir?: "ltr" | "rtl";
     messages: Messages;
     ui: UiTexts;
+    email: EmailTexts;
 };
 /**
  * The English status messages on their own, so the React hook can fall back

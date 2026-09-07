@@ -326,6 +326,7 @@ export function mountBugbottle(options) {
                 headers: options.headers,
                 credentials: options.credentials,
                 timeoutMs: options.timeoutMs,
+                fetch: options.fetch,
                 parseError: options.parseError,
             });
             resetForm();

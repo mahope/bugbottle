@@ -79,6 +79,11 @@ export type MountOptions = {
     headers?: SendOptions["headers"];
     credentials?: SendOptions["credentials"];
     timeoutMs?: SendOptions["timeoutMs"];
+    /**
+     * Replace the global `fetch`. Mostly for tests and for demonstrations that
+     * have no endpoint to talk to.
+     */
+    fetch?: SendOptions["fetch"];
     parseError?: SendOptions["parseError"];
     onSent?: (id: string | undefined) => void;
     onError?: (error: unknown) => void;

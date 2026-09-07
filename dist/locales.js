@@ -42,6 +42,10 @@ export const en = {
         close: "Close",
         thanks: "Thank you. We have received your report.",
     },
+    email: {
+        subject: "New report: {title}",
+        intro: "A new report arrived from your application. The details are below.",
+    },
 };
 export const da = {
     code: "da",
@@ -69,6 +73,10 @@ export const da = {
         sending: "Sender…",
         close: "Luk",
         thanks: "Tak. Vi har modtaget din rapport.",
+    },
+    email: {
+        subject: "Ny rapport: {title}",
+        intro: "Der er kommet en ny rapport fra din applikation. Detaljerne står nedenfor.",
     },
 };
 export const sv = {
@@ -98,6 +106,10 @@ export const sv = {
         close: "Stäng",
         thanks: "Tack. Vi har tagit emot din rapport.",
     },
+    email: {
+        subject: "Ny rapport: {title}",
+        intro: "En ny rapport har kommit från din applikation. Detaljerna står nedan.",
+    },
 };
 export const nb = {
     code: "nb",
@@ -125,6 +137,10 @@ export const nb = {
         sending: "Sender…",
         close: "Lukk",
         thanks: "Takk. Vi har mottatt rapporten din.",
+    },
+    email: {
+        subject: "Ny rapport: {title}",
+        intro: "Det har kommet en ny rapport fra applikasjonen din. Detaljene står nedenfor.",
     },
 };
 export const de = {
@@ -154,6 +170,10 @@ export const de = {
         close: "Schließen",
         thanks: "Danke. Wir haben Ihre Meldung erhalten.",
     },
+    email: {
+        subject: "Neue Meldung: {title}",
+        intro: "Aus Ihrer Anwendung ist eine neue Meldung eingegangen. Die Einzelheiten stehen unten.",
+    },
 };
 export const nl = {
     code: "nl",
@@ -181,6 +201,10 @@ export const nl = {
         sending: "Verzenden…",
         close: "Sluiten",
         thanks: "Bedankt. We hebben je melding ontvangen.",
+    },
+    email: {
+        subject: "Nieuwe melding: {title}",
+        intro: "Er is een nieuwe melding uit je applicatie binnengekomen. De details staan hieronder.",
     },
 };
 export const fr = {
@@ -210,6 +234,10 @@ export const fr = {
         close: "Fermer",
         thanks: "Merci. Nous avons bien reçu votre signalement.",
     },
+    email: {
+        subject: "Nouveau signalement : {title}",
+        intro: "Un nouveau signalement est arrivé depuis votre application. Les détails sont ci-dessous.",
+    },
 };
 export const es = {
     code: "es",
@@ -237,6 +265,10 @@ export const es = {
         sending: "Enviando…",
         close: "Cerrar",
         thanks: "Gracias. Hemos recibido tu informe.",
+    },
+    email: {
+        subject: "Nuevo informe: {title}",
+        intro: "Ha llegado un nuevo informe desde tu aplicación. Los detalles están abajo.",
     },
 };
 /** Every bundled locale, keyed by code. */
