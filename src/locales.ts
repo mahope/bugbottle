@@ -28,6 +28,8 @@ export type UiTexts = {
   title: string;
   /** Short line under the heading. Empty string hides it. */
   intro: string;
+  /** Accessible name of the report-type radio group. Never shown. */
+  typeLabel: string;
   types: { bug: string; idea: string; other: string };
   messageLabel: string;
   messagePlaceholder: string;
@@ -36,11 +38,23 @@ export type UiTexts = {
   screenshotNote: string;
   pickElement: string;
   picking: string;
+  /**
+   * Announced when pick mode starts. The panel disappears and the pointer
+   * changes, neither of which a screen reader reports, so this line says what
+   * happened and how to get out of it again.
+   */
+  pickingAnnounce: string;
+  /** Announced when pick mode ends, whether an element was picked or not. */
+  pickingDone: string;
   attached: string;
   remove: string;
+  /** Accessible name of one remove button. `{element}` is the element itself. */
+  removeElement: string;
   send: string;
   sending: string;
   close: string;
+  /** Accessible name of the panel's close button, distinct from `close`. */
+  closeDialog: string;
   /** Shown after a successful send, with a button to close. */
   thanks: string;
   /**
@@ -92,6 +106,7 @@ export const en: Locale = {
     trigger: "Feedback",
     title: "Report a problem",
     intro: "Tell us what went wrong, or what you would like to see.",
+    typeLabel: "Type of report",
     types: { bug: "Bug", idea: "Idea", other: "Other" },
     messageLabel: "What happened?",
     messagePlaceholder: "What is wrong, missing or confusing?",
@@ -99,11 +114,16 @@ export const en: Locale = {
     screenshotNote: "The picture shows this page as you see it now.",
     pickElement: "Point at the element",
     picking: "Click anything to attach it — Esc to stop",
+    pickingAnnounce:
+      "Pointing mode. Click any element on the page to attach it, or press Escape to stop.",
+    pickingDone: "Pointing mode ended.",
     attached: "Attached",
     remove: "Remove",
+    removeElement: "Remove {element}",
     send: "Send",
     sending: "Sending…",
     close: "Close",
+    closeDialog: "Close the report panel",
     thanks: "Thank you. We have received your report.",
     openedByError: "Something went wrong on this page. Want to tell us what you were doing?",
   },
@@ -127,6 +147,7 @@ export const da: Locale = {
     trigger: "Feedback",
     title: "Meld et problem",
     intro: "Fortæl os hvad der gik galt, eller hvad du savner.",
+    typeLabel: "Type rapport",
     types: { bug: "Fejl", idea: "Idé", other: "Andet" },
     messageLabel: "Hvad skete der?",
     messagePlaceholder: "Hvad er galt, mangler eller er forvirrende?",
@@ -134,11 +155,16 @@ export const da: Locale = {
     screenshotNote: "Billedet viser siden som du ser den nu.",
     pickElement: "Peg på elementet",
     picking: "Klik på det, der skal vedhæftes — Esc for at stoppe",
+    pickingAnnounce:
+      "Pegetilstand. Klik på et element på siden for at vedhæfte det, eller tryk på Esc for at stoppe.",
+    pickingDone: "Pegetilstand er slut.",
     attached: "Vedhæftet",
     remove: "Fjern",
+    removeElement: "Fjern {element}",
     send: "Send",
     sending: "Sender…",
     close: "Luk",
+    closeDialog: "Luk rapportpanelet",
     thanks: "Tak. Vi har modtaget din rapport.",
     openedByError: "Noget gik galt på denne side. Vil du fortælle os, hvad du var i gang med?",
   },
@@ -162,6 +188,7 @@ export const sv: Locale = {
     trigger: "Feedback",
     title: "Rapportera ett problem",
     intro: "Berätta vad som gick fel, eller vad du saknar.",
+    typeLabel: "Typ av rapport",
     types: { bug: "Fel", idea: "Idé", other: "Annat" },
     messageLabel: "Vad hände?",
     messagePlaceholder: "Vad är fel, saknas eller är förvirrande?",
@@ -169,11 +196,16 @@ export const sv: Locale = {
     screenshotNote: "Bilden visar sidan som du ser den nu.",
     pickElement: "Peka på elementet",
     picking: "Klicka på det som ska bifogas — Esc för att avbryta",
+    pickingAnnounce:
+      "Pekläge. Klicka på ett element på sidan för att bifoga det, eller tryck på Esc för att avbryta.",
+    pickingDone: "Pekläget är avslutat.",
     attached: "Bifogat",
     remove: "Ta bort",
+    removeElement: "Ta bort {element}",
     send: "Skicka",
     sending: "Skickar…",
     close: "Stäng",
+    closeDialog: "Stäng rapportpanelen",
     thanks: "Tack. Vi har tagit emot din rapport.",
     openedByError: "Något gick fel på den här sidan. Vill du berätta vad du höll på med?",
   },
@@ -197,6 +229,7 @@ export const nb: Locale = {
     trigger: "Tilbakemelding",
     title: "Meld et problem",
     intro: "Fortell oss hva som gikk galt, eller hva du savner.",
+    typeLabel: "Type rapport",
     types: { bug: "Feil", idea: "Idé", other: "Annet" },
     messageLabel: "Hva skjedde?",
     messagePlaceholder: "Hva er galt, mangler eller er forvirrende?",
@@ -204,11 +237,16 @@ export const nb: Locale = {
     screenshotNote: "Bildet viser siden slik du ser den nå.",
     pickElement: "Pek på elementet",
     picking: "Klikk på det som skal legges ved — Esc for å avbryte",
+    pickingAnnounce:
+      "Pekemodus. Klikk på et element på siden for å legge det ved, eller trykk Esc for å avbryte.",
+    pickingDone: "Pekemodus er avsluttet.",
     attached: "Vedlagt",
     remove: "Fjern",
+    removeElement: "Fjern {element}",
     send: "Send",
     sending: "Sender…",
     close: "Lukk",
+    closeDialog: "Lukk rapportpanelet",
     thanks: "Takk. Vi har mottatt rapporten din.",
     openedByError: "Noe gikk galt på denne siden. Vil du fortelle oss hva du holdt på med?",
   },
@@ -232,6 +270,7 @@ export const de: Locale = {
     trigger: "Feedback",
     title: "Problem melden",
     intro: "Sagen Sie uns, was schiefging oder was Ihnen fehlt.",
+    typeLabel: "Art der Meldung",
     types: { bug: "Fehler", idea: "Idee", other: "Sonstiges" },
     messageLabel: "Was ist passiert?",
     messagePlaceholder: "Was ist falsch, fehlt oder ist verwirrend?",
@@ -239,11 +278,16 @@ export const de: Locale = {
     screenshotNote: "Das Bild zeigt diese Seite so, wie Sie sie jetzt sehen.",
     pickElement: "Auf das Element zeigen",
     picking: "Klicken Sie auf das Element — Esc zum Abbrechen",
+    pickingAnnounce:
+      "Zeigemodus. Klicken Sie auf ein Element der Seite, um es anzuhängen, oder drücken Sie Esc zum Abbrechen.",
+    pickingDone: "Zeigemodus beendet.",
     attached: "Angehängt",
     remove: "Entfernen",
+    removeElement: "{element} entfernen",
     send: "Senden",
     sending: "Wird gesendet…",
     close: "Schließen",
+    closeDialog: "Meldungsfenster schließen",
     thanks: "Danke. Wir haben Ihre Meldung erhalten.",
     openedByError:
       "Auf dieser Seite ist etwas schiefgegangen. Möchten Sie uns sagen, was Sie gerade getan haben?",
@@ -268,6 +312,7 @@ export const nl: Locale = {
     trigger: "Feedback",
     title: "Probleem melden",
     intro: "Vertel ons wat er misging, of wat je mist.",
+    typeLabel: "Soort melding",
     types: { bug: "Fout", idea: "Idee", other: "Anders" },
     messageLabel: "Wat gebeurde er?",
     messagePlaceholder: "Wat is er mis, ontbreekt of is verwarrend?",
@@ -275,11 +320,16 @@ export const nl: Locale = {
     screenshotNote: "De afbeelding toont deze pagina zoals je die nu ziet.",
     pickElement: "Wijs het element aan",
     picking: "Klik op wat je wilt bijvoegen — Esc om te stoppen",
+    pickingAnnounce:
+      "Aanwijsmodus. Klik op een element op de pagina om het bij te voegen, of druk op Esc om te stoppen.",
+    pickingDone: "Aanwijsmodus beëindigd.",
     attached: "Bijgevoegd",
     remove: "Verwijderen",
+    removeElement: "{element} verwijderen",
     send: "Verzenden",
     sending: "Verzenden…",
     close: "Sluiten",
+    closeDialog: "Meldingsvenster sluiten",
     thanks: "Bedankt. We hebben je melding ontvangen.",
     openedByError: "Er ging iets mis op deze pagina. Wil je ons vertellen wat je aan het doen was?",
   },
@@ -303,6 +353,7 @@ export const fr: Locale = {
     trigger: "Commentaires",
     title: "Signaler un problème",
     intro: "Dites-nous ce qui n'a pas fonctionné, ou ce qui vous manque.",
+    typeLabel: "Type de signalement",
     types: { bug: "Bug", idea: "Idée", other: "Autre" },
     messageLabel: "Que s'est-il passé ?",
     messagePlaceholder: "Qu'est-ce qui est faux, manquant ou déroutant ?",
@@ -310,11 +361,16 @@ export const fr: Locale = {
     screenshotNote: "L'image montre cette page telle que vous la voyez.",
     pickElement: "Désigner l'élément",
     picking: "Cliquez sur l'élément à joindre — Échap pour arrêter",
+    pickingAnnounce:
+      "Mode désignation. Cliquez sur un élément de la page pour le joindre, ou appuyez sur Échap pour arrêter.",
+    pickingDone: "Mode désignation terminé.",
     attached: "Joint",
     remove: "Retirer",
+    removeElement: "Retirer {element}",
     send: "Envoyer",
     sending: "Envoi…",
     close: "Fermer",
+    closeDialog: "Fermer le panneau de signalement",
     thanks: "Merci. Nous avons bien reçu votre signalement.",
     openedByError:
       "Quelque chose s'est mal passé sur cette page. Voulez-vous nous dire ce que vous faisiez ?",
@@ -339,6 +395,7 @@ export const es: Locale = {
     trigger: "Comentarios",
     title: "Informar de un problema",
     intro: "Cuéntanos qué salió mal o qué echas en falta.",
+    typeLabel: "Tipo de informe",
     types: { bug: "Error", idea: "Idea", other: "Otro" },
     messageLabel: "¿Qué ha pasado?",
     messagePlaceholder: "¿Qué está mal, falta o resulta confuso?",
@@ -346,11 +403,16 @@ export const es: Locale = {
     screenshotNote: "La imagen muestra esta página tal como la ves ahora.",
     pickElement: "Señalar el elemento",
     picking: "Haz clic en lo que quieras adjuntar — Esc para cancelar",
+    pickingAnnounce:
+      "Modo de señalar. Haz clic en un elemento de la página para adjuntarlo, o pulsa Esc para cancelar.",
+    pickingDone: "Modo de señalar finalizado.",
     attached: "Adjunto",
     remove: "Quitar",
+    removeElement: "Quitar {element}",
     send: "Enviar",
     sending: "Enviando…",
     close: "Cerrar",
+    closeDialog: "Cerrar el panel de informes",
     thanks: "Gracias. Hemos recibido tu informe.",
     openedByError: "Algo ha ido mal en esta página. ¿Quieres contarnos qué estabas haciendo?",
   },

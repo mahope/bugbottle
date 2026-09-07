@@ -40,6 +40,7 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express` | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
+| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over three states through `puppeteer-core`. `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
 | `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts` | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
@@ -85,6 +86,14 @@ not closed and a branch is not merged with the docs lagging.
 - **Privacy text in the README is load-bearing.** The "Please read this part"
   section exists because a public media bucket once nearly exposed screenshots.
   Do not soften or shorten it.
+- **No new control in `src/ui/` without a label and a locale string.** Every
+  control the reporter can reach carries an accessible name, and that name
+  comes from `UiTexts` in all eight languages — never a hard-coded English
+  word, and never an icon on its own. The same goes for anything the panel
+  announces: it is a locale string or it is not said. The panel is a dialog
+  with a focus trap, so a control added outside `panel` is unreachable while
+  it is open; check `tests/ui-a11y.test.ts` and re-run
+  `node scripts/a11y-audit.mjs` (zero axe violations, three states).
 - **Source files must not contain literal null bytes.** Use `\u0000` in code
   and `String.fromCharCode(0)` in tests. A literal NUL breaks tooling.
 
@@ -95,14 +104,16 @@ npm run check       # typecheck → test → build → docs, in that order; run 
 npm test            # node --test on tests/*.test.ts (needs Node 22+)
 npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → IIFE
 npm run build:docs  # site/docs/ from README.md; fails on an ungrouped `##` section
+npm run a11y        # axe-core over the panel in a real Chrome; needs a build first
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
 
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5376 bytes gzipped and `bugbottle/ui` under 9 kB (CI enforces both;
-about 5.2 kB and 9.0 kB with masking, the queued state and the triggers), and
+stay under 5376 bytes gzipped and `bugbottle/ui` under 10 kB (CI enforces both;
+about 5.2 kB and 9.6 kB with masking, the queued state, the triggers and the
+accessibility pass), and
 the bare core under 1 kB (0.8 kB). The react budget is measured on the hook
 alone; `BugReportBoundary` costs about 370 bytes more for the applications that
 import it. `bugbottle/ui` moved from 8 kB to 9 kB when the panel started
@@ -118,12 +129,19 @@ in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
 tree-shaken away. `bugbottle/queue` is budgeted at 1024 bytes and measures
 about 1000: it imports only a type, so that number is the module itself. The
-IIFE budget is 16384 bytes gzipped (16.1 kB with the queue and the triggers); masking, the queue and the triggers each
-cost it roughly half a kilobyte to a kilobyte.
+IIFE budget is 17920 bytes gzipped (16.8 kB with the queue, the triggers and
+the accessibility pass); masking, the queue and the triggers each
+cost it roughly half a kilobyte to a kilobyte. The panel's own budget went from
+9 kB to 10 kB for issue #35: the focus trap and return, the radiogroup and its
+arrow keys, the live region and the two-scheme colours are about 0.7 kB, and
+five new locale strings are the rest — in the IIFE, times eight languages.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 `puppeteer-core` and Chrome, and check the posted body.
+`scripts/a11y-audit.mjs` is that procedure written down: it serves `dist/`,
+mounts the panel with everything showing and runs the pinned `axe-core` over
+three states (closed, open light, open dark), exiting non-zero on a violation.
 
 ## Conventions
 

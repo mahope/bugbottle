@@ -9,6 +9,26 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- An accessibility pass over the ready-made panel, so a client site can switch
+  it on without an accessibility regression. Focus is trapped inside the shadow
+  root while the panel is open — Tab wraps at both ends, which is what
+  `aria-modal` has been claiming — and closing it returns focus to whatever
+  opened it rather than to the top of the page. The report types became a
+  proper `radiogroup`: one stop in the tab order, arrow keys walking through
+  it, `aria-checked` on each. Every control has a name, including the remove
+  buttons, which are now named after the element they remove instead of being
+  several buttons called "Remove", and the screenshot note, which is attached
+  to the checkbox with `aria-describedby`. A polite live region outside the
+  panel announces the element picker starting and stopping, with the Escape
+  hint — that mode hides the panel and changes the pointer, and nothing said
+  so. Targets are at least 24x24, `prefers-reduced-motion` is respected, and
+  the dark scheme now lightens the accent and the error red (`--bb-accent-text`
+  and `--bb-error`), which were readable on white and not on `#111827`.
+  `axe-core` reports zero violations with the panel open in both schemes and
+  closed; `npm run a11y` runs that audit against a real Chrome. Five new
+  `UiTexts` strings in all eight languages: `typeLabel`, `pickingAnnounce`,
+  `pickingDone`, `removeElement` and `closeDialog`.
+
 - `dist/report.schema.json`, the JSON Schema (2020-12) for the payload,
   generated from the `BugReport` type by `scripts/build-schema.ts` as part of
   `npm run build` and exported as `bugbottle/report.schema.json`. It carries
@@ -59,6 +79,15 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- The CI budgets for `bugbottle/ui` (9216 → 10240 bytes gzipped, measuring
+  9849) and `dist/bugbottle.js` (16384 → 17920, measuring 17239), for the
+  accessibility pass. The behaviour — the focus trap and return, the radio
+  group and its arrow keys, the live region, the two-scheme colours — is about
+  0.7 kB; the rest is five new strings, which the script-tag build carries in
+  all eight languages. A panel a keyboard user cannot leave is not a smaller
+  panel, so this was not a trade worth making the other way.
+- The panel's header is a `div` rather than a `<header>`, which browsers and
+  axe treat as a banner landmark nested inside the dialog.
 - The CI budget for `dist/bugbottle.js` is 16 kB gzipped: the script-tag build
   now carries the queue and the triggers as well, and measures 16.1 kB.
 - The CI size budgets for `bugbottle/react` (5120 → 5376 bytes) and

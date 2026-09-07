@@ -50,8 +50,11 @@ jobs:
           set -e
           iife=$(gzip -c dist/bugbottle.js | wc -c)
           echo "dist/bugbottle.js: $iife bytes gzipped"
-          if [ "$iife" -gt 16384 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 16384" >&2
+          # 16.1 kB before the accessibility pass, 16.8 after it: the panel's
+          # own kilobyte is mostly five new locale strings, and this bundle
+          # carries them in all eight languages.
+          if [ "$iife" -gt 17920 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 17920" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -106,9 +109,14 @@ jobs:
           # 8.0 kB of this is the panel as it shipped in 0.5; the kilobyte on
           # top is `bugbottle/triggers`, which the panel now imports so that a
           # keyboard shortcut works without any wiring. An application that
-          # mounts the panel gets both, so it is budgeted for both.
-          if [ "$ui" -gt 9216 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 9216" >&2
+          # mounts the panel gets both, so it is budgeted for both. The budget
+          # then went from 9 kB to 10 kB for the accessibility pass — the focus
+          # trap and return, the radio group with its arrow keys, the live
+          # region, the two-scheme colours and five new strings — which is the
+          # difference between a panel a keyboard user can leave and one they
+          # cannot, and so is not optional.
+          if [ "$ui" -gt 10240 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 10240" >&2
             exit 1
           fi
           # The breadcrumbs module itself is well under 1 kB; the rest of this
