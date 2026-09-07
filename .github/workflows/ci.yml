@@ -54,14 +54,15 @@ jobs:
           # the stack frames and the wider context: the script tag carries every
           # default in eight languages.
           # 18432 was not enough for the picture annotator, which is why the
-          # budget is 20992 and the file measures 20450. About 1.4 kB of the
+          # budget was 20992 and the file measured 20450. About 1.4 kB of the
           # rise is `src/annotate.ts` itself, which the panel imports, and the
           # remaining kilobyte is its eight locale strings in eight languages —
           # one of them a sentence, because it is where the annotator's keys
           # are said to a screen reader. Neither half can be dropped without
-          # dropping the feature or its accessible names.
-          if [ "$iife" -gt 20992 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 20992" >&2
+          # dropping the feature or its accessible names. Signing (#37) landed
+          # beside it and the two together measure 21043, so the budget is 21504.
+          if [ "$iife" -gt 21504 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 21504" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp

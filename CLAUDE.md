@@ -167,7 +167,8 @@ evidence); masking, the queue and the triggers each cost it roughly half a
 kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35. `bugbottle/annotate` is budgeted at
 2048 bytes and measures 1441: a canvas, three tools and an undo stack, with
 nothing imported. #36 then took the panel budget from 10 kB to 12 kB and the
-IIFE from 18432 to 20992 bytes (measured 11971 and 20450). The panel imports
+IIFE from 18432 to 20992 bytes (measured 11971 and 20450); with #37 signing
+merged beside it the IIFE measures 21043, so its budget is 21504. The panel imports
 the annotator unconditionally, so those 1441 bytes are paid by every
 application that mounts the panel — `annotate: false` hides the button, it does
 not shrink the bundle, and a dynamic import would only move the cost onto a

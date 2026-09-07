@@ -34,7 +34,7 @@ need Node 18.
   `bugbottle/triggers` 1300 bytes, `bugbottle/sign` 512 bytes,
   `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 20.5 kB. The
+  are small; the core they share is not), `dist/bugbottle.js` 21 kB. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
