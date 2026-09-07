@@ -42,8 +42,8 @@ jobs:
           set -e
           iife=$(gzip -c dist/bugbottle.js | wc -c)
           echo "dist/bugbottle.js: $iife bytes gzipped"
-          if [ "$iife" -gt 15360 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 15360" >&2
+          if [ "$iife" -gt 16384 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 16384" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp

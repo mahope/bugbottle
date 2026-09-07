@@ -118,7 +118,7 @@ in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
 tree-shaken away. `bugbottle/queue` is budgeted at 1024 bytes and measures
 about 1000: it imports only a type, so that number is the module itself. The
-IIFE budget is 15360 bytes gzipped; masking, the queue and the triggers each
+IIFE budget is 16384 bytes gzipped (16.1 kB with the queue and the triggers); masking, the queue and the triggers each
 cost it roughly half a kilobyte to a kilobyte.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM

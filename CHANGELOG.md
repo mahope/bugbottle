@@ -59,6 +59,8 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- The CI budget for `dist/bugbottle.js` is 16 kB gzipped: the script-tag build
+  now carries the queue and the triggers as well, and measures 16.1 kB.
 - The CI size budgets for `bugbottle/react` (5120 → 5376 bytes) and
   `dist/bugbottle.js` (14336 → 15360 bytes). The hook grew by the `queued`
   state and its message; the script-tag build carries the whole queue.
