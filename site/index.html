@@ -54,230 +54,233 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div>
-        <h1>Headless in-app bug reports that arrive with the evidence attached.</h1>
-        <p class="lede">Your UI, your endpoint, a few kilobytes.</p>
-        <p>
-          Error trackers catch what throws. They cannot catch what merely looks wrong,
-          and they never tell you what the person was doing when it did.
-          <em>“The save button does nothing”</em> is not a report anyone can act on.
+        <h1>Bug reports that arrive with the evidence attached.</h1>
+        <p class="why">
+          I kept getting emails that said “the save button does nothing” and not much
+          else. This is the piece that attaches everything I would otherwise have had
+          to ask for.
         </p>
         <p>
-          bugbottle collects the context at the moment someone notices — the page, the
-          viewport, the recent console errors, the element they point at, optionally a
-          picture of what they were looking at — and POSTs it as JSON to a route you
-          already own.
+          bugbottle collects what the browser already knows at the moment someone
+          notices: the path, the viewport, the console errors from the last few
+          minutes, the element they point at, and a screenshot if you turn that on. It
+          POSTs the lot as JSON to a route you wrote. No dashboard, no account, nothing
+          in the middle. Your reports never touch my servers, because there are none.
         </p>
         <div class="actions">
-          <a class="button primary" href="#demo">Try the panel</a>
-          <a class="button" href="#start">Get started</a>
-          <a class="button" href="https://github.com/mahope/bugbottle#readme">Read the documentation</a>
+          <a class="button primary" href="#demo">Open the panel</a>
+          <a class="button" href="#start">Install it</a>
+          <a class="button" href="https://github.com/mahope/bugbottle#readme">Read the docs</a>
         </div>
+        <p class="stamp">
+          Version 0.4.0, released 7 September 2026. Zero dependencies.
+          <a href="https://github.com/mahope/bugbottle/blob/main/CHANGELOG.md">What changed</a>.
+        </p>
       </div>
 
-      <div>
-        <figure class="card" aria-hidden="true">
-          <div class="card-head">
-            <span class="card-dot"></span>
-            <b>report.json</b>
-            <span class="grow">bug</span>
-          </div>
-          <div class="card-body">
-            <div class="card-row" style="--i:0">
-              <span class="k">message</span>
-              <span class="v card-quote">The save button does nothing.</span>
-            </div>
-            <div class="card-row" style="--i:1">
-              <span class="k">element</span>
-              <span class="v">form#checkout &gt; button.save<br>“Save and continue”</span>
-            </div>
-            <div class="card-row" style="--i:2">
-              <span class="k">console</span>
-              <span class="v card-warn">TypeError: cannot read total of undefined</span>
-            </div>
-            <div class="card-row" style="--i:3">
-              <span class="k">trail</span>
-              <span class="v">click .cart → nav /checkout → submit #checkout</span>
-            </div>
-            <div class="card-row" style="--i:4">
-              <span class="k">context</span>
-              <span class="v">
-                <span class="chip">/checkout?step=2</span>
-                <span class="chip">1280×900</span>
-                <span class="chip">Chrome 141</span>
-              </span>
-            </div>
-          </div>
-          <div class="card-foot" style="--i:5">
-            POST /api/feedback
-            <span class="seal">201</span>
-          </div>
-        </figure>
-        <p class="card-note">One report, as your route receives it. Nothing is sent from this page.</p>
-      </div>
+      <figure class="shot">
+        <img src="/panel.png" width="1760" height="1074" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+        <figcaption>
+          The panel from <code>bugbottle/ui</code>, captured on this page. The button in
+          the corner opens the same one.
+        </figcaption>
+      </figure>
     </div>
   </section>
 
-  <section id="what" class="reveal">
+  <section id="specs" class="reveal">
     <div class="wrap">
-      <div class="rail">
-        <h2>What you get</h2>
-        <ul class="terms">
-          <li>
-            <h3>Headless</h3>
-            <p>
-              You render the form. This owns the state, the capture and the submit —
-              not your markup.
-            </p>
-          </li>
-          <li>
-            <h3>Bring your own backend</h3>
-            <p>
-              No dashboard, no hosted service. A report is a JSON body on a
-              <code>fetch</code>, received by a route handler you write, with the
-              validation helpers shipped alongside.
-            </p>
-          </li>
-          <li>
-            <h3>Nothing in your bundle you did not ask for</h3>
-            <p>
-              Zero dependencies. The core is about 0.6 kB gzipped; with the element
-              picker and the React hook, 3.4 kB; the optional ready-made panel, 6 kB.
-            </p>
-          </li>
-          <li>
-            <h3>Point at the element</h3>
-            <p>
-              <code>pickElement()</code> resolves with a short CSS selector, the tag,
-              the visible text, the position and the useful attributes — enough for a
-              person or a coding agent to land on the right file.
-            </p>
-          </li>
-          <li>
-            <h3>Your language, your brand</h3>
-            <p>
-              Eight bundled locales, every string overridable, and a panel themed with
-              a handful of CSS variables.
-            </p>
-          </li>
-          <li>
-            <h3>Server helpers included</h3>
-            <p>
-              Every field a browser sends is checked before it reaches your database,
-              because that is where the sharp edges are.
-            </p>
-          </li>
-        </ul>
-      </div>
+      <h2>What it does, and what it leaves to you</h2>
+      <dl class="specs">
+        <div>
+          <dt>You write the form</dt>
+          <dd>
+            The library holds the state, collects the evidence and makes the request.
+            It renders nothing unless you ask for the ready-made panel.
+          </dd>
+        </div>
+        <div>
+          <dt>You own the endpoint</dt>
+          <dd>
+            A report is a JSON body arriving at a route you wrote. There is nothing to
+            sign up for. The validators that check what arrives ship in
+            <code>bugbottle/server</code>.
+          </dd>
+        </div>
+        <div>
+          <dt>It stays small</dt>
+          <dd>
+            No runtime dependencies, and seven entry points so a page pays only for
+            what it imports. The core is 0.8 kB gzipped. The
+            <a href="#start">table below</a> has the rest.
+          </dd>
+        </div>
+        <div>
+          <dt>People can point</dt>
+          <dd>
+            <code>pickElement()</code> returns a short CSS selector, the tag, the
+            visible text and the position: enough for me, or for a coding agent, to
+            open the right file rather than guess at it.
+          </dd>
+        </div>
+        <div>
+          <dt>It speaks eight languages</dt>
+          <dd>
+            Danish, English, Swedish, Norwegian, German, Dutch, French and Spanish, with
+            every string replaceable and the panel themed from a handful of CSS
+            variables.
+          </dd>
+        </div>
+        <div>
+          <dt>The server side trusts nothing</dt>
+          <dd>
+            Everything the browser sends is treated as hostile input: lengths clipped,
+            null bytes stripped, and a screenshot checked by the signature in its
+            decoded bytes rather than the type it claims to be.
+          </dd>
+        </div>
+      </dl>
     </div>
   </section>
 
   <section id="start" class="reveal">
     <div class="wrap">
-      <div class="rail">
-        <h2>Get started</h2>
-        <p>
-          Three ways in, depending on what the project already has. All three post the
-          same JSON to a route you write.
-        </p>
+      <h2>Three ways to install it</h2>
+      <p>
+        All three post the same JSON to a route you write. Pick by what the project
+        already has.
+      </p>
 
-        <div class="options">
-          <div class="option">
-            <div class="option-text">
-              <h3>With a bundler</h3>
-              <p>Install it, start recording console errors, mount the ready-made panel.</p>
+      <div class="options">
+        <div class="option">
+          <div class="option-text">
+            <h3>With a bundler</h3>
+            <p>Install it, start recording console errors, mount the panel.</p>
+          </div>
+          <div class="option-code">
+            <div class="slab">
+              <div class="slab-tab">terminal</div>
+              <pre><code>npm install bugbottle</code></pre>
             </div>
-            <div class="option-code">
-              <div class="slab">
-                <div class="slab-tab">terminal</div>
-                <pre><code>npm install bugbottle</code></pre>
-              </div>
-              <div class="slab">
-                <div class="slab-tab">main.js</div>
-                <pre><code>import { initConsoleBuffer } from "bugbottle";
+            <div class="slab">
+              <div class="slab-tab">main.js</div>
+              <pre><code>import { initConsoleBuffer } from "bugbottle";
 import { mountBugbottle } from "bugbottle/ui";
 
 initConsoleBuffer();
 mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
-              </div>
-            </div>
-          </div>
-
-          <div class="option">
-            <div class="option-text">
-              <h3>One script tag</h3>
-              <p>
-                For a site with no build step — a WordPress theme, a static page, a
-                client site somebody else deploys. About 11 kB gzipped.
-              </p>
-            </div>
-            <div class="option-code">
-              <div class="slab">
-                <div class="slab-tab">index.html</div>
-                <pre><code>&lt;script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.3.1/dist/bugbottle.js"
-  data-endpoint="/api/feedback"
-  data-brand="Acme"
-&gt;&lt;/script&gt;</code></pre>
-              </div>
-            </div>
-          </div>
-
-          <div class="option">
-            <div class="option-text">
-              <h3>WordPress</h3>
-            </div>
-            <div class="option-code">
-              <p>
-                A plugin that mounts the same panel and receives the reports in the
-                installation itself: a private post type with an admin list, an optional
-                email, Danish and English. One activation, no build step, no developer on
-                call.
-              </p>
-              <p class="small">
-                <a href="https://github.com/mahope/bugbottle-wordpress/releases/latest">Download the plugin</a>
-                · <a href="https://github.com/mahope/bugbottle-wordpress">Source and settings</a>
-              </p>
             </div>
           </div>
         </div>
 
-        <p class="small muted">
-          Prefer to build the form yourself? <code>useBugReport</code> from
-          <code>bugbottle/react</code> gives you the same core with none of the
-          markup. See the
-          <a href="https://github.com/mahope/bugbottle#the-form-react">README</a>.
-        </p>
+        <div class="option">
+          <div class="option-text">
+            <h3>One script tag</h3>
+            <p>
+              For a site with no build step: a WordPress theme, a static page, a client
+              site somebody else deploys. It mounts itself from the data attributes.
+            </p>
+          </div>
+          <div class="option-code">
+            <div class="slab">
+              <div class="slab-tab">index.html</div>
+              <pre><code>&lt;script
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.4.0/dist/bugbottle.js"
+  data-endpoint="/api/feedback"
+  data-brand="Acme"
+&gt;&lt;/script&gt;</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="option">
+          <div class="option-text">
+            <h3>WordPress</h3>
+          </div>
+          <div class="option-code">
+            <p>
+              A plugin that mounts the same panel and keeps the reports in the
+              installation itself: a private post type with an admin list, an optional
+              email, Danish and English. One activation, no build step, no developer on
+              call.
+            </p>
+            <p class="small">
+              <a href="https://github.com/mahope/bugbottle-wordpress/releases/latest">Download the plugin</a>
+              or <a href="https://github.com/mahope/bugbottle-wordpress">read the settings first</a>.
+            </p>
+          </div>
+        </div>
       </div>
+
+      <table class="sizes">
+        <caption>What each entry point costs, measured at 0.4.0</caption>
+        <thead>
+          <tr>
+            <th scope="col">Import</th>
+            <th scope="col">Gzipped</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">bugbottle</th>
+            <td>0.8 kB</td>
+          </tr>
+          <tr>
+            <th scope="row">bugbottle/react</th>
+            <td>3.9 kB</td>
+          </tr>
+          <tr>
+            <th scope="row">bugbottle/ui</th>
+            <td>6.9 kB</td>
+          </tr>
+          <tr>
+            <th scope="row">bugbottle/breadcrumbs</th>
+            <td>1.2 kB</td>
+          </tr>
+          <tr>
+            <th scope="row">the script tag above</th>
+            <td>11.6 kB</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="small muted">
+        Bundled with esbuild, minified, without <code>html-to-image</code>. CI fails the
+        build when they grow past the budget.
+      </p>
+
+      <p class="small muted">
+        Rather build the form yourself? <code>useBugReport</code> from
+        <code>bugbottle/react</code> gives you the same core with none of the markup:
+        <a href="https://github.com/mahope/bugbottle#the-form-react">the README section on the form</a>.
+      </p>
     </div>
   </section>
 
   <section id="demo" class="reveal">
     <div class="wrap">
-      <div class="rail">
-        <h2>The panel, live on this page</h2>
-        <div class="demo-grid">
-          <div>
-            <p>
-              The floating button in the corner is the real
-              <code>bugbottle/ui</code> panel. Open it, write a line, point at
-              something on this page, and press send.
-            </p>
-            <p>
-              There is no endpoint behind it: the demo passes its own
-              <code>fetch</code>, keeps the body that would have been posted, and
-              renders it beside this with <code>toMarkdown</code> from
-              <code>bugbottle/server</code> — the same function you would use for an
-              issue body or a morning digest. Nothing leaves your browser. Screenshots
-              are switched off here, because the demo has nowhere private to put one.
-            </p>
-            <p><button type="button" class="button primary" id="demo-open">Open the panel</button></p>
-          </div>
-          <div>
-            <h3 id="payload-heading">The payload, as Markdown</h3>
-            <div class="slab">
-              <div class="slab-tab">toMarkdown(report)</div>
-              <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send a report and it appears here."></pre>
-            </div>
+      <h2>Open the panel and read what it would have sent</h2>
+      <div class="demo-grid">
+        <div>
+          <p>
+            The button in the corner is the real <code>bugbottle/ui</code> panel, running
+            from the same <code>dist/</code> that npm ships. Open it, write a line, point
+            at something on this page, press send.
+          </p>
+          <p>
+            There is no endpoint behind it. The demo hands the library a
+            <code>fetch</code> of its own, keeps the body that would have been posted,
+            and renders it here with <code>toMarkdown</code> from
+            <code>bugbottle/server</code>, which is the same function you would use for
+            an issue body. Nothing leaves your browser. Screenshots are off here, since
+            the demo has nowhere private to put one.
+          </p>
+          <p><button type="button" class="button primary" id="demo-open">Open the panel</button></p>
+        </div>
+        <div>
+          <h3 id="payload-heading">The report, as Markdown</h3>
+          <div class="slab">
+            <div class="slab-tab">toMarkdown(report)</div>
+            <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send a report and it appears here."></pre>
           </div>
         </div>
       </div>
@@ -286,65 +289,60 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
 
   <section id="privacy" class="reveal">
     <div class="wrap">
-      <div class="rail">
-        <h2>Please read this part</h2>
-        <p>
-          A screenshot of your application contains whatever the reporter could see.
-          In a clinical system that can mean a patient photograph; in a payroll tool,
-          a salary; in yours, perhaps somebody's inbox or a half-written message they
-          had not sent yet.
-        </p>
-        <p>Three things follow, and the library cannot do them for you:</p>
-        <ol>
-          <li>
-            <strong>Put screenshots somewhere private.</strong> If your object storage
-            bucket has a public read policy — many media buckets do — anything you write
-            to it can be fetched by anyone holding the URL. Use a separate bucket with
-            no public policy.
-          </li>
-          <li>
-            <strong>Serve them back through an authenticated route.</strong> Never give
-            a screenshot a public URL. Look the storage key up from the row rather than
-            taking it from the request, so an id cannot be used to walk your bucket.
-          </li>
-          <li>
-            <strong>Say so before the picture is taken.</strong> Put it in the form,
-            next to the checkbox — not in a policy nobody opens.
-          </li>
-        </ol>
-        <p>
-          Requiring people to be signed in is worth considering too. An anonymous
-          screenshot is one nobody can be asked about later, and nobody can be told has
-          been deleted.
-          <a href="https://github.com/mahope/bugbottle#please-read-this-part">The full section in the README.</a>
-        </p>
-      </div>
+      <h2>Read this before you turn screenshots on</h2>
+      <p>
+        A screenshot of your application contains whatever the reporter could see. In a
+        clinical system that can mean a patient photograph; in a payroll tool, a salary;
+        in yours, perhaps somebody's inbox or a half-written message they had not sent
+        yet.
+      </p>
+      <p>Three things follow, and the library cannot do them for you:</p>
+      <ol>
+        <li>
+          <strong>Put screenshots somewhere private.</strong> If your object storage
+          bucket has a public read policy, and many media buckets do, anything you write
+          to it can be fetched by anyone holding the URL. Use a separate bucket with no
+          public policy.
+        </li>
+        <li>
+          <strong>Serve them back through an authenticated route.</strong> Never give a
+          screenshot a public URL. Look the storage key up from the row rather than
+          taking it from the request, so an id cannot be used to walk your bucket.
+        </li>
+        <li>
+          <strong>Say so before the picture is taken.</strong> Put it in the form, next
+          to the checkbox, not in a policy nobody opens.
+        </li>
+      </ol>
+      <p>
+        Requiring people to be signed in is worth considering too. An anonymous
+        screenshot is one nobody can be asked about later, and nobody can be told has
+        been deleted.
+        <a href="https://github.com/mahope/bugbottle#please-read-this-part">The full section in the README.</a>
+      </p>
     </div>
   </section>
 
-  <section id="mahope" class="reveal">
+  <section id="colophon" class="reveal">
     <div class="wrap">
-      <div class="rail">
-        <h2>Built by Mahope</h2>
-        <p>
-          I am Mads Holst Jensen, a freelance web and AI developer in Denmark, and
-          Mahope is the name I work under. bugbottle came out of client work: two
-          applications whose users kept reporting things I could not reproduce. I built
-          the part that collects the evidence, then kept taking pieces out of it until
-          it was small enough to give away.
-        </p>
-        <p>
-          I build this kind of tooling for other people's products as well — the path a
-          user takes to report a problem, the internal tool nobody has had time for, the
-          integration that has to keep working after I have gone. If that is what you
-          are missing, write to me and describe it.
-        </p>
-        <p class="signature sans">
-          <strong>Mads Holst Jensen</strong>
-          <a href="https://mahope.dk">mahope.dk</a>
-          <a href="mailto:mads@mahope.dk">mads@mahope.dk</a>
-        </p>
-      </div>
+      <h2>Who writes this</h2>
+      <p>
+        I am Mads Holst Jensen, a freelance web and AI developer in Denmark, working
+        under the name Mahope. bugbottle came out of two client applications whose users
+        kept reporting things I could not reproduce. I built the part that collects the
+        evidence, then took pieces out of it until it was small enough to give away.
+      </p>
+      <p>
+        I build this sort of thing for other people's products as well: the path a user
+        takes when something is wrong, the internal tool nobody has had time for, the
+        integration that has to keep working after I have gone. If that is what you are
+        missing, write and tell me what it is.
+      </p>
+      <p class="signature">
+        <strong>Mads Holst Jensen</strong>
+        <a href="https://mahoje.dk">mahoje.dk</a>
+        <a href="mailto:mads@mahope.dk">mads@mahope.dk</a>
+      </p>
     </div>
   </section>
 
@@ -357,11 +355,7 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
       <a href="https://www.npmjs.com/package/bugbottle">bugbottle on npm</a>
       <a href="https://github.com/mahope/bugbottle/issues">Report a problem</a>
     </nav>
-    <p>
-      MIT licence. Built and maintained by
-      <a href="https://mahope.dk">Mahope</a>, a freelance web and AI developer in
-      Denmark, who also builds this kind of thing to order.
-    </p>
+    <p>MIT licence. Written and maintained by <a href="https://mahoje.dk">Mahope</a> in Denmark.</p>
     <p>This page sets no cookies, runs no analytics and makes no external request.</p>
   </div>
 </footer>

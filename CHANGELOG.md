@@ -30,21 +30,26 @@ change the API; the changelog says so when they do.
   public contract: the same call with the same arguments still returns a data
   URL or throws `ScreenshotTooLargeError`.
 
-- The landing page in `site/` is redesigned in both languages. It is laid out
-  as a case file rather than a README: one column of prose in the system serif
-  against a hairline margin rule that every heading sits on, the seal red as
-  the only accent, and code shown on dark slabs with the file they belong in.
-  The hero now shows the product — a stylised report card that assembles itself
-  once on load, row by row in the order the library collects them, and seals
-  with the 201 the endpoint answers. Section reveals use one
-  `IntersectionObserver` in `demo.js`, which also flags the demo section while
-  the panel is open; the class that hides a section is set from JavaScript, so
-  a page without it hides nothing, and `prefers-reduced-motion` switches every
-  animation and transition off. Install grew into a "get started" block with
-  the three ways in (bundler, one script tag, WordPress plugin on the way), and
-  a first-person "Built by Mahope" section links to mahope.dk. Still no
-  framework, no analytics, no cookies and no external request: system fonts
-  only, about 50 kB of HTML, CSS and JavaScript.
+- The landing page in `site/` is rewritten in both languages to read like a
+  person wrote it (issue #19). Copy is first person where it matters — a
+  two-line "why I built it" in the hero, and a colophon signed by name — short
+  and concrete instead of summarising itself. The hero shows a real capture of
+  the panel (`site/panel.png`, taken headless from this page at 2x) next to
+  the text, with `width`/`height` set so it costs no layout shift, replacing
+  the fully synthetic report card. The case-file idea from the previous
+  redesign is down to one detail — a small stamp under the hero holding the
+  version, the release date and a link to what changed — with the margin rule
+  and dark code slabs it introduced kept because they still work. No gradient
+  blobs, no three-card feature row: the six things it does are one column of
+  terms and definitions, and "get started" is three rows (bundler, one script
+  tag, WordPress plugin), sized to what each needs rather than forced into
+  equal columns. Section reveals still use one `IntersectionObserver` in
+  `demo.js`, set from JavaScript so a page without it hides nothing, off under
+  `prefers-reduced-motion`. The size table and the stamp read from measured
+  numbers, noted where to update them at a release. Danish is rewritten rather
+  than translated. Still no framework, no analytics, no cookies and no
+  external request: system fonts only, under 50 kB of HTML, CSS and
+  JavaScript.
 - `site/og.png` (1200x630, rendered from the new `site/og.svg` with headless
   Chrome) is wired as `og:image` and `twitter:image` on both pages, and the
   Dockerfile copies it into the image.

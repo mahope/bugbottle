@@ -1,14 +1,14 @@
 /*
- * One stylesheet for both languages. Tokens on :root, redefined once under
- * prefers-color-scheme, so nothing else in the file mentions a colour twice.
+ * One stylesheet for both languages. Colour tokens live on :root and are
+ * redefined once under prefers-color-scheme, so no colour is written twice.
  * System fonts only: the page makes no external request at all, which is a
  * claim printed in the footer and therefore worth keeping true.
  *
- * The page is laid out as a case file: a hairline margin rule runs down the
- * left of every section the way it would in a lab notebook, each heading sits
- * on it as a small square, and the one piece of colour is the seal red used
- * for the report card, links and focus. Body text is set in the system serif
- * because the page is read, not scanned; headings are the system sans, tight.
+ * The page is set almost entirely in the system serif, the way a long email
+ * is, with the system sans kept for the things that are furniture: navigation,
+ * buttons, table headers, small print. The seal red appears three times on the
+ * page (the bottle in the wordmark, the primary button, the stamp under the
+ * hero) and nowhere else, so it still means something when it shows up.
  */
 
 :root {
@@ -22,12 +22,10 @@
   --rule-soft: #e2e9e4;
   --accent: #a8102b;
   --accent-ink: #ffffff;
-  --accent-wash: #f7e7ea;
   --slab: #0d2a24;
   --slab-ink: #d7e5df;
   --slab-rule: #21473f;
   --slab-key: #86c9b4;
-  --slab-warn: #ff9f8d;
 
   --radius: 4px;
   --radius-lg: 8px;
@@ -46,12 +44,10 @@
     --rule-soft: #14302a;
     --accent: #ff8898;
     --accent-ink: #14100f;
-    --accent-wash: #23201f;
     --slab: #041310;
     --slab-ink: #cfe0da;
     --slab-rule: #1a3b34;
     --slab-key: #6fbfa8;
-    --slab-warn: #ff9f8d;
   }
 }
 
@@ -72,15 +68,15 @@ body {
 }
 
 .wrap {
-  width: min(72rem, 100%);
+  width: min(70rem, 100%);
   margin: 0 auto;
   padding: 0 clamp(1.25rem, 5vw, 3rem);
 }
 
 a {
-  color: var(--accent);
-  text-underline-offset: 0.15em;
+  color: inherit;
   text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
 }
 
 a:hover {
@@ -96,46 +92,38 @@ button:focus-visible {
 
 h1,
 h2,
-h3,
-.sans {
-  font-family: var(--sans);
-  font-weight: 650;
-  letter-spacing: -0.022em;
+h3 {
+  font-family: var(--serif);
+  font-weight: 700;
+  letter-spacing: -0.005em;
 }
 
 h1 {
-  font-size: clamp(2.1rem, 1.2rem + 3.2vw, 3.4rem);
-  line-height: 1.06;
-  margin: 0 0 1.25rem;
-  max-width: 17ch;
+  font-size: clamp(2rem, 1.35rem + 2.2vw, 2.85rem);
+  line-height: 1.12;
+  margin: 0 0 1.4rem;
+  max-width: 19ch;
 }
 
 h2 {
-  font-size: clamp(1.45rem, 1.2rem + 0.9vw, 1.9rem);
-  line-height: 1.15;
-  margin: 0 0 1.25rem;
-  position: relative;
+  font-size: clamp(1.35rem, 1.15rem + 0.75vw, 1.7rem);
+  line-height: 1.2;
+  margin: 0 0 1.3rem;
+  max-width: 26ch;
 }
 
 h3 {
   font-size: 1.0625rem;
-  letter-spacing: -0.01em;
   margin: 0 0 0.35rem;
 }
 
 p {
   margin: 0 0 1.05rem;
-  max-width: 34rem;
+  max-width: 33rem;
 }
 
-.lede {
+.sans {
   font-family: var(--sans);
-  font-weight: 450;
-  font-size: clamp(1.1rem, 1rem + 0.5vw, 1.3rem);
-  line-height: 1.4;
-  letter-spacing: -0.01em;
-  color: var(--muted);
-  max-width: 28rem;
 }
 
 .muted {
@@ -157,7 +145,7 @@ p {
   display: flex;
   align-items: center;
   gap: 1rem;
-  min-height: 4rem;
+  min-height: 3.75rem;
   flex-wrap: wrap;
 }
 
@@ -173,9 +161,10 @@ p {
   text-decoration: none;
 }
 
+/* One of the three places the accent is allowed. */
 .brand svg {
-  width: 20px;
-  height: 26px;
+  width: 19px;
+  height: 25px;
   flex: none;
   color: var(--accent);
 }
@@ -218,8 +207,10 @@ p {
 
 /* -------------------------------------------------------------- sections */
 
+/* Deliberately uneven: the page breathes differently around the parts that
+   are read slowly (privacy) than around the parts that are scanned. */
+
 main > section {
-  padding: clamp(3rem, 7vw, 5.5rem) 0;
   border-top: 1px solid var(--rule);
 }
 
@@ -227,55 +218,70 @@ main > section:first-child {
   border-top: 0;
 }
 
-/* The notebook margin: a hairline down the section with the heading sitting
-   on it as a small square. Desktop only — on a phone the rule would crowd the
-   text without adding anything. */
-@media (min-width: 62rem) {
-  .rail {
-    border-left: 1px solid var(--rule);
-    padding-left: 2.75rem;
-  }
+#specs {
+  padding: clamp(2.75rem, 6vw, 4.25rem) 0 clamp(2.5rem, 5vw, 3.5rem);
+}
 
-  .rail > h2::before {
-    content: "";
-    position: absolute;
-    left: calc(-2.75rem - 4px);
-    top: 0.5em;
-    width: 8px;
-    height: 8px;
-    background: var(--accent);
-  }
+#start {
+  padding: clamp(3rem, 7vw, 5.5rem) 0;
+  background: var(--surface);
+}
+
+#demo {
+  padding: clamp(2.75rem, 6vw, 4.5rem) 0;
+}
+
+#privacy {
+  padding: clamp(3.25rem, 8vw, 6rem) 0;
+}
+
+#colophon {
+  padding: clamp(2.75rem, 6vw, 4rem) 0 clamp(3rem, 7vw, 5rem);
+  background: var(--surface);
 }
 
 /* ------------------------------------------------------------------ hero */
 
 .hero {
   background: var(--surface);
-  padding-bottom: clamp(3rem, 7vw, 5rem);
+  padding: clamp(2.5rem, 6vw, 4.25rem) 0 clamp(2.75rem, 6vw, 4.5rem);
 }
 
 .hero-grid {
   display: grid;
-  gap: clamp(2.5rem, 5vw, 4rem);
+  gap: clamp(2.25rem, 5vw, 3rem);
   align-items: start;
 }
 
 @media (min-width: 62rem) {
   .hero-grid {
-    grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
-    gap: 4.5rem;
+    grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+    gap: 4rem;
+  }
+
+  /* The picture starts a little below the headline rather than level with it:
+     the two columns are not a matched pair. */
+  .shot {
+    margin-top: 1.1rem;
   }
 }
 
 .hero p {
-  max-width: 33rem;
+  max-width: 32rem;
+}
+
+.why {
+  font-size: 1.15rem;
+  line-height: 1.55;
+  margin-bottom: 1.4rem;
+  max-width: 30rem;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 1.75rem;
+  margin-top: 1.6rem;
 }
 
 .button {
@@ -283,8 +289,7 @@ main > section:first-child {
   font-family: var(--sans);
   font-weight: 550;
   font-size: 0.9375rem;
-  letter-spacing: -0.005em;
-  padding: 0.65rem 1.15rem;
+  padding: 0.6rem 1.1rem;
   border-radius: var(--radius);
   border: 1px solid var(--rule);
   text-decoration: none;
@@ -298,6 +303,7 @@ main > section:first-child {
   background: var(--paper);
 }
 
+/* Two of three: the one button that starts the demo. */
 .button.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -318,174 +324,99 @@ button.button {
   cursor: pointer;
 }
 
-/* ----------------------------------------------------------- report card */
+/* Three of three, and the last trace of the case-file idea the page used to
+   be built around: a small stamp holding the numbers that go stale. */
+.stamp {
+  font-family: var(--sans);
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 1.75rem 0 0;
+  padding-left: 1.05rem;
+  position: relative;
+  max-width: 30rem;
+}
 
-/* The stylised report the library would have posted. It assembles itself once
-   on load: the rows arrive in the order the library collects them, and the
-   status seals it. Nothing here is interactive, so it is aria-hidden and the
-   same facts are in the prose beside it. */
+.stamp::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+}
 
-.card {
+.stamp a {
+  color: inherit;
+}
+
+/* --------------------------------------------------------- the screenshot */
+
+/* A real capture of the panel, taken from this page with headless Chrome.
+   width/height are on the <img> so the hero does not move when it loads. */
+
+.shot {
   margin: 0;
-  background: var(--slab);
-  color: var(--slab-ink);
-  border: 1px solid var(--slab-rule);
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
-  font-family: var(--mono);
-  font-size: 0.875rem;
-  line-height: 1.55;
-  overflow: hidden;
-  box-shadow: 0 18px 40px -28px rgb(13 42 36 / 55%);
+  background: var(--paper);
 }
 
-.card-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--slab-rule);
-  color: var(--slab-key);
-}
-
-.card-head b {
-  font-weight: 400;
-  color: var(--slab-ink);
-}
-
-.card-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex: none;
-}
-
-.card-head .grow {
-  margin-left: auto;
-  opacity: 0.65;
-}
-
-.card-body {
-  padding: 0.35rem 1rem 0.9rem;
-}
-
-.card-row {
-  display: grid;
-  grid-template-columns: 4.75rem minmax(0, 1fr);
-  gap: 0.75rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--slab-rule);
-}
-
-.card-row:last-child {
-  border-bottom: 0;
-}
-
-.card-row .k {
-  color: var(--slab-key);
-}
-
-.card-row .v {
-  overflow-wrap: anywhere;
-}
-
-.card-quote {
-  font-family: var(--serif);
-  font-size: 1.0625rem;
-  line-height: 1.45;
-  color: #ffffff;
-}
-
-.card-warn {
-  color: var(--slab-warn);
-}
-
-.chip {
-  display: inline-block;
-  border: 1px solid var(--slab-rule);
-  border-radius: 3px;
-  padding: 0 0.35rem;
-  margin: 0 0.3rem 0.25rem 0;
-}
-
-.card-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem 1rem;
-  border-top: 1px solid var(--slab-rule);
-  background: rgb(255 255 255 / 3%);
-}
-
-.card-foot .seal {
-  margin-left: auto;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-radius: 3px;
-  padding: 0.05rem 0.45rem;
-  font-weight: 700;
-}
-
-/* The single orchestrated moment on the page. */
-.card-row,
-.card-foot {
-  animation: bb-rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
-  animation-delay: calc(160ms + var(--i, 0) * 110ms);
-}
-
-.card-foot .seal {
-  animation: bb-seal 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
-  animation-delay: calc(160ms + var(--i, 0) * 110ms + 180ms);
-}
-
-@keyframes bb-rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-@keyframes bb-seal {
-  from {
-    opacity: 0;
-    transform: scale(1.35);
-  }
-}
-
-.card-note {
-  margin: 0.75rem 0 0;
-  font-size: 0.875rem;
+.shot figcaption {
+  font-family: var(--sans);
+  font-size: 0.8125rem;
   color: var(--muted);
-  max-width: none;
+  margin-top: 0.6rem;
+  max-width: 28rem;
 }
 
-/* ------------------------------------------------------------------ list */
+/* --------------------------------------------------------- the spec list */
 
-.terms {
-  list-style: none;
+/* Six things, as a list of terms and what they mean, in one column of text.
+   Rows rather than cards: a card would make six equal claims, and they are
+   not equal. */
+
+.specs {
   margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0;
+  max-width: 52rem;
 }
 
-@media (min-width: 48rem) {
-  .terms {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 3rem;
-  }
-}
-
-.terms li {
-  padding: 1.15rem 0;
+.specs div {
+  padding: 1.05rem 0;
   border-top: 1px solid var(--rule-soft);
-  max-width: 34rem;
+  display: grid;
+  gap: 0.15rem 2.5rem;
 }
 
-.terms p {
+.specs div:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (min-width: 50rem) {
+  .specs div {
+    grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+    align-items: baseline;
+  }
+}
+
+.specs dt {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.specs dd {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9875rem;
+  max-width: 36rem;
 }
 
 /* --------------------------------------------------------- code and slab */
@@ -521,35 +452,38 @@ code {
 }
 
 p code,
-li code {
+li code,
+dd code,
+td code {
   background: var(--rule-soft);
   border-radius: 3px;
   padding: 0.08em 0.32em;
   font-size: 0.875em;
 }
 
-/* ------------------------------------------------------------ get started */
+/* ----------------------------------------------------------- get started */
 
-/* Three ways in, as three rows rather than three columns: a snippet needs the
-   width of a line of code, and cutting one in half to fit a card helps nobody. */
+/* Three ways in, as three rows: a snippet needs the width of a line of code,
+   and cutting one in half to fit a column helps nobody. */
 
 .options {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
-  margin: 1.75rem 0 1.5rem;
+  gap: 1.75rem;
+  margin: 1.75rem 0 2.25rem;
+  max-width: 58rem;
 }
 
 .option {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-lg);
-  padding: 1.35rem 1.5rem;
   display: grid;
-  /* minmax(0, …) so a long line of code scrolls inside its own slab instead of
-     widening the page. */
   grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.option:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .option-code,
@@ -560,20 +494,21 @@ li code {
 
 @media (min-width: 56rem) {
   .option {
-    grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
     gap: 2.5rem;
     align-items: start;
   }
 }
 
-.option > div > p,
-.option-text p {
+.option-text p,
+.option-code p {
   color: var(--muted);
   font-size: 0.9375rem;
-  max-width: 30rem;
+  max-width: 32rem;
 }
 
-.option-text p:last-child {
+.option-text p:last-child,
+.option-code p:last-child {
   margin-bottom: 0;
 }
 
@@ -581,26 +516,50 @@ li code {
   margin-bottom: 0;
 }
 
-.option-soon {
-  background: transparent;
-  border-style: dashed;
+/* ------------------------------------------------------------ size table */
+
+/* The measured numbers, in the one place a table is the honest shape. Update
+   them at a release; site/README.md says where. */
+
+.sizes {
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  margin: 0 0 0.85rem;
+  width: 100%;
+  max-width: 34rem;
 }
 
-.option-soon h3 {
+.sizes caption {
+  text-align: left;
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  padding-bottom: 0.5rem;
+}
+
+.sizes th,
+.sizes td {
+  text-align: left;
+  padding: 0.4rem 1rem 0.4rem 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+
+.sizes thead th {
+  font-weight: 600;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 
-.later {
-  font-family: var(--mono);
-  font-size: 0.75rem;
+.sizes tbody th {
   font-weight: 400;
-  letter-spacing: 0;
-  color: var(--accent);
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  padding: 0 0.35rem;
-  margin-left: 0.4rem;
-  vertical-align: 0.15em;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+
+.sizes td:last-child {
+  padding-right: 0;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ demo */
@@ -631,7 +590,7 @@ li code {
   font-size: 0.875rem;
 }
 
-/* When the panel is open the demo says so, quietly. */
+/* When the panel is open the demo section lifts off the paper, quietly. */
 #demo {
   transition: background-color 0.3s ease;
 }
@@ -640,36 +599,18 @@ li code {
   background: var(--surface);
 }
 
-.panel-open #demo .rail {
-  border-left-color: var(--accent);
-}
-
 /* --------------------------------------------------------------- privacy */
 
-#privacy .rail {
-  border-left-color: var(--accent);
-}
-
 #privacy ol {
-  padding-left: 1.3rem;
-  max-width: 34rem;
+  padding-left: 1.25rem;
+  max-width: 33rem;
 }
 
 #privacy li {
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.8rem;
 }
 
-#privacy li::marker {
-  font-family: var(--mono);
-  font-size: 0.8125rem;
-  color: var(--accent);
-}
-
-/* ---------------------------------------------------------------- mahope */
-
-#mahope {
-  background: var(--surface);
-}
+/* -------------------------------------------------------------- colophon */
 
 .signature {
   font-family: var(--sans);
@@ -679,16 +620,26 @@ li code {
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
   align-items: baseline;
+  max-width: none;
 }
 
 .signature strong {
   font-weight: 650;
 }
 
+/* Body links are ink with an underline; only the three accent places above
+   use the red. Inside prose that keeps the eye on the sentence. */
+main p a,
+main li a,
+main dd a,
+footer a {
+  text-decoration: underline;
+}
+
 /* ---------------------------------------------------------------- footer */
 
 footer {
-  padding: 2.5rem 0 3.5rem;
+  padding: 2.25rem 0 3.5rem;
   color: var(--muted);
   font-family: var(--sans);
   font-size: 0.9375rem;
@@ -711,13 +662,13 @@ footer a {
   color: var(--ink);
 }
 
-/* ---------------------------------------------------------- scroll reveal */
+/* --------------------------------------------------------- scroll reveal */
 
 /* The class is set by demo.js, so a page without JavaScript never hides
    anything. Reduced motion opts out entirely. */
 .reveal-ready .reveal {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(8px);
   transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 

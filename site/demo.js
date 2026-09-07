@@ -89,9 +89,9 @@ if (sections.length && "IntersectionObserver" in window && !stillness.matches) {
   for (const section of sections) seen.observe(section);
 }
 
-// While the panel is open the demo section says so: its margin rule takes the
-// accent colour. The panel keeps `aria-expanded` on its trigger up to date, so
-// that attribute is the honest source rather than a guess from our own button.
+// While the panel is open the demo section says so, by lifting off the paper.
+// The panel keeps `aria-expanded` on its trigger up to date, so that attribute is
+// the honest source rather than a guess from our own button.
 const host = document.querySelector("[data-bugbottle]");
 const trigger = host && host.shadowRoot && host.shadowRoot.querySelector(".trigger");
 if (trigger) {

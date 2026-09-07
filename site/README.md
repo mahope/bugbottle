@@ -9,9 +9,10 @@ and the favicon is an inline SVG.
 | File | Role |
 |---|---|
 | `index.html` | English page |
-| `da/index.html` | Danish page — same structure, same sections |
+| `da/index.html` | Danish page — same structure, same sections, written for a Danish reader rather than translated |
 | `style.css` | Shared. Colour tokens on `:root`, redefined once for dark mode |
 | `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal |
+| `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
 | `og.svg` | Source of the OpenGraph picture. Not served |
 | `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
 | `nginx.conf` | Replaces `conf.d/default.conf`: `/health`, caching, gzip |
@@ -33,6 +34,16 @@ passed straight through to `sendReport`.
 Screenshots are switched off in the demo: `html-to-image` is not loaded, so no
 renderer is given and the panel does not offer the checkbox.
 
+## The hero screenshot
+
+`panel.png` is a real capture, not an illustration: the panel open on this
+page, message filled in, an element pointed at, taken headless at 2x with the
+global `puppeteer-core` and Chrome and saved at `site/panel.png`. It carries
+`width`/`height` on the `<img>` so the hero does not shift while it loads, and
+it must stay under 150 kB. Re-capture it whenever the panel's own look changes
+enough that the screenshot stops matching — there is no build step that keeps
+it in sync automatically.
+
 ## The OpenGraph picture
 
 `og.png` is `og.svg` screenshotted at 1200x630 with headless Chrome, so the
@@ -48,12 +59,23 @@ await page.screenshot({ path: "site/og.png", clip: { x: 0, y: 0, width: 1200, he
 
 ## Motion
 
-Two pieces, both of which degrade to a finished page when they cannot run: the
-report card in the hero assembles itself with CSS `animation-delay` on each
-row, and `demo.js` reveals sections with one `IntersectionObserver`. The class
-that hides a section before it is revealed is set from JavaScript, so a browser
-without it — or one asking for reduced motion — never hides anything. Every
-animation and transition is switched off under `prefers-reduced-motion`.
+One piece, which degrades to a finished page when it cannot run: `demo.js`
+reveals sections with one `IntersectionObserver` as the reader scrolls to
+them. The class that hides a section before it is revealed is set from
+JavaScript, so a browser without it — or one asking for reduced motion —
+never hides anything. Every animation and transition is switched off under
+`prefers-reduced-motion`. A headless full-page screenshot that never scrolls
+the real viewport will not trigger this — scroll through the page first, or
+the shot will show sections stuck invisible below the fold.
+
+## Version, sizes and the release date
+
+The version number, the release date and the gzipped size of each entry
+point are written into both pages by hand — in the hero stamp and the size
+table — rather than templated at build time, since the page has no build
+step of its own. Update all three (`site/index.html` and `site/da/index.html`)
+whenever `package.json`'s version changes or the sizes in `CLAUDE.md`'s
+bundle-size check move.
 
 ## Building and running
 
