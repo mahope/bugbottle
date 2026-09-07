@@ -59,6 +59,17 @@ export declare function initNetwork(options?: NetworkOptions): void;
 export declare function getNetwork(): NetworkEntry[];
 /** Whether `initNetwork` has run and not been reset since. */
 export declare function isNetworkActive(): boolean;
-/** Empties the buffer and puts `fetch` and `XMLHttpRequest` back as they were. */
+/**
+ * Empties the buffer and puts `fetch` and `XMLHttpRequest` back as they were —
+ * but only where they are still ours. Another library may have wrapped our
+ * patch after `initNetwork` ran, and assigning the original over the top of
+ * that wrapper would uninstall somebody else's instrumentation without saying
+ * so. A wrapper we cannot safely remove is left where it is instead; it goes
+ * on calling a `record` that does nothing, which costs a function call and
+ * nothing else.
+ *
+ * A request still in flight when this is called settles into no buffer at all,
+ * not even the one a later `initNetwork` opens.
+ */
 export declare function resetNetwork(): void;
 //# sourceMappingURL=network.d.ts.map
