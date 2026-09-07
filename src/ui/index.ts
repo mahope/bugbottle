@@ -83,6 +83,11 @@ export type MountOptions = {
   headers?: SendOptions["headers"];
   credentials?: SendOptions["credentials"];
   timeoutMs?: SendOptions["timeoutMs"];
+  /**
+   * Replace the global `fetch`. Mostly for tests and for demonstrations that
+   * have no endpoint to talk to.
+   */
+  fetch?: SendOptions["fetch"];
   parseError?: SendOptions["parseError"];
   onSent?: (id: string | undefined) => void;
   onError?: (error: unknown) => void;
@@ -423,6 +428,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         headers: options.headers,
         credentials: options.credentials,
         timeoutMs: options.timeoutMs,
+        fetch: options.fetch,
         parseError: options.parseError,
       });
       resetForm();

@@ -63,7 +63,12 @@ function escapeHtml(text: string): string {
 
 /** The first heading of a rendered report, without the type prefix. */
 function titleOf(report: unknown, options: MarkdownOptions): string {
-  const heading = toMarkdown(report, { ...options, typeInTitle: false }).split(/\r?\n/)[0] ?? "";
+  // The caller's options shape the body, not the subject: with headingLevel 0
+  // the first line would be the message or the facts table, so the heading is
+  // forced here.
+  const heading =
+    toMarkdown(report, { ...options, typeInTitle: false, headingLevel: 2, screenshotUrl: undefined })
+      .split(/\r?\n/)[0] ?? "";
   return heading.replace(/^#{1,6}\s*/, "").trim();
 }
 
@@ -85,7 +90,7 @@ export async function sendReportEmail(
   const markdownOptions = options.markdown ?? {};
   const markdown = toMarkdown(report, markdownOptions);
   const title = titleOf(report, markdownOptions);
-  const subject = options.subject ?? locale.email.subject.replace("{title}", title);
+  const subject = options.subject ?? locale.email.subject.replace("{title}", () => title);
   const intro = locale.email.intro;
 
   const payload: Record<string, unknown> = {
