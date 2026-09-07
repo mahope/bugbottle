@@ -120,9 +120,54 @@ export type DedupeOptions = {
 };
 /** Hard ceiling on the fingerprint map. */
 export declare const MAX_DEDUPE_ENTRIES = 10000;
+/**
+ * Checking the HMAC the browser put on the body, from `bugbottle/sign`.
+ *
+ * Read the README before turning this on: the key ships to the browser, so it
+ * is public, and this is spam deterrence beside a rate limit rather than
+ * authentication. What it buys is that a script pointed at the endpoint has to
+ * read your bundle and implement HMAC-SHA-256 before it can post anything, and
+ * that a body captured once cannot be replayed.
+ */
+export type SignatureOptions = {
+    /**
+     * The shared key, or several of them for a rotation: a signature that
+     * matches any key in the list is accepted, so a new key can be deployed to
+     * the server before the browsers have it.
+     */
+    key: string | string[];
+    /** Where the signature is expected. Default `X-Bugbottle-Signature`. */
+    header?: string;
+    /**
+     * How far the signed timestamp may be from ours, in either direction.
+     * Default five minutes — long enough for a clock nobody has synchronised,
+     * short enough that the replay cache stays small.
+     */
+    maxSkewMs?: number;
+    /**
+     * Whether a request without a signature is refused. Default true whenever
+     * `signature` is set: an optional signature that a caller can skip by
+     * dropping a header deters nothing. Set it to false while the signed clients
+     * are rolling out; a signature that *is* present is still verified either
+     * way, because a wrong one is a claim rather than an omission.
+     */
+    require?: boolean;
+};
+/** The default skew window: five minutes on either side of our clock. */
+export declare const DEFAULT_SIGNATURE_SKEW_MS: number;
+/** Hard ceiling on the replay cache. */
+export declare const MAX_SIGNATURE_ENTRIES = 10000;
+/** The one answer to every bad signature. Missing, wrong, late and replayed all read the same. */
+export declare const BAD_SIGNATURE_ERROR = "Bad signature";
 export type HandleReportOptions = {
     /** False answers 401 before the body is read. */
     authorize?: (request: Request) => boolean | Promise<boolean>;
+    /**
+     * Verify the HMAC the client put on the body. Anything wrong with it —
+     * missing when required, invalid, outside the skew window, already seen —
+     * answers 401 `{ error: "Bad signature" }`.
+     */
+    signature?: SignatureOptions;
     /** Ceiling for the request body. Default 4 MB. Over it answers 413. */
     maxBodyBytes?: number;
     /** How long the whole body may take to arrive. Default 15 s. Over it answers 408. */
@@ -168,6 +213,8 @@ export type HandleReportOptions = {
 export declare function resetRateLimits(): void;
 /** Exported for tests, which would otherwise leak fingerprints into each other. */
 export declare function resetDedupe(): void;
+/** Exported for tests, which would otherwise leak signatures into each other. */
+export declare function resetSignatures(): void;
 /**
  * The unknown top-level keys, capped. Strings are clipped, numbers and
  * booleans pass as they are, and anything else — an object, an array, a

@@ -94,9 +94,22 @@ export async function sendReport(endpoint, report, options = {}) {
         }
         const doFetch = options.fetch ?? globalThis.fetch;
         const serialised = JSON.stringify(payload);
+        const headers = {
+            "Content-Type": "application/json",
+            ...options.headers,
+        };
+        if (options.sign) {
+            // Raced against the signal for the same reason `beforeSend` is: a signer
+            // that never settles must not leave the form on "sending" for ever.
+            const signed = await Promise.race([
+                Promise.resolve(options.sign(serialised)),
+                rejectWhenAborted(controller.signal),
+            ]);
+            Object.assign(headers, signed);
+        }
         const init = {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...options.headers },
+            headers,
             body: serialised,
             signal: controller.signal,
         };

@@ -9,7 +9,7 @@ bare core under 1.5 kB gzipped, `bugbottle/react` under 5.5 kB, `bugbottle/ui`
 under 10 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
 1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-the script-tag build under 18 kB. The core budget was 1 kB until 0.6, when stack
+`bugbottle/sign` under 512 bytes, the script-tag build under 18 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -82,6 +82,14 @@ the React hook was refactored onto — one state machine, three bindings, about
 1.3 and 1.2 kB gzipped over the core a form pays for anyway. Both peers are
 optional.
 
+**0.6** — `bugbottle/sign`: an optional HMAC-SHA-256 over `<timestamp>.<body>`
+with a shared key (`createSigner`, WebCrypto, 366 bytes gzipped), a `sign` seam
+on `sendReport` and every adapter, `data-sign-key` on the script tag, and
+`signature` on `handleReport` — key rotation, a five-minute skew window, a
+constant-time compare and a replay cache, all four failures answering one
+`401 { error: "Bad signature" }`. Documented honestly: a key in the browser is
+public, so it is spam deterrence beside a rate limit and never authentication.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -102,7 +110,8 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 - Performance snapshot from buffered `PerformanceObserver` entries; storage
   snapshot (keys and lengths only).
 - Optional HMAC signature (WebCrypto) verified by the server helper. Documented
-  honestly as spam deterrence, not authentication.
+  honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
+  see "Already shipped".)
 - More sinks: Jira, GitLab. Sentry envelope.
 
 ## 1.0 — adoptable

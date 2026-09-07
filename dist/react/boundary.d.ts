@@ -34,6 +34,8 @@ export type ReportErrorOptions = {
     scrub?: BuildReportInput["scrub"];
     /** Last look at the report. Return it, a changed copy, or `null` to drop it. */
     beforeSend?: SendOptions["beforeSend"];
+    /** Signs the body. Pass `createSigner({ key })` from `bugbottle/sign`. */
+    sign?: SendOptions["sign"];
 };
 /**
  * The message a render error becomes: what threw, where it threw, and which

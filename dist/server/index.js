@@ -17,7 +17,7 @@ export { fingerprint, stableHash } from "../fingerprint.js";
 // The fast path over the validators below: one call from `Request` to
 // `Response`. Importing it is opt-in, so an integrator who only wants the
 // validators does not bundle the sinks it reaches for.
-export { handleReport, validateReport, collectExtra, resetRateLimits, resetDedupe, toResend, toWebhook, toGithub, toLinear, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, MAX_DEDUPE_ENTRIES, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, } from "./handle.js";
+export { handleReport, validateReport, collectExtra, resetRateLimits, resetDedupe, resetSignatures, toResend, toWebhook, toGithub, toLinear, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, MAX_DEDUPE_ENTRIES, MAX_SIGNATURE_ENTRIES, DEFAULT_SIGNATURE_SKEW_MS, BAD_SIGNATURE_ERROR, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, } from "./handle.js";
 export { expressHandler, } from "./express.js";
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.

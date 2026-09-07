@@ -36,6 +36,7 @@ import {
   type ReportType,
 } from "../report-core.ts";
 import { fingerprint } from "../fingerprint.ts";
+import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.ts";
 import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { scrubReport, type ScrubOptions } from "../scrub.ts";
 import { sendReportEmail, type SendReportEmailOptions } from "../sinks/resend.ts";
@@ -167,9 +168,58 @@ export type DedupeOptions = {
 /** Hard ceiling on the fingerprint map. */
 export const MAX_DEDUPE_ENTRIES = 10_000;
 
+/**
+ * Checking the HMAC the browser put on the body, from `bugbottle/sign`.
+ *
+ * Read the README before turning this on: the key ships to the browser, so it
+ * is public, and this is spam deterrence beside a rate limit rather than
+ * authentication. What it buys is that a script pointed at the endpoint has to
+ * read your bundle and implement HMAC-SHA-256 before it can post anything, and
+ * that a body captured once cannot be replayed.
+ */
+export type SignatureOptions = {
+  /**
+   * The shared key, or several of them for a rotation: a signature that
+   * matches any key in the list is accepted, so a new key can be deployed to
+   * the server before the browsers have it.
+   */
+  key: string | string[];
+  /** Where the signature is expected. Default `X-Bugbottle-Signature`. */
+  header?: string;
+  /**
+   * How far the signed timestamp may be from ours, in either direction.
+   * Default five minutes — long enough for a clock nobody has synchronised,
+   * short enough that the replay cache stays small.
+   */
+  maxSkewMs?: number;
+  /**
+   * Whether a request without a signature is refused. Default true whenever
+   * `signature` is set: an optional signature that a caller can skip by
+   * dropping a header deters nothing. Set it to false while the signed clients
+   * are rolling out; a signature that *is* present is still verified either
+   * way, because a wrong one is a claim rather than an omission.
+   */
+  require?: boolean;
+};
+
+/** The default skew window: five minutes on either side of our clock. */
+export const DEFAULT_SIGNATURE_SKEW_MS = 5 * 60_000;
+
+/** Hard ceiling on the replay cache. */
+export const MAX_SIGNATURE_ENTRIES = 10_000;
+
+/** The one answer to every bad signature. Missing, wrong, late and replayed all read the same. */
+export const BAD_SIGNATURE_ERROR = "Bad signature";
+
 export type HandleReportOptions = {
   /** False answers 401 before the body is read. */
   authorize?: (request: Request) => boolean | Promise<boolean>;
+  /**
+   * Verify the HMAC the client put on the body. Anything wrong with it —
+   * missing when required, invalid, outside the skew window, already seen —
+   * answers 401 `{ error: "Bad signature" }`.
+   */
+  signature?: SignatureOptions;
   /** Ceiling for the request body. Default 4 MB. Over it answers 413. */
   maxBodyBytes?: number;
   /** How long the whole body may take to arrive. Default 15 s. Over it answers 408. */
@@ -247,6 +297,107 @@ function evictDedupe(now: number, windowMs: number): void {
     if (oldest.done) break;
     seenReports.delete(oldest.value);
   }
+}
+
+/**
+ * The signatures accepted so far, and when. Module-level with the same honest
+ * limit as the buckets and the fingerprints: one instance remembers its own
+ * traffic, and two instances behind a load balancer do not share a cache. It
+ * stops a captured body being replayed at the instance that saw it, which is
+ * where a replay of a browser's own request lands anyway.
+ */
+const seenSignatures = new Map<string, number>();
+
+/** Exported for tests, which would otherwise leak signatures into each other. */
+export function resetSignatures(): void {
+  seenSignatures.clear();
+}
+
+/**
+ * Compares two hex digests without leaking where they differ through timing.
+ * The lengths are public — both are 64 characters of SHA-256 — so returning
+ * early on a mismatch there tells an attacker nothing.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let differences = 0;
+  for (let i = 0; i < a.length; i += 1) differences |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return differences === 0;
+}
+
+/** `t=<unix ms>,v1=<hex>` into its parts, or null when it is not that. */
+function parseSignature(value: string): { timestamp: number; digest: string } | null {
+  let timestamp = Number.NaN;
+  let digest = "";
+  for (const part of value.split(",")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const name = part.slice(0, eq).trim();
+    const field = part.slice(eq + 1).trim();
+    if (name === "t") timestamp = Number(field);
+    else if (name === "v1") digest = field;
+  }
+  // The shape is checked before any HMAC is computed, so a header full of
+  // rubbish costs a regular expression rather than a key import.
+  if (!Number.isFinite(timestamp) || !/^[0-9a-f]{64}$/.test(digest)) return null;
+  return { timestamp, digest };
+}
+
+/** Drops what has aged out of the skew window, then the oldest. */
+function evictSignatures(now: number, maxSkewMs: number): void {
+  for (const [digest, at] of seenSignatures) {
+    if (at + maxSkewMs <= now) seenSignatures.delete(digest);
+  }
+  while (seenSignatures.size >= MAX_SIGNATURE_ENTRIES) {
+    const oldest = seenSignatures.keys().next();
+    if (oldest.done) break;
+    seenSignatures.delete(oldest.value);
+  }
+}
+
+/**
+ * True when this body arrived with a signature we are willing to accept.
+ *
+ * The body is the raw text as it was received, not a re-serialisation of the
+ * parsed JSON: `JSON.stringify(JSON.parse(x))` is not `x` — key order, spacing
+ * and number formatting all move — so anything that reparses before verifying
+ * would reject every honest report.
+ */
+async function verifySignature(
+  request: Request,
+  body: string,
+  options: SignatureOptions,
+): Promise<boolean> {
+  const header = request.headers.get(options.header ?? DEFAULT_SIGNATURE_HEADER);
+  // No signature at all is the one case `require: false` lets through. A
+  // signature that is present is verified whatever `require` says.
+  if (!header) return options.require === false;
+
+  const parsed = parseSignature(header);
+  if (!parsed) return false;
+
+  const maxSkewMs = options.maxSkewMs ?? DEFAULT_SIGNATURE_SKEW_MS;
+  const now = Date.now();
+  // Both directions: a clock ahead of ours is as much of a replay window as a
+  // clock behind it.
+  if (Math.abs(now - parsed.timestamp) > maxSkewMs) return false;
+
+  const keys = Array.isArray(options.key) ? options.key : [options.key];
+  const message = `${parsed.timestamp}.${body}`;
+  let matched = false;
+  for (const key of keys) {
+    // Every key is tried even after one matches, so the time this takes says
+    // nothing about which key was used or whether the first one was right.
+    if (timingSafeEqual(await hmacHex(key, message), parsed.digest)) matched = true;
+  }
+  if (!matched) return false;
+
+  // Only a signature that verified is remembered, so nobody can fill the cache
+  // with digests of their own choosing.
+  if (seenSignatures.has(parsed.digest)) return false;
+  evictSignatures(now, maxSkewMs);
+  seenSignatures.set(parsed.digest, now);
+  return true;
 }
 
 function defaultRateLimitKey(request: Request): string {
@@ -529,6 +680,12 @@ export async function handleReport(
         return json({ error: "Report took too long to arrive" }, 408, cors);
       }
       throw err;
+    }
+
+    // Verified over the text that arrived, before anything parses it, and
+    // before a body nobody signed reaches a validator.
+    if (options.signature && !(await verifySignature(request, text, options.signature))) {
+      return json({ error: BAD_SIGNATURE_ERROR }, 401, cors);
     }
 
     let payload: unknown;

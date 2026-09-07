@@ -400,6 +400,7 @@ export function mountBugbottle(options) {
                 fetch: options.fetch,
                 parseError: options.parseError,
                 beforeSend: options.beforeSend,
+                sign: options.sign,
             });
             resetForm();
             thanksText.textContent = ui.thanks;

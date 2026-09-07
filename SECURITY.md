@@ -34,6 +34,13 @@ was not.
   text is bulleted and `data-bugbottle-block` regions are covered. On by
   default, `mask: false` to switch it off. It hides the fields it knows about,
   so anything else sensitive on the page still has to be marked.
+- `bugbottle/sign` puts an HMAC-SHA-256 over `<timestamp>.<body>` on the
+  request and `handleReport`'s `signature` option verifies it in constant time,
+  refusing a body that was tampered with, signed under an unknown key, older
+  than the skew window or replayed. The key ships to the browser and is
+  therefore public: this raises the cost of posting rubbish to a public
+  endpoint, and it authenticates nobody. Keep the rate limit and the
+  authorisation.
 - No cookies, no identifiers, no third-party calls. A report goes to the
   endpoint you configure and nowhere else.
 - `scrubReport` redacts email addresses, bearer tokens, JWTs, Luhn-valid card

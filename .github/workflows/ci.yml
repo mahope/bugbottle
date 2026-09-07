@@ -74,6 +74,7 @@ jobs:
           echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
           echo 'import { createQueue } from "bugbottle/queue"; export { createQueue };' > queue.js
           echo 'import { onShortcut, onUncaughtError } from "bugbottle/triggers"; export { onShortcut, onUncaughtError };' > triggers.js
+          echo 'import { createSigner } from "bugbottle/sign"; export { createSigner };' > sign.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
         run: |
@@ -89,7 +90,8 @@ jobs:
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
-          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-breadcrumbs out-network out-queue out-triggers; do
+          npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
+          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-breadcrumbs out-network out-queue out-triggers out-sign; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -180,6 +182,15 @@ jobs:
           triggers=$(gzip -c out-triggers.js | wc -c)
           if [ "$triggers" -gt 1300 ]; then
             echo "bugbottle/triggers is $triggers bytes gzipped; the budget is 1300" >&2
+            exit 1
+          fi
+          # One key import, one HMAC and a hex loop, and it imports nothing at
+          # all — so this number is the module itself. The core must not carry
+          # it: `sendReport` takes the signer as a function for the same reason
+          # it takes the scrubber as one.
+          sign=$(gzip -c out-sign.js | wc -c)
+          if [ "$sign" -gt 512 ]; then
+            echo "bugbottle/sign is $sign bytes gzipped; the budget is 512" >&2
             exit 1
           fi
           # The two adapters are budgeted on what they add, not on what they

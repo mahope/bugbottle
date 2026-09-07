@@ -64,6 +64,10 @@
       "types": "./dist/network.d.ts",
       "default": "./dist/network.js"
     },
+    "./sign": {
+      "types": "./dist/sign.d.ts",
+      "default": "./dist/sign.js"
+    },
     "./queue": {
       "types": "./dist/queue.d.ts",
       "default": "./dist/queue.js"

@@ -595,6 +595,7 @@ run on your page.
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
 | `data-network` | Present, with any value, records the failed and slow requests. See "What the network did". |
+| `data-sign-key` | Signs the body with this key. A key in the page source is public, so this deters spam rather than authenticating anybody; see [Signing requests](#signing-requests). |
 | `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
@@ -1006,6 +1007,102 @@ is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
 answers `413` and calls `req.destroy()` rather than buffering the rest of a
 body it has already refused.
 
+### Signing requests
+
+An endpoint that anybody can POST to will eventually be found by somebody with
+a loop. `bugbottle/sign` puts an HMAC-SHA-256 on the body and `handleReport`
+checks it, so the obvious rubbish is refused before a row is written.
+
+Read this paragraph before you turn it on. **A key that ships to a browser is
+public.** It is in the bundle, and anyone who opens the network tab or the
+JavaScript can copy it. Signing is spam deterrence, not authentication: it
+raises the price of posting to your endpoint from "curl in a loop" to "read
+their bundle and implement HMAC", and it makes a captured body unusable a
+second time. It is worth having beside `rateLimit` and `authorize`. It is not a
+reason to skip either of them, and it is no protection at all against somebody
+who wants in.
+
+In the browser, pass the signer as `sign` wherever the endpoint is configured
+— the hook, the composable, the store, the panel, `sendReport` directly:
+
+```ts
+import { createSigner } from "bugbottle/sign";
+
+useBugReport({
+  endpoint: "/api/bug-report",
+  sign: createSigner({ key: import.meta.env.VITE_BUGBOTTLE_SIGN_KEY }),
+});
+```
+
+With the script tag, it is one attribute:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.5.0/dist/bugbottle.js"
+        data-endpoint="/api/bug-report"
+        data-sign-key="the-key-your-server-knows"></script>
+```
+
+On the server:
+
+```ts
+export const POST = (req: Request) =>
+  handleReport(req, {
+    signature: { key: process.env.BUGBOTTLE_SIGN_KEY! },
+    rateLimit: { limit: 20, windowMs: 60_000 },
+    store: async (report) => await db.reports.insert(report),
+  });
+```
+
+The header is `X-Bugbottle-Signature: t=<unix ms>,v1=<hex>`, where the hex is
+the HMAC-SHA-256 of `<t>.<body>` — the timestamp, a full stop, and the exact
+JSON that was sent. The timestamp is inside the signed message rather than
+merely beside it, so moving it to slip past the window breaks the signature.
+Any language can verify it: it is a plain HMAC.
+
+Everything about the check is an option:
+
+```ts
+signature: {
+  key: [newKey, oldKey],   // any key in the list is accepted, which is how you rotate one
+  header: "X-Sig",         // default X-Bugbottle-Signature
+  maxSkewMs: 5 * 60_000,   // default; the clock may be wrong in either direction
+  require: true,           // default whenever `signature` is set
+}
+```
+
+Missing when required, wrong, outside the skew window, or already seen: all
+four answer `401 { error: "Bad signature" }`, and they answer it identically,
+because telling a caller *which* part they got wrong is telling them how to get
+it right. Every accepted signature is remembered until it ages out of the skew
+window — the last 10 000 of them, in memory, per instance, with the same
+honesty as the rate limit: it stops a captured body being replayed at the
+instance that saw it, not across a fleet behind a load balancer.
+
+Two things will surprise you if nobody says them:
+
+- **A browser without `crypto.subtle` sends the report unsigned.** WebCrypto is
+  missing on very old browsers and on any page served over plain HTTP. Nothing
+  throws and nothing is queued; the report goes out without the header, and a
+  server with `require` on refuses it. Set `require: false` while you find out
+  whether that is anybody, and note that a signature which *is* present is
+  verified whatever `require` says — a wrong one is a claim, not an omission.
+- **The offline queue posts unsigned.** `bugbottle/queue` re-POSTs a finished
+  body with its own `fetch` and no signer, and a report written during an
+  outage is delivered long after any sensible skew window anyway. Signing and
+  queueing do not go together; pick one per endpoint.
+
+With Express, mount the signed route **without** a body parser:
+
+```ts
+app.post("/api/bug-report", expressHandler({ signature: { key: signKey } }));
+```
+
+The signature covers the exact text the browser sent. `express.json()` hands
+the adapter an object, which it has to re-serialise, and
+`JSON.stringify(JSON.parse(x))` is not `x` — key order, spacing and number
+formatting all move, and the HMAC moves with them. Without a parser the adapter
+reads the raw stream itself and verifies what actually arrived.
+
 ### The manual path
 
 If you want to see and control every step — or you already have a handler —
@@ -1409,7 +1506,8 @@ type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 **`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
 `locales`,
-`resolveLocale`, `scrubReport`, `buildReport`, `sendReport`, `pickElement`,
+`resolveLocale`, `scrubReport`, `createSigner`, `buildReport`, `sendReport`,
+`pickElement`,
 `onShortcut`, `onUncaughtError`, `version`, and
 `data-*` auto-mount. See "One script tag".
 
@@ -1426,6 +1524,10 @@ post type with an admin list, and emails them if you want. One activation.
 
 **`bugbottle/queue`** — `createQueue`, and the `Queue`, `QueueOptions` and
 `QueuedReport` types. See "When the network is down".
+
+**`bugbottle/sign`** — `createSigner`, `computeSignature`, `hmacHex`,
+`DEFAULT_SIGNATURE_HEADER`, and the `SignerOptions` type. See "Signing
+requests".
 
 **`bugbottle/triggers`** — `onShortcut`, `onUncaughtError`, `parseShortcut`,
 `matchesShortcut`, `isEditableTarget`, `eventSource`, `deepActiveElement`,
@@ -1458,7 +1560,7 @@ Requires `html-to-image`.
 
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
-`resetDedupe`, `fingerprint`, `stableHash`,
+`resetDedupe`, `resetSignatures`, `fingerprint`, `stableHash`,
 `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
@@ -1468,8 +1570,10 @@ Requires `html-to-image`.
 `InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
-`HandleReportOptions`, `HandleReportResult`, `DedupeOptions`, `ReportSink` and
-`SinkContext` types, the `StackFrame` type, and the `MAX_*` limits, including
+`HandleReportOptions`, `HandleReportResult`, `DedupeOptions`,
+`SignatureOptions`, `ReportSink` and
+`SinkContext` types, `DEFAULT_SIGNATURE_SKEW_MS`, `MAX_SIGNATURE_ENTRIES`,
+`BAD_SIGNATURE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
 `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also

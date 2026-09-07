@@ -25,6 +25,28 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
 
 ### Added
 
+- `bugbottle/sign`: `createSigner({ key, header? })` returns the `sign` function
+  `sendReport` takes, signing the serialised body with WebCrypto HMAC-SHA-256
+  and sending `X-Bugbottle-Signature: t=<unix ms>,v1=<hex>` over
+  `<t>.<body>`. 366 bytes gzipped, imported by nothing in the core — the same
+  function-shaped seam as `scrub`, so nobody pays for it who does not sign.
+  `sign` is passed through `createReportState`, the React, Vue and Svelte
+  adapters, `BugReportBoundary`, `mountBugbottle` and `data-sign-key` on the
+  script tag. A browser without `crypto.subtle` (a very old one, or a page on
+  plain HTTP) sends the report unsigned rather than failing.
+- `handleReport`: a `signature` option — `{ key, header?, maxSkewMs?, require? }`
+  — verifying that HMAC over the raw text before anything parses it. Several
+  keys may be given for a rotation, the comparison is constant-time, the skew
+  window is five minutes on either side by default, and the last 10 000
+  accepted signatures are remembered so a captured body cannot be replayed
+  (in memory, per instance, evicted like the rate-limit buckets). Missing when
+  required, invalid, expired and replayed all answer
+  `401 { error: "Bad signature" }`, deliberately indistinguishable. `require`
+  defaults to true whenever `signature` is set; a signature that is present is
+  verified either way. With Express the signed route must be mounted without a
+  body parser, because `express.json()` re-serialises the body into different
+  bytes. Documented honestly in the README: a key that ships to a browser is
+  public, so this is spam deterrence beside a rate limit, not authentication.
 - `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
   a composable over refs. `type` and `message` are writable computeds, so
   `v-model` binds to them; the subscription is torn down with the effect scope

@@ -140,6 +140,13 @@ export type MountOptions = {
    */
   beforeSend?: SendOptions["beforeSend"];
   /**
+   * Signs the body before it is sent. Pass the signer:
+   * `import { createSigner } from "bugbottle/sign"; sign: createSigner({ key })`.
+   * A key in the browser is public, so this deters spam rather than
+   * authenticating anybody. See the README.
+   */
+  sign?: SendOptions["sign"];
+  /**
    * Where a report goes when the send fails. Pass a queue from
    * `bugbottle/queue` and the reporter is thanked with the `queued` message
    * rather than shown an error; the report is delivered when the browser is
@@ -559,6 +566,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         fetch: options.fetch,
         parseError: options.parseError,
         beforeSend: options.beforeSend,
+        sign: options.sign,
       });
       resetForm();
       thanksText.textContent = ui.thanks;

@@ -10,6 +10,14 @@
  * The types are structural rather than imported from `@types/express`: this
  * package has no dependencies and is not about to grow one for two field
  * names. Anything shaped like an Express request and response fits.
+ *
+ * One caveat matters when `signature` is on. The signature covers the exact
+ * text the browser sent, and this adapter only has that text when nothing
+ * parsed the body first: `express.json()` hands back an object, which is
+ * re-serialised below with whatever key order and spacing `JSON.stringify`
+ * chooses, and that is a different string with a different HMAC. Mount the
+ * signed route without a body parser — `app.post(path, expressHandler(...))`
+ * — and the raw stream is read here and verified as it arrived.
  */
 import { type HandleReportOptions } from "./handle.ts";
 /** As much of an Express request as the adapter reads. */

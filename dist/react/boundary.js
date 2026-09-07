@@ -48,6 +48,7 @@ async function sendRenderError(options, error, componentStack) {
         parseError: options.parseError,
         fetch: options.fetch,
         beforeSend: options.beforeSend,
+        sign: options.sign,
     });
     return id;
 }

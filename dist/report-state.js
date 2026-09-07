@@ -188,6 +188,7 @@ export function createReportState(options) {
                     timeoutMs: opts.timeoutMs,
                     parseError: opts.parseError,
                     beforeSend: opts.beforeSend,
+                    sign: opts.sign,
                 });
                 set({ status: { kind: "sent", id } });
                 clearForm();

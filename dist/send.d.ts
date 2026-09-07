@@ -79,6 +79,26 @@ export type SendOptions = {
      */
     keepalive?: boolean;
     /**
+     * Signs the serialised body and returns the headers that carry the
+     * signature. Pass the signer from `bugbottle/sign`:
+     *
+     * ```ts
+     * import { createSigner } from "bugbottle/sign";
+     * sendReport(endpoint, report, { sign: createSigner({ key: SIGN_KEY }) });
+     * ```
+     *
+     * It runs after `beforeSend` and after the body is serialised, because the
+     * bytes that are signed have to be the bytes that are sent — a hook that
+     * edits the report afterwards would invalidate the signature. The headers it
+     * returns win over `headers`. `keepalive` changes nothing here: the same
+     * signature travels on a request the browser finishes after the page is gone.
+     *
+     * It is a function rather than a `{ key }` option so that this file never
+     * imports `sign.ts`: a bundler resolves every import it sees, and the core
+     * entry has a kilobyte and a half to stay under. Same seam as `scrub`.
+     */
+    sign?: (body: string) => Promise<Record<string, string>>;
+    /**
      * Called when the send failed, with the report as it would have been sent
      * and the error that stopped it. This is where an offline queue lives:
      *

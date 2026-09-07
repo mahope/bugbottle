@@ -19,6 +19,7 @@
  */
 import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, InvalidScreenshotError, } from "../report-core.js";
 import { fingerprint } from "../fingerprint.js";
+import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 import { toMarkdown } from "../markdown.js";
 import { scrubReport } from "../scrub.js";
 import { sendReportEmail } from "../sinks/resend.js";
@@ -56,6 +57,12 @@ export const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 export const MAX_RATE_LIMIT_BUCKETS = 10_000;
 /** Hard ceiling on the fingerprint map. */
 export const MAX_DEDUPE_ENTRIES = 10_000;
+/** The default skew window: five minutes on either side of our clock. */
+export const DEFAULT_SIGNATURE_SKEW_MS = 5 * 60_000;
+/** Hard ceiling on the replay cache. */
+export const MAX_SIGNATURE_ENTRIES = 10_000;
+/** The one answer to every bad signature. Missing, wrong, late and replayed all read the same. */
+export const BAD_SIGNATURE_ERROR = "Bad signature";
 /**
  * The rate-limit buckets. Module-level on purpose and documented as such: a
  * serverless isolate gets its own, and two instances behind a load balancer do
@@ -88,6 +95,107 @@ function evictDedupe(now, windowMs) {
             break;
         seenReports.delete(oldest.value);
     }
+}
+/**
+ * The signatures accepted so far, and when. Module-level with the same honest
+ * limit as the buckets and the fingerprints: one instance remembers its own
+ * traffic, and two instances behind a load balancer do not share a cache. It
+ * stops a captured body being replayed at the instance that saw it, which is
+ * where a replay of a browser's own request lands anyway.
+ */
+const seenSignatures = new Map();
+/** Exported for tests, which would otherwise leak signatures into each other. */
+export function resetSignatures() {
+    seenSignatures.clear();
+}
+/**
+ * Compares two hex digests without leaking where they differ through timing.
+ * The lengths are public — both are 64 characters of SHA-256 — so returning
+ * early on a mismatch there tells an attacker nothing.
+ */
+function timingSafeEqual(a, b) {
+    if (a.length !== b.length)
+        return false;
+    let differences = 0;
+    for (let i = 0; i < a.length; i += 1)
+        differences |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return differences === 0;
+}
+/** `t=<unix ms>,v1=<hex>` into its parts, or null when it is not that. */
+function parseSignature(value) {
+    let timestamp = Number.NaN;
+    let digest = "";
+    for (const part of value.split(",")) {
+        const eq = part.indexOf("=");
+        if (eq < 0)
+            continue;
+        const name = part.slice(0, eq).trim();
+        const field = part.slice(eq + 1).trim();
+        if (name === "t")
+            timestamp = Number(field);
+        else if (name === "v1")
+            digest = field;
+    }
+    // The shape is checked before any HMAC is computed, so a header full of
+    // rubbish costs a regular expression rather than a key import.
+    if (!Number.isFinite(timestamp) || !/^[0-9a-f]{64}$/.test(digest))
+        return null;
+    return { timestamp, digest };
+}
+/** Drops what has aged out of the skew window, then the oldest. */
+function evictSignatures(now, maxSkewMs) {
+    for (const [digest, at] of seenSignatures) {
+        if (at + maxSkewMs <= now)
+            seenSignatures.delete(digest);
+    }
+    while (seenSignatures.size >= MAX_SIGNATURE_ENTRIES) {
+        const oldest = seenSignatures.keys().next();
+        if (oldest.done)
+            break;
+        seenSignatures.delete(oldest.value);
+    }
+}
+/**
+ * True when this body arrived with a signature we are willing to accept.
+ *
+ * The body is the raw text as it was received, not a re-serialisation of the
+ * parsed JSON: `JSON.stringify(JSON.parse(x))` is not `x` — key order, spacing
+ * and number formatting all move — so anything that reparses before verifying
+ * would reject every honest report.
+ */
+async function verifySignature(request, body, options) {
+    const header = request.headers.get(options.header ?? DEFAULT_SIGNATURE_HEADER);
+    // No signature at all is the one case `require: false` lets through. A
+    // signature that is present is verified whatever `require` says.
+    if (!header)
+        return options.require === false;
+    const parsed = parseSignature(header);
+    if (!parsed)
+        return false;
+    const maxSkewMs = options.maxSkewMs ?? DEFAULT_SIGNATURE_SKEW_MS;
+    const now = Date.now();
+    // Both directions: a clock ahead of ours is as much of a replay window as a
+    // clock behind it.
+    if (Math.abs(now - parsed.timestamp) > maxSkewMs)
+        return false;
+    const keys = Array.isArray(options.key) ? options.key : [options.key];
+    const message = `${parsed.timestamp}.${body}`;
+    let matched = false;
+    for (const key of keys) {
+        // Every key is tried even after one matches, so the time this takes says
+        // nothing about which key was used or whether the first one was right.
+        if (timingSafeEqual(await hmacHex(key, message), parsed.digest))
+            matched = true;
+    }
+    if (!matched)
+        return false;
+    // Only a signature that verified is remembered, so nobody can fill the cache
+    // with digests of their own choosing.
+    if (seenSignatures.has(parsed.digest))
+        return false;
+    evictSignatures(now, maxSkewMs);
+    seenSignatures.set(parsed.digest, now);
+    return true;
 }
 function defaultRateLimitKey(request) {
     const forwarded = request.headers.get("x-forwarded-for");
@@ -359,6 +467,11 @@ export async function handleReport(request, options = {}) {
                 return json({ error: "Report took too long to arrive" }, 408, cors);
             }
             throw err;
+        }
+        // Verified over the text that arrived, before anything parses it, and
+        // before a body nobody signed reaches a validator.
+        if (options.signature && !(await verifySignature(request, text, options.signature))) {
+            return json({ error: BAD_SIGNATURE_ERROR }, 401, cors);
         }
         let payload;
         try {
