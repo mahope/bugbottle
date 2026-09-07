@@ -12,13 +12,8 @@
  * data ends up. The original functions are always called through, so nothing
  * disappears from the developer console.
  */
-export type ConsoleLevel = "error" | "warn";
-export type ConsoleEntry = {
-    /** ISO 8601 timestamp. */
-    ts: string;
-    level: ConsoleLevel;
-    message: string;
-};
+import { type ConsoleEntry, type ConsoleLevel } from "./report-core.ts";
+export type { ConsoleEntry, ConsoleLevel };
 export type ConsoleBufferOptions = {
     /** How many entries to keep. Oldest are dropped first. Default 50. */
     maxEntries?: number;
@@ -29,7 +24,9 @@ export type ConsoleBufferOptions = {
  * Starts recording. Call once, as early as your app can manage — anything that
  * happens before this is not in the buffer.
  *
- * Safe to call more than once; only the first call patches the console.
+ * Safe to call more than once; only the first call patches the console. In a
+ * server-rendered app, call it from client-only code: it patches whichever
+ * `console` it finds, and on the server that is the server's.
  */
 export declare function initConsoleBuffer(options?: ConsoleBufferOptions): void;
 /** A copy of what has been recorded so far. */

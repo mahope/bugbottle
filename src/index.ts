@@ -33,6 +33,8 @@ export {
   buildReport,
   sendReport,
   SendFailedError,
+  SendTimeoutError,
+  DEFAULT_SEND_TIMEOUT_MS,
   type BuildReportInput,
   type SendOptions,
   type SendResult,

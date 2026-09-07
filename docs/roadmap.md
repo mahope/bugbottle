@@ -7,11 +7,11 @@ Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. The core entry stays under 1 kB
 gzipped and `bugbottle/react` under 3.5 kB.
 
-Already in 0.1: console buffer, page context, injectable screenshot renderer,
+Already in 0.3: console buffer, page context, injectable screenshot renderer,
 element picker (`pickElement`), framework-agnostic `buildReport`/`sendReport`,
 server validators for every field.
 
-## 0.2 — evidence and safety
+## 0.4 — evidence and safety
 
 - **`toMarkdown(report)`** in `bugbottle/server` — a report rendered for a
   human or an agent: selector, text and position of each element, page,
@@ -32,7 +32,7 @@ server validators for every field.
 - **`report.schema.json`** generated from the types, so a receiver can be
   built without the library.
 
-## 0.3 — delivery and handoff
+## 0.5 — delivery and handoff
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
   `localStorage`, flushed on `online`.

@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { buildReport, sendReport, SendFailedError } from "../src/send.ts";
+import { buildReport, sendReport, SendFailedError, SendTimeoutError } from "../src/send.ts";
 import { initConsoleBuffer, resetConsoleBuffer } from "../src/console-buffer.ts";
 
 afterEach(() => resetConsoleBuffer());
@@ -102,4 +102,30 @@ test("a failed response becomes a SendFailedError with the server message", asyn
     }),
     (err: unknown) => err instanceof SendFailedError && err.message === "Custom: forbidden",
   );
+});
+
+test("a hung endpoint is abandoned after timeoutMs with a SendTimeoutError", async () => {
+  const hangingFetch = ((_url: unknown, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })) as typeof globalThis.fetch;
+  await assert.rejects(
+    sendReport("/x", buildReport({ type: "bug", message: "a" }), { fetch: hangingFetch, timeoutMs: 20 }),
+    (err: unknown) => err instanceof SendTimeoutError && /20 ms/.test(err.message),
+  );
+});
+
+test("a caller-supplied signal aborts the request as itself, not as a timeout", async () => {
+  const hangingFetch = ((_url: unknown, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })) as typeof globalThis.fetch;
+  const outer = new AbortController();
+  const pending = sendReport("/x", buildReport({ type: "bug", message: "a" }), {
+    fetch: hangingFetch,
+    signal: outer.signal,
+    timeoutMs: 5000,
+  });
+  outer.abort();
+  await assert.rejects(pending, (err: unknown) => !(err instanceof SendTimeoutError));
 });

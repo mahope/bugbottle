@@ -12,12 +12,18 @@
  * data ends up. The original functions are always called through, so nothing
  * disappears from the developer console.
  */
-const DEFAULTS = { maxEntries: 50, maxMessageLength: 500 };
+import { MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, } from "./report-core.js";
+const DEFAULTS = {
+    maxEntries: MAX_CONSOLE_ENTRIES,
+    maxMessageLength: MAX_CONSOLE_MESSAGE_LENGTH,
+};
 let buffer = [];
 let initialised = false;
 let limits = { ...DEFAULTS };
 let originalError = null;
 let originalWarn = null;
+let onError = null;
+let onRejection = null;
 function serialise(args, maxLength) {
     return args
         .map((a) => {
@@ -50,7 +56,9 @@ function push(level, args) {
  * Starts recording. Call once, as early as your app can manage — anything that
  * happens before this is not in the buffer.
  *
- * Safe to call more than once; only the first call patches the console.
+ * Safe to call more than once; only the first call patches the console. In a
+ * server-rendered app, call it from client-only code: it patches whichever
+ * `console` it finds, and on the server that is the server's.
  */
 export function initConsoleBuffer(options = {}) {
     if (initialised)
@@ -73,12 +81,14 @@ export function initConsoleBuffer(options = {}) {
     if (typeof window !== "undefined") {
         // Uncaught errors do not reach console.error in every browser, so they are
         // recorded directly.
-        window.addEventListener("error", (e) => {
+        onError = (e) => {
             push("error", [`Uncaught: ${e.message} (${e.filename}:${e.lineno})`]);
-        });
-        window.addEventListener("unhandledrejection", (e) => {
+        };
+        onRejection = (e) => {
             push("error", [`Unhandled rejection: ${serialise([e.reason], limits.maxMessageLength)}`]);
-        });
+        };
+        window.addEventListener("error", onError);
+        window.addEventListener("unhandledrejection", onRejection);
     }
 }
 /** A copy of what has been recorded so far. */
@@ -88,13 +98,21 @@ export function getConsoleBuffer() {
 /** Empties the buffer and restores the real console functions. */
 export function resetConsoleBuffer() {
     buffer = [];
-    if (initialised) {
-        if (originalError)
-            console.error = originalError;
-        if (originalWarn)
-            console.warn = originalWarn;
-        initialised = false;
-        limits = { ...DEFAULTS };
+    if (!initialised)
+        return;
+    if (originalError)
+        console.error = originalError;
+    if (originalWarn)
+        console.warn = originalWarn;
+    if (typeof window !== "undefined") {
+        if (onError)
+            window.removeEventListener("error", onError);
+        if (onRejection)
+            window.removeEventListener("unhandledrejection", onRejection);
     }
+    onError = null;
+    onRejection = null;
+    initialised = false;
+    limits = { ...DEFAULTS };
 }
 //# sourceMappingURL=console-buffer.js.map

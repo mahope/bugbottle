@@ -45,6 +45,12 @@ export type SendOptions = {
   /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
   credentials?: RequestCredentials;
   signal?: AbortSignal;
+  /**
+   * Abort the request after this many milliseconds. Default 15 000. A hung
+   * request must not leave a form stuck on "sending" until the reporter gives
+   * up and closes the tab. Set to 0 to disable.
+   */
+  timeoutMs?: number;
   /** Replace the global `fetch`, mostly for tests. */
   fetch?: typeof globalThis.fetch;
   /**
@@ -54,12 +60,22 @@ export type SendOptions = {
   parseError?: (response: Response, body: unknown) => string | undefined;
 };
 
+export const DEFAULT_SEND_TIMEOUT_MS = 15_000;
+
 export type SendResult = {
   /** The `id` field of the response body, when the server sends one. */
   id?: string;
   body: unknown;
   response: Response;
 };
+
+/** The request was aborted by `timeoutMs` before the server answered. */
+export class SendTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`No answer from the endpoint within ${timeoutMs} ms`);
+    this.name = "SendTimeoutError";
+  }
+}
 
 /** The server answered, but not with success. `message` is safe to show. */
 export class SendFailedError extends Error {
@@ -75,7 +91,8 @@ export class SendFailedError extends Error {
 
 /**
  * POSTs a report as JSON. Resolves on a 2xx, throws `SendFailedError` on any
- * other status, and lets network failures from `fetch` propagate as they are.
+ * other status, `SendTimeoutError` when `timeoutMs` elapses first, and lets
+ * network failures from `fetch` propagate as they are.
  */
 export async function sendReport(
   endpoint: string,
@@ -89,10 +106,29 @@ export async function sendReport(
     body: JSON.stringify(report),
   };
   if (options.credentials) init.credentials = options.credentials;
-  if (options.signal) init.signal = options.signal;
 
-  const response = await doFetch(endpoint, init);
-  const body: unknown = await response.json().catch(() => null);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
+  const controller = new AbortController();
+  const onOuterAbort = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener("abort", onOuterAbort);
+  if (options.signal?.aborted) onOuterAbort();
+  const timer = timeoutMs > 0 ? setTimeout(() => controller.abort("timeout"), timeoutMs) : null;
+  init.signal = controller.signal;
+
+  let response: Response;
+  let body: unknown;
+  try {
+    response = await doFetch(endpoint, init);
+    body = await response.json().catch(() => null);
+  } catch (err) {
+    if (controller.signal.aborted && controller.signal.reason === "timeout") {
+      throw new SendTimeoutError(timeoutMs);
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onOuterAbort);
+  }
 
   if (!response.ok) {
     const fromBody = body as { error?: unknown; message?: unknown } | null;

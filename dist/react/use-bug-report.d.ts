@@ -1,4 +1,6 @@
-import { type ReportType } from "../report-core.ts";
+import { type ScreenshotRenderer } from "../capture.ts";
+import { type ElementRef, type ReportType } from "../report-core.ts";
+import { type SendOptions } from "../send.ts";
 /**
  * Everything a report form needs, and none of its markup.
  *
@@ -13,6 +15,8 @@ export type BugReportStatus = {
 } | {
     kind: "capturing";
 } | {
+    kind: "picking";
+} | {
     kind: "sending";
 } | {
     kind: "sent";
@@ -25,6 +29,12 @@ export type BugReportStatus = {
 export type UseBugReportOptions = {
     /** Endpoint that receives the report. Required. */
     endpoint: string;
+    /**
+     * How to take the picture. Without it, screenshots are off and
+     * `canScreenshot` is false. `import { htmlToImage } from "bugbottle/html-to-image"`
+     * is the ready-made one.
+     */
+    screenshot?: ScreenshotRenderer;
     /** Type selected when the form opens. Defaults to "bug". */
     initialType?: ReportType;
     /**
@@ -36,10 +46,16 @@ export type UseBugReportOptions = {
     consoleFor?: (type: ReportType) => boolean;
     /** Extra fields to send alongside the report. */
     extra?: Record<string, unknown>;
+    /** Extra request headers — an auth token, a CSRF header. */
+    headers?: SendOptions["headers"];
+    /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
+    credentials?: SendOptions["credentials"];
+    /** Give up on the endpoint after this long. Default 15 000 ms. */
+    timeoutMs?: SendOptions["timeoutMs"];
     /** Called after a successful submit. */
     onSent?: (id: string | undefined) => void;
     /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
-    parseError?: (response: Response, body: unknown) => string;
+    parseError?: SendOptions["parseError"];
     /** Messages shown to the reporter. Supply translated strings here. */
     messages?: Partial<Record<"empty" | "screenshotTooLarge" | "screenshotFailed" | "sendFailed" | "sent", string>>;
 };
@@ -49,15 +65,24 @@ export declare function useBugReport(options: UseBugReportOptions): {
     setType: (next: ReportType) => void;
     message: string;
     setMessage: import("react").Dispatch<import("react").SetStateAction<string>>;
+    /** Whether a renderer was supplied, so the form can hide the checkbox. */
+    canScreenshot: boolean;
     screenshot: string | null;
     includeScreenshot: boolean;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
+    /** Elements the reporter has pointed at, in order. */
+    elements: ElementRef[];
+    pickElement: () => Promise<ElementRef | null>;
+    cancelPick: () => void | undefined;
+    removeElement: (index: number) => void;
     open: () => void;
     submit: () => Promise<boolean>;
+    reset: () => void;
     status: BugReportStatus;
     /** Convenience flags, so consumers do not have to match on the union. */
     isCapturing: boolean;
+    isPicking: boolean;
     isSending: boolean;
     statusMessage: string;
 };

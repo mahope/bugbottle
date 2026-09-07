@@ -50,6 +50,8 @@ export type UseBugReportOptions = {
   headers?: SendOptions["headers"];
   /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
   credentials?: SendOptions["credentials"];
+  /** Give up on the endpoint after this long. Default 15 000 ms. */
+  timeoutMs?: SendOptions["timeoutMs"];
   /** Called after a successful submit. */
   onSent?: (id: string | undefined) => void;
   /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
@@ -213,6 +215,7 @@ export function useBugReport(options: UseBugReportOptions) {
       const { id } = await sendReport(endpoint, report, {
         headers: opts.headers,
         credentials: opts.credentials,
+        timeoutMs: opts.timeoutMs,
         parseError: opts.parseError,
       });
       setStatus({ kind: "sent", id });

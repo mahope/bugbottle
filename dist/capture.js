@@ -7,27 +7,23 @@ export class ScreenshotTooLargeError extends Error {
 }
 const defaultExclude = (node) => node instanceof HTMLElement && node.dataset.bugbottle !== undefined;
 /**
- * Renders the current page to a PNG data URL.
- *
- * Requires `html-to-image` to be installed; it is loaded on demand, so it stays
- * out of your bundle until someone actually reports something.
+ * Renders the current page to a PNG data URL using the given renderer.
  *
  * A high-DPI screen can produce more than a server will accept, so an oversized
  * capture is retried at half scale before giving up — the size of someone's
  * monitor should not decide whether their report goes through.
  */
-export async function captureScreenshot(options = {}) {
+export async function captureScreenshot(render, options = {}) {
     if (typeof document === "undefined") {
         throw new Error("captureScreenshot requires a browser environment");
     }
     const maxLength = options.maxDataUrlLength ?? MAX_SCREENSHOT_DATA_URL_LENGTH;
     const exclude = options.exclude ?? defaultExclude;
     const root = options.root ?? document.body;
-    const { toPng } = await import("html-to-image");
     const filter = (node) => !exclude(node);
-    let dataUrl = await toPng(root, { filter, pixelRatio: 1 });
+    let dataUrl = await render(root, { filter, pixelRatio: 1 });
     if (dataUrl.length > maxLength) {
-        dataUrl = await toPng(root, { filter, pixelRatio: 0.5 });
+        dataUrl = await render(root, { filter, pixelRatio: 0.5 });
     }
     if (dataUrl.length > maxLength) {
         throw new ScreenshotTooLargeError();

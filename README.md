@@ -21,16 +21,15 @@ npm install bugbottle
 npm install html-to-image   # optional, only if you want screenshots
 ```
 
-**No npm account? Install straight from GitHub.**
+Without npm, install the tagged release straight from GitHub, or import the
+built files from the jsDelivr CDN — `dist/` is committed for exactly that:
 
 ```bash
-npm install github:mahope/bugbottle#v0.2.4
+npm install github:mahope/bugbottle#v0.3.0
 ```
 
-or import the built files directly from the jsDelivr CDN:
-
 ```js
-import { recordConsoleErrors, collectReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.2.1-no-npm-needed/dist/index.js";
+import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.3.0/dist/index.js";
 ```
 
 - **Headless.** You render the form. The chrome around a feedback widget is
@@ -138,8 +137,8 @@ your panel and your trigger button.
 Other options: `initialType`, `screenshotFor` and `consoleFor` (which report
 types get a picture and the console; bugs only by default), `extra` (fields
 merged into the body — an app version, a tenant id), `headers` and
-`credentials` (for an authenticated or cross-origin endpoint), `onSent`,
-`parseError`, and `messages` for translated strings. The defaults are English.
+`credentials` (for an authenticated or cross-origin endpoint), `timeoutMs`,
+`onSent`, `parseError`, and `messages` for translated strings. The defaults are English.
 
 ## The form (anything else)
 
@@ -161,7 +160,8 @@ const { id } = await sendReport("/api/feedback", report);
 ```
 
 `sendReport` resolves on a 2xx, throws `SendFailedError` (with `status` and
-the parsed body) on anything else, and lets network errors through untouched.
+the parsed body) on anything else, gives up with `SendTimeoutError` after
+15 seconds (`timeoutMs`), and lets network errors through untouched.
 `captureScreenshot` retries at half scale when the first render is larger than
 a server would accept, and throws `ScreenshotTooLargeError` if that is still
 too big. Treat either as "send without the picture".

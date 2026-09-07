@@ -143,7 +143,7 @@ function main() {
   let valid = 0;
   let invalid = 0;
   for (const file of files) {
-    const rel = path.relative(process.cwd(), file);
+    const rel = path.relative(process.cwd(), file).split(path.sep).join('/');
     let report = null;
     try {
       const sizeKb = fs.statSync(file).size / 1024;

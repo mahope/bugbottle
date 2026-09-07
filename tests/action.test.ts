@@ -11,8 +11,9 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ACTION = new URL("../action/index.cjs", import.meta.url).pathname;
+const ACTION = fileURLToPath(new URL("../action/index.cjs", import.meta.url));
 
 function runAction(files: Record<string,string>, env: Record<string,string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "bugbottle-action-"));

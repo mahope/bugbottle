@@ -8,17 +8,22 @@
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.6; }
   form { display: grid; gap: .75rem; }
-  textarea, button { font: inherit; }
+  textarea, button, select { font: inherit; }
   textarea { min-height: 6rem; padding: .5rem; }
   button { padding: .5rem 1rem; cursor: pointer; }
   [data-bugbottle] img { max-width: 100%; border: 1px solid #8888; }
   [role="status"] { min-height: 1.5em; color: gray; }
+  ul { padding-left: 1.2rem; } code { font-size: .9em; }
 </style>
 </head>
 <body>
-<h1>Report a problem</h1>
-<p>This page is the bugbottle vanilla-JS example. Anything you log to the
-console as an error before submitting rides along with the report.</p>
+<h1>Orders</h1>
+<p>This page is the bugbottle vanilla-JS example. Anything logged as an error
+before submitting rides along with the report, and you can point at the thing
+the report is about.</p>
+<p><button type="button" id="save-order">Save order</button>
+   <button type="button" id="refund">Refund</button></p>
+
 <form data-bugbottle>
   <label>Type
     <select name="type">
@@ -30,60 +35,77 @@ console as an error before submitting rides along with the report.</p>
   <label>What happened?
     <textarea name="message" required></textarea>
   </label>
-  <label>
-    <input type="checkbox" name="screenshot" checked />
-    Attach a picture of this page (uses html-to-image from esm.sh)
-  </label>
+  <p>
+    <button type="button" id="pick">Point at the element</button>
+    <button type="button" id="shot">Take a picture</button>
+  </p>
+  <ul id="elements"></ul>
+  <img id="preview" alt="" hidden />
   <button type="submit">Send</button>
   <p role="status"></p>
 </form>
-<script type="module">
-  import { initConsoleBuffer } from "https://esm.sh/bugbottle@0.1";
-  initConsoleBuffer();
 
+<script type="module">
+  // Served from this repo's dist/ by server.mjs. With npm it is simply:
+  //   import { ... } from "bugbottle";
+  import {
+    initConsoleBuffer, pickElement, captureScreenshot, buildReport, sendReport, SendFailedError,
+  } from "/bugbottle/index.js";
+
+  initConsoleBuffer();
   // Prove the buffer works even though nothing is visibly wrong:
-  setTimeout(() => console.error(new Error("example: something looked wrong")), 500);
+  document.getElementById("save-order").onclick = () => console.error(new Error("save failed: 500 from /api/orders"));
 
   const form = document.querySelector("form");
   const statusEl = form.querySelector("[role=status]");
+  const list = document.getElementById("elements");
+  const preview = document.getElementById("preview");
+  const elements = [];
+  let screenshotDataUrl = null;
+
+  document.getElementById("pick").onclick = async () => {
+    statusEl.textContent = "Click anything to attach it — Esc to stop";
+    const el = await pickElement();
+    statusEl.textContent = "";
+    if (!el) return;
+    elements.push(el);
+    const li = document.createElement("li");
+    li.innerHTML = `<code></code> `;
+    li.querySelector("code").textContent = el.selector;
+    li.append(el.text);
+    list.append(li);
+  };
+
+  document.getElementById("shot").onclick = async () => {
+    try {
+      // The renderer is passed in; here it comes from a CDN. With npm:
+      //   import { htmlToImage } from "bugbottle/html-to-image";
+      const { toPng } = await import("https://esm.sh/html-to-image@1?bundle");
+      screenshotDataUrl = await captureScreenshot((root, o) => toPng(root, o));
+      preview.src = screenshotDataUrl;
+      preview.hidden = false;
+    } catch {
+      statusEl.textContent = "Could not take the picture — you can still send without it.";
+    }
+  };
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     statusEl.textContent = "Sending…";
-
-    let screenshotDataUrl;
-    if (fd.get("screenshot")) {
-      try {
-        const { toPng } = await import("https://esm.sh/html-to-image@1?bundle");
-        screenshotDataUrl = await toPng(document.body, {
-          filter: (n) => !(n instanceof HTMLElement && n.dataset.bugbottle !== undefined),
-        });
-      } catch {
-        statusEl.textContent = "Could not take the picture — sending without it.";
-      }
-    }
-
     try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: fd.get("type"),
-          message: fd.get("message"),
-          screenshotDataUrl,
-          console: [],
-          context: {
-            url: location.pathname,
-            viewport: innerWidth + "x" + innerHeight,
-            userAgent: navigator.userAgent,
-          },
-        }),
+      const report = buildReport({
+        type: fd.get("type"),
+        message: fd.get("message"),
+        elements,
+        screenshotDataUrl,
       });
-      const body = await res.json();
-      statusEl.textContent = res.ok ? "Sent — thank you." : body.error || "Failed.";
-      if (res.ok) form.reset();
-    } catch {
-      statusEl.textContent = "The report could not be sent.";
+      const { id } = await sendReport("/api/feedback", report);
+      statusEl.textContent = `Sent — thank you (${id}).`;
+      form.reset(); list.innerHTML = ""; elements.length = 0;
+      screenshotDataUrl = null; preview.hidden = true;
+    } catch (err) {
+      statusEl.textContent = err instanceof SendFailedError ? err.message : "The report could not be sent.";
     }
   });
 </script>

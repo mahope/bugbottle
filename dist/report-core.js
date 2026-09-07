@@ -3,9 +3,10 @@
  * no storage. Both ends import this: the browser to build a report, the server
  * to check the one it received.
  *
- * The screenshot is the part that needs real care. It arrives as a data URL
- * from a browser, which means it is attacker-controlled input that a server is
- * about to write to storage, so its shape is checked rather than trusted.
+ * Everything that arrives at the server is attacker-controlled input that is
+ * about to be written to storage, so its shape is checked rather than trusted.
+ * The screenshot needs the most care, but a message or a console entry can
+ * carry a null byte that a database refuses, or be long enough to bloat a row.
  */
 export const REPORT_TYPES = ["bug", "idea", "other"];
 /** Decoded ceiling for a screenshot. The client downscales before this. */
@@ -13,10 +14,25 @@ export const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
 /** Base64 inflates by about a third; the prefix is the rest of the slack. */
 export const MAX_SCREENSHOT_DATA_URL_LENGTH = 2_900_000;
 export const MAX_MESSAGE_LENGTH = 4000;
+/** How many console entries a report may carry. Oldest are dropped first. */
+export const MAX_CONSOLE_ENTRIES = 50;
+/** Longest a single console message may be before it is clipped. */
+export const MAX_CONSOLE_MESSAGE_LENGTH = 500;
+/** How many pointed-at elements a report may carry. */
+export const MAX_ELEMENTS = 10;
+/** Longest text kept for a pointed-at element. */
+export const MAX_ELEMENT_TEXT_LENGTH = 200;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 export function isReportType(value) {
     return typeof value === "string" && REPORT_TYPES.includes(value);
+}
+/**
+ * Postgres (and others) refuse a text value containing a null byte, so one
+ * arriving from a browser would fail the whole insert.
+ */
+function stripNullBytes(text) {
+    return text.replace(/\u0000/g, "");
 }
 /**
  * Trims and length-checks the reporter's message.
@@ -25,7 +41,7 @@ export function isReportType(value) {
 export function normaliseMessage(raw, maxLength = MAX_MESSAGE_LENGTH) {
     if (typeof raw !== "string")
         return null;
-    const text = raw.trim();
+    const text = stripNullBytes(raw).trim();
     if (text.length === 0)
         return null;
     return text.slice(0, maxLength);
@@ -36,12 +52,86 @@ export function normaliseMessage(raw, maxLength = MAX_MESSAGE_LENGTH) {
  */
 export function normaliseContext(raw) {
     const obj = (raw ?? {});
-    const str = (v, max) => (typeof v === "string" ? v.slice(0, max) : "");
+    const str = (v, max) => typeof v === "string" ? stripNullBytes(v).slice(0, max) : "";
     return {
         url: str(obj.url, 500),
         viewport: str(obj.viewport, 32),
         userAgent: str(obj.userAgent, 500),
     };
+}
+/**
+ * Validates the console entries a report arrived with.
+ *
+ * Anything that is not an array of `{ ts, level, message }` with a known level
+ * is dropped, messages are clipped, and only the most recent entries are kept.
+ * Never throws: a malformed console section means "no console", not a failed
+ * report.
+ */
+export function normaliseConsole(raw, options = {}) {
+    const maxEntries = options.maxEntries ?? MAX_CONSOLE_ENTRIES;
+    const maxMessageLength = options.maxMessageLength ?? MAX_CONSOLE_MESSAGE_LENGTH;
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const item of raw) {
+        if (typeof item !== "object" || item === null)
+            continue;
+        const { ts, level, message } = item;
+        if (level !== "error" && level !== "warn")
+            continue;
+        if (typeof message !== "string")
+            continue;
+        out.push({
+            ts: typeof ts === "string" && !Number.isNaN(Date.parse(ts)) ? ts : "",
+            level,
+            message: stripNullBytes(message).slice(0, maxMessageLength),
+        });
+    }
+    return out.length > maxEntries ? out.slice(-maxEntries) : out;
+}
+/**
+ * Validates the elements a report arrived with. Malformed entries are dropped,
+ * strings are clipped, attribute names are limited to a safe pattern, and at
+ * most `maxElements` are kept. Never throws.
+ */
+export function normaliseElements(raw, options = {}) {
+    const maxElements = options.maxElements ?? MAX_ELEMENTS;
+    if (!Array.isArray(raw))
+        return [];
+    const str = (v, max) => typeof v === "string" ? stripNullBytes(v).slice(0, max) : "";
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : 0);
+    const out = [];
+    for (const item of raw) {
+        if (out.length >= maxElements)
+            break;
+        if (typeof item !== "object" || item === null)
+            continue;
+        const o = item;
+        const selector = str(o.selector, 500);
+        const tag = str(o.tag, 32);
+        if (!selector || !tag)
+            continue;
+        const rect = (o.rect ?? {});
+        const attributes = {};
+        if (typeof o.attributes === "object" && o.attributes !== null) {
+            for (const [k, v] of Object.entries(o.attributes)) {
+                if (Object.keys(attributes).length >= 20)
+                    break;
+                if (!/^[a-z][a-z0-9-]{0,63}$/.test(k) || k.startsWith("data-bugbottle"))
+                    continue;
+                if (typeof v === "string")
+                    attributes[k] = stripNullBytes(v).slice(0, 200);
+            }
+        }
+        out.push({
+            selector,
+            tag,
+            text: str(o.text, MAX_ELEMENT_TEXT_LENGTH),
+            rect: { x: num(rect.x), y: num(rect.y), width: num(rect.width), height: num(rect.height) },
+            attributes,
+        });
+    }
+    return out;
 }
 export class InvalidScreenshotError extends Error {
     constructor(message) {
@@ -84,10 +174,21 @@ export function decodeScreenshotDataUrl(dataUrl, options = {}) {
     }
     return bytes;
 }
-/** Works in Node and in the browser, without pulling in Buffer types. */
+/**
+ * Works in Node and in the browser, without pulling in Buffer types.
+ *
+ * `atob` throws a DOMException on malformed input; that is wrapped so a caller
+ * only ever has to catch InvalidScreenshotError.
+ */
 function base64ToBytes(b64) {
     if (typeof atob === "function") {
-        const binary = atob(b64);
+        let binary;
+        try {
+            binary = atob(b64);
+        }
+        catch {
+            throw new InvalidScreenshotError("Screenshot is not valid base64");
+        }
         const out = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++)
             out[i] = binary.charCodeAt(i);
