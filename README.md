@@ -493,6 +493,78 @@ Requiring people to be signed in is worth considering too. An anonymous
 screenshot is one nobody can be asked about later, and nobody can be told has
 been deleted.
 
+### Scrubbing
+
+The text of a report is written in a hurry, and it arrives carrying whatever was
+on the clipboard: the failing request, the token somebody was debugging with, a
+customer's email address. The page URL brings its own `?token=`. `scrubReport`
+walks a report and replaces those with `[redacted]`.
+
+```ts
+import { buildReport, sendReport, scrubReport } from "bugbottle";
+
+const report = buildReport({ type: "bug", message, scrub: scrubReport });
+await sendReport("/api/feedback", report);
+```
+
+The same function works in the route handler, which is the safer place to put it
+— it also covers reports from an older client:
+
+```ts
+import { scrubReport } from "bugbottle/server";
+
+const clean = scrubReport(await request.json());
+```
+
+On by default: email addresses, `Bearer <token>`, JWTs (`eyJ…`), 13 to 19 digit
+card numbers that pass the Luhn check, IBANs, and query values whose key matches
+`/token|key|secret|password|auth/i`. They are applied to `message`,
+`console[].message`, `context.url`, `elements[].text`, an element's `href` and
+`data-*` attributes, and `breadcrumbs` if you add them. The screenshot is not
+touched: masking pixels is a different job.
+
+An order number of 16 digits is kept, because it fails Luhn. Prose that happens
+to say `key=value` is kept, because the query pattern only runs on URLs.
+
+`scrubReport(report, options)` takes `patterns` (extra global regexes, redacted
+whole), `keep` (built-ins to switch off by name) and `replacement`:
+
+```ts
+scrubReport(report, {
+  patterns: [/\bACME-\d+\b/g],
+  keep: ["email"],          // "email" | "bearer" | "jwt" | "card" | "iban" | "query"
+  replacement: "[redacted]",
+});
+```
+
+The scrubber is its own module and nothing else imports it, so a bundle that
+does not use it does not carry it. Pattern matching is not a guarantee: it
+catches the shapes it knows, and the reporter can still type something no regex
+recognises. Treat it as one layer, not as the reason it is safe to store the
+report anywhere.
+
+### `beforeSend`
+
+The last look at a report before it leaves the browser. Return it, return a
+changed copy, or return `null` to drop it — nothing is requested, and
+`sendReport` resolves `{ dropped: true, body: null, response: null }`. The name
+and the contract are Sentry's.
+
+```ts
+useBugReport({
+  endpoint: "/api/feedback",
+  scrub: scrubReport,
+  beforeSend: (report) => {
+    if (report.message.includes("password")) return null;   // dropped silently
+    return { ...report, tenant: currentTenant };
+  },
+});
+```
+
+The reporter sees the ordinary thank-you either way. They wrote the report in
+good faith, and a message telling them it was discarded helps nobody. If you
+want to know, count it yourself inside the hook.
+
 ## The payload
 
 What arrives at your endpoint, with `extra` fields merged in at the top level:
@@ -521,8 +593,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
 `captureScreenshot`, `collectContext`, `pickElement`, `describeElement`,
-`buildSelector`, `buildReport`, `sendReport`, `ScreenshotTooLargeError`,
-`SendFailedError`, the server validators below, and the shared types and limits.
+`buildSelector`, `buildReport`, `sendReport`, `scrubReport`,
+`BUILTIN_SCRUBBERS`, `ScreenshotTooLargeError`, `SendFailedError`, the server
+validators below, and the shared types and limits.
 
 **`bugbottle/react`** — `useBugReport`.
 

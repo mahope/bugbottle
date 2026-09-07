@@ -56,8 +56,15 @@ jobs:
           for f in out-core out-react out-server out-ui; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
+          core=$(gzip -c out-core.js | wc -c)
           react=$(gzip -c out-react.js | wc -c)
           ui=$(gzip -c out-ui.js | wc -c)
+          # The bare core must not carry the scrubber, or anything else added
+          # to the entry that a plain buildReport consumer never calls.
+          if [ "$core" -gt 1024 ]; then
+            echo "bugbottle is $core bytes gzipped; the budget is 1024" >&2
+            exit 1
+          fi
           if [ "$react" -gt 4096 ]; then
             echo "bugbottle/react is $react bytes gzipped; the budget is 4096" >&2
             exit 1

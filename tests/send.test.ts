@@ -129,3 +129,45 @@ test("a caller-supplied signal aborts the request as itself, not as a timeout", 
   outer.abort();
   await assert.rejects(pending, (err: unknown) => !(err instanceof SendTimeoutError));
 });
+
+test("beforeSend returning null drops the report without a request", async () => {
+  const { fetch, calls } = fakeFetch(201, { id: "r_1" });
+  const seen: string[] = [];
+  const result = await sendReport("/x", buildReport({ type: "bug", message: "drop me" }), {
+    fetch,
+    beforeSend: (report) => {
+      seen.push(report.message);
+      return null;
+    },
+  });
+  assert.equal(calls.length, 0, "no fetch call was made");
+  assert.equal(result.dropped, true);
+  assert.equal(result.body, null);
+  assert.equal(result.response, null);
+  assert.equal(result.id, undefined);
+  assert.deepEqual(seen, ["drop me"], "the hook saw the assembled report");
+});
+
+test("beforeSend can change the report, and what it returns is what is posted", async () => {
+  const { fetch, calls } = fakeFetch(200, { id: "r_2" });
+  const result = await sendReport("/x", buildReport({ type: "bug", message: "call me on 12345" }), {
+    fetch,
+    beforeSend: async (report) => ({ ...report, message: report.message.replace(/\d+/g, "n") }),
+  });
+  assert.equal(result.dropped, undefined);
+  assert.equal(result.id, "r_2");
+  const posted = JSON.parse(String(calls[0]?.init.body)) as { message: string };
+  assert.equal(posted.message, "call me on n");
+});
+
+test("a scrub function passed to buildReport is the last thing to touch the body", () => {
+  const report = buildReport({
+    type: "bug",
+    message: "x",
+    includeConsole: false,
+    extra: { appVersion: "1.2.3" },
+    scrub: (r) => ({ ...r, message: "scrubbed" }),
+  });
+  assert.equal(report.message, "scrubbed");
+  assert.equal(report.appVersion, "1.2.3", "extras survive the scrub");
+});

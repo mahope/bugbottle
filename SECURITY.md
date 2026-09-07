@@ -27,6 +27,10 @@ was not.
   cannot include another tab, window, or the desktop.
 - No cookies, no identifiers, no third-party calls. A report goes to the
   endpoint you configure and nowhere else.
+- `scrubReport` redacts email addresses, bearer tokens, JWTs, Luhn-valid card
+  numbers, IBANs and sensitive query values when you wire it in, on either
+  side; `beforeSend` can drop a report outright. Both are opt-in, and pattern
+  matching catches shapes, not everything.
 
 ## What the library cannot do for you
 

@@ -36,6 +36,16 @@ export {
   type CreateGithubIssueOptions,
   type CreateGithubIssueResult,
 } from "../sinks/github.ts";
+// Useful in the route handler too: scrub once more on the way in, so the row
+// that is written is the redacted one whatever the client did or did not do.
+export {
+  scrubReport,
+  BUILTIN_SCRUBBERS,
+  DEFAULT_REPLACEMENT,
+  type ScrubOptions,
+  type Scrubber,
+  type ScrubberName,
+} from "../scrub.ts";
 
 export {
   decodeScreenshotDataUrl,

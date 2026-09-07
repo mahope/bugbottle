@@ -17,7 +17,13 @@ import { captureScreenshot, ScreenshotTooLargeError, type ScreenshotRenderer } f
 import { pickElement } from "../element-picker.ts";
 import { en, type Locale, type Messages, type UiTexts } from "../locales.ts";
 import { MAX_ELEMENTS, REPORT_TYPES, type ElementRef, type ReportType } from "../report-core.ts";
-import { buildReport, sendReport, SendFailedError, type SendOptions } from "../send.ts";
+import {
+  buildReport,
+  sendReport,
+  SendFailedError,
+  type BuildReportInput,
+  type SendOptions,
+} from "../send.ts";
 
 export type Theme = {
   /** Accent: trigger button, primary action, focus ring. */
@@ -89,6 +95,16 @@ export type MountOptions = {
    */
   fetch?: SendOptions["fetch"];
   parseError?: SendOptions["parseError"];
+  /**
+   * Redact the assembled report before it is sent. Pass the scrubber:
+   * `import { scrubReport } from "bugbottle"; scrub: scrubReport`.
+   */
+  scrub?: BuildReportInput["scrub"];
+  /**
+   * Last look at the report. Return it, a changed copy, or `null` to drop it.
+   * A dropped report still shows the reporter the ordinary thank-you panel.
+   */
+  beforeSend?: SendOptions["beforeSend"];
   onSent?: (id: string | undefined) => void;
   onError?: (error: unknown) => void;
 };
@@ -423,6 +439,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         includeConsole: consoleFor(type),
         elements,
         extra: options.extra,
+        scrub: options.scrub,
       });
       const { id } = await sendReport(options.endpoint, report, {
         headers: options.headers,
@@ -430,6 +447,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         timeoutMs: options.timeoutMs,
         fetch: options.fetch,
         parseError: options.parseError,
+        beforeSend: options.beforeSend,
       });
       resetForm();
       form.hidden = true;
