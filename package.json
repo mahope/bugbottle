@@ -91,7 +91,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "happy-dom": "20.14.0",
-    "esbuild": "0.24.0",
+    "esbuild": "0.28.2",
     "html-to-image": "^1.11.13",
     "react": "^19.2.8",
     "react-dom": "19.2.8",
