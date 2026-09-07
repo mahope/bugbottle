@@ -1,0 +1,10 @@
+# The site image is built with the repository root as its context, so without
+# this file the whole of node_modules and .git is uploaded to the daemon on
+# every build. `dist/` is deliberately not excluded: the demo on the page
+# imports it over HTTP, so it has to reach the image.
+node_modules
+.git
+.github
+.claude
+*.tsbuildinfo
+site/docs

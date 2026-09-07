@@ -1,0 +1,414 @@
+/*
+ * The documentation pages, generated into /docs/ by scripts/build-docs.mjs.
+ *
+ * Loaded after style.css and only by those pages, so every rule here can lean
+ * on the landing page's colour tokens and its header and footer without
+ * changing either. The landing page is being polished separately; nothing in
+ * this file may reach it.
+ *
+ * The page is two columns on a wide screen — a sidebar of topics and a column
+ * of prose — and one column below 60rem, where the sidebar becomes a short
+ * scrollable box above the article rather than a wall of links.
+ */
+
+.docs-shell {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: clamp(2rem, 4vw, 4rem);
+  align-items: start;
+  padding-top: 2.5rem;
+  padding-bottom: 4rem;
+}
+
+/* ------------------------------------------------------------- sidebar */
+
+.docs-sidebar {
+  position: sticky;
+  top: 1.5rem;
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.docs-group {
+  margin: 1.4rem 0 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.docs-group:first-child {
+  margin-top: 0;
+}
+
+.docs-group a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.docs-sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.docs-sidebar li a {
+  display: block;
+  padding: 0.28rem 0 0.28rem 0.85rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.docs-sidebar li a:hover {
+  color: var(--ink);
+}
+
+/* The current page is the one thing the sidebar has to say clearly, so it
+   gets the accent rule as well as the weight — colour alone is not enough. */
+.docs-sidebar a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 650;
+  border-left-color: var(--accent);
+}
+
+.docs-group a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+/* ---------------------------------------------------------------- body */
+
+.docs-body {
+  max-width: 44rem;
+}
+
+.docs-eyebrow {
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.docs-body h1 {
+  max-width: 22ch;
+  margin-bottom: 1.6rem;
+}
+
+.docs-body h2 {
+  margin: 2.4rem 0 0.9rem;
+  max-width: 30ch;
+  scroll-margin-top: 1.5rem;
+}
+
+.docs-body h3 {
+  margin: 1.8rem 0 0.5rem;
+  font-size: 1.0625rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.docs-lede {
+  font-size: 1.125rem;
+  color: var(--muted);
+  max-width: 40rem;
+}
+
+/* Visible on hover and to a keyboard, never in a screenshot or in print. */
+.anchor {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.8em;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+h2:hover > .anchor,
+h3:hover > .anchor,
+.anchor:focus-visible {
+  opacity: 1;
+}
+
+.docs-body p,
+.docs-body li {
+  max-width: 40rem;
+}
+
+.docs-body ul,
+.docs-body ol {
+  padding-left: 1.2rem;
+}
+
+.docs-body li {
+  margin-bottom: 0.35rem;
+}
+
+.docs-body blockquote {
+  margin: 1.2rem 0;
+  padding: 0.2rem 0 0.2rem 1rem;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}
+
+.docs-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.2rem 0;
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+}
+
+.docs-body th,
+.docs-body td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.docs-body th {
+  font-weight: 650;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* A wide table must scroll inside itself rather than push the page sideways. */
+.docs-body > table {
+  display: block;
+  overflow-x: auto;
+}
+
+.docs-body details {
+  margin: 1.2rem 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.9rem;
+}
+
+.docs-body summary {
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+}
+
+/* -------------------------------------------------------- on this page */
+
+.docs-toc {
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 2rem;
+  max-width: 26rem;
+}
+
+.docs-toc p {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.docs-toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.docs-toc li a {
+  color: var(--muted);
+  text-decoration: none;
+  display: block;
+  padding: 0.12rem 0;
+}
+
+.docs-toc li a:hover,
+.docs-toc a[aria-current="true"] {
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------- code and copy */
+
+.docs-body .slab {
+  margin: 1.2rem 0;
+  position: relative;
+}
+
+.docs-body .slab pre {
+  padding-right: 5.5rem;
+}
+
+/* Added by docs.js, so a browser without JavaScript never shows a button
+   that cannot do anything. */
+.copy {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
+  color: var(--slab-ink);
+  background: transparent;
+  border: 1px solid var(--slab-rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.copy:hover {
+  color: var(--slab-key);
+  border-color: var(--slab-key);
+}
+
+.copy[data-done="yes"] {
+  color: var(--slab-key);
+  border-color: var(--slab-key);
+}
+
+/* ---------------------------------------------------- edit, prev, next */
+
+.docs-edit {
+  margin-top: 2.5rem;
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+
+.docs-edit a {
+  color: var(--muted);
+}
+
+.docs-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--sans);
+}
+
+.docs-pager a {
+  display: block;
+  flex: 1 1 12rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.docs-pager a:hover {
+  border-color: var(--accent);
+}
+
+.docs-pager a span {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.docs-pager .next {
+  text-align: right;
+}
+
+/* --------------------------------------------------------- index page */
+
+.docs-index {
+  display: grid;
+  gap: 2rem;
+  margin-top: 2.5rem;
+}
+
+.docs-index h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.25rem;
+}
+
+.docs-index section > p {
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+}
+
+.docs-index ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.docs-index li {
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 0.6rem;
+  max-width: 44rem;
+}
+
+.docs-index li a {
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.docs-index li a:hover {
+  text-decoration: underline;
+}
+
+.docs-index li span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  font-family: var(--sans);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------ narrow */
+
+@media (max-width: 60rem) {
+  .docs-shell {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 1.5rem;
+  }
+
+  .docs-sidebar {
+    position: static;
+    max-height: 15rem;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .docs-toc {
+    max-width: none;
+  }
+
+  .docs-body h1 {
+    max-width: none;
+  }
+}
+
+@media print {
+  .docs-sidebar,
+  .docs-toc,
+  .docs-pager,
+  .copy {
+    display: none;
+  }
+}

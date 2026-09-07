@@ -7,6 +7,29 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- Documentation at [bugbottle.dev/docs/](https://bugbottle.dev/docs/): one page
+  per README section, grouped into Get started, Evidence, Server, Privacy,
+  Reference and About, with a sidebar that marks the current page, heading
+  anchors, a copy button on every code block, previous/next links and an
+  "Edit this page on GitHub" link straight to the section it came from.
+- `scripts/build-docs.mjs` generates those pages from `README.md` with `marked`
+  (pinned devDependency). It runs in a `node:22-alpine` builder stage in
+  `site/Dockerfile`, so nothing under `site/docs/` is committed and the README
+  stays the only copy of the text. A README section that is not placed in the
+  script's grouping fails the build rather than becoming a page nobody links
+  to.
+- `site/docs.css` and `site/docs.js` for the documentation pages only. The
+  landing page's stylesheet is untouched.
+
+### Changed
+
+- The "Docs" link in the header of both landing pages, and the "Read the docs"
+  button in the hero, now point at `/docs/` instead of the README on GitHub.
+- `.dockerignore`: the site image is built from the repository root, so
+  `node_modules` and `.git` no longer travel to the daemon on every build.
+
 ## 0.5.0
 
 The receiving release: one function that takes any web Request and turns it
