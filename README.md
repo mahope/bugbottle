@@ -1032,6 +1032,11 @@ types, and the `MAX_*` limits.
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any
 evergreen browser on the client.
 
+## Releasing
+
+`npm run release -- patch` (or `minor`/`major`) bumps the version, commits and pushes the tag.
+CI publishes to npm and creates the GitHub release.
+
 ## Licence
 
 MIT

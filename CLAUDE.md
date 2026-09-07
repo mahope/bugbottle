@@ -128,8 +128,9 @@ in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 
 Version bump in `package.json` and `CHANGELOG.md`, update the `#vX.Y.Z`
 refs in the README install section, `npm run build` and `git add -f dist`,
-commit, tag `vX.Y.Z`, push the tag. `.github/workflows/release.yml` runs `npm run check` and
-publishes with provenance through npm Trusted Publishing (OIDC, no token;
+commit, then `npm run release -- patch|minor|major` (npm version + push
+--follow-tags). `.github/workflows/release.yml` runs `npm run check`, creates the
+GitHub release with generated notes and publishes with provenance through npm Trusted Publishing (OIDC, no token;
 configured on npmjs.com under the package Settings → Trusted Publisher for
 this repository and `release.yml`). 0.3.0 was published by hand with 2FA.
 

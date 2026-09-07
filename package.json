@@ -71,7 +71,8 @@
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "npm run check",
+    "release": "node scripts/release.mjs"
   },
   "peerDependencies": {
     "html-to-image": "^1.11.0",

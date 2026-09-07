@@ -1,14 +1,14 @@
 name: Release
 
 # Publishes to npm when a version tag is pushed:
-#   npm version minor          # bumps package.json, commits, tags vX.Y.Z
-#   git push --follow-tags
+#   npm run release -- minor   # npm version (commit + tag vX.Y.Z) + git push --follow-tags
 #
 # Authentication is npm Trusted Publishing: npm trusts this repository's
 # GitHub Actions OIDC identity, so there is no token to store or leak. It is
 # configured once on npmjs.com under the package's Settings → Trusted
 # Publisher (GitHub Actions, owner mahope, repository bugbottle, workflow
-# release.yml). Provenance is attached automatically.
+# release.yml). Provenance is attached automatically. The GitHub release for
+# the tag is created afterwards with auto-generated notes.
 #
 # Trusted publishing needs npm 11.5.1 or newer, which is why the CLI is
 # upgraded before publishing.
@@ -16,9 +16,10 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -37,10 +38,22 @@ jobs:
       - run: npm run check
       - name: Refuse to publish if the tag does not match package.json
         run: |
-          tag="${GITHUB_REF_NAME#v}"
           version="$(node -p 'require("./package.json").version')"
-          if [ "$tag" != "$version" ]; then
-            echo "Tag v$tag does not match package.json version $version" >&2
-            exit 1
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if [ "$tag" != "$version" ]; then
+              echo "Tag v$tag does not match package.json version $version" >&2
+              exit 1
+            fi
           fi
+          echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
       - run: npm publish --access public
+      - name: Create GitHub release if it does not exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $RELEASE_TAG already exists"
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$RELEASE_TAG" --generate-notes
+          fi
