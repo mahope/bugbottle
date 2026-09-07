@@ -8,7 +8,7 @@
  * long). Every value goes through `normalise*` first, so this accepts the raw
  * body from the request as well as a validated report.
  */
-import { isReportType, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, } from "./report-core.js";
+import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
 /** Pipes and newlines would break a table cell. */
 function cell(value) {
@@ -32,6 +32,28 @@ function elementLine(el) {
     bits.push(`at ${el.rect.x},${el.rect.y} ${el.rect.width}×${el.rect.height}`);
     return `- ${bits.join(" ")}`;
 }
+function breadcrumbLine(crumb) {
+    const bits = [];
+    if (crumb.ts)
+        bits.push(crumb.ts);
+    if (crumb.kind === "click" || crumb.kind === "submit") {
+        bits.push(crumb.kind === "click" ? "clicked" : "submitted");
+        if (crumb.target)
+            bits.push(`\`${crumb.target}\``);
+        if (crumb.text)
+            bits.push(`— "${crumb.text}"`);
+    }
+    else if (crumb.kind === "navigation") {
+        bits.push("navigated");
+        if (crumb.from)
+            bits.push(`\`${crumb.from}\` →`);
+        bits.push(`\`${crumb.to ?? ""}\``);
+    }
+    else {
+        bits.push(`page ${crumb.to ?? "changed"}`);
+    }
+    return `- ${bits.join(" ")}`;
+}
 /**
  * Renders a report (raw request body or validated) as Markdown. Never throws
  * on malformed input: missing sections are left out.
@@ -42,6 +64,7 @@ export function toMarkdown(raw, options = {}) {
     const message = normaliseMessage(r.message) ?? "";
     const context = normaliseContext(r.context);
     const elements = normaliseElements(r.elements);
+    const breadcrumbs = normaliseBreadcrumbs(r.breadcrumbs);
     const consoleEntries = normaliseConsole(r.console, {
         maxEntries: options.maxConsoleEntries,
     });
@@ -85,6 +108,12 @@ export function toMarkdown(raw, options = {}) {
         out.push(`### Element${elements.length > 1 ? "s" : ""} pointed at`, "");
         for (const el of elements)
             out.push(elementLine(el));
+        out.push("");
+    }
+    if (breadcrumbs.length > 0) {
+        out.push("### What happened before", "");
+        for (const crumb of breadcrumbs)
+            out.push(breadcrumbLine(crumb));
         out.push("");
     }
     if (consoleEntries.length > 0) {

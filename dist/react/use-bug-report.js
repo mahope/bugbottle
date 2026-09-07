@@ -128,12 +128,14 @@ export function useBugReport(options) {
                 includeConsole: consoleFor(type),
                 elements,
                 extra: opts.extra,
+                scrub: opts.scrub,
             });
             const { id } = await sendReport(endpoint, report, {
                 headers: opts.headers,
                 credentials: opts.credentials,
                 timeoutMs: opts.timeoutMs,
                 parseError: opts.parseError,
+                beforeSend: opts.beforeSend,
             });
             setStatus({ kind: "sent", id });
             setMessage("");

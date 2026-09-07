@@ -7,6 +7,12 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.4.0
+
+The evidence release: what happened before, where it went, and what must never
+leave the browser. One breaking change: `Locale` now requires an `email` key
+(every bundled locale has it; a hand-written one needs the two strings).
+
 ### Added
 
 - `dist/bugbottle.js`, a self-contained IIFE for pages with no build step:

@@ -16,5 +16,9 @@ export { toMarkdown } from "../markdown.js";
 export { SinkError } from "../sinks/error.js";
 export { sendReportEmail, } from "../sinks/resend.js";
 export { sendReportWebhook, DISCORD_MAX_CONTENT, } from "../sinks/webhook.js";
-export { decodeScreenshotDataUrl, InvalidScreenshotError, isReportType, normaliseMessage, normaliseContext, normaliseConsole, normaliseElements, MAX_MESSAGE_LENGTH, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_DATA_URL_LENGTH, MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, MAX_ELEMENTS, MAX_ELEMENT_TEXT_LENGTH, REPORT_TYPES, } from "../report-core.js";
+export { createGithubIssue, } from "../sinks/github.js";
+// Useful in the route handler too: scrub once more on the way in, so the row
+// that is written is the redacted one whatever the client did or did not do.
+export { scrubReport, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, } from "../scrub.js";
+export { decodeScreenshotDataUrl, InvalidScreenshotError, isReportType, normaliseMessage, normaliseContext, normaliseConsole, normaliseElements, normaliseBreadcrumbs, MAX_MESSAGE_LENGTH, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_DATA_URL_LENGTH, MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, MAX_ELEMENTS, MAX_ELEMENT_TEXT_LENGTH, MAX_BREADCRUMBS, MAX_BREADCRUMB_TEXT_LENGTH, REPORT_TYPES, } from "../report-core.js";
 //# sourceMappingURL=index.js.map

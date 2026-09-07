@@ -7,6 +7,7 @@
  */
 import { collectContext } from "./capture.js";
 import { getConsoleBuffer } from "./console-buffer.js";
+import { readBreadcrumbs } from "./registry.js";
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
 export function buildReport(input) {
     const report = {
@@ -18,9 +19,15 @@ export function buildReport(input) {
         report.console = getConsoleBuffer();
     if (input.elements && input.elements.length > 0)
         report.elements = input.elements;
+    if (input.includeBreadcrumbs ?? true) {
+        const crumbs = readBreadcrumbs();
+        if (crumbs && crumbs.length > 0)
+            report.breadcrumbs = crumbs;
+    }
     if (input.screenshotDataUrl)
         report.screenshotDataUrl = input.screenshotDataUrl;
-    return { ...input.extra, ...report };
+    const body = { ...input.extra, ...report };
+    return input.scrub ? input.scrub(body) : body;
 }
 export const DEFAULT_SEND_TIMEOUT_MS = 15_000;
 /** The request was aborted by `timeoutMs` before the server answered. */
@@ -45,34 +52,62 @@ export class SendFailedError extends Error {
  * POSTs a report as JSON. Resolves on a 2xx, throws `SendFailedError` on any
  * other status, `SendTimeoutError` when `timeoutMs` elapses first, and lets
  * network failures from `fetch` propagate as they are.
+ *
+ * `options.beforeSend` runs first and can drop the report, in which case this
+ * resolves `{ dropped: true }` and never touches the network.
  */
 export async function sendReport(endpoint, report, options = {}) {
-    const doFetch = options.fetch ?? globalThis.fetch;
-    const init = {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...options.headers },
-        body: JSON.stringify(report),
-    };
-    if (options.credentials)
-        init.credentials = options.credentials;
     const timeoutMs = options.timeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
     const controller = new AbortController();
     const onOuterAbort = () => controller.abort(options.signal?.reason);
     options.signal?.addEventListener("abort", onOuterAbort);
     if (options.signal?.aborted)
         onOuterAbort();
+    // The clock starts before `beforeSend`, not after it. An async hook that
+    // never settles — a permission dialog nobody answers, a fetch of its own to a
+    // dead host — leaves the form on "sending" for ever, which is exactly the
+    // failure `timeoutMs` exists to bound. The whole send is on the clock.
     const timer = timeoutMs > 0 ? setTimeout(() => controller.abort("timeout"), timeoutMs) : null;
-    init.signal = controller.signal;
-    let response;
-    let body;
+    const timedOut = () => controller.signal.aborted && controller.signal.reason === "timeout";
     try {
-        response = await doFetch(endpoint, init);
-        body = await response.json().catch(() => null);
+        let payload = report;
+        if (options.beforeSend) {
+            const decided = await Promise.race([
+                Promise.resolve(options.beforeSend(payload)),
+                rejectWhenAborted(controller.signal),
+            ]);
+            if (decided === null || decided === undefined) {
+                return { dropped: true, body: null, response: null };
+            }
+            payload = decided;
+        }
+        const doFetch = options.fetch ?? globalThis.fetch;
+        const init = {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...options.headers },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        };
+        if (options.credentials)
+            init.credentials = options.credentials;
+        const response = await doFetch(endpoint, init);
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+            const fromBody = body;
+            const message = options.parseError?.(response, body) ||
+                (typeof fromBody?.error === "string" && fromBody.error) ||
+                (typeof fromBody?.message === "string" && fromBody.message) ||
+                `Request failed with status ${response.status}`;
+            throw new SendFailedError(message, response.status, body);
+        }
+        const id = body?.id;
+        return { id: typeof id === "string" ? id : undefined, body, response };
     }
     catch (err) {
-        if (controller.signal.aborted && controller.signal.reason === "timeout") {
+        if (err instanceof SendFailedError)
+            throw err;
+        if (timedOut())
             throw new SendTimeoutError(timeoutMs);
-        }
         throw err;
     }
     finally {
@@ -80,15 +115,19 @@ export async function sendReport(endpoint, report, options = {}) {
             clearTimeout(timer);
         options.signal?.removeEventListener("abort", onOuterAbort);
     }
-    if (!response.ok) {
-        const fromBody = body;
-        const message = options.parseError?.(response, body) ||
-            (typeof fromBody?.error === "string" && fromBody.error) ||
-            (typeof fromBody?.message === "string" && fromBody.message) ||
-            `Request failed with status ${response.status}`;
-        throw new SendFailedError(message, response.status, body);
-    }
-    const id = body?.id;
-    return { id: typeof id === "string" ? id : undefined, body, response };
+}
+/**
+ * A promise that rejects the moment the signal aborts, so anything awaited can
+ * be raced against it. `Promise.race` subscribes to both sides, so the loser is
+ * never an unhandled rejection.
+ */
+function rejectWhenAborted(signal) {
+    return new Promise((_resolve, reject) => {
+        const fail = () => reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+        if (signal.aborted)
+            fail();
+        else
+            signal.addEventListener("abort", fail, { once: true });
+    });
 }
 //# sourceMappingURL=send.js.map

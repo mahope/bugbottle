@@ -23,6 +23,10 @@ export declare const MAX_CONSOLE_MESSAGE_LENGTH = 500;
 export declare const MAX_ELEMENTS = 10;
 /** Longest text kept for a pointed-at element. */
 export declare const MAX_ELEMENT_TEXT_LENGTH = 200;
+/** How many breadcrumbs a report may carry. Oldest are dropped first. */
+export declare const MAX_BREADCRUMBS = 30;
+/** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
+export declare const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 export type ConsoleLevel = "error" | "warn";
 export type ConsoleEntry = {
     /** ISO 8601 timestamp. */
@@ -55,6 +59,29 @@ export type ElementRef = {
     /** id, name, role, type, href, aria-label, placeholder, title and data-* — never data-bugbottle*. */
     attributes: Record<string, string>;
 };
+export declare const BREADCRUMB_KINDS: readonly ["click", "navigation", "submit", "visibility"];
+export type BreadcrumbKind = (typeof BREADCRUMB_KINDS)[number];
+/**
+ * One thing the reporter did before they reported. A short timeline of these
+ * turns "it broke after I clicked save" into something reproducible.
+ *
+ * Which fields are set depends on the kind: a click or a submit carries the
+ * `target` selector (and, for a click, the visible `text`), a navigation
+ * carries `from` and `to`, and a visibility change carries `to`.
+ */
+export type Breadcrumb = {
+    /** ISO 8601 timestamp. */
+    ts: string;
+    kind: BreadcrumbKind;
+    /** A short CSS selector for the element involved. */
+    target?: string;
+    /** Visible text of the clicked element, whitespace-collapsed and clipped. */
+    text?: string;
+    /** Path and query the navigation left, or nothing when it is not known. */
+    from?: string;
+    /** Path and query navigated to, or `hidden`/`visible` for a visibility change. */
+    to?: string;
+};
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
     type: ReportType;
@@ -63,6 +90,8 @@ export type BugReport = {
     console?: ConsoleEntry[];
     /** Elements the reporter pointed at, in the order they were attached. */
     elements?: ElementRef[];
+    /** What the reporter did before reporting, oldest first. */
+    breadcrumbs?: Breadcrumb[];
     screenshotDataUrl?: string;
 };
 export declare function isReportType(value: unknown): value is ReportType;
@@ -96,6 +125,16 @@ export declare function normaliseConsole(raw: unknown, options?: {
 export declare function normaliseElements(raw: unknown, options?: {
     maxElements?: number;
 }): ElementRef[];
+/**
+ * Validates the breadcrumbs a report arrived with. Entries with an unknown
+ * kind are dropped, strings are clipped, fields that are not strings are left
+ * out entirely, and at most `maxBreadcrumbs` are kept — the most recent ones,
+ * since the end of the timeline is the interesting end. Never throws: a
+ * malformed section means "no breadcrumbs", not a failed report.
+ */
+export declare function normaliseBreadcrumbs(raw: unknown, options?: {
+    maxBreadcrumbs?: number;
+}): Breadcrumb[];
 export declare class InvalidScreenshotError extends Error {
     constructor(message: string);
 }

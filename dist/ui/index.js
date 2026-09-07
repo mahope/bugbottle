@@ -16,7 +16,7 @@ import { captureScreenshot, ScreenshotTooLargeError } from "../capture.js";
 import { pickElement } from "../element-picker.js";
 import { en } from "../locales.js";
 import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
-import { buildReport, sendReport, SendFailedError } from "../send.js";
+import { buildReport, sendReport, SendFailedError, } from "../send.js";
 const POSITIONS = {
     "bottom-right": "right:16px;bottom:16px;",
     "bottom-left": "left:16px;bottom:16px;",
@@ -321,6 +321,7 @@ export function mountBugbottle(options) {
                 includeConsole: consoleFor(type),
                 elements,
                 extra: options.extra,
+                scrub: options.scrub,
             });
             const { id } = await sendReport(options.endpoint, report, {
                 headers: options.headers,
@@ -328,6 +329,7 @@ export function mountBugbottle(options) {
                 timeoutMs: options.timeoutMs,
                 fetch: options.fetch,
                 parseError: options.parseError,
+                beforeSend: options.beforeSend,
             });
             resetForm();
             form.hidden = true;

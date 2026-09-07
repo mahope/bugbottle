@@ -15,7 +15,7 @@
 import { type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
 import { type ReportType } from "../report-core.ts";
-import { type SendOptions } from "../send.ts";
+import { type BuildReportInput, type SendOptions } from "../send.ts";
 export type Theme = {
     /** Accent: trigger button, primary action, focus ring. */
     primary?: string;
@@ -85,6 +85,16 @@ export type MountOptions = {
      */
     fetch?: SendOptions["fetch"];
     parseError?: SendOptions["parseError"];
+    /**
+     * Redact the assembled report before it is sent. Pass the scrubber:
+     * `import { scrubReport } from "bugbottle"; scrub: scrubReport`.
+     */
+    scrub?: BuildReportInput["scrub"];
+    /**
+     * Last look at the report. Return it, a changed copy, or `null` to drop it.
+     * A dropped report still shows the reporter the ordinary thank-you panel.
+     */
+    beforeSend?: SendOptions["beforeSend"];
     onSent?: (id: string | undefined) => void;
     onError?: (error: unknown) => void;
 };

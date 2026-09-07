@@ -14,5 +14,7 @@ export { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 export { SinkError, type FetchLike } from "../sinks/error.ts";
 export { sendReportEmail, type SendReportEmailOptions, type SendReportEmailResult, } from "../sinks/resend.ts";
 export { sendReportWebhook, DISCORD_MAX_CONTENT, type SendReportWebhookOptions, type SendReportWebhookResult, type WebhookFormat, } from "../sinks/webhook.ts";
-export { decodeScreenshotDataUrl, InvalidScreenshotError, isReportType, normaliseMessage, normaliseContext, normaliseConsole, normaliseElements, MAX_MESSAGE_LENGTH, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_DATA_URL_LENGTH, MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, MAX_ELEMENTS, MAX_ELEMENT_TEXT_LENGTH, REPORT_TYPES, type ReportType, type ReportContext, type BugReport, type ConsoleEntry, type ConsoleLevel, type ElementRef, } from "../report-core.ts";
+export { createGithubIssue, type CreateGithubIssueOptions, type CreateGithubIssueResult, } from "../sinks/github.ts";
+export { scrubReport, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, type ScrubOptions, type Scrubber, type ScrubberName, } from "../scrub.ts";
+export { decodeScreenshotDataUrl, InvalidScreenshotError, isReportType, normaliseMessage, normaliseContext, normaliseConsole, normaliseElements, normaliseBreadcrumbs, MAX_MESSAGE_LENGTH, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_DATA_URL_LENGTH, MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, MAX_ELEMENTS, MAX_ELEMENT_TEXT_LENGTH, MAX_BREADCRUMBS, MAX_BREADCRUMB_TEXT_LENGTH, REPORT_TYPES, type ReportType, type ReportContext, type BugReport, type ConsoleEntry, type ConsoleLevel, type ElementRef, type Breadcrumb, type BreadcrumbKind, } from "../report-core.ts";
 //# sourceMappingURL=index.d.ts.map

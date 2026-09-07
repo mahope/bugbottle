@@ -13,6 +13,13 @@ export type BuildReportInput = {
     screenshotDataUrl?: string | null;
     /** Attach the recorded console errors. Default true. */
     includeConsole?: boolean;
+    /**
+     * Attach the recorded breadcrumbs. Default true, which means "whenever
+     * `initBreadcrumbs` from `bugbottle/breadcrumbs` is recording" — an
+     * application that never imports that module has nothing to attach and pays
+     * nothing for the option.
+     */
+    includeBreadcrumbs?: boolean;
     /** Elements the reporter pointed at, from `pickElement`. */
     elements?: ElementRef[];
     /**
@@ -20,6 +27,21 @@ export type BuildReportInput = {
      * The report's own fields win if the names collide.
      */
     extra?: Record<string, unknown>;
+    /**
+     * Last pass over the assembled body, for redacting what the reporter did not
+     * mean to send. Pass the scrubber from `bugbottle`:
+     *
+     * ```ts
+     * import { buildReport, scrubReport } from "bugbottle";
+     * buildReport({ type, message, scrub: scrubReport });
+     * buildReport({ type, message, scrub: (r) => scrubReport(r, { keep: ["email"] }) });
+     * ```
+     *
+     * It is a function rather than a `true` flag so that this file never imports
+     * `scrub.ts`: a bundler resolves every import it sees, and the core entry has
+     * a kilobyte to stay under.
+     */
+    scrub?: (report: BugReport & Record<string, unknown>) => BugReport & Record<string, unknown>;
 };
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
 export declare function buildReport(input: BuildReportInput): BugReport & Record<string, unknown>;
@@ -42,13 +64,26 @@ export type SendOptions = {
      * body's `error` or `message` field, then a generic one.
      */
     parseError?: (response: Response, body: unknown) => string | undefined;
+    /**
+     * Last look at the report before it leaves the browser. Return it, return a
+     * changed copy, or return `null` to drop it — `sendReport` then resolves
+     * `{ dropped: true, body: null, response: null }` without making a request.
+     *
+     * The name and the contract are Sentry's, because that is the shape people
+     * already know. Errors thrown here propagate: a hook that cannot decide is
+     * not a reason to send anyway.
+     */
+    beforeSend?: (report: BugReport & Record<string, unknown>) => (BugReport & Record<string, unknown>) | null | Promise<(BugReport & Record<string, unknown>) | null>;
 };
 export declare const DEFAULT_SEND_TIMEOUT_MS = 15000;
 export type SendResult = {
     /** The `id` field of the response body, when the server sends one. */
     id?: string;
     body: unknown;
-    response: Response;
+    /** `null` when `beforeSend` dropped the report and no request was made. */
+    response: Response | null;
+    /** True when `beforeSend` returned `null`. Nothing was sent. */
+    dropped?: boolean;
 };
 /** The request was aborted by `timeoutMs` before the server answered. */
 export declare class SendTimeoutError extends Error {
@@ -64,6 +99,9 @@ export declare class SendFailedError extends Error {
  * POSTs a report as JSON. Resolves on a 2xx, throws `SendFailedError` on any
  * other status, `SendTimeoutError` when `timeoutMs` elapses first, and lets
  * network failures from `fetch` propagate as they are.
+ *
+ * `options.beforeSend` runs first and can drop the report, in which case this
+ * resolves `{ dropped: true }` and never touches the network.
  */
 export declare function sendReport(endpoint: string, report: BugReport & Record<string, unknown>, options?: SendOptions): Promise<SendResult>;
 //# sourceMappingURL=send.d.ts.map

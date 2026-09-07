@@ -22,8 +22,13 @@ export const MAX_CONSOLE_MESSAGE_LENGTH = 500;
 export const MAX_ELEMENTS = 10;
 /** Longest text kept for a pointed-at element. */
 export const MAX_ELEMENT_TEXT_LENGTH = 200;
+/** How many breadcrumbs a report may carry. Oldest are dropped first. */
+export const MAX_BREADCRUMBS = 30;
+/** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
+export const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+export const BREADCRUMB_KINDS = ["click", "navigation", "submit", "visibility"];
 export function isReportType(value) {
     return typeof value === "string" && REPORT_TYPES.includes(value);
 }
@@ -132,6 +137,43 @@ export function normaliseElements(raw, options = {}) {
         });
     }
     return out;
+}
+/**
+ * Validates the breadcrumbs a report arrived with. Entries with an unknown
+ * kind are dropped, strings are clipped, fields that are not strings are left
+ * out entirely, and at most `maxBreadcrumbs` are kept — the most recent ones,
+ * since the end of the timeline is the interesting end. Never throws: a
+ * malformed section means "no breadcrumbs", not a failed report.
+ */
+export function normaliseBreadcrumbs(raw, options = {}) {
+    const maxBreadcrumbs = options.maxBreadcrumbs ?? MAX_BREADCRUMBS;
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const item of raw) {
+        if (typeof item !== "object" || item === null)
+            continue;
+        const o = item;
+        const kind = o.kind;
+        if (typeof kind !== "string" || !BREADCRUMB_KINDS.includes(kind)) {
+            continue;
+        }
+        const crumb = {
+            ts: typeof o.ts === "string" && !Number.isNaN(Date.parse(o.ts)) ? o.ts : "",
+            kind: kind,
+        };
+        if (typeof o.target === "string")
+            crumb.target = stripNullBytes(o.target).slice(0, 500);
+        if (typeof o.text === "string") {
+            crumb.text = stripNullBytes(o.text).slice(0, MAX_BREADCRUMB_TEXT_LENGTH);
+        }
+        if (typeof o.from === "string")
+            crumb.from = stripNullBytes(o.from).slice(0, 500);
+        if (typeof o.to === "string")
+            crumb.to = stripNullBytes(o.to).slice(0, 500);
+        out.push(crumb);
+    }
+    return out.length > maxBreadcrumbs ? out.slice(-maxBreadcrumbs) : out;
 }
 export class InvalidScreenshotError extends Error {
     constructor(message) {

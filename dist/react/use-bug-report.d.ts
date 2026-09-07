@@ -1,6 +1,6 @@
 import { type ScreenshotRenderer } from "../capture.ts";
 import { type ElementRef, type ReportType } from "../report-core.ts";
-import { type SendOptions } from "../send.ts";
+import { type BuildReportInput, type SendOptions } from "../send.ts";
 import { type Messages } from "../locales.ts";
 /**
  * Everything a report form needs, and none of its markup.
@@ -57,6 +57,17 @@ export type UseBugReportOptions = {
     onSent?: (id: string | undefined) => void;
     /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
     parseError?: SendOptions["parseError"];
+    /**
+     * Redact the assembled report before it is sent. Pass the scrubber:
+     * `import { scrubReport } from "bugbottle"; scrub: scrubReport`.
+     */
+    scrub?: BuildReportInput["scrub"];
+    /**
+     * Last look at the report. Return it, a changed copy, or `null` to drop it.
+     * A dropped report still shows the reporter the ordinary thank-you: they
+     * wrote it in good faith, and telling them it was discarded helps nobody.
+     */
+    beforeSend?: SendOptions["beforeSend"];
     /**
      * Messages shown to the reporter. Pass a bundled locale
      * (`import { da } from "bugbottle/locales"; messages: da.messages`) or
