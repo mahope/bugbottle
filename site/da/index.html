@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bugbottle — fejlrapporter inde i din app</title>
+<meta name="description" content="Fejlrapporter fra brugerne, der ankommer med beviserne vedhæftet: konsolfejl, sidens kontekst, elementet de peger på og eventuelt et skærmbillede. Din brugerflade, dit eget endepunkt, nogle få kilobyte.">
+<link rel="canonical" href="https://bugbottle.mahoje.dk/da/">
+<link rel="alternate" hreflang="en" href="https://bugbottle.mahoje.dk/">
+<link rel="alternate" hreflang="da" href="https://bugbottle.mahoje.dk/da/">
+<link rel="alternate" hreflang="x-default" href="https://bugbottle.mahoje.dk/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 6h6v3.6l3.6 6.2A4 4 0 0 1 23 17.8V26a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3v-8.2c0-.7.2-1.4.5-2L13 9.6z' fill='%232563eb'/%3E%3Crect x='12.5' y='2' width='7' height='4' rx='1' fill='%231e3a8a'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="bugbottle">
+<meta property="og:url" content="https://bugbottle.mahoje.dk/da/">
+<meta property="og:title" content="bugbottle — fejlrapporter inde i din app">
+<meta property="og:description" content="Fejlrapporter, der ankommer med beviserne vedhæftet: konsolfejl, sidens kontekst og elementet, brugeren peger på. Din brugerflade, dit eget endepunkt, nogle få kilobyte.">
+<meta property="og:locale" content="da_DK">
+<meta property="og:locale:alternate" content="en">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/da/">
+      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path d="M13 6h6v3.6l3.6 6.2A4 4 0 0 1 23 17.8V26a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3v-8.2c0-.7.2-1.4.5-2L13 9.6z" fill="currentColor"/>
+        <rect x="12.5" y="2" width="7" height="4" rx="1" fill="currentColor" opacity=".55"/>
+      </svg>
+      bugbottle
+    </a>
+    <nav aria-label="Websted">
+      <a href="https://github.com/mahope/bugbottle">GitHub</a>
+      <a href="https://www.npmjs.com/package/bugbottle">npm</a>
+      <a href="https://github.com/mahope/bugbottle#readme" hreflang="en">Dokumentation</a>
+      <span class="lang">
+        <a href="/" lang="en" hreflang="en">EN</a>
+        <span aria-hidden="true">|</span>
+        <a href="/da/" aria-current="true" lang="da" hreflang="da">DA</a>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="wrap">
+      <h1>Fejlrapporter inde i din app, der ankommer med beviserne vedhæftet.</h1>
+      <p class="lede">Din brugerflade, dit eget endepunkt, nogle få kilobyte.</p>
+      <p>
+        Fejlovervågning fanger det, der kaster en fejl. Den kan ikke fange det, der
+        bare ser forkert ud, og den fortæller aldrig, hvad brugeren var i gang med,
+        da det skete. <em>»Gem-knappen gør ingenting«</em> er ikke en rapport, nogen
+        kan handle på.
+      </p>
+      <p>
+        bugbottle samler konteksten i det øjeblik, nogen opdager fejlen — siden,
+        vinduets størrelse, de seneste konsolfejl, det element brugeren peger på og
+        eventuelt et billede af det, vedkommende kiggede på — og sender det som JSON
+        til en rute, du selv ejer.
+      </p>
+      <div class="actions">
+        <a class="button primary" href="#demo">Prøv panelet</a>
+        <a class="button" href="https://github.com/mahope/bugbottle#readme" hreflang="en">Læs dokumentationen</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="what">
+    <div class="wrap">
+      <h2>Hvad du får</h2>
+      <ul class="plain">
+        <li>
+          <strong>Uden brugerflade.</strong>
+          Du bygger selv formularen. Biblioteket står for tilstanden, indsamlingen
+          og afsendelsen — ikke for din HTML.
+        </li>
+        <li>
+          <strong>Du modtager rapporterne selv.</strong>
+          Der er intet kontrolpanel og ingen tjeneste, man skal oprette sig hos. En
+          rapport er et JSON-kald til en rute, du selv skriver, og
+          valideringsfunktionerne følger med.
+        </li>
+        <li>
+          <strong>Intet i din pakke, du ikke har bedt om.</strong>
+          Nul afhængigheder. Kernen fylder omkring 0,6 kB gzippet; med
+          elementvælgeren og React-hook'et 3,4 kB; det færdige panel 6 kB.
+        </li>
+        <li>
+          <strong>Peg på elementet.</strong>
+          <code>pickElement()</code> giver en kort CSS-vælger, elementets tag, den
+          synlige tekst, placeringen og de brugbare attributter — nok til at et
+          menneske eller en kodeagent kan finde den rigtige fil.
+        </li>
+        <li>
+          <strong>Dit sprog, dit udtryk.</strong>
+          Otte indbyggede sprog, alle tekster kan skiftes ud, og panelet får sit
+          udseende fra en håndfuld CSS-variabler.
+        </li>
+        <li>
+          <strong>Hjælpefunktioner til serveren.</strong>
+          Alt, hvad en browser sender, bliver kontrolleret, før det når din database,
+          for det er dér, de skarpe kanter er.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Tre linjer</h2>
+      <p>Installér det, begynd at opsamle konsolfejl, og montér det færdige panel.</p>
+<pre><code>npm install bugbottle</code></pre>
+<pre><code>import { initConsoleBuffer } from "bugbottle";
+import { mountBugbottle } from "bugbottle/ui";
+import { da } from "bugbottle/locales";
+
+initConsoleBuffer();
+mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
+      <p class="small muted">
+        Vil du hellere bygge formularen selv? <code>useBugReport</code> fra
+        <code>bugbottle/react</code> giver dig den samme kerne uden en linje færdig HTML.
+        Se
+        <a href="https://github.com/mahope/bugbottle#the-form-react" hreflang="en">dokumentationen</a>
+        (på engelsk).
+      </p>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="wrap">
+      <h2>Panelet, kørende på denne side</h2>
+      <p>
+        Den flydende knap i hjørnet er det rigtige
+        <code>bugbottle/ui</code>-panel med den danske sprogfil. Åbn det, skriv en
+        linje, peg på noget her på siden, og tryk send.
+      </p>
+      <p>
+        Der er ingen server bag: demoen sender gennem sit eget
+        <code>fetch</code>, gemmer den rapport, der ville være blevet sendt, og
+        viser den nedenfor med <code>toMarkdown</code> fra
+        <code>bugbottle/server</code> — samme funktion, som du ville bruge til
+        teksten i en sag eller til en morgenopsamling. Intet forlader din browser.
+        Skærmbilleder er slået fra her, fordi demoen ikke har noget privat sted at
+        lægge dem.
+      </p>
+      <p><button type="button" class="button primary" id="demo-open">Åbn panelet</button></p>
+      <h3 id="payload-heading">Rapporten som Markdown</h3>
+      <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send en rapport ovenfor, så står den her."></pre>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap">
+      <h2>Læs lige det her</h2>
+      <p>
+        Et skærmbillede af din applikation indeholder alt, hvad den, der melder
+        fejlen, kunne se. I et journalsystem kan det være et billede af en patient;
+        i et lønsystem en løn; i dit måske nogens indbakke eller en halvskrevet
+        besked, der aldrig blev sendt.
+      </p>
+      <p>Tre ting følger heraf, og dem kan biblioteket ikke gøre for dig:</p>
+      <ol>
+        <li>
+          <strong>Læg skærmbilleder et privat sted.</strong> Hvis din objektlagring
+          har offentlig læseadgang — det har mange mediearkiver — kan alt, hvad du
+          lægger derind, hentes af enhver, der kender adressen. Brug en separat
+          lagerplads uden offentlig adgang.
+        </li>
+        <li>
+          <strong>Vis dem kun gennem en rute, der kræver login.</strong> Giv aldrig
+          et skærmbillede en offentlig adresse. Slå nøglen op ud fra rækken i
+          databasen frem for at tage den fra forespørgslen, så et id ikke kan bruges
+          til at gennemsøge hele lageret.
+        </li>
+        <li>
+          <strong>Sig det, før billedet bliver taget.</strong> Skriv det i
+          formularen ved siden af afkrydsningsfeltet — ikke i en politik, ingen
+          åbner.
+        </li>
+      </ol>
+      <p>
+        Det er også værd at overveje at kræve, at folk er logget ind. Et anonymt
+        skærmbillede er et, ingen bagefter kan spørges om, og ingen kan få at vide
+        er blevet slettet.
+        <a href="https://github.com/mahope/bugbottle#please-read-this-part" hreflang="en">Hele afsnittet i dokumentationen.</a>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      MIT-licens.
+      <a href="https://github.com/mahope/bugbottle">Kildekoden på GitHub</a> ·
+      <a href="https://www.npmjs.com/package/bugbottle">bugbottle på npm</a> ·
+      <a href="https://github.com/mahope/bugbottle/issues">Meld et problem</a>
+    </p>
+    <p>
+      Bygget af <a href="https://mahope.dk">Mahope</a>. Siden sætter ingen cookies,
+      kører ingen statistik og henter ingenting udefra.
+    </p>
+  </div>
+</footer>
+
+<script type="module" src="/demo.js"></script>
+</body>
+</html>

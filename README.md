@@ -4,6 +4,8 @@
 [![CI](https://github.com/mahope/bugbottle/actions/workflows/ci.yml/badge.svg)](https://github.com/mahope/bugbottle/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/licence-MIT-blue)](./LICENSE)
 
+[bugbottle.mahoje.dk](https://bugbottle.mahoje.dk) — the page, with a live demo of the panel ([in Danish](https://bugbottle.mahoje.dk/da/)).
+
 Headless in-app bug reports that arrive with the evidence attached.
 Your UI, your endpoint, a few kilobytes.
 

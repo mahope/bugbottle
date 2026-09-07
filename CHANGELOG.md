@@ -7,6 +7,18 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `fetch` option on `mountBugbottle`, passed through to `sendReport`. The panel
+  could already be pointed at any endpoint, but not at a function — which is
+  what a demonstration with no server behind it needs.
+- `site/`: the landing page for <https://bugbottle.mahoje.dk> in English and
+  Danish, served by `nginx:alpine` from `site/Dockerfile`. It is built from the
+  repository root so the committed `dist/` can be copied into the image: the
+  panel on the page is the real `bugbottle/ui`, mounted with a fake `fetch`
+  that renders the payload it was given through `toMarkdown`. Nothing in
+  `src/` refers to it and the npm package is unchanged.
+
 ## 0.3.1
 
 ### Added
