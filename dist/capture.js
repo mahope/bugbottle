@@ -115,15 +115,56 @@ export async function captureScreenshot(render, options = {}) {
     }
     return dataUrl;
 }
-/** Where the reporter is, and in what. Safe to call outside a browser. */
+/**
+ * Where the reporter is, and in what. Safe to call outside a browser.
+ *
+ * Everything past the first three fields is best-effort: each is read behind a
+ * guard and left out when the browser does not offer it, because a missing
+ * fact is not worth a thrown context. None of it says more about the person
+ * than the user agent already does — no fingerprinting beyond these fields.
+ */
 export function collectContext() {
     if (typeof window === "undefined") {
         return { url: "", viewport: "", userAgent: "" };
     }
-    return {
+    // Read through `window` rather than the bare globals: they are the same
+    // object in a browser, and it keeps the whole context readable from one
+    // place — including in a test that stands a fake window up.
+    const nav = window.navigator;
+    const context = {
         url: window.location.pathname + window.location.search,
         viewport: `${window.innerWidth}x${window.innerHeight}`,
-        userAgent: navigator.userAgent,
+        userAgent: nav.userAgent,
     };
+    if (nav.language)
+        context.language = nav.language;
+    try {
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (zone)
+            context.timezone = zone;
+    }
+    catch {
+        // A runtime without a full ICU build has no zone to give.
+    }
+    const screen = window.screen;
+    if (screen)
+        context.screen = `${screen.width}x${screen.height}@${window.devicePixelRatio ?? 1}`;
+    try {
+        if (typeof window.matchMedia === "function") {
+            context.colorScheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+        }
+    }
+    catch {
+        // An unsupported media query throws in some embedded browsers.
+    }
+    if (typeof nav.onLine === "boolean")
+        context.online = nav.onLine;
+    const connection = nav.connection;
+    if (connection && typeof connection.effectiveType === "string") {
+        context.connection = connection.effectiveType;
+    }
+    return context;
 }
 //# sourceMappingURL=capture.js.map

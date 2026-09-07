@@ -19,6 +19,22 @@ export declare const MAX_MESSAGE_LENGTH = 4000;
 export declare const MAX_CONSOLE_ENTRIES = 50;
 /** Longest a single console message may be before it is clipped. */
 export declare const MAX_CONSOLE_MESSAGE_LENGTH = 500;
+/** How many stack frames one console entry may carry. */
+export declare const MAX_STACK_FRAMES = 10;
+/** Longest a file or function name in a stack frame may be. */
+export declare const MAX_STACK_STRING_LENGTH = 200;
+/**
+ * Longest each of the optional context facts may be. They are tokens rather
+ * than prose — a locale, an IANA zone, a screen size, a connection type — so
+ * anything longer is a mistake or an attempt to smuggle text into a field
+ * nobody reads.
+ */
+export declare const MAX_CONTEXT_LENGTHS: {
+    readonly language: 35;
+    readonly timezone: 64;
+    readonly screen: 32;
+    readonly connection: 16;
+};
 /** How many pointed-at elements a report may carry. */
 export declare const MAX_ELEMENTS = 10;
 /** Longest text kept for a pointed-at element. */
@@ -30,19 +46,54 @@ export declare const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 /** How many recorded requests a report may carry. Oldest are dropped first. */
 export declare const MAX_NETWORK_ENTRIES = 30;
 export type ConsoleLevel = "error" | "warn";
+/**
+ * One line of a parsed stack: where the code was, never what it said. Source
+ * text is deliberately absent — a frame points at a file and a position, and
+ * resolving that to a line of code is the reader's job, with their own maps.
+ */
+export type StackFrame = {
+    /** Script the frame is in: a URL or a path, as the browser wrote it. */
+    file: string;
+    /** 1-based line number. */
+    line: number;
+    /** 1-based column number. */
+    col: number;
+    /** Function name, when the browser named one. */
+    fn?: string;
+};
 export type ConsoleEntry = {
     /** ISO 8601 timestamp. */
     ts: string;
     level: ConsoleLevel;
     message: string;
+    /** Frames parsed from an uncaught error or a rejection, innermost first. */
+    stack?: StackFrame[];
 };
-/** Where the reporter was, and in what. */
+/**
+ * Where the reporter was, and in what.
+ *
+ * Everything after `userAgent` is optional and best-effort: a browser that
+ * does not offer a fact simply leaves it out. None of it identifies a person
+ * more than the user agent already does.
+ */
 export type ReportContext = {
     /** Path and query of the page. The origin and the fragment are left out. */
     url: string;
     /** `${innerWidth}x${innerHeight}`. */
     viewport: string;
     userAgent: string;
+    /** The browser's preferred language tag, e.g. `en-GB`. */
+    language?: string;
+    /** IANA time zone the browser resolved, e.g. `Europe/Copenhagen`. */
+    timezone?: string;
+    /** `${screenWidth}x${screenHeight}@${devicePixelRatio}`. */
+    screen?: string;
+    /** What `prefers-color-scheme` said at the time of the report. */
+    colorScheme?: "dark" | "light";
+    /** Whether the browser believed it was online. */
+    online?: boolean;
+    /** The Network Information API's effective type, e.g. `4g`. */
+    connection?: string;
 };
 /** An element the reporter pointed at: what it is, what it says, where it is. */
 export type ElementRef = {
@@ -129,6 +180,11 @@ export declare function normaliseMessage(raw: unknown, maxLength?: number): stri
 /**
  * Clips the context strings. A browser can send a user-agent of any length,
  * and this ends up in your database.
+ *
+ * The three required fields are always present, empty when they were missing.
+ * The optional facts are only carried through when they arrived as the right
+ * type and were not empty, so a receiver never has to tell "unknown" from
+ * "the browser sent an empty string"; anything else in the object is dropped.
  */
 export declare function normaliseContext(raw: unknown): ReportContext;
 /**
@@ -142,6 +198,8 @@ export declare function normaliseContext(raw: unknown): ReportContext;
 export declare function normaliseConsole(raw: unknown, options?: {
     maxEntries?: number;
     maxMessageLength?: number;
+    maxStackFrames?: number;
+    maxStackStringLength?: number;
 }): ConsoleEntry[];
 /**
  * Validates the elements a report arrived with. Malformed entries are dropped,

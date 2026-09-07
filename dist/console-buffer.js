@@ -13,6 +13,7 @@
  * disappears from the developer console.
  */
 import { MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, } from "./report-core.js";
+import { parseStack } from "./stack.js";
 const DEFAULTS = {
     maxEntries: MAX_CONSOLE_ENTRIES,
     maxMessageLength: MAX_CONSOLE_MESSAGE_LENGTH,
@@ -43,12 +44,15 @@ function serialise(args, maxLength) {
         .join(" ")
         .slice(0, maxLength);
 }
-function push(level, args) {
-    buffer.push({
+function push(level, args, stack) {
+    const entry = {
         ts: new Date().toISOString(),
         level,
         message: serialise(args, limits.maxMessageLength),
-    });
+    };
+    if (stack && stack.length > 0)
+        entry.stack = stack;
+    buffer.push(entry);
     if (buffer.length > limits.maxEntries)
         buffer = buffer.slice(-limits.maxEntries);
 }
@@ -81,11 +85,13 @@ export function initConsoleBuffer(options = {}) {
     if (typeof window !== "undefined") {
         // Uncaught errors do not reach console.error in every browser, so they are
         // recorded directly.
+        // The message stays the one-liner it always was; the frames are the extra
+        // evidence, parsed from whatever the browser attached to the error itself.
         onError = (e) => {
-            push("error", [`Uncaught: ${e.message} (${e.filename}:${e.lineno})`]);
+            push("error", [`Uncaught: ${e.message} (${e.filename}:${e.lineno})`], parseStack(e.error?.stack));
         };
         onRejection = (e) => {
-            push("error", [`Unhandled rejection: ${serialise([e.reason], limits.maxMessageLength)}`]);
+            push("error", [`Unhandled rejection: ${serialise([e.reason], limits.maxMessageLength)}`], parseStack(e.reason?.stack));
         };
         window.addEventListener("error", onError);
         window.addEventListener("unhandledrejection", onRejection);

@@ -23,9 +23,29 @@ export const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1
 
 export const PNG_DATA_URL = `data:image/png;base64,${Buffer.from(PNG_BYTES).toString("base64")}`;
 
-/** The same report with every optional section filled in. */
+/** The same report with every optional section and every optional fact filled in. */
 export const fullReportBody = {
   ...reportBody,
+  context: {
+    ...reportBody.context,
+    language: "en-GB",
+    timezone: "Europe/Copenhagen",
+    screen: "2560x1440@2",
+    colorScheme: "dark",
+    online: true,
+    connection: "4g",
+  },
+  console: [
+    {
+      level: "error",
+      message: "Uncaught: order.save is not a function",
+      ts: "2026-09-07T10:00:00.000Z",
+      stack: [
+        { file: "https://app.test/assets/main.js", line: 12, col: 9, fn: "saveOrder" },
+        { file: "https://app.test/assets/vendor.js", line: 1, col: 1 },
+      ],
+    },
+  ],
   elements: [
     {
       selector: "form#checkout > button:nth-of-type(2)",

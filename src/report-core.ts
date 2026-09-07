@@ -26,6 +26,25 @@ export const MAX_CONSOLE_ENTRIES = 50;
 /** Longest a single console message may be before it is clipped. */
 export const MAX_CONSOLE_MESSAGE_LENGTH = 500;
 
+/** How many stack frames one console entry may carry. */
+export const MAX_STACK_FRAMES = 10;
+
+/** Longest a file or function name in a stack frame may be. */
+export const MAX_STACK_STRING_LENGTH = 200;
+
+/**
+ * Longest each of the optional context facts may be. They are tokens rather
+ * than prose — a locale, an IANA zone, a screen size, a connection type — so
+ * anything longer is a mistake or an attempt to smuggle text into a field
+ * nobody reads.
+ */
+export const MAX_CONTEXT_LENGTHS = {
+  language: 35,
+  timezone: 64,
+  screen: 32,
+  connection: 16,
+} as const;
+
 /** How many pointed-at elements a report may carry. */
 export const MAX_ELEMENTS = 10;
 
@@ -46,20 +65,56 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 export type ConsoleLevel = "error" | "warn";
 
+/**
+ * One line of a parsed stack: where the code was, never what it said. Source
+ * text is deliberately absent — a frame points at a file and a position, and
+ * resolving that to a line of code is the reader's job, with their own maps.
+ */
+export type StackFrame = {
+  /** Script the frame is in: a URL or a path, as the browser wrote it. */
+  file: string;
+  /** 1-based line number. */
+  line: number;
+  /** 1-based column number. */
+  col: number;
+  /** Function name, when the browser named one. */
+  fn?: string;
+};
+
 export type ConsoleEntry = {
   /** ISO 8601 timestamp. */
   ts: string;
   level: ConsoleLevel;
   message: string;
+  /** Frames parsed from an uncaught error or a rejection, innermost first. */
+  stack?: StackFrame[];
 };
 
-/** Where the reporter was, and in what. */
+/**
+ * Where the reporter was, and in what.
+ *
+ * Everything after `userAgent` is optional and best-effort: a browser that
+ * does not offer a fact simply leaves it out. None of it identifies a person
+ * more than the user agent already does.
+ */
 export type ReportContext = {
   /** Path and query of the page. The origin and the fragment are left out. */
   url: string;
   /** `${innerWidth}x${innerHeight}`. */
   viewport: string;
   userAgent: string;
+  /** The browser's preferred language tag, e.g. `en-GB`. */
+  language?: string;
+  /** IANA time zone the browser resolved, e.g. `Europe/Copenhagen`. */
+  timezone?: string;
+  /** `${screenWidth}x${screenHeight}@${devicePixelRatio}`. */
+  screen?: string;
+  /** What `prefers-color-scheme` said at the time of the report. */
+  colorScheme?: "dark" | "light";
+  /** Whether the browser believed it was online. */
+  online?: boolean;
+  /** The Network Information API's effective type, e.g. `4g`. */
+  connection?: string;
 };
 
 /** An element the reporter pointed at: what it is, what it says, where it is. */
@@ -164,16 +219,61 @@ export function normaliseMessage(raw: unknown, maxLength = MAX_MESSAGE_LENGTH): 
 /**
  * Clips the context strings. A browser can send a user-agent of any length,
  * and this ends up in your database.
+ *
+ * The three required fields are always present, empty when they were missing.
+ * The optional facts are only carried through when they arrived as the right
+ * type and were not empty, so a receiver never has to tell "unknown" from
+ * "the browser sent an empty string"; anything else in the object is dropped.
  */
 export function normaliseContext(raw: unknown): ReportContext {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const str = (v: unknown, max: number) =>
     typeof v === "string" ? stripNullBytes(v).slice(0, max) : "";
-  return {
+  const context: ReportContext = {
     url: str(obj.url, 500),
     viewport: str(obj.viewport, 32),
     userAgent: str(obj.userAgent, 500),
   };
+  const language = str(obj.language, MAX_CONTEXT_LENGTHS.language);
+  if (language) context.language = language;
+  const timezone = str(obj.timezone, MAX_CONTEXT_LENGTHS.timezone);
+  if (timezone) context.timezone = timezone;
+  const screen = str(obj.screen, MAX_CONTEXT_LENGTHS.screen);
+  if (screen) context.screen = screen;
+  if (obj.colorScheme === "dark" || obj.colorScheme === "light") {
+    context.colorScheme = obj.colorScheme;
+  }
+  if (typeof obj.online === "boolean") context.online = obj.online;
+  const connection = str(obj.connection, MAX_CONTEXT_LENGTHS.connection);
+  if (connection) context.connection = connection;
+  return context;
+}
+
+/**
+ * Validates the stack frames one console entry arrived with. A frame without a
+ * string `file` or without finite numbers is dropped, strings are clipped, and
+ * at most `maxFrames` are kept — the innermost ones, which is where a stack is
+ * written from. Never throws.
+ */
+function normaliseStack(raw: unknown, maxFrames: number, maxStringLength: number): StackFrame[] {
+  if (!Array.isArray(raw)) return [];
+  const frames: StackFrame[] = [];
+  for (const item of raw) {
+    if (frames.length >= maxFrames) break;
+    if (typeof item !== "object" || item === null) continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.file !== "string") continue;
+    const num = (v: unknown) =>
+      typeof v === "number" && Number.isFinite(v) ? Math.max(Math.trunc(v), 0) : 0;
+    const frame: StackFrame = {
+      file: stripNullBytes(o.file).slice(0, maxStringLength),
+      line: num(o.line),
+      col: num(o.col),
+    };
+    if (typeof o.fn === "string" && o.fn) frame.fn = stripNullBytes(o.fn).slice(0, maxStringLength);
+    frames.push(frame);
+  }
+  return frames;
 }
 
 /**
@@ -186,23 +286,33 @@ export function normaliseContext(raw: unknown): ReportContext {
  */
 export function normaliseConsole(
   raw: unknown,
-  options: { maxEntries?: number; maxMessageLength?: number } = {},
+  options: {
+    maxEntries?: number;
+    maxMessageLength?: number;
+    maxStackFrames?: number;
+    maxStackStringLength?: number;
+  } = {},
 ): ConsoleEntry[] {
   const maxEntries = options.maxEntries ?? MAX_CONSOLE_ENTRIES;
   const maxMessageLength = options.maxMessageLength ?? MAX_CONSOLE_MESSAGE_LENGTH;
+  const maxStackFrames = options.maxStackFrames ?? MAX_STACK_FRAMES;
+  const maxStackStringLength = options.maxStackStringLength ?? MAX_STACK_STRING_LENGTH;
   if (!Array.isArray(raw)) return [];
 
   const out: ConsoleEntry[] = [];
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
-    const { ts, level, message } = item as Record<string, unknown>;
+    const { ts, level, message, stack } = item as Record<string, unknown>;
     if (level !== "error" && level !== "warn") continue;
     if (typeof message !== "string") continue;
-    out.push({
+    const entry: ConsoleEntry = {
       ts: typeof ts === "string" && !Number.isNaN(Date.parse(ts)) ? ts : "",
       level,
       message: stripNullBytes(message).slice(0, maxMessageLength),
-    });
+    };
+    const frames = normaliseStack(stack, maxStackFrames, maxStackStringLength);
+    if (frames.length > 0) entry.stack = frames;
+    out.push(entry);
   }
   return out.length > maxEntries ? out.slice(-maxEntries) : out;
 }

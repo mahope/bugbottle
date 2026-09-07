@@ -50,11 +50,11 @@ jobs:
           set -e
           iife=$(gzip -c dist/bugbottle.js | wc -c)
           echo "dist/bugbottle.js: $iife bytes gzipped"
-          # 16.1 kB before the accessibility pass, 16.8 after it: the panel's
-          # own kilobyte is mostly five new locale strings, and this bundle
-          # carries them in all eight languages.
-          if [ "$iife" -gt 17920 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 17920" >&2
+          # 16.1 kB before the accessibility pass, 16.8 after it, about 17.7 with
+          # the stack frames and the wider context: the script tag carries every
+          # default in eight languages.
+          if [ "$iife" -gt 18432 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 18432" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -97,8 +97,15 @@ jobs:
           ui=$(gzip -c out-ui.js | wc -c)
           # The bare core must not carry the scrubber, or anything else added
           # to the entry that a plain buildReport consumer never calls.
-          if [ "$core" -gt 1024 ]; then
-            echo "bugbottle is $core bytes gzipped; the budget is 1024" >&2
+          # 0.9 kB of this is the buffer and buildReport as they shipped in 0.5;
+          # the rest is the evidence added in 0.6 — the stack parser in
+          # `src/stack.ts` (about 250 bytes) and the six optional context facts
+          # (about 190). Splitting the parser out does not make the core any
+          # smaller, because `console-buffer.ts` is itself part of this entry;
+          # it keeps the parsing out of `report-core.ts`, which the server
+          # imports. Both are on by default, so the budget carries them.
+          if [ "$core" -gt 1536 ]; then
+            echo "bugbottle is $core bytes gzipped; the budget is 1536" >&2
             exit 1
           fi
           breadcrumbs=$(gzip -c out-breadcrumbs.js | wc -c)
@@ -108,8 +115,10 @@ jobs:
           # default. A privacy default that a consumer has to remember to
           # import is not a default at all. The `queued` state and its message
           # then took it just over 5 kB, which is why the budget is 5.25.
-          if [ "$react" -gt 5376 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 5376" >&2
+          # 0.6 kB was added in 0.6 by the stack frames and the context facts,
+          # which the hook pays for because the core does.
+          if [ "$react" -gt 5632 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 5632" >&2
             exit 1
           fi
           # 8.0 kB of this is the panel as it shipped in 0.5; the kilobyte on

@@ -18,8 +18,11 @@ import {
 } from "../scripts/build-schema.ts";
 import {
   MAX_CONSOLE_ENTRIES,
+  MAX_CONTEXT_LENGTHS,
   MAX_MESSAGE_LENGTH,
   MAX_SCREENSHOT_DATA_URL_LENGTH,
+  MAX_STACK_FRAMES,
+  MAX_STACK_STRING_LENGTH,
 } from "../src/report-core.ts";
 import { fullReportBody, reportBody } from "./report-fixtures.ts";
 
@@ -77,6 +80,29 @@ test("the MAX_ limits travel with the schema, so another language can enforce th
   assert.equal(properties.screenshotDataUrl?.maxLength, MAX_SCREENSHOT_DATA_URL_LENGTH);
 
   assert.equal(validate({ ...reportBody, message: "x".repeat(MAX_MESSAGE_LENGTH + 1) }), false);
+});
+
+test("the stack and context ceilings travel with the schema too", () => {
+  const defs = schema.$defs as Record<string, Record<string, Record<string, Record<string, unknown>>>>;
+  const context = defs.ReportContext!.properties!;
+  assert.equal(context.language?.maxLength, MAX_CONTEXT_LENGTHS.language);
+  assert.equal(context.timezone?.maxLength, MAX_CONTEXT_LENGTHS.timezone);
+  assert.equal(context.screen?.maxLength, MAX_CONTEXT_LENGTHS.screen);
+  assert.equal(context.connection?.maxLength, MAX_CONTEXT_LENGTHS.connection);
+  assert.deepEqual(context.colorScheme?.enum, ["dark", "light"]);
+
+  assert.equal(defs.ConsoleEntry!.properties!.stack?.maxItems, MAX_STACK_FRAMES);
+  const frame = defs.StackFrame!.properties!;
+  assert.equal(frame.file?.maxLength, MAX_STACK_STRING_LENGTH);
+  assert.equal(frame.fn?.maxLength, MAX_STACK_STRING_LENGTH);
+  assert.ok(!("source" in frame), "a frame never carries source text");
+
+  const sepia = { ...fullReportBody.context, colorScheme: "sepia" };
+  assert.equal(
+    validate({ ...fullReportBody, context: sepia }),
+    false,
+    "an unknown colour scheme is not a colour scheme",
+  );
 });
 
 test("only a PNG data url passes as a screenshot", () => {

@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createGenerator } from "ts-json-schema-generator";
 import {
   MAX_BREADCRUMBS,
+  MAX_CONTEXT_LENGTHS,
   MAX_BREADCRUMB_TEXT_LENGTH,
   MAX_CONSOLE_ENTRIES,
   MAX_CONSOLE_MESSAGE_LENGTH,
@@ -34,6 +35,8 @@ import {
   MAX_MESSAGE_LENGTH,
   MAX_NETWORK_ENTRIES,
   MAX_SCREENSHOT_DATA_URL_LENGTH,
+  MAX_STACK_FRAMES,
+  MAX_STACK_STRING_LENGTH,
 } from "../src/report-core.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -118,7 +121,22 @@ export function buildReportSchema(): Json {
   screenshot.maxLength = MAX_SCREENSHOT_DATA_URL_LENGTH;
   screenshot.pattern = PNG_DATA_URL_PATTERN;
 
-  at(defs, ["ConsoleEntry", "properties", "message"]).maxLength = MAX_CONSOLE_MESSAGE_LENGTH;
+  const entry = at(defs, ["ConsoleEntry", "properties"]);
+  at(entry, ["message"]).maxLength = MAX_CONSOLE_MESSAGE_LENGTH;
+  at(entry, ["stack"]).maxItems = MAX_STACK_FRAMES;
+
+  const frame = at(defs, ["StackFrame", "properties"]);
+  at(frame, ["file"]).maxLength = MAX_STACK_STRING_LENGTH;
+  at(frame, ["fn"]).maxLength = MAX_STACK_STRING_LENGTH;
+
+  // The optional context facts are tokens, and their ceilings live in
+  // `normaliseContext` rather than in the type, so a receiver in another
+  // language has no other way to learn them.
+  const context = at(defs, ["ReportContext", "properties"]);
+  for (const [key, max] of Object.entries(MAX_CONTEXT_LENGTHS)) {
+    at(context, [key]).maxLength = max;
+  }
+
   at(defs, ["ElementRef", "properties", "text"]).maxLength = MAX_ELEMENT_TEXT_LENGTH;
   at(defs, ["Breadcrumb", "properties", "text"]).maxLength = MAX_BREADCRUMB_TEXT_LENGTH;
 

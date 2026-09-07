@@ -5,11 +5,12 @@ Short version. The reasoning is in `research-features.md` and
 
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
-bare core under 1 kB gzipped, `bugbottle/react` under 5.25 kB, `bugbottle/ui`
-under 9 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
+bare core under 1.5 kB gzipped, `bugbottle/react` under 5.5 kB, `bugbottle/ui`
+under 10 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
 1.3 kB, `bugbottle/queue` under 1 kB, `bugbottle/triggers` under 1.2 kB,
 `bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-the script-tag build under 16 kB.
+the script-tag build under 18 kB. The core budget was 1 kB until 0.6, when stack
+frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
@@ -44,6 +45,13 @@ in-memory rate limit — with `expressHandler` for Express. Hardened after a
 review: a body deadline as well as a body ceiling, a per-sink deadline, a
 capped and clipped rate-limit map, 405 for anything that is not a POST, and a
 screenshot store that may fail without taking the report with it.
+
+**0.6** — stack frames on uncaught errors and unhandled rejections
+(`ConsoleEntry.stack`, at most ten `{ file, line, col, fn? }`, one parser for
+V8, Firefox and Safari, never any source text), and six optional context facts:
+language, time zone, screen with pixel ratio, colour scheme, online state and
+effective connection type — each guarded, each clipped by `normaliseContext`,
+all of them in the facts table and in the schema.
 
 **0.6** — `report.schema.json` generated from the types by
 `scripts/build-schema.ts`, shipped in the package and served at
@@ -80,8 +88,6 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 
 ## 0.5 — evidence and delivery
 
-- **Stack normalisation** for uncaught errors — `{ file, line, col, fn }`
-  frames alongside the raw stack.
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
   `localStorage`, flushed on `online`.
 - Rate limit by fingerprint. (Dedup by fingerprint shipped, client and server.)

@@ -99,7 +99,12 @@ function withBrowser(fn: (env: Browser) => void): void {
     replaceState: (_d: unknown, _u: string, url?: string) => void calls.push(`replace:${url}`),
   };
   // `collectContext` reads these off `window`, so a bare EventTarget is not enough.
-  Object.assign(win, { location, innerWidth: 1440, innerHeight: 900 });
+  Object.assign(win, {
+    location,
+    innerWidth: 1440,
+    innerHeight: 900,
+    navigator: { userAgent: "test" },
+  });
   g.document = doc;
   g.window = win;
   g.history = history;

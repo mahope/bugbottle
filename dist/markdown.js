@@ -10,6 +10,12 @@
  */
 import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
+/**
+ * How many frames of a stack are printed under a console entry. Ten are kept
+ * in the report, but a reader scanning an issue wants the innermost few; the
+ * whole stack is in the JSON for anyone who needs it.
+ */
+const MAX_RENDERED_STACK_FRAMES = 3;
 /** Pipes and newlines would break a table cell. */
 function cell(value) {
     return String(value ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
@@ -95,8 +101,20 @@ export function toMarkdown(raw, options = {}) {
         facts.push(["Page", `\`${context.url}\``]);
     if (context.viewport)
         facts.push(["Viewport", context.viewport]);
+    if (context.screen)
+        facts.push(["Screen", context.screen]);
     if (context.userAgent)
         facts.push(["Browser", context.userAgent]);
+    if (context.language)
+        facts.push(["Language", context.language]);
+    if (context.timezone)
+        facts.push(["Time zone", context.timezone]);
+    if (context.colorScheme)
+        facts.push(["Colour scheme", context.colorScheme]);
+    if (typeof context.online === "boolean")
+        facts.push(["Online", context.online ? "yes" : "no"]);
+    if (context.connection)
+        facts.push(["Connection", context.connection]);
     const ts = consoleEntries.at(-1)?.ts;
     if (ts)
         facts.push(["Last console entry", ts]);
@@ -133,7 +151,14 @@ export function toMarkdown(raw, options = {}) {
         out.push("");
     }
     if (consoleEntries.length > 0) {
-        const lines = consoleEntries.map((e) => `${e.ts ? `${e.ts} ` : ""}[${e.level}] ${e.message}`);
+        const lines = [];
+        for (const e of consoleEntries) {
+            lines.push(`${e.ts ? `${e.ts} ` : ""}[${e.level}] ${e.message}`);
+            // The top of the stack is where the fault is; the rest is framework.
+            for (const f of (e.stack ?? []).slice(0, MAX_RENDERED_STACK_FRAMES)) {
+                lines.push(`    at ${f.fn ? `${f.fn} ` : ""}${f.file}:${f.line}:${f.col}`);
+            }
+        }
         const block = fence(lines.join("\n"), "text");
         const label = `Console (${consoleEntries.length} ${consoleEntries.length === 1 ? "entry" : "entries"})`;
         if (options.collapseConsole ?? true) {

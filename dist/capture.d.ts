@@ -106,6 +106,13 @@ export declare const DEFAULT_BYTES_PER_PIXEL_ESTIMATE = 0.5;
  * wrong.
  */
 export declare function captureScreenshot(render: ScreenshotRenderer, options?: CaptureOptions): Promise<string>;
-/** Where the reporter is, and in what. Safe to call outside a browser. */
+/**
+ * Where the reporter is, and in what. Safe to call outside a browser.
+ *
+ * Everything past the first three fields is best-effort: each is read behind a
+ * guard and left out when the browser does not offer it, because a missing
+ * fact is not worth a thrown context. None of it says more about the person
+ * than the user agent already does — no fingerprinting beyond these fields.
+ */
 export declare function collectContext(): ReportContext;
 //# sourceMappingURL=capture.d.ts.map

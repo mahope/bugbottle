@@ -109,6 +109,14 @@
           "maxLength": 500,
           "type": "string"
         },
+        "stack": {
+          "description": "Frames parsed from an uncaught error or a rejection, innermost first.",
+          "items": {
+            "$ref": "#/$defs/StackFrame"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
         "ts": {
           "description": "ISO 8601 timestamp.",
           "type": "string"
@@ -222,8 +230,40 @@
       "type": "object"
     },
     "ReportContext": {
-      "description": "Where the reporter was, and in what.",
+      "description": "Where the reporter was, and in what.\n\nEverything after `userAgent` is optional and best-effort: a browser that does not offer a fact simply leaves it out. None of it identifies a person more than the user agent already does.",
       "properties": {
+        "colorScheme": {
+          "description": "What `prefers-color-scheme` said at the time of the report.",
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "type": "string"
+        },
+        "connection": {
+          "description": "The Network Information API's effective type, e.g. `4g`.",
+          "maxLength": 16,
+          "type": "string"
+        },
+        "language": {
+          "description": "The browser's preferred language tag, e.g. `en-GB`.",
+          "maxLength": 35,
+          "type": "string"
+        },
+        "online": {
+          "description": "Whether the browser believed it was online.",
+          "type": "boolean"
+        },
+        "screen": {
+          "description": "`${screenWidth}x${screenHeight}@${devicePixelRatio}`.",
+          "maxLength": 32,
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA time zone the browser resolved, e.g. `Europe/Copenhagen`.",
+          "maxLength": 64,
+          "type": "string"
+        },
         "url": {
           "description": "Path and query of the page. The origin and the fragment are left out.",
           "type": "string"
@@ -250,6 +290,35 @@
         "other"
       ],
       "type": "string"
+    },
+    "StackFrame": {
+      "description": "One line of a parsed stack: where the code was, never what it said. Source text is deliberately absent — a frame points at a file and a position, and resolving that to a line of code is the reader's job, with their own maps.",
+      "properties": {
+        "col": {
+          "description": "1-based column number.",
+          "type": "number"
+        },
+        "file": {
+          "description": "Script the frame is in: a URL or a path, as the browser wrote it.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "fn": {
+          "description": "Function name, when the browser named one.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line number.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "file",
+        "line",
+        "col"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://bugbottle.dev/schema/report.json",

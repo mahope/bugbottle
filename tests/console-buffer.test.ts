@@ -135,3 +135,66 @@ test("uncaught errors are recorded once, even after a reset and re-init", () => 
     delete (globalThis as { window?: unknown }).window;
   }
 });
+
+test("an uncaught error carries the frames from its error object", () => {
+  const fakeWindow = new EventTarget();
+  (globalThis as { window?: unknown }).window = fakeWindow;
+  try {
+    withSilencedConsole(() => {
+      initConsoleBuffer();
+      const error = new TypeError("order.save is not a function");
+      error.stack = [
+        "TypeError: order.save is not a function",
+        "    at saveOrder (https://app.test/main.js:12:9)",
+        "    at https://app.test/vendor.js:1:1",
+      ].join("\n");
+      fakeWindow.dispatchEvent(
+        Object.assign(new Event("error"), {
+          message: "order.save is not a function",
+          filename: "https://app.test/main.js",
+          lineno: 12,
+          error,
+        }),
+      );
+    });
+    const entry = getConsoleBuffer()[0];
+    assert.equal(
+      entry?.message,
+      "Uncaught: order.save is not a function (https://app.test/main.js:12)",
+      "the one-line message is unchanged",
+    );
+    assert.equal(entry?.stack?.length, 2, "the header line is not a frame");
+    assert.equal(entry?.stack?.[0]?.fn, "saveOrder");
+    assert.equal(entry?.stack?.[0]?.line, 12);
+  } finally {
+    delete (globalThis as { window?: unknown }).window;
+  }
+});
+
+test("a rejection with no usable stack is still recorded, without one", () => {
+  const fakeWindow = new EventTarget();
+  (globalThis as { window?: unknown }).window = fakeWindow;
+  try {
+    withSilencedConsole(() => {
+      initConsoleBuffer();
+      // A promise can be rejected with anything at all, including a string.
+      fakeWindow.dispatchEvent(
+        Object.assign(new Event("unhandledrejection"), { reason: "gateway timeout" }),
+      );
+      const withFrames = Object.assign(new Error("nope"), {
+        stack: "Error: nope\nretry@https://app.test/main.js:88:3",
+      });
+      fakeWindow.dispatchEvent(
+        Object.assign(new Event("unhandledrejection"), { reason: withFrames }),
+      );
+    });
+    const [plain, framed] = getConsoleBuffer();
+    assert.equal(plain?.message, "Unhandled rejection: gateway timeout");
+    assert.equal(plain?.stack, undefined, "no frames means no key at all");
+    assert.deepEqual(framed?.stack, [
+      { file: "https://app.test/main.js", line: 88, col: 3, fn: "retry" },
+    ]);
+  } finally {
+    delete (globalThis as { window?: unknown }).window;
+  }
+});

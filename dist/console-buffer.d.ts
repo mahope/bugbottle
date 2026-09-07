@@ -12,8 +12,8 @@
  * data ends up. The original functions are always called through, so nothing
  * disappears from the developer console.
  */
-import { type ConsoleEntry, type ConsoleLevel } from "./report-core.ts";
-export type { ConsoleEntry, ConsoleLevel };
+import { type ConsoleEntry, type ConsoleLevel, type StackFrame } from "./report-core.ts";
+export type { ConsoleEntry, ConsoleLevel, StackFrame };
 export type ConsoleBufferOptions = {
     /** How many entries to keep. Oldest are dropped first. Default 50. */
     maxEntries?: number;
