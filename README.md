@@ -42,8 +42,8 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 0.9 kB gzipped; with the element picker and the React hook, 4.5 kB;
-  the optional ready-made panel, 7.4 kB; breadcrumbs 1.3 kB; the everything
-  script tag, 12.2 kB. `html-to-image` is only pulled in by the module that
+  the optional ready-made panel, 7.4 kB; breadcrumbs 1.3 kB; the network log
+  1.1 kB; the everything script tag, 13.3 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
@@ -251,6 +251,7 @@ run on your page.
 | `data-logo` | Image URL shown before the title and on the trigger. |
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
+| `data-network` | Present, with any value, records the failed and slow requests. See "What the network did". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
 
@@ -261,8 +262,9 @@ There is no screenshot in this build. A renderer means `html-to-image`, which
 is far larger than everything else here put together, and forcing it on every
 page that only wants the panel is the wrong trade. The bundle exposes the
 building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
-`initConsoleBuffer`, `initBreadcrumbs`, `locales`, `resolveLocale`,
-`scrubReport`, `buildReport`, `sendReport`, `pickElement` and `version` — so a
+`initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `locales`,
+`resolveLocale`, `scrubReport`, `buildReport`, `sendReport`, `pickElement` and
+`version` — so a
 page that wants pictures can load `html-to-image` itself and call
 `window.bugbottle.mount({ endpoint, screenshot })`. Leave `data-endpoint` off
 the tag and nothing mounts on its own:
@@ -402,6 +404,70 @@ initBreadcrumbs({
 
 `getBreadcrumbs()` returns a copy of the timeline, and `resetBreadcrumbs()`
 empties it, removes the listeners and puts `history` back as it found it.
+
+## What the network did
+
+Breadcrumbs say what the reporter did; `bugbottle/network` says what the
+browser did about it. "The save button does nothing" is a different report
+when it arrives with the 500 from `POST /api/orders` that caused it. It is a
+separate entry point too, and opt-in: it patches `fetch` and
+`XMLHttpRequest`, which is a bigger promise than adding a listener.
+
+```ts
+import { initNetwork } from "bugbottle/network";
+
+initNetwork({ endpoint: "/api/feedback" });
+```
+
+Only the interesting requests are kept: a status of 400 or more, a request
+that failed before it got a status (`status: 0`, `error: true`), and anything
+slower than `slowMs` — 2000 ms by default. A fast 200 is the request that
+worked, and there are hundreds of those in a session; recorded, they would
+evict the one that explains the report. The last 30 are kept.
+
+```jsonc
+[
+  { "ts": "2026-09-07T08:12:31.004Z", "method": "POST", "url": "/api/orders", "status": 500, "ms": 812 },
+  { "ts": "2026-09-07T08:12:33.900Z", "method": "GET", "url": "/api/orders/42", "status": 0, "ms": 30, "error": true },
+  { "ts": "2026-09-07T08:12:36.100Z", "method": "GET", "url": "https://api.stripe.com/v1/charges", "status": 200, "ms": 3400 }
+]
+```
+
+`buildReport` attaches them on its own while the recorder is active, as
+`network`; pass `includeNetwork: false` to leave them out of one report.
+`toMarkdown` renders them as a "Requests" table.
+
+**Never recorded: request or response bodies, and never headers.** That is
+where tokens, cookies and personal data live, and a bug report is not the
+place for any of them. What is left is the method, the URL, the status and the
+duration. The URL keeps its path and query with sensitive query values
+redacted (`?token=…` becomes `?token=[redacted]`); a cross-origin URL keeps
+its origin, because which host failed is half the answer.
+
+```ts
+initNetwork({
+  endpoint: "/api/feedback",
+  slowMs: 2000,
+  all: false,
+  maxEntries: 30,
+  ignore: (url) => url.startsWith("/api/analytics"),
+  beforeRequest: (entry) =>
+    entry.url.startsWith("/admin") ? null : { ...entry, url: entry.url.replace(/\/\d+/, "/:id") },
+});
+```
+
+- `all: true` records every request, not only the failed and the slow ones.
+- `beforeRequest` sees every entry before it is stored. Return null to drop
+  it, or a changed one to redact it. A hook that throws drops the entry and
+  never reaches your application.
+- Requests to `endpoint` are skipped, so a report never describes its own
+  delivery. `ignore` replaces that check when you need a different rule.
+
+The patched `fetch` always calls the original and hands back its result
+untouched, rejections included; `XMLHttpRequest` is timed with `loadend`, the
+one event that fires for every ending. `getNetwork()` returns a copy of what
+has been recorded, and `resetNetwork()` empties it and puts both globals back
+as it found them.
 
 ## Feeding reports to an agent
 
@@ -777,6 +843,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
   "breadcrumbs": [                     // only while bugbottle/breadcrumbs is recording
     { "ts": "2026-09-07T08:12:30.400Z", "kind": "navigation", "from": "/orders/1", "to": "/orders/2" }
   ],
+  "network": [                         // only while bugbottle/network is recording
+    { "ts": "2026-09-07T08:12:31.004Z", "method": "POST", "url": "/api/orders", "status": 500, "ms": 812 }
+  ],
   "screenshotDataUrl": "data:image/png;base64,…"   // only when attached
 }
 ```
@@ -788,13 +857,14 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 the `MaskOptions` of its `mask` option, whose defaults are
 `DEFAULT_MASK_SELECTOR`, `DEFAULT_BLOCK_SELECTOR` and `DEFAULT_MASK_COLOUR`),
 `collectContext`, `pickElement`, `describeElement`, `buildSelector`,
-`buildReport`, `sendReport`, `scrubReport`, `BUILTIN_SCRUBBERS`,
+`buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
 validators below, and the shared types and limits.
 
 **`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
-`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `locales`, `resolveLocale`,
-`scrubReport`, `buildReport`, `sendReport`, `pickElement`, `version`, and
+`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `locales`,
+`resolveLocale`, `scrubReport`, `buildReport`, `sendReport`, `pickElement`,
+`version`, and
 `data-*` auto-mount. See "One script tag".
 
 **WordPress** — the plugin at
@@ -804,6 +874,9 @@ post type with an admin list, and emails them if you want. One activation.
 
 **`bugbottle/breadcrumbs`** — `initBreadcrumbs`, `getBreadcrumbs`,
 `resetBreadcrumbs`, `isBreadcrumbsActive`, and the `BreadcrumbsOptions` type.
+
+**`bugbottle/network`** — `initNetwork`, `getNetwork`, `resetNetwork`,
+`isNetworkActive`, and the `NetworkOptions` and `NetworkEntry` types.
 
 **`bugbottle/react`** — `useBugReport`.
 
@@ -819,7 +892,8 @@ Requires `html-to-image`.
 
 **`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
-`normaliseBreadcrumbs`, `isReportType`, `toMarkdown`, `scrubReport`,
+`normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
+`scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
 `InvalidScreenshotError`, `SinkError`, `REPORT_TYPES` and the `MAX_*` limits.
 

@@ -40,6 +40,7 @@ export {
 // that is written is the redacted one whatever the client did or did not do.
 export {
   scrubReport,
+  scrubUrl,
   BUILTIN_SCRUBBERS,
   DEFAULT_REPLACEMENT,
   type ScrubOptions,
@@ -56,6 +57,7 @@ export {
   normaliseConsole,
   normaliseElements,
   normaliseBreadcrumbs,
+  normaliseNetwork,
   MAX_MESSAGE_LENGTH,
   MAX_SCREENSHOT_BYTES,
   MAX_SCREENSHOT_DATA_URL_LENGTH,
@@ -65,6 +67,7 @@ export {
   MAX_ELEMENT_TEXT_LENGTH,
   MAX_BREADCRUMBS,
   MAX_BREADCRUMB_TEXT_LENGTH,
+  MAX_NETWORK_ENTRIES,
   REPORT_TYPES,
   type ReportType,
   type ReportContext,
@@ -74,4 +77,5 @@ export {
   type ElementRef,
   type Breadcrumb,
   type BreadcrumbKind,
+  type NetworkEntry,
 } from "../report-core.ts";

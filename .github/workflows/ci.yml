@@ -42,8 +42,8 @@ jobs:
           set -e
           iife=$(gzip -c dist/bugbottle.js | wc -c)
           echo "dist/bugbottle.js: $iife bytes gzipped"
-          if [ "$iife" -gt 13312 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 13312" >&2
+          if [ "$iife" -gt 14336 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 14336" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -57,6 +57,7 @@ jobs:
           echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
           echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
           echo 'import { initBreadcrumbs } from "bugbottle/breadcrumbs"; initBreadcrumbs();' > breadcrumbs.js
+          echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
         run: |
@@ -66,7 +67,8 @@ jobs:
           npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
           npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
           npx esbuild breadcrumbs.js --bundle --minify --format=esm --outfile=out-breadcrumbs.js
-          for f in out-core out-react out-server out-ui out-breadcrumbs; do
+          npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
+          for f in out-core out-react out-server out-ui out-breadcrumbs out-network; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -98,5 +100,13 @@ jobs:
           # adding breadcrumbs to such an app costs about 550 bytes gzipped.
           if [ "$breadcrumbs" -gt 1536 ]; then
             echo "bugbottle/breadcrumbs is $breadcrumbs bytes gzipped; the budget is 1536" >&2
+            exit 1
+          fi
+          # The network log carries its own URL scrubber, which is the query
+          # pattern from scrub.ts and nothing else; the rest of the scrubber is
+          # tree-shaken away. 1174 bytes gzipped at 0.5.0.
+          network=$(gzip -c out-network.js | wc -c)
+          if [ "$network" -gt 1228 ]; then
+            echo "bugbottle/network is $network bytes gzipped; the budget is 1228" >&2
             exit 1
           fi

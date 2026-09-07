@@ -1,24 +1,36 @@
 /**
- * A one-slot registry so `buildReport` can pick up breadcrumbs without
- * importing the module that records them.
+ * A two-slot registry so `buildReport` can pick up breadcrumbs and recorded
+ * requests without importing the modules that record them.
  *
- * `bugbottle/breadcrumbs` is a separate entry on purpose: an application that
- * never imports it must not pay for it. If `send.ts` imported `breadcrumbs.ts`
- * directly, every bundle would carry the recorder and its listeners. Instead
- * `initBreadcrumbs` registers a getter here, and `send.ts` reads it — this
- * file is a handful of bytes and has no DOM code in it at all.
+ * `bugbottle/breadcrumbs` and `bugbottle/network` are separate entries on
+ * purpose: an application that never imports one must not pay for it. If
+ * `send.ts` imported them directly, every bundle would carry both recorders
+ * and their patches. Instead each `init*` registers a getter here, and
+ * `send.ts` reads it — this file is a handful of bytes and has no DOM code in
+ * it at all.
  */
 
-import type { Breadcrumb } from "./report-core.ts";
+import type { Breadcrumb, NetworkEntry } from "./report-core.ts";
 
-let source: (() => Breadcrumb[]) | null = null;
+let breadcrumbSource: (() => Breadcrumb[]) | null = null;
+let networkSource: (() => NetworkEntry[]) | null = null;
 
 /** Called by `initBreadcrumbs`; pass null to unregister. */
 export function registerBreadcrumbSource(getter: (() => Breadcrumb[]) | null): void {
-  source = getter;
+  breadcrumbSource = getter;
 }
 
 /** What has been recorded, or null when nothing is recording. */
 export function readBreadcrumbs(): Breadcrumb[] | null {
-  return source ? source() : null;
+  return breadcrumbSource ? breadcrumbSource() : null;
+}
+
+/** Called by `initNetwork`; pass null to unregister. */
+export function registerNetworkSource(getter: (() => NetworkEntry[]) | null): void {
+  networkSource = getter;
+}
+
+/** The requests recorded so far, or null when nothing is recording. */
+export function readNetwork(): NetworkEntry[] | null {
+  return networkSource ? networkSource() : null;
 }

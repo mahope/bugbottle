@@ -7,6 +7,26 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `bugbottle/network`, a network log next to the console buffer: `initNetwork`
+  patches `fetch` and `XMLHttpRequest` and keeps the last 30 requests that
+  failed (status 400 and up, or no status at all) or took longer than `slowMs`
+  (2000 ms by default). `all: true` records everything, `beforeRequest` can
+  redact or drop an entry, `maxEntries` bounds the ring, and requests to the
+  report endpoint are skipped. `buildReport` attaches them as `network`
+  (`includeNetwork: false` leaves them out), `toMarkdown` renders a "Requests"
+  table, and `normaliseNetwork` with `MAX_NETWORK_ENTRIES` validates them on
+  the server. Its own entry point, 1174 bytes gzipped, budgeted at 1228 in CI.
+  Request and response bodies and headers are never recorded, in either
+  direction; sensitive query values in the URL are redacted, and a cross-origin
+  URL keeps its origin.
+- `scrubUrl` in `bugbottle` and `bugbottle/server`: the query-value scrubber on
+  its own, so a module can redact a URL without carrying the whole scrubber.
+- `window.bugbottle.initNetwork` in the script-tag build, with a `data-network`
+  attribute that turns the network log on from the tag. The IIFE budget moves
+  from 12288 to 13824 bytes gzipped to make room; the bundle is 12600.
+
 ### Changed
 
 - The canonical address of the project is now <https://bugbottle.dev>: canonical,

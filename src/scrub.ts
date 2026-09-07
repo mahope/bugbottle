@@ -77,6 +77,28 @@ function passesLuhn(digits: string): boolean {
 }
 
 /**
+ * The query scrubber's pattern, kept as its own binding so `scrubUrl` can use
+ * it without touching `BUILTIN_SCRUBBERS`. A bundler that sees only `scrubUrl`
+ * imported then drops every other pattern, `passesLuhn` included — which is
+ * what lets `bugbottle/network` scrub its URLs inside a 1.2 kB budget.
+ */
+const QUERY_PATTERN = /([?&][^?&=#\s]*(?:token|key|secret|password|auth)[^?&=#\s]*=)[^&#\s]*/gi;
+
+/**
+ * Redacts the sensitive query values in one URL, keeping the key that named
+ * them: `/orders?token=abc` becomes `/orders?token=[redacted]`. Everything
+ * else — the path, the ordinary parameters — is left exactly as it was.
+ *
+ * This is the one part of the scrubber that `bugbottle/network` needs, and it
+ * is exported separately so that module does not have to carry the rest.
+ */
+export function scrubUrl(url: string, replacement: string = DEFAULT_REPLACEMENT): string {
+  if (typeof url !== "string") return url;
+  QUERY_PATTERN.lastIndex = 0;
+  return url.replace(QUERY_PATTERN, (_match, prefix: string) => (prefix ?? "") + replacement);
+}
+
+/**
  * The patterns that are on by default, in the order they are applied. Order
  * matters: the query scrubber runs before the ones that would match the value
  * it is about to redact, and the card scrubber runs last so it never eats the
@@ -84,7 +106,7 @@ function passesLuhn(digits: string): boolean {
  */
 export const BUILTIN_SCRUBBERS: Record<ScrubberName, Scrubber> = {
   query: {
-    pattern: /([?&][^?&=#\s]*(?:token|key|secret|password|auth)[^?&=#\s]*=)[^&#\s]*/gi,
+    pattern: QUERY_PATTERN,
     replace: keepPrefix,
     urlsOnly: true,
   },

@@ -52,6 +52,10 @@
       "types": "./dist/breadcrumbs.d.ts",
       "default": "./dist/breadcrumbs.js"
     },
+    "./network": {
+      "types": "./dist/network.d.ts",
+      "default": "./dist/network.js"
+    },
     "./locales": {
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"

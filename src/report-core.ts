@@ -38,6 +38,9 @@ export const MAX_BREADCRUMBS = 30;
 /** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
 export const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 
+/** How many recorded requests a report may carry. Oldest are dropped first. */
+export const MAX_NETWORK_ENTRIES = 30;
+
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -97,6 +100,29 @@ export type Breadcrumb = {
   to?: string;
 };
 
+/**
+ * One request the browser made before the report. Recorded by
+ * `bugbottle/network`, which keeps the failed and the slow ones.
+ *
+ * Bodies and headers are never part of this, in either direction: that is
+ * where tokens and personal data live. What is left says which call failed and
+ * how long it took, which is the part that explains the report.
+ */
+export type NetworkEntry = {
+  /** ISO 8601 timestamp of when the request finished. */
+  ts: string;
+  /** The HTTP method, upper case. */
+  method: string;
+  /** Path and query, with sensitive query values redacted. Cross-origin URLs keep their origin. */
+  url: string;
+  /** The response status, or 0 when the request never got one. */
+  status: number;
+  /** How long the request took, in milliseconds. */
+  ms: number;
+  /** True when the request failed before a status — offline, CORS, aborted. */
+  error?: boolean;
+};
+
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
   type: ReportType;
@@ -107,6 +133,8 @@ export type BugReport = {
   elements?: ElementRef[];
   /** What the reporter did before reporting, oldest first. */
   breadcrumbs?: Breadcrumb[];
+  /** Requests that failed or were slow before the report, oldest first. */
+  network?: NetworkEntry[];
   screenshotDataUrl?: string;
 };
 
@@ -257,6 +285,42 @@ export function normaliseBreadcrumbs(
     out.push(crumb);
   }
   return out.length > maxBreadcrumbs ? out.slice(-maxBreadcrumbs) : out;
+}
+
+/**
+ * Validates the recorded requests a report arrived with. An entry without a
+ * string `url` is not a request and is dropped; everything else is clipped,
+ * rounded or defaulted rather than rejected, and at most `maxEntries` are
+ * kept — the most recent ones. Never throws: a malformed section means "no
+ * requests", not a failed report.
+ */
+export function normaliseNetwork(
+  raw: unknown,
+  options: { maxEntries?: number } = {},
+): NetworkEntry[] {
+  const maxEntries = options.maxEntries ?? MAX_NETWORK_ENTRIES;
+  if (!Array.isArray(raw)) return [];
+
+  const out: NetworkEntry[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.url !== "string") continue;
+    const status = typeof o.status === "number" && Number.isFinite(o.status) ? o.status : 0;
+    const ms = typeof o.ms === "number" && Number.isFinite(o.ms) ? o.ms : 0;
+    const entry: NetworkEntry = {
+      ts: typeof o.ts === "string" && !Number.isNaN(Date.parse(o.ts)) ? o.ts : "",
+      // A method is a short token by definition, so anything longer is either
+      // a mistake or an attempt to smuggle text through a field nobody reads.
+      method: typeof o.method === "string" ? stripNullBytes(o.method).slice(0, 20) : "GET",
+      url: stripNullBytes(o.url).slice(0, 500),
+      status: Math.min(Math.max(Math.trunc(status), 0), 999),
+      ms: Math.min(Math.max(Math.round(ms), 0), 3_600_000),
+    };
+    if (o.error === true) entry.error = true;
+    out.push(entry);
+  }
+  return out.length > maxEntries ? out.slice(-maxEntries) : out;
 }
 
 export class InvalidScreenshotError extends Error {
