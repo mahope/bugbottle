@@ -81,6 +81,27 @@ change the API; the changelog says so when they do.
   server validators, and `toMarkdown` renders a "What happened before" list
   between the elements and the console.
 
+### Fixed
+
+- A `beforeBreadcrumb` that throws no longer throws out of the host
+  application's `pushState`: the hook is wrapped, a throw drops the crumb, and
+  nothing the recorder does can fail a navigation.
+- Text inside a `contenteditable` region, and an `<option>` label, are masked
+  the way `<input>` already was — a rich-text editor is a field whatever tag it
+  uses, so a click there records the selector only.
+- Navigations that go nowhere are no longer recorded. A `hashchange`, or the
+  `replaceState` a query-sync library fires on every keystroke, used to push a
+  crumb per event and evict the ones worth reading.
+- `maxEntries: 0` records nothing instead of removing the bound (`slice(-0)` is
+  the whole array), and a NaN or otherwise unusable value falls back to the
+  default 30.
+- `scrubReport` now scrubs every element attribute except `id`, `role` and
+  `type`. `aria-label`, `title`, `name` and `placeholder` are recorded by
+  `describeElement` and routinely name a person.
+- `sendReport` starts the `timeoutMs` clock before `beforeSend`, so an async
+  hook that never settles raises `SendTimeoutError` instead of leaving the form
+  on "sending" for ever.
+
 ## 0.3.1
 
 ### Added

@@ -167,15 +167,24 @@ function scrubField(source: Record<string, unknown>, key: string, p: Plan, isUrl
   if (typeof value === "string") source[key] = scrubString(value, p, isUrl);
 }
 
+/**
+ * Attributes that describe the shape of an element rather than its content.
+ * Redacting these would cost the reader the ability to tell one element from
+ * another and buy no privacy at all.
+ */
+const STRUCTURAL_ATTRIBUTES = new Set(["id", "role", "type"]);
+
 function scrubAttributes(attributes: unknown, p: Plan): unknown {
   if (!isObject(attributes)) return attributes;
   const out: Record<string, unknown> = { ...attributes };
   for (const [key, value] of Object.entries(out)) {
-    if (typeof value !== "string") continue;
-    // href carries the query string; data-* is where applications park ids,
-    // emails and the occasional token. The rest are structural.
-    if (key === "href") out[key] = scrubString(value, p, true);
-    else if (key.startsWith("data-")) out[key] = scrubString(value, p, false);
+    if (typeof value !== "string" || STRUCTURAL_ATTRIBUTES.has(key)) continue;
+    // Everything but the three structural names is scrubbed. `describeElement`
+    // also records aria-label, title, name and placeholder, and those are prose
+    // written for a human: they name people, quote addresses and echo whatever
+    // the field is asking for. Only href is treated as a URL, because only href
+    // carries a query string.
+    out[key] = scrubString(value, p, key === "href");
   }
   return out;
 }

@@ -115,6 +115,18 @@ test("a hung endpoint is abandoned after timeoutMs with a SendTimeoutError", asy
   );
 });
 
+test("a beforeSend that never settles times out too", async () => {
+  const neverFetch = (() => new Promise<Response>(() => {})) as typeof globalThis.fetch;
+  await assert.rejects(
+    sendReport("/x", buildReport({ type: "bug", message: "a" }), {
+      fetch: neverFetch,
+      timeoutMs: 20,
+      beforeSend: () => new Promise(() => {}),
+    }),
+    (err: unknown) => err instanceof SendTimeoutError && /20 ms/.test(err.message),
+  );
+});
+
 test("a caller-supplied signal aborts the request as itself, not as a timeout", async () => {
   const hangingFetch = ((_url: unknown, init?: RequestInit) =>
     new Promise<Response>((_resolve, reject) => {
