@@ -813,3 +813,9 @@ and you want malformed ones caught before they reach your issue tracker.
 
 Outputs `valid-count` and `invalid-count`. The job fails if any report is
 malformed or no files match. Zero dependencies — installs in about a second.
+
+## Who makes it
+
+Mads Holst Jensen, a freelance web and AI developer in Denmark. bugbottle came
+out of client projects where "the save button does nothing" arrived by email
+with nothing attached. [mahoje.dk](https://mahoje.dk) · mads@mahope.dk
