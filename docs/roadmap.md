@@ -9,7 +9,7 @@ bare core under 1.5 kB gzipped, `bugbottle/react` under 5.5 kB, `bugbottle/ui`
 under 10 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
 1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-`bugbottle/sign` under 512 bytes, the script-tag build under 18 kB. The core budget was 1 kB until 0.6, when stack
+`bugbottle/sign` under 512 bytes, the script-tag build under 19 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped

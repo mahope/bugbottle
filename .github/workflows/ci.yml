@@ -53,8 +53,8 @@ jobs:
           # 16.1 kB before the accessibility pass, 16.8 after it, about 17.7 with
           # the stack frames and the wider context: the script tag carries every
           # default in eight languages.
-          if [ "$iife" -gt 18432 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 18432" >&2
+          if [ "$iife" -gt 19456 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 19456" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp

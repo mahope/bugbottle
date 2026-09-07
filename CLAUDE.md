@@ -156,7 +156,7 @@ used to be one `setItem`. `bugbottle/vue` and `bugbottle/svelte` are budgeted
 at 1536 bytes each, but *marginally*: a bundle of either weighs about 5.4 kB,
 nearly all of it the capture, the picker and the send that any form pays for,
 so CI subtracts a bundle of `buildReport`/`sendReport`/`captureScreenshot`/
-`pickElement` and checks the difference. The IIFE budget is 18432 bytes gzipped
+`pickElement` and checks the difference. The IIFE budget is 19456 bytes gzipped
 (about 18 kB with the queue, the triggers, the accessibility pass and the 0.6
 evidence); masking, the queue and the triggers each cost it roughly half a
 kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35.
