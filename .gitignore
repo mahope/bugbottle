@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 .claude/
 site/docs/
+site/compare/
+site/da/sammenlign/
+site/sitemap.xml
+site/robots.txt

@@ -9,6 +9,21 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- A "Compared with" page on the site, in English at `/compare/` and in Danish
+  at `/da/sammenlign/`, placing bugbottle next to Marker.io, Jam, Sentry User
+  Feedback, BugPin and rrweb: licence, hosted or your own endpoint, what each
+  captures, what it weighs and what it costs, with every figure dated
+  September 2026 and linked to the page it came from, and a paragraph on when
+  to pick one of the others. Written as Markdown in `site/compare.md` and
+  `site/da/sammenlign.md` and rendered by `scripts/build-docs.mjs`, so it is
+  generated and gitignored like the documentation. Linked from both landing
+  page footers and from the About group of the documentation sidebar.
+- `site/sitemap.xml` and `site/robots.txt`, written by the same script: every
+  page as an absolute `https://bugbottle.dev` URL, `hreflang` alternates on
+  the two pairs that exist in both languages, and a `Sitemap:` line in a
+  robots file that allows everything. Generated rather than hand-written, so a
+  new documentation page cannot be left out of them; nginx serves the sitemap
+  as `application/xml` and the robots file as `text/plain`.
 - `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
   a composable over refs. `type` and `message` are writable computeds, so
   `v-model` binds to them; the subscription is torn down with the effect scope
@@ -117,6 +132,11 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- The OpenGraph picture is redrawn in the site's light palette: the pale green
+  ground and bottle green ink of the page itself, the seal red kept for the
+  four marks it carries there. A link preview is pasted into a timeline that
+  already chose a background, and the first visit it promises is the light
+  one. `site/og.svg` is the source, re-rendered to `site/og.png` at 1200x630.
 - `useBugReport` from `bugbottle/react` is now a thin wrapper over
   `createReportState`, subscribed with `useSyncExternalStore`. No behaviour
   changed — the hook's tests are untouched and still pass — and the returned

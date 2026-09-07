@@ -4,31 +4,37 @@
     site/README.md. Kept in the repository so the picture can be corrected
     without redrawing it, and because it is the only place the page's colours
     appear outside style.css.
+
+    It is set in the page's light palette rather than its dark one: a link
+    preview is pasted into a chat or a timeline that has already picked a
+    background, and the pale ground is what the site looks like on the first
+    visit. The dark panel in the middle is the report card, which is the one
+    place the page is dark as well.
   -->
-  <rect width="1200" height="630" fill="#0d2a24"/>
+  <rect width="1200" height="630" fill="#edf0ec"/>
 
   <!-- The margin rule the page itself is laid out on. -->
-  <rect x="96" y="0" width="1" height="630" fill="#21473f"/>
-  <rect x="92" y="118" width="9" height="9" fill="#a8102b"/>
+  <rect x="96" y="0" width="1" height="630" fill="#d3dcd6"/>
+  <rect x="92" y="118" width="9" height="9" fill="#c22a44"/>
 
   <!-- Wordmark -->
   <g transform="translate(136 96)">
     <path d="M13 6h6v3.6l3.6 6.2A4 4 0 0 1 23 17.8V26a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3v-8.2c0-.7.2-1.4.5-2L13 9.6z" fill="#a8102b" transform="translate(0 6) scale(1.35)"/>
-    <rect x="12.5" y="2" width="7" height="4" rx="1" fill="#d7e5df" transform="translate(0 6) scale(1.35)"/>
-    <text x="56" y="38" fill="#ffffff" font-size="38" font-weight="700" letter-spacing="-1.4">bugbottle</text>
+    <rect x="12.5" y="2" width="7" height="4" rx="1" fill="#0f2f2a" transform="translate(0 6) scale(1.35)"/>
+    <text x="56" y="38" fill="#0f2f2a" font-size="38" font-weight="700" letter-spacing="-1.4">bugbottle</text>
   </g>
 
-  <text x="136" y="228" fill="#ffffff" font-size="62" font-weight="700" letter-spacing="-2.4">Bug reports that arrive</text>
-  <text x="136" y="296" fill="#ffffff" font-size="62" font-weight="700" letter-spacing="-2.4">with the evidence attached.</text>
+  <text x="136" y="228" fill="#0f2f2a" font-size="62" font-weight="700" letter-spacing="-2.4">Bug reports that arrive</text>
+  <text x="136" y="296" fill="#0f2f2a" font-size="62" font-weight="700" letter-spacing="-2.4">with the evidence attached.</text>
 
-  <text x="136" y="356" fill="#9dc4b8" font-size="27" font-weight="400">Your UI, your endpoint, a few kilobytes.</text>
+  <text x="136" y="356" fill="#4a635d" font-size="27" font-weight="400">Your UI, your endpoint, a few kilobytes.</text>
 
   <!-- The report card, in the state the page animates it into. -->
   <g transform="translate(136 392)">
-    <rect x="0" y="0" width="928" height="166" rx="10" fill="#041310" stroke="#21473f"/>
-    <circle cx="24" cy="30" r="5" fill="#a8102b"/>
+    <rect x="0" y="0" width="928" height="166" rx="10" fill="#0f2f2a"/>
+    <circle cx="24" cy="30" r="5" fill="#c22a44"/>
     <text x="42" y="36" fill="#d7e5df" font-size="17" font-family="Consolas, monospace">report.json</text>
-    <rect x="0" y="52" width="928" height="1" fill="#21473f"/>
+    <rect x="0" y="52" width="928" height="1" fill="#26514a"/>
 
     <text x="24" y="86" fill="#86c9b4" font-size="17" font-family="Consolas, monospace">message</text>
     <text x="152" y="88" fill="#ffffff" font-size="22" font-family="Georgia, serif">The save button does nothing.</text>
@@ -39,9 +45,9 @@
     <text x="24" y="150" fill="#86c9b4" font-size="17" font-family="Consolas, monospace">console</text>
     <text x="152" y="150" fill="#ff9f8d" font-size="17" font-family="Consolas, monospace">TypeError: cannot read total of undefined</text>
 
-    <rect x="812" y="114" width="92" height="32" rx="5" fill="#a8102b"/>
+    <rect x="812" y="114" width="92" height="32" rx="5" fill="#c22a44"/>
     <text x="858" y="136" fill="#ffffff" font-size="17" font-weight="700" font-family="Consolas, monospace" text-anchor="middle">201</text>
   </g>
 
-  <text x="136" y="596" fill="#6f978a" font-size="21">MIT licence. Zero dependencies. Built by Mahope.</text>
+  <text x="136" y="596" fill="#4a635d" font-size="21">MIT licence. Zero dependencies. Built by Mahope.</text>
 </svg>
