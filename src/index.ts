@@ -25,6 +25,13 @@ export {
 } from "./capture.ts";
 
 export {
+  DEFAULT_BLOCK_SELECTOR,
+  DEFAULT_MASK_COLOUR,
+  DEFAULT_MASK_SELECTOR,
+  type MaskOptions,
+} from "./mask.ts";
+
+export {
   pickElement,
   describeElement,
   buildSelector,

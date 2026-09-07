@@ -5,9 +5,9 @@ Short version. The reasoning is in `research-features.md` and
 
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
-bare core under 1 kB gzipped, `bugbottle/react` under 4 kB, `bugbottle/ui`
+bare core under 1 kB gzipped, `bugbottle/react` under 5 kB, `bugbottle/ui`
 under 8 kB, `bugbottle/breadcrumbs` under 1.5 kB, the script-tag build under
-12 kB.
+13 kB.
 
 ## Already shipped
 
@@ -25,6 +25,11 @@ auto-mount, screenshot scale chosen up front with `onCapture` timing, email
 strings in every locale, hook tests on happy-dom, the landing page at
 bugbottle.dev in English and Danish.
 
+**Unreleased** — screenshot masking: field values, `contenteditable` text,
+`data-bugbottle-mask` text and `data-bugbottle-block` regions are hidden while
+the picture is taken and restored afterwards, on by default, `mask: false` to
+switch it off. rrweb's attribute names.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -34,8 +39,6 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 - **Network log** — patch `fetch`/`XMLHttpRequest`; method, URL, status,
   duration, sizes; no bodies by default. Its own entry point, scrubbed by the
   same pipeline as everything else.
-- **Input masking** in screenshots — `data-bugbottle-mask` / `-block`
-  attributes, `maskAllInputs` default on. Same conventions as rrweb.
 - **Stack normalisation** for uncaught errors — `{ file, line, col, fn }`
   frames alongside the raw stack.
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in

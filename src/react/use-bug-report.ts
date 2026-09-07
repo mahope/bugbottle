@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { captureScreenshot, ScreenshotTooLargeError, type ScreenshotRenderer } from "../capture.ts";
+import {
+  captureScreenshot,
+  ScreenshotTooLargeError,
+  type CaptureOptions,
+  type ScreenshotRenderer,
+} from "../capture.ts";
 import { pickElement as pickElementFromPage } from "../element-picker.ts";
 import { MAX_ELEMENTS, REPORT_TYPES, type ElementRef, type ReportType } from "../report-core.ts";
 import { buildReport, sendReport, type BuildReportInput, type SendOptions } from "../send.ts";
@@ -45,6 +50,13 @@ export type UseBugReportOptions = {
   screenshotFor?: (type: ReportType) => boolean;
   /** Attach the recorded console errors for this type. Defaults to bugs only. */
   consoleFor?: (type: ReportType) => boolean;
+  /**
+   * What to hide in the screenshot. Field values, `contenteditable` text and
+   * the `data-bugbottle-mask` / `data-bugbottle-block` regions are masked by
+   * default; pass an object to narrow it, or `false` to photograph the page as
+   * the reporter sees it. See `CaptureOptions["mask"]`.
+   */
+  mask?: CaptureOptions["mask"];
   /** Extra fields to send alongside the report. */
   extra?: Record<string, unknown>;
   /** Extra request headers — an auth token, a CSRF header. */
@@ -119,7 +131,7 @@ export function useBugReport(options: UseBugReportOptions) {
     capturing.current = true;
     setStatus({ kind: "capturing" });
     try {
-      setScreenshot(await captureScreenshot(renderer));
+      setScreenshot(await captureScreenshot(renderer, { mask: latest.current.mask }));
       setStatus({ kind: "idle" });
     } catch (err) {
       // A failed picture must never block the report, so this only turns the
