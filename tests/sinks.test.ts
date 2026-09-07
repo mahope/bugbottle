@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sendReportEmail } from "../src/sinks/resend.ts";
 import { sendReportWebhook, DISCORD_MAX_CONTENT } from "../src/sinks/webhook.ts";
+import { createGithubIssue } from "../src/sinks/github.ts";
 import { SinkError } from "../src/sinks/error.ts";
 import { da } from "../src/locales.ts";
 
@@ -212,4 +213,99 @@ test("a refused webhook becomes a SinkError", async () => {
       return true;
     },
   );
+});
+
+test("the issue is opened on the named repository with the documented headers", async () => {
+  const { fetch, calls } = fakeFetch(201, {
+    number: 41,
+    html_url: "https://github.com/acme/app/issues/41",
+  });
+  const result = await createGithubIssue(report, {
+    token: "ghp_test_token",
+    owner: "acme",
+    repo: "app",
+    fetch,
+  });
+
+  assert.deepEqual(result, { number: 41, url: "https://github.com/acme/app/issues/41" });
+  assert.equal(calls[0]?.url, "https://api.github.com/repos/acme/app/issues");
+  assert.equal(calls[0]?.init.method, "POST");
+  assert.equal(headerOf(calls[0]!.init, "Authorization"), "Bearer ghp_test_token");
+  assert.equal(headerOf(calls[0]!.init, "Accept"), "application/vnd.github+json");
+  assert.equal(headerOf(calls[0]!.init, "X-GitHub-Api-Version"), "2022-11-28");
+  assert.equal(headerOf(calls[0]!.init, "User-Agent"), "bugbottle");
+
+  const body = sentBody(calls);
+  assert.equal(body.title, "Bug: The save button does nothing");
+  assert.match(String(body.body), /## Bug: The save button does nothing/);
+  assert.match(String(body.body), /`\/orders\/91`/);
+  assert.equal("labels" in body, false, "no labels key when none were asked for");
+});
+
+test("labels are passed along and an explicit title wins", async () => {
+  const { fetch, calls } = fakeFetch(201, { number: 7, html_url: "https://example.com/7" });
+  await createGithubIssue(report, {
+    token: "t",
+    owner: "acme",
+    repo: "app",
+    labels: ["bug", "from-bugbottle"],
+    title: "Something specific",
+    fetch,
+  });
+
+  const body = sentBody(calls);
+  assert.deepEqual(body.labels, ["bug", "from-bugbottle"]);
+  assert.equal(body.title, "Something specific");
+});
+
+test("a screenshot url is linked in the issue body", async () => {
+  const { fetch, calls } = fakeFetch(201, { number: 8, html_url: "https://example.com/8" });
+  await createGithubIssue(report, {
+    token: "t",
+    owner: "acme",
+    repo: "app",
+    screenshotUrl: "https://files.example.com/shots/abc.png",
+    fetch,
+  });
+
+  // The API cannot take an attachment, so the address you stored it at is the
+  // only way the picture reaches the issue.
+  assert.match(String(sentBody(calls).body), /https:\/\/files\.example\.com\/shots\/abc\.png/);
+});
+
+test("a rejected token becomes a SinkError carrying the status and body", async () => {
+  const { fetch } = fakeFetch(401, { message: "Bad credentials" });
+  await assert.rejects(
+    () => createGithubIssue(report, { token: "expired", owner: "acme", repo: "app", fetch }),
+    (err: unknown) => {
+      assert.ok(err instanceof SinkError);
+      assert.equal(err.name, "SinkError");
+      assert.equal(err.status, 401);
+      assert.equal(err.message, "Bad credentials");
+      assert.deepEqual(err.body, { message: "Bad credentials" });
+      return true;
+    },
+  );
+});
+
+test("a malformed report is still filed, with a fallback title", async () => {
+  const { fetch, calls } = fakeFetch(201, { number: 9, html_url: "https://example.com/9" });
+  const result = await createGithubIssue(
+    { type: 42, message: null, console: "not an array" },
+    { token: "t", owner: "acme", repo: "app", fetch },
+  );
+
+  assert.equal(result.number, 9);
+  assert.equal(sentBody(calls).title, "Feedback: Feedback");
+});
+
+test("a github answer without a number resolves rather than failing", async () => {
+  const { fetch } = fakeFetch(201, "created");
+  const result = await createGithubIssue(report, {
+    token: "t",
+    owner: "acme",
+    repo: "app",
+    fetch,
+  });
+  assert.deepEqual(result, { number: undefined, url: undefined });
 });

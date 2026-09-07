@@ -32,6 +32,12 @@ export {
 } from "../sinks/webhook.ts";
 
 export {
+  createGithubIssue,
+  type CreateGithubIssueOptions,
+  type CreateGithubIssueResult,
+} from "../sinks/github.ts";
+
+export {
   decodeScreenshotDataUrl,
   InvalidScreenshotError,
   isReportType,
