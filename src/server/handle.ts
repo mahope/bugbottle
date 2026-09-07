@@ -403,13 +403,24 @@ async function runSink(
   ctx: SinkContext,
   timeoutMs: number,
 ): Promise<void> {
-  const signal = AbortSignal.timeout(timeoutMs);
+  // A plain timer rather than AbortSignal.timeout: on Node 22 that signal's
+  // timer does not keep the event loop alive, so a hung sink in a process with
+  // nothing else pending would end the process before the deadline fired.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const expiry = new Promise<never>((_, reject) => {
-    signal.addEventListener("abort", () => reject(new SinkTimeoutError(timeoutMs)), { once: true });
+    timer = setTimeout(() => {
+      controller.abort(new SinkTimeoutError(timeoutMs));
+      reject(new SinkTimeoutError(timeoutMs));
+    }, timeoutMs);
   });
   // A sink that answers in time leaves this promise to reject into nobody.
   expiry.catch(() => {});
-  await Promise.race([sink(report, { ...ctx, signal }), expiry]);
+  try {
+    await Promise.race([sink(report, { ...ctx, signal: controller.signal }), expiry]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /**

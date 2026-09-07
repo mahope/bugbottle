@@ -261,13 +261,26 @@ export class SinkTimeoutError extends Error {
  * for a delivery that is explicitly not allowed to fail the reply anyway.
  */
 async function runSink(sink, report, ctx, timeoutMs) {
-    const signal = AbortSignal.timeout(timeoutMs);
+    // A plain timer rather than AbortSignal.timeout: on Node 22 that signal's
+    // timer does not keep the event loop alive, so a hung sink in a process with
+    // nothing else pending would end the process before the deadline fired.
+    const controller = new AbortController();
+    let timer;
     const expiry = new Promise((_, reject) => {
-        signal.addEventListener("abort", () => reject(new SinkTimeoutError(timeoutMs)), { once: true });
+        timer = setTimeout(() => {
+            controller.abort(new SinkTimeoutError(timeoutMs));
+            reject(new SinkTimeoutError(timeoutMs));
+        }, timeoutMs);
     });
     // A sink that answers in time leaves this promise to reject into nobody.
     expiry.catch(() => { });
-    await Promise.race([sink(report, { ...ctx, signal }), expiry]);
+    try {
+        await Promise.race([sink(report, { ...ctx, signal: controller.signal }), expiry]);
+    }
+    finally {
+        if (timer !== undefined)
+            clearTimeout(timer);
+    }
 }
 /**
  * Turns an incoming request into a stored, delivered report and a `Response`.
