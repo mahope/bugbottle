@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.6.0 — 2026-09-07
+
 The adoptable release: one form state shared by React, Vue and Svelte; a
 panel that a keyboard and a screen reader can use; the offline queue; a
 keyboard shortcut and an opt-in open-on-error; stack frames and a wider page
