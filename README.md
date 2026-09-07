@@ -384,6 +384,63 @@ page returned as HTML, or a 40 MB payload never reaches your storage.
 If your response has an `id` field, the client hands it to `onSent`. If a
 failed response has an `error` or `message` field, it is shown to the reporter.
 
+## Sending it somewhere
+
+Storing the report is one thing; seeing it is another. Two sinks live in
+`bugbottle/server`, both a formatter over one `fetch` call, both with no
+dependency of their own. Neither reads your environment: the key and the URL
+are arguments, so it is visible at the call site where the secret came from —
+and so nothing can drift into a browser bundle.
+
+`sendReportEmail` posts to Resend. It renders the report with `toMarkdown`,
+attaches the decoded screenshot as `screenshot.png` when you pass the bytes,
+and returns the message id:
+
+```ts
+import { decodeScreenshotDataUrl, sendReportEmail } from "bugbottle/server";
+import { da } from "bugbottle/locales";
+
+export async function POST(req: Request) {
+  const payload = await req.json();
+  // …validate as above, then store what you keep…
+
+  await sendReportEmail(payload, {
+    apiKey: process.env.RESEND_API_KEY!,   // your configuration, not the library's
+    from: "bugs@example.com",
+    to: "team@example.com",
+    screenshot: screenshot ?? undefined,   // from decodeScreenshotDataUrl
+    locale: da,                            // subject and intro in Danish
+  });
+
+  return Response.json({ id }, { status: 201 });
+}
+```
+
+The subject comes from the report's title and the locale, unless you pass
+`subject` yourself. The body is the Markdown, with a minimal HTML version
+beside it.
+
+`sendReportWebhook` posts to anything with a URL. `json` sends the report as it
+arrived plus a `markdown` field, which is what Make, n8n and your own intake
+endpoint want; `slack` sends `{ text }` and `discord` sends `{ content }`,
+clipped to the 2000 characters Discord accepts:
+
+```ts
+import { sendReportWebhook } from "bugbottle/server";
+
+await sendReportWebhook(payload, { url: process.env.SLACK_WEBHOOK_URL!, format: "slack" });
+await sendReportWebhook(payload, { url: process.env.DISCORD_WEBHOOK_URL!, format: "discord" });
+await sendReportWebhook(payload, {
+  url: process.env.INTAKE_URL!,
+  headers: { "X-Token": process.env.INTAKE_TOKEN! },
+});
+```
+
+Both throw `SinkError`, carrying the HTTP status and the response body, when
+the service answers with anything but success. Catch it around the sink rather
+than around the whole handler: a report you have already stored should not be
+lost to a chat webhook that was revoked last week.
+
 ## Please read this part
 
 A screenshot of your application contains whatever the reporter could see. In a
@@ -447,11 +504,13 @@ Requires `html-to-image`.
 `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
-`locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts` types.
+`locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,
+`EmailTexts` types.
 
 **`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`, `isReportType`,
-`toMarkdown`, `InvalidScreenshotError`, `REPORT_TYPES` and the `MAX_*` limits.
+`toMarkdown`, `sendReportEmail`, `sendReportWebhook`, `InvalidScreenshotError`,
+`SinkError`, `REPORT_TYPES` and the `MAX_*` limits.
 
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any
 evergreen browser on the client.

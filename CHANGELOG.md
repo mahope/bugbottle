@@ -7,6 +7,22 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `sendReportEmail(report, options)` in `bugbottle/server`: renders the report
+  with `toMarkdown` and emails it through Resend — subject from the report
+  title and the locale, text and a minimal HTML body, the decoded screenshot
+  attached as `screenshot.png`. The API key is an argument; the sink never
+  reads the environment itself.
+- `sendReportWebhook(report, options)` in `bugbottle/server`: posts the report
+  to a webhook as `json` (the report plus a `markdown` field), `slack`
+  (`{ text }`) or `discord` (`{ content }`, clipped to 2000 characters).
+- `SinkError`, thrown by both sinks with the HTTP status and the response body
+  when the service answers with anything but success.
+- An `email` key on every bundled `Locale` (`subject` with a `{title}`
+  placeholder, and `intro`), so a forwarded report is worded in the team's
+  language. `Locale` now requires it; a hand-written locale needs the key.
+
 ## 0.3.1
 
 ### Added

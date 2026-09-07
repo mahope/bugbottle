@@ -43,6 +43,18 @@ export type UiTexts = {
   thanks: string;
 };
 
+/**
+ * The wording of a report sent on by email — read by whoever receives it, not
+ * by the reporter, but written in the same language so a Danish team is not
+ * handed an English subject line.
+ */
+export type EmailTexts = {
+  /** Subject line. `{title}` is replaced with the report's title. */
+  subject: string;
+  /** One line above the rendered report. */
+  intro: string;
+};
+
 export type Locale = {
   /** BCP 47 tag, set on the panel's `lang` attribute. */
   code: string;
@@ -50,6 +62,7 @@ export type Locale = {
   dir?: "ltr" | "rtl";
   messages: Messages;
   ui: UiTexts;
+  email: EmailTexts;
 };
 
 /**
@@ -85,6 +98,10 @@ export const en: Locale = {
     close: "Close",
     thanks: "Thank you. We have received your report.",
   },
+  email: {
+    subject: "New report: {title}",
+    intro: "A new report arrived from your application. The details are below.",
+  },
 };
 
 export const da: Locale = {
@@ -113,6 +130,10 @@ export const da: Locale = {
     sending: "Sender…",
     close: "Luk",
     thanks: "Tak. Vi har modtaget din rapport.",
+  },
+  email: {
+    subject: "Ny rapport: {title}",
+    intro: "Der er kommet en ny rapport fra din applikation. Detaljerne står nedenfor.",
   },
 };
 
@@ -143,6 +164,10 @@ export const sv: Locale = {
     close: "Stäng",
     thanks: "Tack. Vi har tagit emot din rapport.",
   },
+  email: {
+    subject: "Ny rapport: {title}",
+    intro: "En ny rapport har kommit från din applikation. Detaljerna står nedan.",
+  },
 };
 
 export const nb: Locale = {
@@ -171,6 +196,10 @@ export const nb: Locale = {
     sending: "Sender…",
     close: "Lukk",
     thanks: "Takk. Vi har mottatt rapporten din.",
+  },
+  email: {
+    subject: "Ny rapport: {title}",
+    intro: "Det har kommet en ny rapport fra applikasjonen din. Detaljene står nedenfor.",
   },
 };
 
@@ -201,6 +230,10 @@ export const de: Locale = {
     close: "Schließen",
     thanks: "Danke. Wir haben Ihre Meldung erhalten.",
   },
+  email: {
+    subject: "Neue Meldung: {title}",
+    intro: "Aus Ihrer Anwendung ist eine neue Meldung eingegangen. Die Einzelheiten stehen unten.",
+  },
 };
 
 export const nl: Locale = {
@@ -229,6 +262,10 @@ export const nl: Locale = {
     sending: "Verzenden…",
     close: "Sluiten",
     thanks: "Bedankt. We hebben je melding ontvangen.",
+  },
+  email: {
+    subject: "Nieuwe melding: {title}",
+    intro: "Er is een nieuwe melding uit je applicatie binnengekomen. De details staan hieronder.",
   },
 };
 
@@ -259,6 +296,10 @@ export const fr: Locale = {
     close: "Fermer",
     thanks: "Merci. Nous avons bien reçu votre signalement.",
   },
+  email: {
+    subject: "Nouveau signalement : {title}",
+    intro: "Un nouveau signalement est arrivé depuis votre application. Les détails sont ci-dessous.",
+  },
 };
 
 export const es: Locale = {
@@ -287,6 +328,10 @@ export const es: Locale = {
     sending: "Enviando…",
     close: "Cerrar",
     thanks: "Gracias. Hemos recibido tu informe.",
+  },
+  email: {
+    subject: "Nuevo informe: {title}",
+    intro: "Ha llegado un nuevo informe desde tu aplicación. Los detalles están abajo.",
   },
 };
 

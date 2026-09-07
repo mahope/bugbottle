@@ -42,7 +42,7 @@ export {
 
 export { toMarkdown, type MarkdownOptions } from "./markdown.ts";
 
-export { type Locale, type Messages, type UiTexts } from "./locales.ts";
+export { type Locale, type Messages, type UiTexts, type EmailTexts } from "./locales.ts";
 
 export {
   REPORT_TYPES,
