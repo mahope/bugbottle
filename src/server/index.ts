@@ -13,6 +13,35 @@
 
 export { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 
+// The fast path over the validators below: one call from `Request` to
+// `Response`. Importing it is opt-in, so an integrator who only wants the
+// validators does not bundle the sinks it reaches for.
+export {
+  handleReport,
+  validateReport,
+  collectExtra,
+  resetRateLimits,
+  toResend,
+  toWebhook,
+  toGithub,
+  DEFAULT_MAX_BODY_BYTES,
+  MAX_EXTRA_KEYS,
+  MAX_EXTRA_STRING_LENGTH,
+  EMPTY_MESSAGE_ERROR,
+  type HandleReportOptions,
+  type HandleReportResult,
+  type RateLimitOptions,
+  type ReportSink,
+  type SinkContext,
+  type ValidatedReport,
+} from "./handle.ts";
+
+export {
+  expressHandler,
+  type ExpressRequestLike,
+  type ExpressResponseLike,
+} from "./express.ts";
+
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.
 export { SinkError, type FetchLike } from "../sinks/error.ts";
