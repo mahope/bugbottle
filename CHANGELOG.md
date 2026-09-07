@@ -17,7 +17,12 @@ change the API; the changelog says so when they do.
 - `sendReportWebhook(report, options)` in `bugbottle/server`: posts the report
   to a webhook as `json` (the report plus a `markdown` field), `slack`
   (`{ text }`) or `discord` (`{ content }`, clipped to 2000 characters).
-- `SinkError`, thrown by both sinks with the HTTP status and the response body
+- `createGithubIssue(report, options)` in `bugbottle/server`: files the report
+  as a GitHub issue with the `toMarkdown` body, optional `labels` and a title
+  from the report type and its first line, and resolves with `{ number, url }`.
+  The issues API cannot take an attachment, so a screenshot has to be stored by
+  you and passed as `screenshotUrl` to be linked from the body.
+- `SinkError`, thrown by every sink with the HTTP status and the response body
   when the service answers with anything but success.
 - An `email` key on every bundled `Locale` (`subject` with a `{title}`
   placeholder, and `intro`), so a forwarded report is worded in the team's

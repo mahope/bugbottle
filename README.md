@@ -388,11 +388,11 @@ failed response has an `error` or `message` field, it is shown to the reporter.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Two sinks live in
-`bugbottle/server`, both a formatter over one `fetch` call, both with no
-dependency of their own. Neither reads your environment: the key and the URL
-are arguments, so it is visible at the call site where the secret came from —
-and so nothing can drift into a browser bundle.
+Storing the report is one thing; seeing it is another. Three sinks live in
+`bugbottle/server`, each a formatter over one `fetch` call, none with a
+dependency of its own. None of them reads your environment: the key, the URL
+and the token are arguments, so it is visible at the call site where the secret
+came from — and so nothing can drift into a browser bundle.
 
 `sendReportEmail` posts to Resend. It renders the report with `toMarkdown`,
 attaches the decoded screenshot as `screenshot.png` when you pass the bytes,
@@ -438,10 +438,37 @@ await sendReportWebhook(payload, {
 });
 ```
 
-Both throw `SinkError`, carrying the HTTP status and the response body, when
-the service answers with anything but success. Catch it around the sink rather
-than around the whole handler: a report you have already stored should not be
-lost to a chat webhook that was revoked last week.
+`createGithubIssue` files the report as an issue, which for a small team is
+the whole backend: the report lands in the same list as everything else that is
+broken, with the same labels and the same search. A fine-grained token with
+issues write on the one repository is enough:
+
+```ts
+import { createGithubIssue } from "bugbottle/server";
+
+const { number, url } = await createGithubIssue(payload, {
+  token: process.env.GITHUB_TOKEN!,
+  owner: "acme",
+  repo: "app",
+  labels: ["bug", "from-bugbottle"],
+  screenshotUrl,                         // where you stored the picture
+});
+```
+
+The title is the report's type and its first line — `Bug: The save button does
+nothing` — unless you pass `title` yourself, and the body is the Markdown.
+
+The GitHub API cannot take an attachment: pictures in an issue body are
+uploads made by the web editor, and there is no public endpoint for that. So
+the screenshot has to be stored by you first, and `screenshotUrl` links to it
+from the body. Anyone who can read the issue then follows that link, which
+means the storage decision below is the one that matters — a link out of an
+issue is only as private as the address it points at.
+
+All three throw `SinkError`, carrying the HTTP status and the response body,
+when the service answers with anything but success. Catch it around the sink
+rather than around the whole handler: a report you have already stored should
+not be lost to a chat webhook that was revoked last week.
 
 ## Please read this part
 
