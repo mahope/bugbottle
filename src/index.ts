@@ -42,9 +42,6 @@ export {
 
 export { toMarkdown, type MarkdownOptions } from "./markdown.ts";
 
-<<<<<<< HEAD
-export { type Locale, type Messages, type UiTexts, type EmailTexts } from "./locales.ts";
-=======
 // Its own module, imported by nothing else here, so a bundler drops it whole
 // when the integrator does not scrub. See src/scrub.ts.
 export {
@@ -56,8 +53,7 @@ export {
   type ScrubberName,
 } from "./scrub.ts";
 
-export { type Locale, type Messages, type UiTexts } from "./locales.ts";
->>>>>>> issue-13-scrubber
+export { type Locale, type Messages, type UiTexts, type EmailTexts } from "./locales.ts";
 
 export {
   REPORT_TYPES,
