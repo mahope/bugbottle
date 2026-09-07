@@ -35,6 +35,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # The IIFE is already in dist/ after the build — esbuild made it there —
+      # so it only has to be weighed, not bundled again.
+      - name: The one-script-tag bundle stays under its budget
+        run: |
+          set -e
+          iife=$(gzip -c dist/bugbottle.js | wc -c)
+          echo "dist/bugbottle.js: $iife bytes gzipped"
+          if [ "$iife" -gt 12288 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 12288" >&2
+            exit 1
+          fi
       - run: npm pack --pack-destination /tmp
       - name: Install the tarball in a project that has no html-to-image
         run: |

@@ -203,6 +203,80 @@ when a renderer is given), the element picker, and a thank-you state. Pass
 floating one, or `trigger: false` and call `open()` yourself. About 6 kB
 gzipped, no framework.
 
+## One script tag
+
+For a site with no build step — a WordPress theme, a static page, a client
+site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
+that mounts the panel from the tag itself. About 11 kB gzipped:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.3.1/dist/bugbottle.js"
+  data-endpoint="/api/feedback"
+  data-locale="da"
+  data-primary="#e11d48"
+  data-brand="Mahope"
+></script>
+```
+
+`dist/` is committed, so the same file is on jsDelivr from the git tag as well:
+`https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.3.1/dist/bugbottle.js`. Pin a
+version in either form; `@latest` is a way to have a stranger's next release
+run on your page.
+
+| Attribute | Effect |
+|---|---|
+| `data-endpoint` | Where the report is POSTed. **Required** — without it nothing mounts. |
+| `data-locale` | Language tag through `resolveLocale`. Defaults to `<html lang>`, then English. |
+| `data-position` | `bottom-right` (default), `bottom-left`, `top-right`, `top-left`. |
+| `data-primary` | Accent colour of the button and the primary action. |
+| `data-brand` | Name in the panel header. |
+| `data-logo` | Image URL shown before the title and on the trigger. |
+| `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
+| `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
+| `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
+
+The tag also patches the console immediately and starts breadcrumbs, so an
+error thrown before the page finishes loading is still in the report.
+
+There is no screenshot in this build. A renderer means `html-to-image`, which
+is far larger than everything else here put together, and forcing it on every
+page that only wants the panel is the wrong trade. The bundle exposes the
+building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
+`initConsoleBuffer`, `initBreadcrumbs`, `locales`, `resolveLocale`,
+`scrubReport`, `buildReport`, `sendReport`, `pickElement` and `version` — so a
+page that wants pictures can load `html-to-image` itself and call
+`window.bugbottle.mount({ endpoint, screenshot })`. Leave `data-endpoint` off
+the tag and nothing mounts on its own:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.3.1/dist/bugbottle.js"></script>
+<script>
+  window.bugbottle.initConsoleBuffer();
+  window.bugbottle.mount({
+    endpoint: "/api/feedback",
+    locale: window.bugbottle.locales.da,
+    scrub: window.bugbottle.scrubReport,
+  });
+</script>
+```
+
+**Subresource integrity.** A CDN is a third party executing code on your
+site. Pin the file with its hash so a swapped file cannot run:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.3.1/dist/bugbottle.js"
+  integrity="sha384-…"
+  crossorigin="anonymous"
+  data-endpoint="/api/feedback"
+></script>
+```
+
+jsDelivr shows the hash on the file's page, or compute it yourself:
+`curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`. The hash
+changes with every version, so it has to be updated with the version.
+
 ## Languages and branding
 
 Every string a reporter sees lives in a `Locale`: five status `messages` and
