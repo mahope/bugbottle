@@ -101,14 +101,17 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5376 bytes gzipped and `bugbottle/ui` under 9 kB (CI enforces both;
-about 5.2 kB and 9.0 kB with masking, the queued state and the triggers), and
-the bare core under 1 kB (0.8 kB). The react budget is measured on the hook
+stay under 5376 bytes gzipped and `bugbottle/ui` under 9.25 kB (CI enforces
+both; about 5.2 kB and 9.3 kB with masking, the queued state and the triggers),
+and the bare core under 1 kB (0.8 kB). The react budget is measured on the hook
 alone; `BugReportBoundary` costs about 370 bytes more for the applications that
 import it. `bugbottle/ui` moved from 8 kB to 9 kB when the panel started
-importing `bugbottle/triggers`, so a keyboard shortcut works with no wiring.
-`bugbottle/triggers` is budgeted at 1200 bytes (measures about 1130): a
-standalone 2.3 kB minified module has no compression dictionary to share.
+importing `bugbottle/triggers`, so a keyboard shortcut works with no wiring,
+and to 9.25 kB when those triggers learnt about shadow roots.
+`bugbottle/triggers` is budgeted at 1300 bytes (measures about 1265): a
+standalone 2.7 kB minified module has no compression dictionary to share, and
+the shadow-DOM fix — the composed path plus the focus chain through
+`shadowRoot.activeElement` — added about 130 bytes to the 1133 it used to be.
 `bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
 of its bundle is `buildSelector`, which an app that also points at elements
 already pays for — the marginal cost there is around 0.55 kB.
@@ -116,10 +119,14 @@ already pays for — the marginal cost there is around 0.55 kB.
 the review fixes (one `loadend` listener per instance, an era guard on
 in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
-tree-shaken away. `bugbottle/queue` is budgeted at 1024 bytes and measures
-about 1000: it imports only a type, so that number is the module itself. The
-IIFE budget is 16384 bytes gzipped (16.1 kB with the queue and the triggers); masking, the queue and the triggers each
-cost it roughly half a kilobyte to a kilobyte.
+tree-shaken away. `bugbottle/queue` is budgeted at 1330 bytes and measures
+about 1290: it imports only a type, so that number is the module itself. It was
+986 against a 1024 budget until the multi-tab fix — every write re-reads
+storage and merges by report id, and a report is claimed before it is
+delivered — which is a read-modify-write, a claim and a release where there
+used to be one `setItem`. The IIFE budget is 16640 bytes gzipped (16.5 kB with
+the queue and the triggers); masking, the queue and the triggers each cost it
+roughly half a kilobyte to a kilobyte.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

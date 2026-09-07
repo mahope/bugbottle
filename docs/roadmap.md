@@ -6,9 +6,9 @@ Short version. The reasoning is in `research-features.md` and
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1 kB gzipped, `bugbottle/react` under 5.25 kB, `bugbottle/ui`
-under 9 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
-1.3 kB, `bugbottle/queue` under 1 kB, `bugbottle/triggers` under 1.2 kB, the
-script-tag build under 15 kB.
+under 9.25 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
+1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/triggers` under 1.3 kB, the
+script-tag build under 16.25 kB.
 
 ## Already shipped
 

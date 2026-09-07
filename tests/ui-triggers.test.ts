@@ -144,15 +144,27 @@ function pressShortcut(): void {
   win.document.dispatchEvent(event);
 }
 
-test("the keyboard shortcut opens and closes the panel", () => {
+test("the keyboard shortcut opens the panel and closes it from outside the box", () => {
   const { fn } = fakeFetch();
   const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn });
-  const { panel } = parts(widget.host);
+  const { panel, textarea } = parts(widget.host);
 
   pressShortcut();
   assert.equal(panel.hidden, false);
+
+  // The panel puts the caret in its own textarea when it opens, and that
+  // textarea lives in a shadow root: the keydown is retargeted to the host on
+  // its way to the document, so `target` says "the widget" while the reporter
+  // is in fact typing. The shortcut must stay out of their way.
+  textarea.focus();
   pressShortcut();
-  assert.equal(panel.hidden, true, "the same keys close it again");
+  assert.equal(panel.hidden, false, "the caret is in the box, so the keys are the reporter's");
+
+  // Blurred, the same keys toggle again — Escape and the close button are the
+  // ways out while the box has focus.
+  textarea.blur();
+  pressShortcut();
+  assert.equal(panel.hidden, true);
 
   widget.destroy();
   pressShortcut();

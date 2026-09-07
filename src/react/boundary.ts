@@ -81,15 +81,17 @@ export type BugReportBoundaryProps = ReportErrorOptions & {
   /**
    * What to show instead of the broken subtree. `report()` sends the report and
    * resolves true when the endpoint accepted it, so a button can say "sent".
+   * `sending` is true while a send is in flight, for a button that should say
+   * "sending…" and be disabled rather than queue up a second POST.
    */
-  fallback: (error: Error, report: () => Promise<boolean>) => ReactNode;
+  fallback: (error: Error, report: () => Promise<boolean>, sending: boolean) => ReactNode;
   /** Called after a successful send, with the id the server returned. */
   onReport?: (error: Error, id: string | undefined) => void;
   /** Called when the boundary catches, and again if a send fails. */
   onError?: (error: unknown) => void;
 };
 
-type BoundaryState = { error: Error | null; componentStack: string | null };
+type BoundaryState = { error: Error | null; componentStack: string | null; sending: boolean };
 
 /**
  * Catches a render error and offers to report it.
@@ -106,7 +108,20 @@ type BoundaryState = { error: Error | null; componentStack: string | null };
  * person, and sending one on their behalf without asking is telemetry.
  */
 export class BugReportBoundary extends Component<BugReportBoundaryProps, BoundaryState> {
-  override state: BoundaryState = { error: null, componentStack: null };
+  override state: BoundaryState = { error: null, componentStack: null, sending: false };
+
+  /**
+   * The send that is in flight, or the one that succeeded. A fallback button is
+   * a button a worried person clicks twice, and the render error behind it is
+   * the same error every time: the second click must join the first send rather
+   * than start a second POST of the same report. A failed send clears this, so
+   * trying again is still possible; a successful one does not, so "sent" stays
+   * sent.
+   */
+  private inFlight: Promise<boolean> | null = null;
+
+  /** setState after unmount is a no-op React complains about. */
+  private mounted = true;
 
   static getDerivedStateFromError(error: unknown): Partial<BoundaryState> {
     return { error: error instanceof Error ? error : new Error(String(error)) };
@@ -117,9 +132,11 @@ export class BugReportBoundary extends Component<BugReportBoundaryProps, Boundar
     this.props.onError?.(error);
   }
 
-  private readonly report = async (): Promise<boolean> => {
-    const { error, componentStack } = this.state;
-    if (!error) return false;
+  override componentWillUnmount(): void {
+    this.mounted = false;
+  }
+
+  private async send(error: Error, componentStack: string | null): Promise<boolean> {
     try {
       const id = await sendRenderError(this.props, error, componentStack);
       this.props.onReport?.(error, id);
@@ -130,10 +147,27 @@ export class BugReportBoundary extends Component<BugReportBoundaryProps, Boundar
       this.props.onError?.(err);
       return false;
     }
+  }
+
+  private readonly report = (): Promise<boolean> => {
+    const { error, componentStack } = this.state;
+    if (!error) return Promise.resolve(false);
+    if (this.inFlight) return this.inFlight;
+    const attempt: Promise<boolean> = this.send(error, componentStack).then((ok) => {
+      // A failure is worth another try, so the guard is lifted again. A success
+      // is not: the report is filed, and the second click was the same click.
+      if (!ok && this.inFlight === attempt) this.inFlight = null;
+      if (this.mounted) this.setState({ sending: false });
+      return ok;
+    });
+    this.inFlight = attempt;
+    if (this.mounted) this.setState({ sending: true });
+    return attempt;
   };
 
   override render(): ReactNode {
-    if (this.state.error) return this.props.fallback(this.state.error, this.report);
+    if (this.state.error)
+      return this.props.fallback(this.state.error, this.report, this.state.sending);
     return this.props.children ?? null;
   }
 }

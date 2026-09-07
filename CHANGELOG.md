@@ -155,6 +155,51 @@ change the API; the changelog says so when they do.
 - The footer is quieter — one size down, muted throughout, links underlined
   with a hairline rather than shouting.
 
+### Fixed
+
+- `bugbottle/queue` survives a second tab. `localStorage` is shared by every
+  tab on the origin and cannot be changed atomically, and the queue read the
+  array once and wrote it back whole — so two tabs lost each other's reports,
+  flushed the same report twice, and put back reports the other had just
+  delivered. Every queued report now gets a random `id` at enqueue, and every
+  write re-reads storage and merges by that id instead of replacing the array.
+  Before a report goes out it is claimed with a `claimedAt` timestamp that
+  tells the other tabs to leave it alone for 30 seconds; a failed delivery
+  releases the claim, a successful one removes the report by id from a freshly
+  read array. Two tabs that read, decide and write within the same few
+  milliseconds can still both claim one report and send it twice — the module
+  header and the README say so, and a duplicate is the failure worth having.
+  Reports queued by 0.5 have no id and are given one derived from the time they
+  were queued, so nothing waiting in storage is lost on upgrade.
+- `bugbottle/queue` removes a delivered report by identity rather than by
+  position. `deliver` dropped `items[0]` after the `await`, by which time an
+  `enqueue` at `maxItems` may have evicted the head — and the report that was
+  thrown away was one nobody had sent.
+- `destroy()` during an in-flight flush no longer leaves the queue retrying for
+  ever. The failure that arrived after `destroy` armed a backoff timer nobody
+  would clear, which failed and armed the next one. `flush`, `retryLater` and
+  the delivery loop all check the flag now.
+- `bugbottle/queue` reads storage before it writes to it. The probe that
+  decided whether `localStorage` works was a `setItem`, so a full quota made
+  the queue behave as though there were no storage at all — including for the
+  reports an earlier visit had already stored, which is exactly the case the
+  queue exists for. The probe is a read; a write that fails still turns the
+  queue memory-only from that point on, and memory then stays the copy that
+  counts.
+- The keyboard shortcut stays out of the way of somebody typing inside a shadow
+  root — the panel's own textarea above all. A `keydown` that crosses a shadow
+  boundary is retargeted to the host, so `event.target` said "the widget" while
+  the caret was in a field; the check now reads `event.composedPath()[0]` where
+  it exists and follows `document.activeElement` down through every
+  `shadowRoot.activeElement`. One consequence is deliberate: `mod+shift+b` no
+  longer closes the panel while the caret is in its box. Escape and the close
+  button do.
+- `BugReportBoundary`'s `report()` is idempotent. A second click while a send
+  was in flight filed the same render error twice; it now joins the first send
+  and gets the same promise, a click after a successful send does nothing, and
+  a failed send can still be retried. The fallback is handed a third argument,
+  `sending`, for a button that should say so and be disabled.
+
 ## 0.5.0
 
 The receiving release: one function that takes any web Request and turns it

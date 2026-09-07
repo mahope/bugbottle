@@ -4,6 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { fingerprint, stableHash } from "../src/fingerprint.ts";
 import {
   DEFAULT_SHORTCUT,
+  deepActiveElement,
   describeUncaught,
   isEditableTarget,
   matchesShortcut,
@@ -271,4 +272,101 @@ test("the first console error is part of the identity, and warnings are not", ()
 test("a fingerprint survives a malformed report", () => {
   assert.equal(typeof fingerprint({}), "string");
   assert.equal(fingerprint({ type: 7, message: null, console: "nonsense" }), fingerprint({}));
+});
+
+/**
+ * A shadow root hides the reporter from a listener on the document twice over:
+ * the event is retargeted to the host on its way out, and `document.activeElement`
+ * stops at the host as well. The panel this package ships lives in one, so the
+ * shortcut used to fire straight through somebody typing in its own textarea.
+ */
+test("a keydown retargeted to a shadow host is read from the composed path", () => {
+  const { host, emit } = fakeHost();
+  const input = { tagName: "INPUT" };
+  const shadowHost = { tagName: "BB-WIDGET" };
+  let opened = 0;
+  const off = onShortcut("mod+shift+b", () => (opened += 1), { target: host, mac: false });
+
+  // What a browser hands a document-level listener for a keystroke that started
+  // inside a shadow tree: the target is the host, the path still has the input.
+  const fromInput = { ...keydown({ ctrlKey: true, shiftKey: true, target: shadowHost }) };
+  emit("keydown", { ...fromInput, composedPath: () => [input, shadowHost] });
+  assert.equal(opened, 0, "the composed path knows the reporter is in a field");
+
+  emit("keydown", { ...fromInput, composedPath: () => [shadowHost] });
+  assert.equal(opened, 1, "and lets the keystroke through when they are not");
+  off();
+});
+
+test("the focus chain is followed through shadow roots", () => {
+  const inner = { tagName: "TEXTAREA", isConnected: true };
+  const shadowHost = {
+    tagName: "BB-WIDGET",
+    isConnected: true,
+    shadowRoot: { activeElement: inner },
+  };
+  assert.equal(deepActiveElement({ activeElement: shadowHost }), inner);
+  // A host whose shadow tree has no focus of its own is itself the answer.
+  const unfocused = { ...shadowHost, shadowRoot: { activeElement: null } };
+  assert.equal(deepActiveElement({ activeElement: unfocused }), unfocused);
+  // Nothing focused, or a focused node that has been taken out of the document.
+  assert.equal(deepActiveElement({ activeElement: null }), null);
+  assert.equal(deepActiveElement({ activeElement: { tagName: "INPUT", isConnected: false } }), null);
+  assert.equal(deepActiveElement(null), null);
+});
+
+test("the shortcut does not fire while the caret is inside a shadow root", async () => {
+  const { Window } = await import("happy-dom");
+  const win = new Window();
+  const doc = win.document;
+  const shadowHost = doc.createElement("div");
+  doc.body.append(shadowHost);
+  const input = doc.createElement("input");
+  shadowHost.attachShadow({ mode: "open" }).append(input);
+
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const had = "document" in globals;
+  const previous = globals["document"];
+  globals["document"] = doc;
+  try {
+    let opened = 0;
+    const off = onShortcut("mod+shift+b", () => (opened += 1), {
+      target: doc as unknown as ListenerHost,
+      mac: false,
+    });
+    const press = (from: unknown) =>
+      (from as { dispatchEvent: (event: unknown) => unknown }).dispatchEvent(
+        new win.KeyboardEvent("keydown", {
+          key: "b",
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          composed: true,
+          cancelable: true,
+        }),
+      );
+
+    input.focus();
+    // `document.activeElement` is the host, which is not a field of any kind;
+    // only the chain through its shadow root reaches the input.
+    assert.equal((doc.activeElement as unknown as { tagName: string }).tagName, "DIV");
+
+    // The keystroke as the reporter makes it, from inside the shadow tree.
+    press(input);
+    assert.equal(opened, 0, "the reporter is typing inside the shadow tree");
+
+    // And one from elsewhere on the page while the caret is still in the box:
+    // the focus chain is what knows, because this event never went near it.
+    press(doc.body);
+    assert.equal(opened, 0, "the caret is still in the box");
+
+    input.blur();
+    press(doc.body);
+    assert.equal(opened, 1, "and the shortcut works again once they are not");
+    off();
+  } finally {
+    if (had) globals["document"] = previous;
+    else delete globals["document"];
+    await win.happyDOM.close();
+  }
 });

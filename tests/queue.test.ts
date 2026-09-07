@@ -250,6 +250,162 @@ test("coming back online and returning to the tab both flush", async () => {
   }
 });
 
+/** What is actually in the storage key, in the order it is stored. */
+function storedMessages(map: Map<string, string>): string[] {
+  const stored = JSON.parse(map.get(KEY) ?? "[]") as { body: BugReport }[];
+  return stored.map((item) => String(item.body.message));
+}
+
+/**
+ * Two tabs on the same origin share one `localStorage` and cannot change it
+ * atomically. A queue that read the array once and wrote it back whole lost the
+ * other tab's reports, sent the same one twice, and put back reports the other
+ * tab had just delivered. Each of the three has a test.
+ */
+test("two tabs queueing at once keep both reports", () => {
+  const { storage, map } = fakeStorage();
+  globals["localStorage"] = storage;
+  const tabA = makeQueue({ endpoint: "/api/feedback", fetch: fakeFetch(503).fetch });
+  const tabB = makeQueue({ endpoint: "/api/feedback", fetch: fakeFetch(503).fetch });
+
+  tabA.enqueue(report("from the first tab"));
+  tabB.enqueue(report("from the second tab"));
+
+  assert.deepEqual(storedMessages(map), ["from the first tab", "from the second tab"]);
+  assert.equal(tabB.size(), 2, "the second tab merged rather than overwrote");
+});
+
+test("two tabs do not deliver the same queued report twice", async () => {
+  const waiting = JSON.stringify([{ id: "r1", at: Date.now(), body: report("only once") }]);
+  globals["localStorage"] = fakeStorage({ [KEY]: waiting }).storage;
+  const first = fakeFetch(200);
+  const second = fakeFetch(200);
+
+  // Both tabs load, both find the same report waiting, and both flush on init.
+  makeQueue({ endpoint: "/api/feedback", fetch: first.fetch });
+  makeQueue({ endpoint: "/api/feedback", fetch: second.fetch });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.equal(
+    first.calls.length + second.calls.length,
+    1,
+    "the claim kept the other tab off a report already going out",
+  );
+});
+
+test("a report one tab has delivered is not written back by the other", async () => {
+  const { storage, map } = fakeStorage();
+  globals["localStorage"] = storage;
+  const stale = makeQueue({ endpoint: "/api/feedback", fetch: fakeFetch(503).fetch });
+  stale.enqueue(report("sent once"));
+
+  const sender = fakeFetch(200);
+  const sending = makeQueue({ endpoint: "/api/feedback", fetch: sender.fetch });
+  await sending.flush();
+  assert.equal(sender.calls.length, 1);
+  assert.equal(map.get(KEY), undefined, "delivered, so gone from storage");
+
+  // The other tab still holds the delivered report in its own memory. Nothing
+  // it writes afterwards may put it back.
+  stale.enqueue(report("written later"));
+  assert.deepEqual(storedMessages(map), ["written later"]);
+});
+
+test("destroying the queue during a flush stops it retrying for ever", async () => {
+  let fail!: () => void;
+  const calls: string[] = [];
+  const fetch = (async (_url: string, init?: RequestInit) => {
+    calls.push(String((JSON.parse(String(init?.body)) as BugReport).message));
+    await new Promise<void>((resolve) => (fail = resolve));
+    throw new TypeError("Failed to fetch");
+  }) as unknown as typeof globalThis.fetch;
+
+  const queue = makeQueue({ endpoint: "/api/feedback", fetch });
+  queue.enqueue(report("in flight"));
+  const flushing = queue.flush();
+
+  // The tab is torn down while the POST is still open. The failure that comes
+  // back used to schedule a retry, which failed and scheduled the next one.
+  const scheduled: number[] = [];
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+    scheduled.push(Number(ms ?? 0));
+    return realSetTimeout(fn, ms);
+  }) as unknown as typeof globalThis.setTimeout;
+  try {
+    queue.destroy();
+    fail();
+    await flushing;
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+
+  assert.deepEqual(scheduled, [], "no retry timer was armed after destroy");
+  await queue.flush();
+  assert.equal(calls.length, 1, "and nothing else was sent");
+});
+
+test("a report delivered while the queue shifted under it is removed by identity", async () => {
+  globals["localStorage"] = fakeStorage().storage;
+  let deliver!: () => void;
+  const sent: string[] = [];
+  const fetch = (async (_url: string, init?: RequestInit) => {
+    sent.push(String((JSON.parse(String(init?.body)) as BugReport).message));
+    if (sent.length === 1) await new Promise<void>((resolve) => (deliver = resolve));
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof globalThis.fetch;
+
+  const queue = makeQueue({ endpoint: "/api/feedback", maxItems: 2, fetch });
+  queue.enqueue(report("one"));
+  queue.enqueue(report("two"));
+  const flushing = queue.flush();
+  assert.deepEqual(sent, ["one"]);
+
+  // A third report while the first is still in flight. At maxItems that evicts
+  // the head, so the item at position 0 is no longer the one being delivered —
+  // and removing by position would throw away a report nobody has sent.
+  queue.enqueue(report("three"));
+  deliver();
+  await flushing;
+
+  assert.deepEqual(sent, ["one", "two", "three"]);
+  assert.equal(queue.size(), 0);
+});
+
+test("a storage that reads but refuses writes still delivers what it held", async () => {
+  const waiting = JSON.stringify([{ id: "r1", at: Date.now(), body: report("queued yesterday") }]);
+  const broken = fakeStorage({ [KEY]: waiting });
+  broken.break();
+  globals["localStorage"] = broken.storage;
+  const { fetch, calls } = fakeFetch(200);
+
+  const queue = makeQueue({ endpoint: "/api/feedback", fetch });
+  assert.equal(queue.size(), 1, "a full quota must not hide what is already stored");
+  await queue.flush();
+  assert.equal(calls.length, 1);
+  assert.equal((calls[0]?.body as BugReport).message, "queued yesterday");
+  assert.equal(queue.size(), 0);
+});
+
+test("a storage that breaks after the queue was made keeps the reports in memory", async () => {
+  const broken = fakeStorage();
+  globals["localStorage"] = broken.storage;
+  const { fetch, calls } = fakeFetch(200);
+  const queue = makeQueue({ endpoint: "/api/feedback", fetch });
+
+  queue.enqueue(report("while there was room"));
+  broken.break();
+  queue.enqueue(report("after the quota filled"));
+  queue.enqueue(report("and one more"));
+  assert.equal(queue.size(), 3, "storage stopped being the copy that counts");
+
+  await queue.flush();
+  assert.deepEqual(
+    calls.map((c) => (c.body as BugReport).message),
+    ["while there was room", "after the quota filled", "and one more"],
+  );
+});
+
 test("clear throws the queue away in memory and in storage", () => {
   const { storage, map } = fakeStorage();
   globals["localStorage"] = storage;
