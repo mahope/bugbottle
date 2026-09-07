@@ -378,6 +378,46 @@ h3:hover > .anchor,
   line-height: 1.5;
 }
 
+/* -------------------------------------------------------- standalone */
+
+/*
+ * The comparison pages: the same prose column, without the sidebar the
+ * documentation has. They are wider than a documentation page because the
+ * table is six columns of other people's products, and narrower than the
+ * page, because it is still prose.
+ */
+
+.docs-standalone {
+  padding-top: 2.5rem;
+  padding-bottom: 4rem;
+}
+
+/* The prose keeps the 40rem measure it has everywhere, from the rules on
+   `.docs-body p` and `.docs-body li`; the cap comes off the column itself so
+   the one table on the page can use the full page width. It is six columns of
+   other people's products and it is the point of the page, not a detail in
+   it. */
+.docs-standalone .docs-body {
+  max-width: none;
+}
+
+.docs-standalone .docs-body > table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.docs-standalone .docs-body > table td,
+.docs-standalone .docs-body > table th {
+  min-width: 8.5rem;
+  padding-right: 1rem;
+}
+
+.docs-standalone .docs-body > table td:first-child,
+.docs-standalone .docs-body > table th:first-child {
+  min-width: 7rem;
+}
+
 /* ------------------------------------------------------------ narrow */
 
 @media (max-width: 60rem) {

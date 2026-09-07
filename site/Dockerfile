@@ -22,6 +22,10 @@ RUN npm ci --ignore-scripts
 
 COPY README.md ./
 COPY scripts/build-docs.mjs ./scripts/
+# The two comparison pages are their own Markdown, not README sections, and
+# the same run writes sitemap.xml and robots.txt.
+COPY site/compare.md ./site/
+COPY site/da/sammenlign.md ./site/da/
 RUN node scripts/build-docs.mjs
 
 
@@ -29,8 +33,13 @@ FROM nginx:alpine
 
 COPY site/nginx.conf /etc/nginx/conf.d/default.conf
 COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site/og.png site/panel.png /usr/share/nginx/html/
-COPY site/da/ /usr/share/nginx/html/da/
+# Named rather than `site/da/`, so the Markdown source of the Danish
+# comparison page is not served next to the page generated from it.
+COPY site/da/index.html /usr/share/nginx/html/da/
 COPY --from=docs /build/site/docs/ /usr/share/nginx/html/docs/
+COPY --from=docs /build/site/compare/ /usr/share/nginx/html/compare/
+COPY --from=docs /build/site/da/sammenlign/ /usr/share/nginx/html/da/sammenlign/
+COPY --from=docs /build/site/sitemap.xml /build/site/robots.txt /usr/share/nginx/html/
 COPY dist/ /usr/share/nginx/html/dist/
 
 EXPOSE 80

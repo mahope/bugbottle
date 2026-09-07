@@ -1,9 +1,11 @@
 # site/
 
 The site at [bugbottle.dev](https://bugbottle.dev): a landing page in English
-at `/` and Danish at `/da/`, and the English documentation at `/docs/`. The
-landing pages are static HTML written by hand; the documentation is generated
-from the project README when the image is built. No framework, no analytics, no
+at `/` and Danish at `/da/`, the English documentation at `/docs/`, and a
+comparison page in both languages at `/compare/` and `/da/sammenlign/`. The
+landing pages are static HTML written by hand; the documentation, the
+comparison, `sitemap.xml` and `robots.txt` are generated when the image is
+built. No framework, no analytics, no
 cookies, and no external request of any kind — the fonts are the system stack
 and the favicon is an inline SVG.
 
@@ -16,6 +18,10 @@ and the favicon is an inline SVG.
 | `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
 | `docs.js` | The documentation pages only: copy buttons, and the current heading in "On this page" |
 | `docs/` | **Generated, never committed.** Written by `scripts/build-docs.mjs`; see "The documentation" below |
+| `compare.md` | The English "Compared with" page, as Markdown. The only prose on the site that is neither the landing page nor the README |
+| `da/sammenlign.md` | The same page in Danish, written for a Danish reader rather than translated |
+| `compare/`, `da/sammenlign/` | **Generated, never committed.** The two pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" below |
+| `sitemap.xml`, `robots.txt` | **Generated, never committed.** Written by the same script; see "The sitemap and robots.txt" below |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
 | `og.svg` | Source of the OpenGraph picture. Not served |
 | `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
@@ -58,8 +64,12 @@ it in sync automatically.
 ## The OpenGraph picture
 
 `og.png` is `og.svg` screenshotted at 1200x630 with headless Chrome, so the
-colours and the report card cannot drift from the page. Edit the SVG and
-render it again with the global `puppeteer-core` and Chrome:
+colours and the report card cannot drift from the page. It is drawn in the
+light palette — the pale green ground, bottle green ink, seal red on the four
+marks — because a link preview lands in a timeline that has already chosen a
+background, and the light page is the one a first visit gets. The report card
+is the only dark thing in it, exactly as on the page. Edit the SVG and render
+it again with the global `puppeteer-core` and Chrome:
 
 ```js
 const page = await browser.newPage();
@@ -116,6 +126,50 @@ falls back to a selection and `execCommand`, which is the path that check
 actually exercises — and that Windows hands the text back with CRLF line
 endings, so compare normalised.
 
+## The comparison
+
+`/compare/` and `/da/sammenlign/` place bugbottle next to Marker.io, Jam,
+Sentry User Feedback, BugPin and rrweb. They are the one page a reader weighing
+the library up is looking for, and the one page that talks about other people's
+products, which is why they live on the site and not in the package README.
+
+The text is `site/compare.md` and `site/da/sammenlign.md`, rendered by
+`scripts/build-docs.mjs` through the same Markdown renderer the documentation
+uses, with the landing page's header and footer and `docs.css`, but no sidebar
+and no previous/next: it is one long read rather than a chapter. The Danish
+page is written for a Danish reader, not translated sentence by sentence.
+
+Two rules hold the page together, and both are the point of it:
+
+- **Every claim about someone else's product links to their page**, in the
+  table cell that makes the claim. The reader should be able to check any
+  number without leaving the row it is in.
+- **The figures carry a date.** They were taken on 7 September 2026 from the
+  research in `docs/research-alternatives.md`, and the first paragraph says so.
+  Prices move; a comparison that does not say when it was true is a
+  comparison nobody can trust. Refresh both pages and the date together, or
+  leave them alone.
+
+The English page is also listed in the documentation sidebar under About,
+which is the `extras` array on that group in the script rather than a slug,
+because it is not a README section.
+
+## The sitemap and robots.txt
+
+`site/sitemap.xml` and `site/robots.txt` are written by the same script run and
+gitignored like `site/docs/`, so a new documentation page cannot be added
+without appearing in the sitemap. The sitemap lists absolute
+`https://bugbottle.dev` URLs: the two landing pages, the documentation index
+and every documentation page, and the two comparison pages. The pairs that
+exist in both languages — the landing pages, and the two comparison pages —
+carry `xhtml:link` alternates for `en`, `da` and `x-default` in both
+directions; the documentation exists in English only and carries none.
+
+`robots.txt` allows everything and names the sitemap. nginx has a location for
+each: the sitemap is served as `application/xml` (its `types { }` block empties
+the MIME map so `default_type` wins over nginx's own `text/xml`), the robots
+file as `text/plain` and unlogged.
+
 ## The copy buttons
 
 Every `.slab` on the page gets a copy button, built in `demo.js` rather than
@@ -156,7 +210,7 @@ docker build -f site/Dockerfile -t bugbottle-site .
 docker run -d -p 8089:80 --name bugbottle-site bugbottle-site
 ```
 
-Then check the four things that must answer 200:
+Then check the things that must answer 200:
 
 ```bash
 curl -si localhost:8089/ | head -1
@@ -165,6 +219,10 @@ curl -si localhost:8089/health | head -1
 curl -si localhost:8089/dist/ui/index.js | head -1
 curl -si localhost:8089/docs/ | head -1
 curl -si localhost:8089/docs/api/ | head -1
+curl -si localhost:8089/compare/ | head -1
+curl -si localhost:8089/da/sammenlign/ | head -1
+curl -si localhost:8089/sitemap.xml | head -3
+curl -si localhost:8089/robots.txt | head -3
 ```
 
 `/health` returns `ok` as `text/plain` and is not logged — it is what the

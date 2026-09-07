@@ -1,5 +1,6 @@
 /*
- * Generates site/docs/ from README.md.
+ * Generates site/docs/, the two "Compared with" pages, sitemap.xml and
+ * robots.txt.
  *
  * The README is the only copy of the documentation. Keeping a second copy
  * under site/ would mean two texts that drift apart within a release, so this
@@ -9,12 +10,25 @@
  * image, so a README edit is live the next time the site is deployed and no
  * step can be forgotten.
  *
- *   node scripts/build-docs.mjs        # writes site/docs/
+ *   node scripts/build-docs.mjs        # writes site/docs/ and the rest
  *
  * The grouping below is the one editorial decision the script makes. Every
  * top-level README section must appear in it exactly once; the build fails
  * when a new section is added and not placed, because a section nobody placed
  * is a page nobody can reach.
+ *
+ * Two pages are not README sections: site/compare.md and site/da/sammenlign.md
+ * are their own Markdown files, rendered by the same renderer into
+ * site/compare/ and site/da/sammenlign/ with the landing page's header and
+ * footer. They are the only prose on the site that is neither the landing page
+ * nor the README, because they are about other people's products and have no
+ * business in a package README.
+ *
+ * The last two files are for machines: site/sitemap.xml lists every URL the
+ * site has, with hreflang alternates on the two pairs that exist in both
+ * languages, and site/robots.txt allows everything and points at the sitemap.
+ * Both are generated here rather than written by hand so a new docs page
+ * cannot be left out of them, and both are gitignored like site/docs/.
  */
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -42,6 +56,36 @@ const INTRO = {
   navTitle: "Install",
 };
 
+/* The pages that come from their own Markdown file instead of a README
+   section. Each is a pair: the same page in the other language, linked from
+   the other with hreflang, exactly like the two landing pages. */
+const STANDALONE = [
+  {
+    id: "compare",
+    lang: "en",
+    source: join("site", "compare.md"),
+    out: join("compare"),
+    url: "/compare/",
+    title: "Compared with",
+    navTitle: "Compared with",
+    eyebrow: "About",
+    heading: "Compared with the alternatives",
+    otherUrl: "/da/sammenlign/",
+  },
+  {
+    id: "sammenlign",
+    lang: "da",
+    source: join("site", "da", "sammenlign.md"),
+    out: join("da", "sammenlign"),
+    url: "/da/sammenlign/",
+    title: "Sammenlignet med",
+    navTitle: "Sammenlignet med",
+    eyebrow: "Om",
+    heading: "Sammenlignet med alternativerne",
+    otherUrl: "/compare/",
+  },
+];
+
 /* slug -> group. The order inside a group is the order of the pages in the
    sidebar and of previous/next. */
 const GROUPS = [
@@ -60,8 +104,6 @@ const GROUPS = [
       "when-the-network-is-down",
       "the-ready-made-panel",
       "one-script-tag",
-      "opening-it-without-a-button",
-      "catching-render-errors-react",
       "languages-and-branding",
     ],
   },
@@ -97,8 +139,18 @@ const GROUPS = [
   },
   {
     title: "About",
-    blurb: "Who writes this and under which licence.",
+    blurb: "Who writes this, under which licence, and what else is out there.",
     slugs: ["who-makes-it", "licence"],
+    /* Not a README section, so it is listed here rather than in `slugs`: the
+       comparison lives on the site alone. */
+    extras: [
+      {
+        url: "/compare/",
+        navTitle: "Compared with",
+        description:
+          "Where bugbottle sits next to Marker.io, Jam, Sentry User Feedback, BugPin and rrweb.",
+      },
+    ],
   },
 ];
 
@@ -277,7 +329,7 @@ function renderer(page, anchors) {
       if (href.startsWith("#")) {
         const target = anchors.get(href.slice(1));
         href = target ?? `${BLOB}/README.md${href}`;
-      } else if (!/^[a-z]+:|^\/\//i.test(href)) {
+      } else if (!href.startsWith("/") && !/^[a-z]+:|^\/\//i.test(href)) {
         href = `${BLOB}/${href.replace(/^\.\//, "")}`;
       }
       const external = !href.startsWith(`${ORIGIN}/`) && !href.startsWith("/") && !href.startsWith("#");
@@ -293,25 +345,37 @@ function renderer(page, anchors) {
   };
 }
 
-function head(page, pages) {
-  const url = `${ORIGIN}/docs/${page.slug === INTRO.slug ? "install/" : `${page.slug}/`}`;
-  const title = page.slug === "index" ? "Documentation — bugbottle" : `${page.title} — bugbottle docs`;
+/* The <head> and the header, shared by the documentation and by the two
+   comparison pages. A page carries its own language, its canonical URL and
+   the alternates it has; a documentation page has only itself. */
+function head(page) {
+  const url =
+    page.canonical ??
+    `${ORIGIN}/docs/${page.slug === INTRO.slug ? "install/" : `${page.slug}/`}`;
+  const title =
+    page.headTitle ??
+    (page.slug === "index" ? "Documentation — bugbottle" : `${page.title} — bugbottle docs`);
+  const lang = page.lang ?? "en";
+  const alternates = (page.alternates ?? [{ hreflang: lang, href: url }])
+    .map((alt) => `<link rel="alternate" hreflang="${alt.hreflang}" href="${alt.href}">`)
+    .join("\n");
+  const ogLocale = lang === "da" ? "da_DK" : "en";
   return `<!doctype html>
-<html lang="en">
+<html lang="${lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(page.description)}">
-<link rel="canonical" href="${page.canonical ?? url}">
-<link rel="alternate" hreflang="en" href="${page.canonical ?? url}">
+<link rel="canonical" href="${url}">
+${alternates}
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 6h6v3.6l3.6 6.2A4 4 0 0 1 23 17.8V26a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3v-8.2c0-.7.2-1.4.5-2L13 9.6z' fill='%23a8102b'/%3E%3Crect x='12.5' y='2' width='7' height='4' rx='1' fill='%230d2a24'/%3E%3C/svg%3E">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="bugbottle">
-<meta property="og:url" content="${page.canonical ?? url}">
+<meta property="og:url" content="${url}">
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(page.description)}">
-<meta property="og:locale" content="en">
+<meta property="og:locale" content="${ogLocale}">
 <meta property="og:image" content="${ORIGIN}/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -325,21 +389,21 @@ function head(page, pages) {
 
 <header class="site-header">
   <div class="wrap">
-    <a class="brand" href="/">
+    <a class="brand" href="${lang === "da" ? "/da/" : "/"}">
       <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
         <path d="M13 6h6v3.6l3.6 6.2A4 4 0 0 1 23 17.8V26a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3v-8.2c0-.7.2-1.4.5-2L13 9.6z" fill="currentColor"/>
         <rect x="12.5" y="2" width="7" height="4" rx="1" fill="currentColor" opacity=".55"/>
       </svg>
       bugbottle
     </a>
-    <nav aria-label="Site">
+    <nav aria-label="${lang === "da" ? "Websted" : "Site"}">
       <a href="https://github.com/mahope/bugbottle">GitHub</a>
       <a href="https://www.npmjs.com/package/bugbottle">npm</a>
-      <a href="/docs/" aria-current="true">Docs</a>
+      <a href="/docs/"${page.docsCurrent === false ? ' hreflang="en"' : ' aria-current="true"'}>${lang === "da" ? "Dokumentation" : "Docs"}</a>
       <span class="lang">
-        <a href="/" lang="en" hreflang="en">EN</a>
+        <a href="${page.enUrl ?? "/"}" lang="en" hreflang="en"${lang === "en" && page.enUrl ? ' aria-current="page"' : ""}>EN</a>
         <span aria-hidden="true">/</span>
-        <a href="/da/" lang="da" hreflang="da">DA</a>
+        <a href="${page.daUrl ?? "/da/"}" lang="da" hreflang="da"${lang === "da" ? ' aria-current="page"' : ""}>DA</a>
       </span>
     </nav>
   </div>
@@ -347,16 +411,30 @@ function head(page, pages) {
 `;
 }
 
-const FOOT = `
+/* The same footer as the landing page, in either language, plus the link to
+   the comparison — which is the one page a reader weighing up bugbottle is
+   looking for and would otherwise never find. */
+function foot(lang) {
+  const da = lang === "da";
+  return `
 <footer>
   <div class="wrap">
-    <nav aria-label="Elsewhere">
-      <a href="${REPO}">Source on GitHub</a>
-      <a href="https://www.npmjs.com/package/bugbottle">bugbottle on npm</a>
-      <a href="${REPO}/issues">Report a problem</a>
+    <nav aria-label="${da ? "Andre steder" : "Elsewhere"}">
+      <a href="${REPO}">${da ? "Kildekoden på GitHub" : "Source on GitHub"}</a>
+      <a href="https://www.npmjs.com/package/bugbottle">${da ? "bugbottle på npm" : "bugbottle on npm"}</a>
+      <a href="${da ? "/da/sammenlign/" : "/compare/"}">${da ? "Sammenlignet med" : "Compared with"}</a>
+      <a href="${REPO}/issues">${da ? "Meld et problem" : "Report a problem"}</a>
     </nav>
-    <p>MIT licence. Written and maintained by <a href="https://mahoje.dk">Mahope</a> in Denmark.</p>
-    <p>This page sets no cookies, runs no analytics and makes no external request.</p>
+    <p>${
+      da
+        ? `MIT-licens. Skrevet og vedligeholdt af <a href="https://mahoje.dk">Mahope</a> i Danmark.`
+        : `MIT licence. Written and maintained by <a href="https://mahoje.dk">Mahope</a> in Denmark.`
+    }</p>
+    <p>${
+      da
+        ? "Siden sætter ingen cookies, kører ingen statistik og henter ingenting udefra."
+        : "This page sets no cookies, runs no analytics and makes no external request."
+    }</p>
   </div>
 </footer>
 
@@ -364,14 +442,16 @@ const FOOT = `
 </body>
 </html>
 `;
+}
 
 function sidebar(pages, currentSlug) {
   const groups = GROUPS.map((group) => {
     const items = group.slugs
       .map((slug) => pages.find((p) => p.slug === slug))
       .filter((page) => page !== undefined)
+      .concat(group.extras ?? [])
       .map((page) => {
-        const current = page.slug === currentSlug;
+        const current = page.slug !== undefined && page.slug === currentSlug;
         const mark = current ? ' aria-current="page"' : "";
         return `        <li><a href="${page.url}"${mark}>${escapeHtml(page.navTitle)}</a></li>`;
       })
@@ -407,7 +487,7 @@ function pageHtml(page, pages) {
     ? `<a class="next" href="${page.next.url}"><span>Next</span>${escapeHtml(page.next.navTitle)}</a>`
     : "";
 
-  return `${head(page, pages)}
+  return `${head(page)}
 <main class="docs-shell wrap">
 ${sidebar(pages, page.slug)}
 
@@ -419,14 +499,82 @@ ${onThisPage(page)}${page.html}
     <nav class="docs-pager" aria-label="Nearby pages">${previous}${next}</nav>
   </article>
 </main>
-${FOOT}`;
+${foot("en")}`;
 }
+
+/* A comparison page: the documentation's typography and chrome, but no
+   sidebar and no pager. It belongs to no group and has no next page — it is
+   one long read, and the sidebar would be a column of English links beside
+   the Danish one. */
+function standaloneHtml(page) {
+  return `${head(page)}
+<main class="docs-standalone wrap">
+  <article class="docs-body">
+    <p class="docs-eyebrow">${escapeHtml(page.eyebrow)}</p>
+    <h1>${escapeHtml(page.heading)}</h1>
+${page.html}
+  </article>
+</main>
+${foot(page.lang)}`;
+}
+
+/* Every URL the site serves, with the two pairs that exist in both languages
+   carrying alternates both ways. Written from the same page list the sidebar
+   is built from, so a docs page cannot be added without landing here. */
+function sitemapXml(pages) {
+  const pair = (self, other, selfLang, otherLang) => [
+    { hreflang: selfLang, href: `${ORIGIN}${self}` },
+    { hreflang: otherLang, href: `${ORIGIN}${other}` },
+    { hreflang: "x-default", href: `${ORIGIN}${selfLang === "en" ? self : other}` },
+  ];
+
+  const entries = [
+    { loc: `${ORIGIN}/`, alternates: pair("/", "/da/", "en", "da") },
+    { loc: `${ORIGIN}/da/`, alternates: pair("/da/", "/", "da", "en") },
+    { loc: `${ORIGIN}/compare/`, alternates: pair("/compare/", "/da/sammenlign/", "en", "da") },
+    {
+      loc: `${ORIGIN}/da/sammenlign/`,
+      alternates: pair("/da/sammenlign/", "/compare/", "da", "en"),
+    },
+    { loc: `${ORIGIN}/docs/`, alternates: [] },
+    ...pages.map((page) => ({ loc: `${ORIGIN}${page.url}`, alternates: [] })),
+  ];
+
+  const body = entries
+    .map((entry) => {
+      const alternates = entry.alternates
+        .map(
+          (alt) =>
+            `    <xhtml:link rel="alternate" hreflang="${alt.hreflang}" href="${escapeHtml(alt.href)}"/>`,
+        )
+        .join("\n");
+      return `  <url>\n    <loc>${escapeHtml(entry.loc)}</loc>${alternates ? `\n${alternates}` : ""}\n  </url>`;
+    })
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${body}
+</urlset>
+`;
+}
+
+/* Nothing here is private and nothing is expensive to crawl, so the file says
+   so plainly and points at the sitemap. */
+const ROBOTS = `# https://bugbottle.dev — a static site with nothing to hide.
+User-agent: *
+Allow: /
+
+Sitemap: ${ORIGIN}/sitemap.xml
+`;
 
 function indexHtml(pages) {
   const groups = GROUPS.map((group) => {
     const items = group.slugs
       .map((slug) => pages.find((p) => p.slug === slug))
       .filter((page) => page !== undefined)
+      .concat(group.extras ?? [])
       .map(
         (page) =>
           `        <li><a href="${page.url}">${escapeHtml(page.navTitle)}</a>` +
@@ -450,7 +598,7 @@ ${items}
     canonical: `${ORIGIN}/docs/`,
   };
 
-  return `${head(page, pages)}
+  return `${head(page)}
 <main class="docs-shell wrap">
 ${sidebar(pages, "index")}
 
@@ -468,7 +616,7 @@ ${groups}
     </div>
   </article>
 </main>
-${FOOT}`;
+${foot("en")}`;
 }
 
 async function main() {
@@ -482,13 +630,21 @@ async function main() {
   const found = sections.map((s) => s.slug);
   const missing = found.filter((slug) => !placed.includes(slug));
   const ghosts = placed.filter((slug) => !found.includes(slug));
-  if (missing.length > 0 || ghosts.length > 0) {
+  /* A slug placed twice used to be silent: the page was written twice, listed
+     twice in the sidebar and reached twice by previous/next, and once there is
+     a sitemap it is a duplicate URL in it. It is always a mistake, so it is a
+     build failure like the other two. */
+  const twice = [...new Set(placed.filter((slug, i) => placed.indexOf(slug) !== i))];
+  if (missing.length > 0 || ghosts.length > 0 || twice.length > 0) {
     const lines = [];
     if (missing.length > 0) {
       lines.push(`README sections with no group in scripts/build-docs.mjs: ${missing.join(", ")}`);
     }
     if (ghosts.length > 0) {
       lines.push(`Grouped slugs with no README section: ${ghosts.join(", ")}`);
+    }
+    if (twice.length > 0) {
+      lines.push(`Slugs placed in more than one group slot: ${twice.join(", ")}`);
     }
     throw new Error(lines.join("\n"));
   }
@@ -536,7 +692,43 @@ async function main() {
     await writeFile(join(outDir, page.slug, "index.html"), pageHtml(page, pages), "utf8");
   }
 
-  process.stdout.write(`site/docs: ${pages.length + 1} pages from README.md\n`);
+  /* The comparison pages. Their Markdown has no headings to slice at and no
+     README anchors to rewrite, so they go through the renderer with an empty
+     anchor map and come out as one article each. */
+  for (const entry of STANDALONE) {
+    const body = (await readFile(join(root, entry.source), "utf8")).replace(/\r\n/g, "\n").trim();
+    const marked = new Marked({ gfm: true, breaks: false });
+    marked.use({ renderer: renderer(entry, new Map()) });
+    const en = STANDALONE[0];
+    const da = STANDALONE[1];
+    const page = {
+      ...entry,
+      html: marked.parse(body),
+      description: describe(body),
+      headTitle: `${entry.heading} — bugbottle`,
+      canonical: `${ORIGIN}${entry.url}`,
+      alternates: [
+        { hreflang: "en", href: `${ORIGIN}${en?.url ?? "/compare/"}` },
+        { hreflang: "da", href: `${ORIGIN}${da?.url ?? "/da/sammenlign/"}` },
+        { hreflang: "x-default", href: `${ORIGIN}${en?.url ?? "/compare/"}` },
+      ],
+      enUrl: en?.url,
+      daUrl: da?.url,
+      docsCurrent: false,
+    };
+    const dir = join(root, "site", entry.out);
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "index.html"), standaloneHtml(page), "utf8");
+  }
+
+  await writeFile(join(root, "site", "sitemap.xml"), sitemapXml(pages), "utf8");
+  await writeFile(join(root, "site", "robots.txt"), ROBOTS, "utf8");
+
+  process.stdout.write(
+    `site/docs: ${pages.length + 1} pages from README.md; ` +
+      `${STANDALONE.length} comparison pages; sitemap.xml and robots.txt\n`,
+  );
 }
 
 await main();
