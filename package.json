@@ -95,7 +95,7 @@
     "html-to-image": "^1.11.13",
     "react": "^19.2.8",
     "react-dom": "19.2.8",
-    "typescript": "^5.7.0"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=18"
