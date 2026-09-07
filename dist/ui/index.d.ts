@@ -15,6 +15,7 @@
 import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
 import { type ReportType } from "../report-core.ts";
+import type { Queue } from "../queue.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
 export type Theme = {
     /** Accent: trigger button, primary action, focus ring. */
@@ -102,6 +103,13 @@ export type MountOptions = {
      * A dropped report still shows the reporter the ordinary thank-you panel.
      */
     beforeSend?: SendOptions["beforeSend"];
+    /**
+     * Where a report goes when the send fails. Pass a queue from
+     * `bugbottle/queue` and the reporter is thanked with the `queued` message
+     * rather than shown an error; the report is delivered when the browser is
+     * online again. A 4xx is never queued — the server has already refused it.
+     */
+    queue?: Queue;
     onSent?: (id: string | undefined) => void;
     onError?: (error: unknown) => void;
 };

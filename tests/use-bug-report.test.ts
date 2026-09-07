@@ -402,3 +402,65 @@ test("unmounting during a pick lets clicks through again", async () => {
   target.remove();
   cleanup();
 });
+
+/** A queue stand-in that only records what it was handed. */
+function fakeQueue() {
+  const queued: unknown[] = [];
+  return {
+    queued,
+    queue: {
+      enqueue: (report: unknown) => void queued.push(report),
+      flush: async () => 0,
+      size: () => queued.length,
+      clear: () => void queued.splice(0),
+      destroy: () => {},
+    },
+  };
+}
+
+test("a failed send with a queue is queued, and the reporter is thanked", async () => {
+  const fetchStub = stubFetch(() => {
+    throw new TypeError("Failed to fetch");
+  });
+  const { queue, queued } = fakeQueue();
+  const { result, unmount } = renderHook(() => useBugReport({ endpoint: ENDPOINT, queue }));
+
+  await act(async () => {
+    result.current.setMessage("The save button does nothing");
+  });
+  let sent: boolean | undefined;
+  await act(async () => {
+    sent = await result.current.submit();
+  });
+
+  assert.equal(sent, true, "as far as the reporter is concerned the report is filed");
+  assert.deepEqual(result.current.status, { kind: "queued" });
+  assert.equal(result.current.statusMessage, enMessages.queued);
+  assert.equal(queued.length, 1);
+  assert.equal((queued[0] as { message: string }).message, "The save button does nothing");
+  assert.equal(result.current.message, "", "the form is cleared, as after a send");
+  fetchStub.restore();
+  unmount();
+  cleanup();
+});
+
+test("a report the endpoint refuses with a 4xx is not queued", async () => {
+  const fetchStub = stubFetch(() => json({ error: "That project is closed" }, 400));
+  const { queue, queued } = fakeQueue();
+  const { result, unmount } = renderHook(() => useBugReport({ endpoint: ENDPOINT, queue }));
+
+  await act(async () => {
+    result.current.setMessage("Something is wrong");
+  });
+  let sent: boolean | undefined;
+  await act(async () => {
+    sent = await result.current.submit();
+  });
+
+  assert.equal(sent, false);
+  assert.equal(queued.length, 0, "a 4xx is the server saying no, not the network failing");
+  assert.equal(result.current.status.kind, "error");
+  fetchStub.restore();
+  unmount();
+  cleanup();
+});

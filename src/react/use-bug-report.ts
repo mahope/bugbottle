@@ -7,7 +7,15 @@ import {
 } from "../capture.ts";
 import { pickElement as pickElementFromPage } from "../element-picker.ts";
 import { MAX_ELEMENTS, REPORT_TYPES, type ElementRef, type ReportType } from "../report-core.ts";
-import { buildReport, sendReport, type BuildReportInput, type SendOptions } from "../send.ts";
+import {
+  buildReport,
+  sendReport,
+  SendFailedError,
+  type BuildReportInput,
+  type SendOptions,
+} from "../send.ts";
+import type { Queue } from "../queue.ts";
+import type { BugReport } from "../report-core.ts";
 import { enMessages, type Messages } from "../locales.ts";
 
 /**
@@ -26,6 +34,7 @@ export type BugReportStatus =
   | { kind: "picking" }
   | { kind: "sending" }
   | { kind: "sent"; id?: string }
+  | { kind: "queued" }
   | {
       kind: "error";
       reason: "empty" | "screenshot-too-large" | "screenshot-failed" | "send-failed";
@@ -86,6 +95,16 @@ export type UseBugReportOptions = {
    * your own strings. Defaults to English.
    */
   messages?: Partial<Messages>;
+  /**
+   * Where a report goes when the send fails. Pass a queue from
+   * `bugbottle/queue` and a report written during an outage is kept and
+   * delivered later; the reporter sees `status.kind === "queued"` and the
+   * `queued` message instead of an error they can do nothing about.
+   *
+   * A 4xx is never queued: the server has already said this report is not
+   * acceptable, and retrying it would only fail again more quietly.
+   */
+  queue?: Queue;
 };
 
 const FALLBACK_MESSAGES: Messages = enMessages;
@@ -223,8 +242,19 @@ export function useBugReport(options: UseBugReportOptions) {
       return false;
     }
     setStatus({ kind: "sending" });
+    // A report that is on its way — or safely queued — leaves an empty form
+    // behind, so the next one does not start with the last one still in it.
+    const clearForm = () => {
+      setMessage("");
+      setScreenshot(null);
+      setElements([]);
+      setIncludeScreenshot(canScreenshot && screenshotFor(type));
+    };
+    // Kept outside the try so the failure path can hand the very same body to
+    // the queue rather than assembling a second one from stale state.
+    let report: (BugReport & Record<string, unknown>) | null = null;
     try {
-      const report = buildReport({
+      report = buildReport({
         type,
         message,
         screenshotDataUrl: includeScreenshot ? screenshot : null,
@@ -241,13 +271,18 @@ export function useBugReport(options: UseBugReportOptions) {
         beforeSend: opts.beforeSend,
       });
       setStatus({ kind: "sent", id });
-      setMessage("");
-      setScreenshot(null);
-      setElements([]);
-      setIncludeScreenshot(canScreenshot && screenshotFor(type));
+      clearForm();
       opts.onSent?.(id);
       return true;
     } catch (err) {
+      const queue = opts.queue;
+      const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
+      if (queue && report && !rejected) {
+        queue.enqueue(report);
+        setStatus({ kind: "queued" });
+        clearForm();
+        return true;
+      }
       setStatus({
         kind: "error",
         reason: "send-failed",
@@ -293,6 +328,12 @@ export function useBugReport(options: UseBugReportOptions) {
     isPicking: status.kind === "picking",
     isSending: status.kind === "sending",
     statusMessage:
-      status.kind === "error" ? status.message : status.kind === "sent" ? msg.sent : "",
+      status.kind === "error"
+        ? status.message
+        : status.kind === "sent"
+          ? msg.sent
+          : status.kind === "queued"
+            ? msg.queued
+            : "",
   };
 }

@@ -20,6 +20,7 @@ export const enMessages = {
     screenshotFailed: "The picture could not be taken — you can still send without it",
     sendFailed: "The report could not be sent",
     sent: "Thank you — the report is on its way",
+    queued: "Saved — it will be sent when you are back online",
 };
 export const en = {
     code: "en",
@@ -55,6 +56,7 @@ export const da = {
         screenshotFailed: "Billedet kunne ikke tages — du kan stadig sende uden",
         sendFailed: "Rapporten kunne ikke sendes",
         sent: "Tak — rapporten er på vej",
+        queued: "Gemt — den bliver sendt, når du er online igen",
     },
     ui: {
         trigger: "Feedback",
@@ -87,6 +89,7 @@ export const sv = {
         screenshotFailed: "Bilden kunde inte tas — du kan ändå skicka utan",
         sendFailed: "Rapporten kunde inte skickas",
         sent: "Tack — rapporten är på väg",
+        queued: "Sparad — den skickas när du är online igen",
     },
     ui: {
         trigger: "Feedback",
@@ -119,6 +122,7 @@ export const nb = {
         screenshotFailed: "Bildet kunne ikke tas — du kan fortsatt sende uten",
         sendFailed: "Rapporten kunne ikke sendes",
         sent: "Takk — rapporten er på vei",
+        queued: "Lagret — den blir sendt når du er tilkoblet igjen",
     },
     ui: {
         trigger: "Tilbakemelding",
@@ -151,6 +155,7 @@ export const de = {
         screenshotFailed: "Das Bild konnte nicht aufgenommen werden — Senden ohne Bild ist möglich",
         sendFailed: "Die Meldung konnte nicht gesendet werden",
         sent: "Danke — die Meldung ist unterwegs",
+        queued: "Gespeichert — sie wird gesendet, sobald Sie wieder online sind",
     },
     ui: {
         trigger: "Feedback",
@@ -183,6 +188,7 @@ export const nl = {
         screenshotFailed: "De afbeelding kon niet worden gemaakt — je kunt zonder verzenden",
         sendFailed: "De melding kon niet worden verzonden",
         sent: "Bedankt — de melding is onderweg",
+        queued: "Opgeslagen — de melding wordt verzonden zodra u weer online bent",
     },
     ui: {
         trigger: "Feedback",
@@ -215,6 +221,7 @@ export const fr = {
         screenshotFailed: "L'image n'a pas pu être prise — vous pouvez envoyer sans",
         sendFailed: "Le signalement n'a pas pu être envoyé",
         sent: "Merci — le signalement est en route",
+        queued: "Enregistré — il sera envoyé dès votre retour en ligne",
     },
     ui: {
         trigger: "Commentaires",
@@ -247,6 +254,7 @@ export const es = {
         screenshotFailed: "No se pudo tomar la imagen — puedes enviar sin ella",
         sendFailed: "No se pudo enviar el informe",
         sent: "Gracias — el informe está en camino",
+        queued: "Guardado — se enviará cuando vuelvas a estar en línea",
     },
     ui: {
         trigger: "Comentarios",

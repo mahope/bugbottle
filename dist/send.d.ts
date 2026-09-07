@@ -67,6 +67,33 @@ export type SendOptions = {
     /** Replace the global `fetch`, mostly for tests. */
     fetch?: typeof globalThis.fetch;
     /**
+     * Ask the browser to finish the request even if the page goes away — a
+     * closed tab, a link followed while the form was still sending.
+     *
+     * It is passed to `fetch` only when the serialised body is under
+     * `KEEPALIVE_MAX_BYTES`: the specification caps all in-flight keepalive
+     * bodies of a page at 64 KiB together, and a larger body makes `fetch`
+     * reject outright rather than send without the flag. A report with a
+     * screenshot is normally far over that, which is why this is opt-in and not
+     * the default.
+     */
+    keepalive?: boolean;
+    /**
+     * Called when the send failed, with the report as it would have been sent
+     * and the error that stopped it. This is where an offline queue lives:
+     *
+     * ```ts
+     * const queue = createQueue({ endpoint });
+     * sendReport(endpoint, report, { onFailure: (r) => queue.enqueue(r) });
+     * ```
+     *
+     * It runs before the error is rethrown, and it is awaited so a queue that
+     * writes to storage has finished by the time the caller sees the failure.
+     * An error thrown here is swallowed: the original failure is the one worth
+     * reporting.
+     */
+    onFailure?: (report: BugReport & Record<string, unknown>, error: unknown) => void | Promise<void>;
+    /**
      * Turn a failed response into a message for the reporter. Defaults to the
      * body's `error` or `message` field, then a generic one.
      */
@@ -83,6 +110,12 @@ export type SendOptions = {
     beforeSend?: (report: BugReport & Record<string, unknown>) => (BugReport & Record<string, unknown>) | null | Promise<(BugReport & Record<string, unknown>) | null>;
 };
 export declare const DEFAULT_SEND_TIMEOUT_MS = 15000;
+/**
+ * The largest body `keepalive` is used for. The browser limit is 64 KiB across
+ * every keepalive request a page has in flight; this leaves room for a second
+ * one rather than spending the whole allowance on the first.
+ */
+export declare const KEEPALIVE_MAX_BYTES = 60000;
 export type SendResult = {
     /** The `id` field of the response body, when the server sends one. */
     id?: string;

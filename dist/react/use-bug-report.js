@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement as pickElementFromPage } from "../element-picker.js";
 import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
-import { buildReport, sendReport } from "../send.js";
+import { buildReport, sendReport, SendFailedError, } from "../send.js";
 import { enMessages } from "../locales.js";
 const FALLBACK_MESSAGES = enMessages;
 const bugsOnly = (t) => t === "bug";
@@ -120,8 +120,19 @@ export function useBugReport(options) {
             return false;
         }
         setStatus({ kind: "sending" });
+        // A report that is on its way — or safely queued — leaves an empty form
+        // behind, so the next one does not start with the last one still in it.
+        const clearForm = () => {
+            setMessage("");
+            setScreenshot(null);
+            setElements([]);
+            setIncludeScreenshot(canScreenshot && screenshotFor(type));
+        };
+        // Kept outside the try so the failure path can hand the very same body to
+        // the queue rather than assembling a second one from stale state.
+        let report = null;
         try {
-            const report = buildReport({
+            report = buildReport({
                 type,
                 message,
                 screenshotDataUrl: includeScreenshot ? screenshot : null,
@@ -138,14 +149,19 @@ export function useBugReport(options) {
                 beforeSend: opts.beforeSend,
             });
             setStatus({ kind: "sent", id });
-            setMessage("");
-            setScreenshot(null);
-            setElements([]);
-            setIncludeScreenshot(canScreenshot && screenshotFor(type));
+            clearForm();
             opts.onSent?.(id);
             return true;
         }
         catch (err) {
+            const queue = opts.queue;
+            const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
+            if (queue && report && !rejected) {
+                queue.enqueue(report);
+                setStatus({ kind: "queued" });
+                clearForm();
+                return true;
+            }
             setStatus({
                 kind: "error",
                 reason: "send-failed",
@@ -189,7 +205,13 @@ export function useBugReport(options) {
         isCapturing: status.kind === "capturing",
         isPicking: status.kind === "picking",
         isSending: status.kind === "sending",
-        statusMessage: status.kind === "error" ? status.message : status.kind === "sent" ? msg.sent : "",
+        statusMessage: status.kind === "error"
+            ? status.message
+            : status.kind === "sent"
+                ? msg.sent
+                : status.kind === "queued"
+                    ? msg.queued
+                    : "",
     };
 }
 //# sourceMappingURL=use-bug-report.js.map

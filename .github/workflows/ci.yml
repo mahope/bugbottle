@@ -42,8 +42,8 @@ jobs:
           set -e
           iife=$(gzip -c dist/bugbottle.js | wc -c)
           echo "dist/bugbottle.js: $iife bytes gzipped"
-          if [ "$iife" -gt 14336 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 14336" >&2
+          if [ "$iife" -gt 15360 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 15360" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -58,6 +58,7 @@ jobs:
           echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
           echo 'import { initBreadcrumbs } from "bugbottle/breadcrumbs"; initBreadcrumbs();' > breadcrumbs.js
           echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
+          echo 'import { createQueue } from "bugbottle/queue"; export { createQueue };' > queue.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
         run: |
@@ -68,7 +69,8 @@ jobs:
           npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
           npx esbuild breadcrumbs.js --bundle --minify --format=esm --outfile=out-breadcrumbs.js
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
-          for f in out-core out-react out-server out-ui out-breadcrumbs out-network; do
+          npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
+          for f in out-core out-react out-server out-ui out-breadcrumbs out-network out-queue; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -85,9 +87,10 @@ jobs:
           # took it past the old 4 kB budget is screenshot masking, which the
           # hook pays for whether or not it takes pictures because it is on by
           # default. A privacy default that a consumer has to remember to
-          # import is not a default at all.
-          if [ "$react" -gt 5120 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 5120" >&2
+          # import is not a default at all. The `queued` state and its message
+          # then took it just over 5 kB, which is why the budget is 5.25.
+          if [ "$react" -gt 5376 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 5376" >&2
             exit 1
           fi
           if [ "$ui" -gt 8192 ]; then
@@ -111,5 +114,12 @@ jobs:
           network=$(gzip -c out-network.js | wc -c)
           if [ "$network" -gt 1330 ]; then
             echo "bugbottle/network is $network bytes gzipped; the budget is 1330" >&2
+            exit 1
+          fi
+          # The queue imports nothing but a type, so this number is the module
+          # itself: storage, backoff, the listeners and one fetch.
+          queue=$(gzip -c out-queue.js | wc -c)
+          if [ "$queue" -gt 1024 ]; then
+            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1024" >&2
             exit 1
           fi

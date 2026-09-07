@@ -15,7 +15,7 @@
 import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement } from "../element-picker.js";
 import { en } from "../locales.js";
-import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
+import { MAX_ELEMENTS, REPORT_TYPES, } from "../report-core.js";
 import { buildReport, sendReport, SendFailedError, } from "../send.js";
 const POSITIONS = {
     "bottom-right": "right:16px;bottom:16px;",
@@ -313,8 +313,10 @@ export function mountBugbottle(options) {
         sendBtn.disabled = true;
         sendBtn.textContent = ui.sending;
         setStatus("");
+        // Assembled outside the try so the failure path can queue this very body.
+        let report = null;
         try {
-            const report = buildReport({
+            report = buildReport({
                 type,
                 message: textarea.value,
                 screenshotDataUrl: shotBox.checked ? screenshot : null,
@@ -332,14 +334,28 @@ export function mountBugbottle(options) {
                 beforeSend: options.beforeSend,
             });
             resetForm();
+            thanksText.textContent = ui.thanks;
             form.hidden = true;
             thanks.hidden = false;
             thanksClose.focus();
             options.onSent?.(id);
         }
         catch (err) {
-            setStatus(err instanceof SendFailedError && err.message ? err.message : msg.sendFailed, "error");
-            options.onError?.(err);
+            const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
+            if (options.queue && report && !rejected) {
+                options.queue.enqueue(report);
+                resetForm();
+                // The same panel as a successful send, with the one line that differs:
+                // the report is safe, it is just not there yet.
+                thanksText.textContent = msg.queued;
+                form.hidden = true;
+                thanks.hidden = false;
+                thanksClose.focus();
+            }
+            else {
+                setStatus(err instanceof SendFailedError && err.message ? err.message : msg.sendFailed, "error");
+                options.onError?.(err);
+            }
         }
         finally {
             sending = false;

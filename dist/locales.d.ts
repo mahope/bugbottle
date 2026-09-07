@@ -16,6 +16,8 @@ export type Messages = {
     screenshotFailed: string;
     sendFailed: string;
     sent: string;
+    /** After a failed send that an offline queue caught. See `bugbottle/queue`. */
+    queued: string;
 };
 export type UiTexts = {
     /** Text on the floating trigger button, and its accessible name. */

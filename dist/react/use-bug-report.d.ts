@@ -1,6 +1,7 @@
 import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type ElementRef, type ReportType } from "../report-core.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
+import type { Queue } from "../queue.ts";
 import { type Messages } from "../locales.ts";
 /**
  * Everything a report form needs, and none of its markup.
@@ -22,6 +23,8 @@ export type BugReportStatus = {
 } | {
     kind: "sent";
     id?: string;
+} | {
+    kind: "queued";
 } | {
     kind: "error";
     reason: "empty" | "screenshot-too-large" | "screenshot-failed" | "send-failed";
@@ -81,6 +84,16 @@ export type UseBugReportOptions = {
      * your own strings. Defaults to English.
      */
     messages?: Partial<Messages>;
+    /**
+     * Where a report goes when the send fails. Pass a queue from
+     * `bugbottle/queue` and a report written during an outage is kept and
+     * delivered later; the reporter sees `status.kind === "queued"` and the
+     * `queued` message instead of an error they can do nothing about.
+     *
+     * A 4xx is never queued: the server has already said this report is not
+     * acceptable, and retrying it would only fail again more quietly.
+     */
+    queue?: Queue;
 };
 export declare function useBugReport(options: UseBugReportOptions): {
     types: readonly ["bug", "idea", "other"];

@@ -5,9 +5,9 @@ Short version. The reasoning is in `research-features.md` and
 
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
-bare core under 1 kB gzipped, `bugbottle/react` under 5 kB, `bugbottle/ui`
+bare core under 1 kB gzipped, `bugbottle/react` under 5.25 kB, `bugbottle/ui`
 under 8 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
-1.2 kB, the script-tag build under 14 kB.
+1.3 kB, `bugbottle/queue` under 1 kB, the script-tag build under 15 kB.
 
 ## Already shipped
 
@@ -45,6 +45,13 @@ screenshot store that may fail without taking the report with it.
 bugbottle.dev/schema/report.json, so a receiver can be built in any language
 without the library. And the Linear sink (`createLinearIssue`, `toLinear`).
 
+**Unreleased** — `bugbottle/queue`: an offline queue in `localStorage` with
+exponential backoff, flushed on `online`, on returning to the tab and on
+creation, dropping what the server refuses and keeping what it could not
+answer. Plus `keepalive` and `onFailure` on `sendReport`, a `queue` option on
+the hook and the widget with a `queued` status and locale message, and
+`data-queue` on the script tag.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -53,8 +60,6 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 
 - **Stack normalisation** for uncaught errors — `{ file, line, col, fn }`
   frames alongside the raw stack.
-- `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
-  `localStorage`, flushed on `online`.
 - Dedup and rate limit by fingerprint.
 
 ## 0.6 — adapters and triggers

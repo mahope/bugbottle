@@ -35,6 +35,12 @@ export function buildReport(input) {
     return input.scrub ? input.scrub(body) : body;
 }
 export const DEFAULT_SEND_TIMEOUT_MS = 15_000;
+/**
+ * The largest body `keepalive` is used for. The browser limit is 64 KiB across
+ * every keepalive request a page has in flight; this leaves room for a second
+ * one rather than spending the whole allowance on the first.
+ */
+export const KEEPALIVE_MAX_BYTES = 60_000;
 /** The request was aborted by `timeoutMs` before the server answered. */
 export class SendTimeoutError extends Error {
     constructor(timeoutMs) {
@@ -74,8 +80,8 @@ export async function sendReport(endpoint, report, options = {}) {
     // failure `timeoutMs` exists to bound. The whole send is on the clock.
     const timer = timeoutMs > 0 ? setTimeout(() => controller.abort("timeout"), timeoutMs) : null;
     const timedOut = () => controller.signal.aborted && controller.signal.reason === "timeout";
+    let payload = report;
     try {
-        let payload = report;
         if (options.beforeSend) {
             const decided = await Promise.race([
                 Promise.resolve(options.beforeSend(payload)),
@@ -87,14 +93,17 @@ export async function sendReport(endpoint, report, options = {}) {
             payload = decided;
         }
         const doFetch = options.fetch ?? globalThis.fetch;
+        const serialised = JSON.stringify(payload);
         const init = {
             method: "POST",
             headers: { "Content-Type": "application/json", ...options.headers },
-            body: JSON.stringify(payload),
+            body: serialised,
             signal: controller.signal,
         };
         if (options.credentials)
             init.credentials = options.credentials;
+        if (options.keepalive && serialised.length < KEEPALIVE_MAX_BYTES)
+            init.keepalive = true;
         const response = await doFetch(endpoint, init);
         const body = await response.json().catch(() => null);
         if (!response.ok) {
@@ -109,11 +118,17 @@ export async function sendReport(endpoint, report, options = {}) {
         return { id: typeof id === "string" ? id : undefined, body, response };
     }
     catch (err) {
-        if (err instanceof SendFailedError)
-            throw err;
-        if (timedOut())
-            throw new SendTimeoutError(timeoutMs);
-        throw err;
+        const failure = err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
+        if (options.onFailure) {
+            try {
+                await options.onFailure(payload, failure);
+            }
+            catch {
+                // A queue that cannot write must not replace the error that says the
+                // report never arrived. The send failed either way.
+            }
+        }
+        throw failure;
     }
     finally {
         if (timer)

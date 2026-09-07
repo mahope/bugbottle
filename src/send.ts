@@ -93,6 +93,36 @@ export type SendOptions = {
   /** Replace the global `fetch`, mostly for tests. */
   fetch?: typeof globalThis.fetch;
   /**
+   * Ask the browser to finish the request even if the page goes away — a
+   * closed tab, a link followed while the form was still sending.
+   *
+   * It is passed to `fetch` only when the serialised body is under
+   * `KEEPALIVE_MAX_BYTES`: the specification caps all in-flight keepalive
+   * bodies of a page at 64 KiB together, and a larger body makes `fetch`
+   * reject outright rather than send without the flag. A report with a
+   * screenshot is normally far over that, which is why this is opt-in and not
+   * the default.
+   */
+  keepalive?: boolean;
+  /**
+   * Called when the send failed, with the report as it would have been sent
+   * and the error that stopped it. This is where an offline queue lives:
+   *
+   * ```ts
+   * const queue = createQueue({ endpoint });
+   * sendReport(endpoint, report, { onFailure: (r) => queue.enqueue(r) });
+   * ```
+   *
+   * It runs before the error is rethrown, and it is awaited so a queue that
+   * writes to storage has finished by the time the caller sees the failure.
+   * An error thrown here is swallowed: the original failure is the one worth
+   * reporting.
+   */
+  onFailure?: (
+    report: BugReport & Record<string, unknown>,
+    error: unknown,
+  ) => void | Promise<void>;
+  /**
    * Turn a failed response into a message for the reporter. Defaults to the
    * body's `error` or `message` field, then a generic one.
    */
@@ -115,6 +145,13 @@ export type SendOptions = {
 };
 
 export const DEFAULT_SEND_TIMEOUT_MS = 15_000;
+
+/**
+ * The largest body `keepalive` is used for. The browser limit is 64 KiB across
+ * every keepalive request a page has in flight; this leaves room for a second
+ * one rather than spending the whole allowance on the first.
+ */
+export const KEEPALIVE_MAX_BYTES = 60_000;
 
 export type SendResult = {
   /** The `id` field of the response body, when the server sends one. */
@@ -171,8 +208,8 @@ export async function sendReport(
   const timer = timeoutMs > 0 ? setTimeout(() => controller.abort("timeout"), timeoutMs) : null;
   const timedOut = () => controller.signal.aborted && controller.signal.reason === "timeout";
 
+  let payload = report;
   try {
-    let payload = report;
     if (options.beforeSend) {
       const decided = await Promise.race([
         Promise.resolve(options.beforeSend(payload)),
@@ -185,13 +222,15 @@ export async function sendReport(
     }
 
     const doFetch = options.fetch ?? globalThis.fetch;
+    const serialised = JSON.stringify(payload);
     const init: RequestInit = {
       method: "POST",
       headers: { "Content-Type": "application/json", ...options.headers },
-      body: JSON.stringify(payload),
+      body: serialised,
       signal: controller.signal,
     };
     if (options.credentials) init.credentials = options.credentials;
+    if (options.keepalive && serialised.length < KEEPALIVE_MAX_BYTES) init.keepalive = true;
 
     const response = await doFetch(endpoint, init);
     const body: unknown = await response.json().catch(() => null);
@@ -209,9 +248,17 @@ export async function sendReport(
     const id = (body as { id?: unknown } | null)?.id;
     return { id: typeof id === "string" ? id : undefined, body, response };
   } catch (err) {
-    if (err instanceof SendFailedError) throw err;
-    if (timedOut()) throw new SendTimeoutError(timeoutMs);
-    throw err;
+    const failure =
+      err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
+    if (options.onFailure) {
+      try {
+        await options.onFailure(payload, failure);
+      } catch {
+        // A queue that cannot write must not replace the error that says the
+        // report never arrived. The send failed either way.
+      }
+    }
+    throw failure;
   } finally {
     if (timer) clearTimeout(timer);
     options.signal?.removeEventListener("abort", onOuterAbort);

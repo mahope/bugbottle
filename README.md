@@ -41,9 +41,9 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 0.9 kB gzipped; with the element picker and the React hook, 4.5 kB;
-  the optional ready-made panel, 7.4 kB; breadcrumbs 1.3 kB; the network log
-  1.1 kB; the everything script tag, 13.3 kB. `html-to-image` is only pulled in by the module that
+  is about 0.8 kB gzipped; with the element picker and the React hook, 5.1 kB;
+  the optional ready-made panel, 7.9 kB; breadcrumbs 1.3 kB; the network log
+  1.1 kB; the offline queue 1 kB; the everything script tag, 14.4 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
@@ -189,6 +189,77 @@ await captureScreenshot(htmlToImage, {
 });
 ```
 
+## When the network is down
+
+The report that matters most is the one written while the application was
+broken — and that is exactly the one a failed `fetch` throws away.
+`bugbottle/queue` keeps it instead:
+
+```ts
+import { createQueue } from "bugbottle/queue";
+import { useBugReport } from "bugbottle/react";
+
+const queue = createQueue({ endpoint: "/api/feedback" });
+const form = useBugReport({ endpoint: "/api/feedback", queue });
+```
+
+A send that fails is written to `localStorage`, and the reporter is told the
+truth in their own language: "Saved — it will be sent when you are back
+online". `form.status.kind` is `"queued"` rather than `"error"`, and
+`statusMessage` is the `queued` string of the locale. `mountBugbottle` takes
+the same `queue` option and shows its ordinary thank-you panel with that line.
+
+The queue drains when it is created, when the browser fires `online`, and when
+the tab becomes visible again. A failed attempt backs off exponentially, from
+one second to five minutes. A 5xx or a network error keeps the report; a 4xx
+drops it, because the server has already said this report is not acceptable and
+retrying it would only fail again more quietly — nothing is ever queued on a
+4xx in the first place.
+
+```ts
+const queue = createQueue({
+  endpoint: "/api/feedback",
+  storageKey: "bugbottle:queue", // where in localStorage
+  maxItems: 5,                   // the oldest is evicted first
+  maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+queue.size();          // how many are waiting
+await queue.flush();   // resolves with how many are still waiting
+queue.clear();         // throw them away
+queue.destroy();       // remove the listeners; the reports stay in storage
+```
+
+A report is at most a few hundred bytes without its picture and a megabyte or
+two with one, so a queued item that would not fit — over 1 MB serialised —
+loses its screenshot and keeps everything else: the message, the console, the
+breadcrumbs, the requests. If `localStorage` is unavailable at all, as in
+Safari's private mode, the queue stays in memory for the life of the page
+rather than refusing to work.
+
+Without a queue, a send can still survive the page closing under it:
+
+```ts
+await sendReport("/api/feedback", report, { keepalive: true });
+```
+
+`keepalive` is passed to `fetch` only when the serialised body is under 60 kB.
+The browser caps every keepalive body a page has in flight at 64 KiB together,
+and a larger one makes `fetch` reject rather than send — so this is for a
+report going out during unload, not for one with a screenshot attached. For
+anything larger, the queue is the answer.
+
+Below the two integrations, `SendOptions` has the seam they are built on:
+`onFailure(report, error)` runs after a failed send, before the error reaches
+you, and is awaited.
+
+```ts
+await sendReport("/api/feedback", report, {
+  onFailure: (failed) => queue.enqueue(failed),
+});
+```
+
 ## The ready-made panel
 
 If you would rather not build a form, `bugbottle/ui` mounts a floating button
@@ -224,7 +295,7 @@ gzipped, no framework.
 
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
-that mounts the panel from the tag itself. About 12 kB gzipped:
+that mounts the panel from the tag itself. About 14 kB gzipped:
 
 ```html
 <script
@@ -252,6 +323,7 @@ run on your page.
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
 | `data-network` | Present, with any value, records the failed and slow requests. See "What the network did". |
+| `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
 
@@ -262,9 +334,9 @@ There is no screenshot in this build. A renderer means `html-to-image`, which
 is far larger than everything else here put together, and forcing it on every
 page that only wants the panel is the wrong trade. The bundle exposes the
 building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
-`initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `locales`,
-`resolveLocale`, `scrubReport`, `buildReport`, `sendReport`, `pickElement` and
-`version` — so a
+`initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
+`locales`, `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`,
+`pickElement` and `version` — so a
 page that wants pictures can load `html-to-image` itself and call
 `window.bugbottle.mount({ endpoint, screenshot })`. Leave `data-endpoint` off
 the tag and nothing mounts on its own:
@@ -1029,7 +1101,8 @@ the `MaskOptions` of its `mask` option, whose defaults are
 validators below, and the shared types and limits.
 
 **`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
-`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `locales`,
+`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
+`locales`,
 `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`, `pickElement`,
 `version`, and
 `data-*` auto-mount. See "One script tag".
@@ -1044,6 +1117,9 @@ post type with an admin list, and emails them if you want. One activation.
 
 **`bugbottle/network`** — `initNetwork`, `getNetwork`, `resetNetwork`,
 `isNetworkActive`, and the `NetworkOptions` and `NetworkEntry` types.
+
+**`bugbottle/queue`** — `createQueue`, and the `Queue`, `QueueOptions` and
+`QueuedReport` types. See "When the network is down".
 
 **`bugbottle/react`** — `useBugReport`.
 
