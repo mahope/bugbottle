@@ -11,10 +11,12 @@
 
 import {
   isReportType,
+  normaliseBreadcrumbs,
   normaliseConsole,
   normaliseContext,
   normaliseElements,
   normaliseMessage,
+  type Breadcrumb,
   type ElementRef,
 } from "./report-core.ts";
 
@@ -60,6 +62,23 @@ function elementLine(el: ElementRef): string {
   return `- ${bits.join(" ")}`;
 }
 
+function breadcrumbLine(crumb: Breadcrumb): string {
+  const bits: string[] = [];
+  if (crumb.ts) bits.push(crumb.ts);
+  if (crumb.kind === "click" || crumb.kind === "submit") {
+    bits.push(crumb.kind === "click" ? "clicked" : "submitted");
+    if (crumb.target) bits.push(`\`${crumb.target}\``);
+    if (crumb.text) bits.push(`— "${crumb.text}"`);
+  } else if (crumb.kind === "navigation") {
+    bits.push("navigated");
+    if (crumb.from) bits.push(`\`${crumb.from}\` →`);
+    bits.push(`\`${crumb.to ?? ""}\``);
+  } else {
+    bits.push(`page ${crumb.to ?? "changed"}`);
+  }
+  return `- ${bits.join(" ")}`;
+}
+
 /**
  * Renders a report (raw request body or validated) as Markdown. Never throws
  * on malformed input: missing sections are left out.
@@ -70,6 +89,7 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   const message = normaliseMessage(r.message) ?? "";
   const context = normaliseContext(r.context);
   const elements = normaliseElements(r.elements);
+  const breadcrumbs = normaliseBreadcrumbs(r.breadcrumbs);
   const consoleEntries = normaliseConsole(r.console, {
     maxEntries: options.maxConsoleEntries,
   });
@@ -105,6 +125,12 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   if (elements.length > 0) {
     out.push(`### Element${elements.length > 1 ? "s" : ""} pointed at`, "");
     for (const el of elements) out.push(elementLine(el));
+    out.push("");
+  }
+
+  if (breadcrumbs.length > 0) {
+    out.push("### What happened before", "");
+    for (const crumb of breadcrumbs) out.push(breadcrumbLine(crumb));
     out.push("");
   }
 

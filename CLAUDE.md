@@ -18,6 +18,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/console-buffer.ts` | `console.error/warn` + `window` error patching, ring buffer | report-core |
 | `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | report-core |
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
+| `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
+| `src/registry.ts` | One slot: `initBreadcrumbs` registers a getter, `send.ts` reads it. Keeps the core free of the recorder | report-core (types) |
 | `src/send.ts` | `buildReport`, `sendReport` — framework-agnostic | capture, console-buffer, report-core |
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
 | `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in | nothing |
@@ -30,10 +32,10 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in every release commit | |
 
-Six entry points in `package.json#exports`: `.`, `./react`, `./server`,
-`./html-to-image`, `./locales`, `./ui`. Keep them separate: a server bundle
-must never pull in DOM code, and a client bundle must never pay for a module
-it did not import. Every reporter-facing string goes through a `Locale`;
+Seven entry points in `package.json#exports`: `.`, `./react`, `./server`,
+`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`. Keep them separate:
+a server bundle must never pull in DOM code, and a client bundle must never
+pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
 
 ## Rules that are not obvious from the code
@@ -71,6 +73,9 @@ scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
 stay under 4 kB gzipped and `bugbottle/ui` under 8 kB (CI enforces both;
 3.4 kB and 6.4 kB at 0.3.0), and the bare core under 1 kB.
+`bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
+of its bundle is `buildSelector`, which an app that also points at elements
+already pays for — the marginal cost there is around 0.55 kB.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

@@ -7,6 +7,10 @@ Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. The core entry stays under 1 kB
 gzipped and `bugbottle/react` under 3.5 kB.
 
+Already in: breadcrumbs (`bugbottle/breadcrumbs`) — clicks (short selector +
+trimmed text), navigation, form submits and visibility changes on one
+timeline, with a `beforeBreadcrumb` hook and masking.
+
 Already in 0.3: console buffer, page context, injectable screenshot renderer,
 element picker (`pickElement`), framework-agnostic `buildReport`/`sendReport`,
 server validators for every field, eight locales (`bugbottle/locales`), and
@@ -21,8 +25,6 @@ the optional themed panel (`bugbottle/ui`) — pulled forward from 1.0 because
 
 - **Network log** — patch `fetch`/`XMLHttpRequest`; method, URL, status,
   duration, sizes; no bodies by default. Its own entry point.
-- **Breadcrumbs** — clicks (short selector + trimmed text), navigation,
-  form submits, visibility changes, on one timeline with console entries.
 - **Scrubber pipeline** — `beforeSend(report)` hook, built-in patterns for
   emails, bearer tokens, card numbers, `?token=` query values, and a header
   deny-list. Required before the network log ships.

@@ -53,6 +53,20 @@ change the API; the changelog says so when they do.
   pass `scrubReport` itself. Both options are forwarded by `useBugReport` and
   `mountBugbottle`; a dropped report shows the reporter the ordinary
   thank-you.
+- **`bugbottle/breadcrumbs`** — a short timeline of what the reporter did
+  before they reported: clicks (a short selector and the element's visible
+  text), navigation (`pushState`, `replaceState`, `popstate`, `hashchange`,
+  path and query only), form submits (the selector only) and visibility
+  changes. A ring buffer of 30, its own entry point, and no cost to an
+  application that does not import it: `initBreadcrumbs` registers a getter
+  that `buildReport` reads, so the core never imports the recorder.
+  Input values are never recorded, `[data-bugbottle]` is skipped entirely,
+  `[data-bugbottle-mask]` records a selector with no text, and
+  `beforeBreadcrumb(crumb)` can drop or rewrite anything before it is stored.
+- `buildReport` gains `includeBreadcrumbs` (default: attach them whenever the
+  buffer is recording), `normaliseBreadcrumbs` and `MAX_BREADCRUMBS` join the
+  server validators, and `toMarkdown` renders a "What happened before" list
+  between the elements and the console.
 
 ## 0.3.1
 
