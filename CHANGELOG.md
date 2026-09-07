@@ -7,6 +7,18 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.3.1
+
+### Added
+
+- `toMarkdown(report, options)` in `bugbottle/server` (and the core entry):
+  renders a raw or validated report as Markdown — title from the first line,
+  facts table, pointed-at elements, collapsible console — for an issue body,
+  a chat message, or the digest a coding agent reads each morning. Accepts
+  the raw request body and never throws.
+
+First release published from CI through npm Trusted Publishing.
+
 ## 0.3.0
 
 First npm release. The API changed from 0.2 in two places: `captureScreenshot`

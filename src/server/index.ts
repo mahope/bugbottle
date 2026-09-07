@@ -11,6 +11,8 @@
  * authenticated route. Do not give it a public URL.
  */
 
+export { toMarkdown, type MarkdownOptions } from "../markdown.ts";
+
 export {
   decodeScreenshotDataUrl,
   InvalidScreenshotError,

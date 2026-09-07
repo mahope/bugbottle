@@ -25,11 +25,11 @@ Without npm, install the tagged release straight from GitHub, or import the
 built files from the jsDelivr CDN — `dist/` is committed for exactly that:
 
 ```bash
-npm install github:mahope/bugbottle#v0.3.0
+npm install github:mahope/bugbottle#v0.3.1
 ```
 
 ```js
-import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.3.0/dist/index.js";
+import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.3.1/dist/index.js";
 ```
 
 - **Headless.** You render the form. The chrome around a feedback widget is
@@ -267,6 +267,45 @@ yesterday's, group them by application, and present them for a yes / no / how
 decision — then let it carry on from the ones approved. The reporter never
 had to describe where the button was; the payload already says.
 
+`toMarkdown` from `bugbottle/server` renders a report for exactly that — or
+for a GitHub issue, a Slack message, an email:
+
+```ts
+import { toMarkdown } from "bugbottle/server";
+
+const body = toMarkdown(payload, {
+  facts: { App: "checkout 1.4.2", User: user.id },
+  screenshotUrl: await storeScreenshot(screenshot), // your private route
+});
+```
+
+~~~markdown
+## Bug: The save button does nothing
+
+The save button does nothing
+
+| | |
+|---|---|
+| Type | Bug |
+| Page | `/orders/42?tab=notes` |
+| Viewport | 1440x900 |
+| Browser | Mozilla/5.0 … |
+| Last console entry | 2026-09-07T08:12:31.004Z |
+| App | checkout 1.4.2 |
+
+### Element pointed at
+
+- `form#checkout > button:nth-of-type(2)` — "Save order" (type="submit") at 912,640 118×36
+
+<details><summary>Console (1 entry)</summary>
+
+```text
+2026-09-07T08:12:31.004Z [error] TypeError: x is not a function
+```
+
+</details>
+~~~
+
 ## Screenshots
 
 `captureScreenshot` takes a *renderer* rather than importing one. A bundler
@@ -412,7 +451,7 @@ Requires `html-to-image`.
 
 **`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`, `isReportType`,
-`InvalidScreenshotError`, `REPORT_TYPES` and the `MAX_*` limits.
+`toMarkdown`, `InvalidScreenshotError`, `REPORT_TYPES` and the `MAX_*` limits.
 
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any
 evergreen browser on the client.
