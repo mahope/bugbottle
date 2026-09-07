@@ -11,7 +11,9 @@ and the favicon is an inline SVG.
 | `index.html` | English page |
 | `da/index.html` | Danish page — same structure, same sections |
 | `style.css` | Shared. Colour tokens on `:root`, redefined once for dark mode |
-| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch` |
+| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal |
+| `og.svg` | Source of the OpenGraph picture. Not served |
+| `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
 | `nginx.conf` | Replaces `conf.d/default.conf`: `/health`, caching, gzip |
 | `Dockerfile` | `nginx:alpine` plus these files and `dist/` |
 
@@ -30,6 +32,28 @@ passed straight through to `sendReport`.
 
 Screenshots are switched off in the demo: `html-to-image` is not loaded, so no
 renderer is given and the panel does not offer the checkbox.
+
+## The OpenGraph picture
+
+`og.png` is `og.svg` screenshotted at 1200x630 with headless Chrome, so the
+colours and the report card cannot drift from the page. Edit the SVG and
+render it again with the global `puppeteer-core` and Chrome:
+
+```js
+const page = await browser.newPage();
+await page.setViewport({ width: 1200, height: 630 });
+await page.setContent(`<!doctype html><meta charset="utf-8">` + svgSource);
+await page.screenshot({ path: "site/og.png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
+```
+
+## Motion
+
+Two pieces, both of which degrade to a finished page when they cannot run: the
+report card in the hero assembles itself with CSS `animation-delay` on each
+row, and `demo.js` reveals sections with one `IntersectionObserver`. The class
+that hides a section before it is revealed is set from JavaScript, so a browser
+without it — or one asking for reduced motion — never hides anything. Every
+animation and transition is switched off under `prefers-reduced-motion`.
 
 ## Building and running
 
