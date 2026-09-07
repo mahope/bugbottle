@@ -24,6 +24,21 @@ export type BuildReportInput = {
    * The report's own fields win if the names collide.
    */
   extra?: Record<string, unknown>;
+  /**
+   * Last pass over the assembled body, for redacting what the reporter did not
+   * mean to send. Pass the scrubber from `bugbottle`:
+   *
+   * ```ts
+   * import { buildReport, scrubReport } from "bugbottle";
+   * buildReport({ type, message, scrub: scrubReport });
+   * buildReport({ type, message, scrub: (r) => scrubReport(r, { keep: ["email"] }) });
+   * ```
+   *
+   * It is a function rather than a `true` flag so that this file never imports
+   * `scrub.ts`: a bundler resolves every import it sees, and the core entry has
+   * a kilobyte to stay under.
+   */
+  scrub?: (report: BugReport & Record<string, unknown>) => BugReport & Record<string, unknown>;
 };
 
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
@@ -36,7 +51,8 @@ export function buildReport(input: BuildReportInput): BugReport & Record<string,
   if (input.includeConsole ?? true) report.console = getConsoleBuffer();
   if (input.elements && input.elements.length > 0) report.elements = input.elements;
   if (input.screenshotDataUrl) report.screenshotDataUrl = input.screenshotDataUrl;
-  return { ...input.extra, ...report };
+  const body = { ...input.extra, ...report };
+  return input.scrub ? input.scrub(body) : body;
 }
 
 export type SendOptions = {
@@ -58,6 +74,21 @@ export type SendOptions = {
    * body's `error` or `message` field, then a generic one.
    */
   parseError?: (response: Response, body: unknown) => string | undefined;
+  /**
+   * Last look at the report before it leaves the browser. Return it, return a
+   * changed copy, or return `null` to drop it — `sendReport` then resolves
+   * `{ dropped: true, body: null, response: null }` without making a request.
+   *
+   * The name and the contract are Sentry's, because that is the shape people
+   * already know. Errors thrown here propagate: a hook that cannot decide is
+   * not a reason to send anyway.
+   */
+  beforeSend?: (
+    report: BugReport & Record<string, unknown>,
+  ) =>
+    | (BugReport & Record<string, unknown>)
+    | null
+    | Promise<(BugReport & Record<string, unknown>) | null>;
 };
 
 export const DEFAULT_SEND_TIMEOUT_MS = 15_000;
@@ -66,7 +97,10 @@ export type SendResult = {
   /** The `id` field of the response body, when the server sends one. */
   id?: string;
   body: unknown;
-  response: Response;
+  /** `null` when `beforeSend` dropped the report and no request was made. */
+  response: Response | null;
+  /** True when `beforeSend` returned `null`. Nothing was sent. */
+  dropped?: boolean;
 };
 
 /** The request was aborted by `timeoutMs` before the server answered. */
@@ -93,17 +127,29 @@ export class SendFailedError extends Error {
  * POSTs a report as JSON. Resolves on a 2xx, throws `SendFailedError` on any
  * other status, `SendTimeoutError` when `timeoutMs` elapses first, and lets
  * network failures from `fetch` propagate as they are.
+ *
+ * `options.beforeSend` runs first and can drop the report, in which case this
+ * resolves `{ dropped: true }` and never touches the network.
  */
 export async function sendReport(
   endpoint: string,
   report: BugReport & Record<string, unknown>,
   options: SendOptions = {},
 ): Promise<SendResult> {
+  let payload = report;
+  if (options.beforeSend) {
+    const decided = await options.beforeSend(payload);
+    if (decided === null || decided === undefined) {
+      return { dropped: true, body: null, response: null };
+    }
+    payload = decided;
+  }
+
   const doFetch = options.fetch ?? globalThis.fetch;
   const init: RequestInit = {
     method: "POST",
     headers: { "Content-Type": "application/json", ...options.headers },
-    body: JSON.stringify(report),
+    body: JSON.stringify(payload),
   };
   if (options.credentials) init.credentials = options.credentials;
 

@@ -42,6 +42,17 @@ export {
 
 export { toMarkdown, type MarkdownOptions } from "./markdown.ts";
 
+// Its own module, imported by nothing else here, so a bundler drops it whole
+// when the integrator does not scrub. See src/scrub.ts.
+export {
+  scrubReport,
+  BUILTIN_SCRUBBERS,
+  DEFAULT_REPLACEMENT,
+  type ScrubOptions,
+  type Scrubber,
+  type ScrubberName,
+} from "./scrub.ts";
+
 export { type Locale, type Messages, type UiTexts } from "./locales.ts";
 
 export {

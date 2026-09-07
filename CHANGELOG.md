@@ -7,6 +7,26 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `scrubReport(report, options)` in the core entry and in `bugbottle/server`,
+  with `BUILTIN_SCRUBBERS`: email addresses, `Bearer <token>`, JWTs, 13 to 19
+  digit card numbers that pass Luhn, IBANs, and query values whose key matches
+  `/token|key|secret|password|auth/i`, replaced with `[redacted]` across the
+  message, console entries, `context.url`, element text, `href` and `data-*`
+  attributes, and `breadcrumbs` if present. `patterns` adds your own, `keep`
+  switches a built-in off, `replacement` changes the text. Pure, never throws,
+  and leaves the screenshot alone. It lives in its own module that nothing else
+  imports, so the core entry stays under a kilobyte gzipped when it is unused.
+- `beforeSend` on `SendOptions`, mirroring Sentry: the last look at a report
+  before it leaves the browser. Returning `null` drops it, and `sendReport`
+  then resolves `{ dropped: true, body: null, response: null }` without making
+  a request. `SendResult.response` is now `Response | null` for that reason.
+- `scrub` on `BuildReportInput`, a function seam applied to the assembled body —
+  pass `scrubReport` itself. Both options are forwarded by `useBugReport` and
+  `mountBugbottle`; a dropped report shows the reporter the ordinary
+  thank-you.
+
 ## 0.3.1
 
 ### Added
