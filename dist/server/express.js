@@ -11,39 +11,67 @@
  * package has no dependencies and is not about to grow one for two field
  * names. Anything shaped like an Express request and response fits.
  */
-import { handleReport } from "./handle.js";
+import { handleReport, DEFAULT_MAX_BODY_BYTES, TOO_LARGE_ERROR, } from "./handle.js";
 /** One header value: Node gives arrays for the repeatable ones. */
 function headerValue(value) {
     if (Array.isArray(value))
         return value.join(", ");
     return value;
 }
-/** Reads the raw request stream, for a route mounted without a body parser. */
-async function rawBody(req) {
+/** Thrown by `rawBody` when the stream is over the ceiling. */
+class RawBodyTooLargeError extends Error {
+}
+/**
+ * Reads the raw request stream, for a route mounted without a body parser.
+ *
+ * Two things matter here and neither is obvious. The stream is counted as it
+ * arrives, because a route mounted without `express.json({ limit })` has no
+ * other ceiling and buffering the whole thing first is exactly the attack.
+ * And the bytes are decoded through one streaming `TextDecoder` rather than
+ * one per chunk: a chunk boundary falls wherever the network put it, and a
+ * two-byte character split across it decodes to two replacement characters if
+ * every chunk is decoded on its own.
+ */
+async function rawBody(req, maxBytes) {
     if (typeof req[Symbol.asyncIterator] !== "function")
         return undefined;
-    const chunks = [];
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const parts = [];
+    let total = 0;
     for await (const chunk of req) {
-        chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+        const bytes = typeof chunk === "string" ? encoder.encode(chunk) : chunk;
+        total += bytes.byteLength;
+        if (total > maxBytes) {
+            // Hang up rather than read the rest of a body we have already refused.
+            req.destroy?.();
+            throw new RawBodyTooLargeError();
+        }
+        parts.push(decoder.decode(bytes, { stream: true }));
     }
-    return chunks.join("");
+    // The flush emits whatever the last chunk left half-decoded.
+    parts.push(decoder.decode());
+    return parts.join("");
 }
 /**
  * The body as text: already-parsed JSON is re-serialised, a string or a
  * `Buffer` is taken as it is, and an unparsed request is read from the stream.
  */
-async function bodyText(req) {
+async function bodyText(req, maxBytes) {
     const body = req.body;
     if (body === undefined || body === null)
-        return await rawBody(req);
+        return await rawBody(req, maxBytes);
     if (typeof body === "string")
         return body;
     if (body instanceof Uint8Array)
         return new TextDecoder().decode(body);
     // An empty object is what `express.json()` leaves when there was no body,
-    // and re-serialising that would look like a report with nothing in it.
+    // and re-serialising that would look like a report with nothing in it. The
+    // stream it already drained iterates zero chunks and yields "", which is not
+    // JSON either, so an empty read means the same as no read at all.
     if (typeof body === "object" && Object.keys(body).length === 0) {
-        return (await rawBody(req)) ?? "{}";
+        const raw = await rawBody(req, maxBytes);
+        return raw ? raw : "{}";
     }
     return JSON.stringify(body);
 }
@@ -76,7 +104,28 @@ export function expressHandler(options = {}) {
             }
             let body;
             if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
-                body = await bodyText(req);
+                try {
+                    body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES);
+                }
+                catch (err) {
+                    if (!(err instanceof RawBodyTooLargeError))
+                        throw err;
+                    // `handleReport` never sees this body, so the 413 is written here.
+                    res.status(413);
+                    if (options.cors) {
+                        const origin = options.cors === true ? "*" : options.cors;
+                        if (res.setHeader)
+                            res.setHeader("Access-Control-Allow-Origin", origin);
+                        else
+                            res.set?.("Access-Control-Allow-Origin", origin);
+                    }
+                    if (res.setHeader)
+                        res.setHeader("Content-Type", "application/json");
+                    else
+                        res.set?.("Content-Type", "application/json");
+                    res.send(JSON.stringify({ error: TOO_LARGE_ERROR }));
+                    return;
+                }
                 if (body !== undefined) {
                     headers.set("content-length", String(new TextEncoder().encode(body).byteLength));
                 }

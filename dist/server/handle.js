@@ -29,8 +29,14 @@ export const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 export const MAX_EXTRA_STRING_LENGTH = 500;
 /** How many unknown top-level keys are kept. */
 export const MAX_EXTRA_KEYS = 20;
+/** How long the whole body may take to arrive. Default 15 s. Over it answers 408. */
+export const DEFAULT_BODY_TIMEOUT_MS = 15_000;
+/** How long one sink may take before it is abandoned. Default 10 s. */
+export const DEFAULT_SINK_TIMEOUT_MS = 10_000;
 /** The locale-neutral answer to a report with nothing written in it. */
 export const EMPTY_MESSAGE_ERROR = "Write a message first";
+/** The answer to a body over the ceiling. Shared with the Express adapter. */
+export const TOO_LARGE_ERROR = "Report is too large";
 /** The known top-level keys of a report. Everything else becomes `extra`. */
 const KNOWN_KEYS = new Set([
     "type",
@@ -42,6 +48,10 @@ const KNOWN_KEYS = new Set([
     "network",
     "screenshotDataUrl",
 ]);
+/** Longest key kept for a bucket: a header is not allowed to size the map. */
+export const MAX_RATE_LIMIT_KEY_LENGTH = 64;
+/** Hard ceiling on the bucket map, whatever the traffic looks like. */
+export const MAX_RATE_LIMIT_BUCKETS = 10_000;
 /**
  * The rate-limit buckets. Module-level on purpose and documented as such: a
  * serverless isolate gets its own, and two instances behind a load balancer do
@@ -58,23 +68,38 @@ function defaultRateLimitKey(request) {
         return forwarded.split(",")[0]?.trim() || "unknown";
     return request.headers.get("cf-connecting-ip") ?? "unknown";
 }
+/**
+ * Makes room for one more bucket: the expired ones first, because they cost
+ * nothing to lose, and then the oldest entries. A `Map` iterates in insertion
+ * order, so the front of it is the oldest key we know about.
+ */
+function evictBuckets(now) {
+    for (const [k, v] of buckets)
+        if (v.resetAt <= now)
+            buckets.delete(k);
+    while (buckets.size >= MAX_RATE_LIMIT_BUCKETS) {
+        const oldest = buckets.keys().next();
+        if (oldest.done)
+            break;
+        buckets.delete(oldest.value);
+    }
+}
 /** True when this caller is over its allowance. Prunes as it goes. */
 function overRateLimit(request, options) {
-    const key = (options.key ?? defaultRateLimitKey)(request);
+    // The key is attacker-controlled by default: a forwarded address is a header.
+    // Clipping it bounds one entry, and the ceiling below bounds the whole map.
+    const key = (options.key ?? defaultRateLimitKey)(request).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
     const now = Date.now();
     const bucket = buckets.get(key);
-    if (!bucket || bucket.resetAt <= now) {
-        buckets.set(key, { count: 1, resetAt: now + options.windowMs });
-        // The map would otherwise grow with every address that ever called.
-        if (buckets.size > 10_000) {
-            for (const [k, v] of buckets)
-                if (v.resetAt <= now)
-                    buckets.delete(k);
-        }
-        return false;
+    if (bucket && bucket.resetAt > now) {
+        bucket.count += 1;
+        return bucket.count > options.limit;
     }
-    bucket.count += 1;
-    return bucket.count > options.limit;
+    // A fresh key is what grows the map, so that is where the ceiling is checked.
+    if (!bucket && buckets.size >= MAX_RATE_LIMIT_BUCKETS)
+        evictBuckets(now);
+    buckets.set(key, { count: 1, resetAt: now + options.windowMs });
+    return false;
 }
 function corsHeaders(cors) {
     if (!cors)
@@ -104,13 +129,20 @@ function withCors(response, cors) {
 /** Thrown internally when the body is over the ceiling. */
 class BodyTooLargeError extends Error {
 }
+/** Thrown internally when the body took longer to arrive than we will wait. */
+class BodyTimeoutError extends Error {
+}
 /**
- * Reads the body as text without ever holding more than the ceiling.
+ * Reads the body as text without ever holding more than the ceiling, and
+ * without waiting for it longer than the deadline.
  *
  * `content-length` is a claim, not a fact, so it is checked first as a cheap
- * rejection and the stream is counted anyway.
+ * rejection and the stream is counted anyway. The deadline covers the whole
+ * read rather than one chunk, because a sender that dribbles a byte at a time
+ * never trips a per-chunk timer and holds the socket open for as long as it
+ * likes.
  */
-async function readBoundedText(request, maxBytes) {
+async function readBoundedText(request, maxBytes, timeoutMs) {
     const declared = request.headers.get("content-length");
     if (declared !== null) {
         const length = Number(declared);
@@ -123,9 +155,16 @@ async function readBoundedText(request, maxBytes) {
     const reader = body.getReader();
     const chunks = [];
     let total = 0;
+    let timer;
+    const expiry = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new BodyTimeoutError()), timeoutMs);
+    });
+    // Nothing awaits `expiry` once the loop is done, so it is marked handled here
+    // rather than surfacing as an unhandled rejection after a fast request.
+    expiry.catch(() => { });
     try {
         for (;;) {
-            const { done, value } = await reader.read();
+            const { done, value } = await Promise.race([reader.read(), expiry]);
             if (done)
                 break;
             if (!value)
@@ -137,6 +176,8 @@ async function readBoundedText(request, maxBytes) {
         }
     }
     finally {
+        if (timer !== undefined)
+            clearTimeout(timer);
         // Stops the sender rather than draining a body we have already refused.
         await reader.cancel().catch(() => { });
     }
@@ -149,6 +190,13 @@ async function readBoundedText(request, maxBytes) {
     return new TextDecoder().decode(joined);
 }
 /**
+ * Keys that mean something to the language rather than to us. `JSON.parse`
+ * makes `__proto__` an own property, but assigning it back onto a plain object
+ * reaches the prototype setter instead, and `constructor` shadows a method
+ * every later reader assumes is there. Neither belongs in a row.
+ */
+const FORBIDDEN_EXTRA_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+/**
  * The unknown top-level keys, capped. Strings are clipped, numbers and
  * booleans pass as they are, and anything else — an object, an array, a
  * function that arrived as JSON cannot — is left out.
@@ -157,6 +205,8 @@ export function collectExtra(payload) {
     const extra = {};
     for (const [key, value] of Object.entries(payload)) {
         if (KNOWN_KEYS.has(key))
+            continue;
+        if (FORBIDDEN_EXTRA_KEYS.has(key))
             continue;
         if (Object.keys(extra).length >= MAX_EXTRA_KEYS)
             break;
@@ -195,6 +245,30 @@ export function validateReport(payload) {
         receivedAt: new Date().toISOString(),
     };
 }
+/** A sink that never answered. Counted exactly like a sink that threw. */
+export class SinkTimeoutError extends Error {
+    constructor(ms) {
+        super(`Sink did not answer within ${ms} ms`);
+        this.name = "SinkTimeoutError";
+    }
+}
+/**
+ * Runs one sink under a deadline.
+ *
+ * A sink is one `fetch` to somebody else's service, and somebody else's
+ * service is allowed to hang. Without a deadline the reporter waits for it,
+ * and on a serverless runtime the whole invocation is billed for the wait —
+ * for a delivery that is explicitly not allowed to fail the reply anyway.
+ */
+async function runSink(sink, report, ctx, timeoutMs) {
+    const signal = AbortSignal.timeout(timeoutMs);
+    const expiry = new Promise((_, reject) => {
+        signal.addEventListener("abort", () => reject(new SinkTimeoutError(timeoutMs)), { once: true });
+    });
+    // A sink that answers in time leaves this promise to reject into nobody.
+    expiry.catch(() => { });
+    await Promise.race([sink(report, { ...ctx, signal }), expiry]);
+}
 /**
  * Turns an incoming request into a stored, delivered report and a `Response`.
  *
@@ -207,15 +281,23 @@ export async function handleReport(request, options = {}) {
     const cors = options.cors;
     try {
         if (request.method === "OPTIONS" && cors) {
+            // Reflecting what was asked for is what lets a client send its own
+            // headers — a CSRF token, a tracing id — without us listing them here.
+            const requested = request.headers.get("access-control-request-headers");
             return new Response(null, {
                 status: 204,
                 headers: {
                     ...corsHeaders(cors),
                     "Access-Control-Allow-Methods": "POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    "Access-Control-Allow-Headers": requested ?? "Content-Type, Authorization",
                     "Access-Control-Max-Age": "86400",
                 },
             });
+        }
+        // Only a POST carries a report. Anything else is a misrouted request, and
+        // answering it here is cheaper than validating a body that cannot exist.
+        if (request.method !== "POST") {
+            return json({ error: "Method not allowed" }, 405, cors);
         }
         if (options.rateLimit && overRateLimit(request, options.rateLimit)) {
             return json({ error: "Too many reports" }, 429, cors);
@@ -224,13 +306,17 @@ export async function handleReport(request, options = {}) {
             return json({ error: "Not allowed" }, 401, cors);
         }
         const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+        const bodyTimeoutMs = options.bodyTimeoutMs ?? DEFAULT_BODY_TIMEOUT_MS;
         let text;
         try {
-            text = await readBoundedText(request, maxBodyBytes);
+            text = await readBoundedText(request, maxBodyBytes, bodyTimeoutMs);
         }
         catch (err) {
             if (err instanceof BodyTooLargeError) {
-                return json({ error: "Report is too large" }, 413, cors);
+                return json({ error: TOO_LARGE_ERROR }, 413, cors);
+            }
+            if (err instanceof BodyTimeoutError) {
+                return json({ error: "Report took too long to arrive" }, 408, cors);
             }
             throw err;
         }
@@ -263,14 +349,23 @@ export async function handleReport(request, options = {}) {
             }
         }
         if (bytes && typeof mode === "function") {
-            screenshotUrl = await mode(bytes, report);
+            try {
+                screenshotUrl = await mode(bytes, report);
+            }
+            catch (err) {
+                // The bucket being down is not the reporter losing their report. The
+                // message is still stored and still delivered, only without a picture.
+                options.onError?.(err);
+            }
         }
         // A stored picture travels on as its URL: handing the bytes to a sink as
         // well would attach the same image twice, once inline and once by link.
+        // `store` sees them on the same terms, which is what the README promises:
+        // only `"keep"` hands bytes on.
         const screenshot = mode === "keep" ? bytes : undefined;
         let id;
         if (options.store) {
-            const stored = await options.store(report, bytes);
+            const stored = await options.store(report, screenshot);
             if (stored && typeof stored === "object" && typeof stored.id === "string")
                 id = stored.id;
         }
@@ -280,12 +375,13 @@ export async function handleReport(request, options = {}) {
         });
         const sinkErrors = [];
         const sinks = options.sinks ?? [];
+        const sinkTimeoutMs = options.sinkTimeoutMs ?? DEFAULT_SINK_TIMEOUT_MS;
         for (let i = 0; i < sinks.length; i += 1) {
             const sink = sinks[i];
             if (!sink)
                 continue;
             try {
-                await sink(report, { markdown, screenshotUrl, screenshot });
+                await runSink(sink, report, { markdown, screenshotUrl, screenshot }, sinkTimeoutMs);
             }
             catch (err) {
                 // A report that is already stored must not be lost to a webhook that

@@ -35,7 +35,10 @@ bodies and no headers ever, URLs scrubbed, `normaliseNetwork` and a
 one universal receiver from web `Request` to `Response` — authorisation, a
 body ceiling, every validator, optional scrubbing, a screenshot policy,
 `store` and ordered sinks with `toResend`/`toWebhook`/`toGithub`, CORS and an
-in-memory rate limit — with `expressHandler` for Express.
+in-memory rate limit — with `expressHandler` for Express. Hardened after a
+review: a body deadline as well as a body ceiling, a per-sink deadline, a
+capped and clipped rate-limit map, 405 for anything that is not a POST, and a
+screenshot store that may fail without taking the report with it.
 
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub

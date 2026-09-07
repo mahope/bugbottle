@@ -23,6 +23,8 @@ export type ExpressRequestLike = {
     body?: unknown;
     /** The raw stream, read when nothing parsed the body. */
     [Symbol.asyncIterator]?: () => AsyncIterator<unknown>;
+    /** Node closes the socket with this; called when the body is over the cap. */
+    destroy?: (error?: Error) => unknown;
 };
 /** As much of an Express response as the adapter writes. */
 export type ExpressResponseLike = {
