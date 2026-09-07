@@ -43,6 +43,11 @@ export type UiTexts = {
   close: string;
   /** Shown after a successful send, with a button to close. */
   thanks: string;
+  /**
+   * Replaces `intro` when the panel was opened by an uncaught error rather
+   * than by the reporter. It has to explain itself: nobody asked for a panel.
+   */
+  openedByError: string;
 };
 
 /**
@@ -100,6 +105,7 @@ export const en: Locale = {
     sending: "Sending…",
     close: "Close",
     thanks: "Thank you. We have received your report.",
+    openedByError: "Something went wrong on this page. Want to tell us what you were doing?",
   },
   email: {
     subject: "New report: {title}",
@@ -134,6 +140,7 @@ export const da: Locale = {
     sending: "Sender…",
     close: "Luk",
     thanks: "Tak. Vi har modtaget din rapport.",
+    openedByError: "Noget gik galt på denne side. Vil du fortælle os, hvad du var i gang med?",
   },
   email: {
     subject: "Ny rapport: {title}",
@@ -168,6 +175,7 @@ export const sv: Locale = {
     sending: "Skickar…",
     close: "Stäng",
     thanks: "Tack. Vi har tagit emot din rapport.",
+    openedByError: "Något gick fel på den här sidan. Vill du berätta vad du höll på med?",
   },
   email: {
     subject: "Ny rapport: {title}",
@@ -202,6 +210,7 @@ export const nb: Locale = {
     sending: "Sender…",
     close: "Lukk",
     thanks: "Takk. Vi har mottatt rapporten din.",
+    openedByError: "Noe gikk galt på denne siden. Vil du fortelle oss hva du holdt på med?",
   },
   email: {
     subject: "Ny rapport: {title}",
@@ -236,6 +245,8 @@ export const de: Locale = {
     sending: "Wird gesendet…",
     close: "Schließen",
     thanks: "Danke. Wir haben Ihre Meldung erhalten.",
+    openedByError:
+      "Auf dieser Seite ist etwas schiefgegangen. Möchten Sie uns sagen, was Sie gerade getan haben?",
   },
   email: {
     subject: "Neue Meldung: {title}",
@@ -270,6 +281,7 @@ export const nl: Locale = {
     sending: "Verzenden…",
     close: "Sluiten",
     thanks: "Bedankt. We hebben je melding ontvangen.",
+    openedByError: "Er ging iets mis op deze pagina. Wil je ons vertellen wat je aan het doen was?",
   },
   email: {
     subject: "Nieuwe melding: {title}",
@@ -304,6 +316,8 @@ export const fr: Locale = {
     sending: "Envoi…",
     close: "Fermer",
     thanks: "Merci. Nous avons bien reçu votre signalement.",
+    openedByError:
+      "Quelque chose s'est mal passé sur cette page. Voulez-vous nous dire ce que vous faisiez ?",
   },
   email: {
     subject: "Nouveau signalement : {title}",
@@ -338,6 +352,7 @@ export const es: Locale = {
     sending: "Enviando…",
     close: "Cerrar",
     thanks: "Gracias. Hemos recibido tu informe.",
+    openedByError: "Algo ha ido mal en esta página. ¿Quieres contarnos qué estabas haciendo?",
   },
   email: {
     subject: "Nuevo informe: {title}",

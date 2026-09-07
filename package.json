@@ -60,6 +60,10 @@
       "types": "./dist/queue.d.ts",
       "default": "./dist/queue.js"
     },
+    "./triggers": {
+      "types": "./dist/triggers.d.ts",
+      "default": "./dist/triggers.js"
+    },
     "./locales": {
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"

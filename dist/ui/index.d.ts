@@ -80,6 +80,22 @@ export type MountOptions = {
      * An element or selector makes that element the trigger instead.
      */
     trigger?: false | HTMLElement | string;
+    /**
+     * Key combination that opens and closes the panel. Default `"mod+shift+b"`,
+     * where `mod` is Command on a Mac and Control everywhere else. `false`
+     * installs no listener. Never fires while the reporter is typing in a field.
+     */
+    shortcut?: string | false;
+    /**
+     * Open the panel when the page throws an error nobody caught. Off by default:
+     * a panel that appears uninvited is a decision about the product, not a
+     * default. On, it opens once per distinct error, sets the type to bug and
+     * shows the locale's `openedByError` line; `{ prefill: true }` also puts the
+     * error message in the box. Nothing is sent until the reporter presses send.
+     */
+    openOnError?: boolean | {
+        prefill?: boolean;
+    };
     /** Where to mount. Default `document.body`. */
     container?: HTMLElement;
     /** Extra fields merged into every report — app version, tenant id. */

@@ -17,6 +17,7 @@ import { pickElement } from "../element-picker.js";
 import { en } from "../locales.js";
 import { MAX_ELEMENTS, REPORT_TYPES, } from "../report-core.js";
 import { buildReport, sendReport, SendFailedError, } from "../send.js";
+import { DEFAULT_SHORTCUT, onShortcut, onUncaughtError } from "../triggers.js";
 const POSITIONS = {
     "bottom-right": "right:16px;bottom:16px;",
     "bottom-left": "left:16px;bottom:16px;",
@@ -143,6 +144,9 @@ export function mountBugbottle(options) {
     let pickController = null;
     let sending = false;
     let isOpen = false;
+    // True only while a panel that an uncaught error opened is still open, so the
+    // intro can explain why it is there and go back to normal afterwards.
+    let openedByError = false;
     // ---- host + shadow
     const host = el("div", { "data-bugbottle": "ui", lang: locale.code, dir: locale.dir ?? "ltr" });
     host.dataset.scheme = theme.scheme ?? "auto";
@@ -214,8 +218,7 @@ export function mountBugbottle(options) {
         title.textContent = options.brand?.name ?? ui.title;
         closeBtn.setAttribute("aria-label", ui.close);
         closeBtn.title = ui.close;
-        intro.textContent = ui.intro;
-        intro.hidden = !ui.intro;
+        applyIntro();
         for (const [t, b] of typeButtons)
             b.textContent = ui.types[t];
         messageLabel.textContent = ui.messageLabel;
@@ -228,6 +231,11 @@ export function mountBugbottle(options) {
         thanksText.textContent = ui.thanks;
         thanksClose.textContent = ui.close;
         renderElements();
+    }
+    function applyIntro() {
+        const text = openedByError ? ui.openedByError : ui.intro;
+        intro.textContent = text;
+        intro.hidden = !text;
     }
     function setStatus(text, kind = "info") {
         status.textContent = text;
@@ -379,6 +387,7 @@ export function mountBugbottle(options) {
         form.hidden = false;
         thanks.hidden = true;
         panel.hidden = false;
+        applyIntro();
         trigger.setAttribute("aria-expanded", "true");
         textarea.focus();
         if (shotBox.checked)
@@ -388,6 +397,7 @@ export function mountBugbottle(options) {
         if (!isOpen)
             return;
         isOpen = false;
+        openedByError = false;
         pickController?.abort();
         panel.hidden = true;
         trigger.setAttribute("aria-expanded", "false");
@@ -426,6 +436,26 @@ export function mountBugbottle(options) {
     function toggle() {
         isOpen ? close() : open();
     }
+    /** Opens the panel for an error the reporter has not asked us about yet. */
+    function openForError(message, prefill) {
+        if (isOpen)
+            return;
+        openedByError = true;
+        if (types.includes("bug"))
+            setType("bug");
+        // Never overwrite what somebody has already written: they were here first.
+        if (prefill && !textarea.value.trim())
+            textarea.value = message;
+        open();
+    }
+    const unsubscribes = [];
+    if (options.shortcut !== false) {
+        unsubscribes.push(onShortcut(options.shortcut ?? DEFAULT_SHORTCUT, toggle));
+    }
+    if (options.openOnError) {
+        const prefill = options.openOnError !== true && options.openOnError.prefill === true;
+        unsubscribes.push(onUncaughtError((error) => openForError(error.message, prefill)));
+    }
     resetForm();
     applyTexts();
     container.append(host);
@@ -442,6 +472,8 @@ export function mountBugbottle(options) {
         },
         destroy() {
             pickController?.abort();
+            for (const off of unsubscribes)
+                off();
             externalTrigger?.removeEventListener("click", toggle);
             host.remove();
         },

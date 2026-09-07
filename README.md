@@ -150,6 +150,98 @@ merged into the body — an app version, a tenant id), `headers` and
 `credentials` (for an authenticated or cross-origin endpoint), `timeoutMs`,
 `onSent`, `parseError`, and `messages` for translated strings. The defaults are English.
 
+## Catching render errors (React)
+
+When a component throws, there is no screen left to point at — but there is a
+message, a stack and a component stack, which is the best evidence a bug report
+ever carries. `BugReportBoundary` catches it and hands your fallback the error
+and a `report()` function:
+
+```tsx
+import { BugReportBoundary } from "bugbottle/react";
+
+<BugReportBoundary
+  endpoint="/api/feedback"
+  fallback={(error, report) => (
+    <div role="alert">
+      <p>This part of the page stopped working.</p>
+      <button onClick={report}>Tell us what happened</button>
+    </div>
+  )}
+>
+  <Orders />
+</BugReportBoundary>;
+```
+
+`report()` sends a bug report whose message is the error, its stack and the
+component stack, and resolves `true` when the endpoint accepted it — so the
+button can say "sent". Nothing is sent until it is called: a report is a
+message from a person, and sending one on their behalf without asking is
+telemetry, which this library is not. `onReport(error, id)` and
+`onError(error)` are there for the surrounding application.
+
+For the errors that reach the root, React 19 takes two handlers, and
+`createRootErrorHandlers` builds both:
+
+```ts
+import { createRoot } from "react-dom/client";
+import { createRootErrorHandlers } from "bugbottle/react";
+
+createRoot(node, createRootErrorHandlers({ endpoint: "/api/feedback" })).render(<App />);
+```
+
+These do send by themselves, because there is nobody left to ask. Each distinct
+error is sent once per `dedupeMs` (60 000 by default, by the same fingerprint
+the client and the server share), so a component that throws on every render
+sends one report rather than a thousand. Say so in your privacy notice, and
+pass `scrub: scrubReport` if a message could carry anything personal.
+
+## Opening it without a button
+
+A form nobody can find is a form nobody uses, and a floating button is not
+always wanted. `bugbottle/triggers` is two listeners, under 1.2 kB gzipped
+together and importing nothing but the fingerprint hash:
+
+```ts
+import { onShortcut, onUncaughtError } from "bugbottle/triggers";
+
+const offKeys = onShortcut("mod+shift+b", () => widget.open());
+const offErrors = onUncaughtError((error) => {
+  console.warn("uncaught", error.fingerprint);
+  widget.open();
+});
+```
+
+`mod` is Command on a Mac and Control everywhere else, so one string covers
+both. The shortcut never fires while the reporter is typing in a field or a
+`contenteditable` region, and a match is `preventDefault`ed so the browser does
+not also act on it. `onUncaughtError` listens for `error` and
+`unhandledrejection`, describes each one the same way, and calls you at most
+once per fingerprint (message plus the first stack frame) per `dedupeMs` —
+60 000 by default — which is what makes it safe to open a panel from. Pass
+`ignore` to drop the ones you already know about. Both return the unsubscribe.
+
+The ready-made panel wires both for you. The shortcut is on by default:
+
+```ts
+const widget = mountBugbottle({
+  endpoint: "/api/feedback",
+  shortcut: "mod+shift+b", // the default; `false` installs no listener
+  openOnError: { prefill: true },
+});
+```
+
+`openOnError` is off unless you ask for it: a panel that appears uninvited is a
+decision about your product, not a default. Switched on, an uncaught error
+opens the panel with the type set to bug and the locale's `openedByError` line
+where the intro usually is — "Something went wrong on this page. Want to tell
+us what you were doing?" — and `{ prefill: true }` also puts the error message
+in the box, without overwriting anything the reporter has already written. They
+still have to press send. Closing the panel puts the ordinary intro back.
+
+From the script tag it is `data-shortcut` (`data-shortcut="off"` for none) and
+`data-open-on-error` (any value, or `"prefill"`).
+
 ## The form (anything else)
 
 The hook is a thin layer over three functions that work anywhere:
@@ -326,6 +418,8 @@ run on your page.
 | `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
+| `data-shortcut` | The combination that opens the panel. `mod+shift+b` unless you say otherwise; `off` installs no listener. |
+| `data-open-on-error` | Present, with any value, opens the panel on an uncaught error. `prefill` also fills the message in. |
 
 The tag also patches the console immediately and starts breadcrumbs, so an
 error thrown before the page finishes loading is still in the report.
@@ -336,7 +430,7 @@ page that only wants the panel is the wrong trade. The bundle exposes the
 building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
 `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
 `locales`, `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`,
-`pickElement` and `version` — so a
+`pickElement`, `onShortcut`, `onUncaughtError` and `version` — so a
 page that wants pictures can load `html-to-image` itself and call
 `window.bugbottle.mount({ endpoint, screenshot })`. Leave `data-endpoint` off
 the tag and nothing mounts on its own:
@@ -645,6 +739,7 @@ export const POST = (req: Request) =>
     onSinkError: (err) => logger.warn({ err }, "sink failed"),
     cors: "https://app.acme.com",                          // answers OPTIONS too
     rateLimit: { limit: 20, windowMs: 60_000 },
+    dedupe: { windowMs: 60_000 },                          // the same report twice → 200
   });
 ```
 
@@ -699,6 +794,17 @@ rateLimit: {
   key: (req) => sessionIdFrom(req.headers.get("cookie")) ?? "anonymous",
 }
 ```
+
+`dedupe` answers a repeat of the same report with `200 { id, duplicate: true }`
+— the id of the first one — without running `store` or the sinks again. What
+counts as the same report is `fingerprint(report)` from `bugbottle`: the type,
+the message and the first console error, hashed. The client computes it the
+same way from the same function, so a fingerprint written down by a sink means
+the same thing on both sides. It is compared after scrubbing, so two reports
+that differ only in what was redacted are one report. Pass `key` to decide for
+yourself. Like the rate limit it is in memory, so it is per instance: it stops
+one browser sending the same crash forty times, not two instances behind a load
+balancer storing it twice.
 
 For Express, `expressHandler` builds the `Request` and writes the `Response`
 back:
@@ -1097,6 +1203,7 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `DEFAULT_MASK_SELECTOR`, `DEFAULT_BLOCK_SELECTOR` and `DEFAULT_MASK_COLOUR`),
 `collectContext`, `pickElement`, `describeElement`, `buildSelector`,
 `buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
+`fingerprint`, `stableHash`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
 validators below, and the shared types and limits.
 
@@ -1104,7 +1211,7 @@ validators below, and the shared types and limits.
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
 `locales`,
 `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`, `pickElement`,
-`version`, and
+`onShortcut`, `onUncaughtError`, `version`, and
 `data-*` auto-mount. See "One script tag".
 
 **WordPress** — the plugin at
@@ -1121,7 +1228,16 @@ post type with an admin list, and emails them if you want. One activation.
 **`bugbottle/queue`** — `createQueue`, and the `Queue`, `QueueOptions` and
 `QueuedReport` types. See "When the network is down".
 
-**`bugbottle/react`** — `useBugReport`.
+**`bugbottle/triggers`** — `onShortcut`, `onUncaughtError`, `parseShortcut`,
+`matchesShortcut`, `isEditableTarget`, `isApplePlatform`, `describeUncaught`,
+`DEFAULT_SHORTCUT`, `DEFAULT_DEDUPE_MS`, and the `Shortcut`, `ShortcutEvent`,
+`ShortcutOptions`, `UncaughtError`, `UncaughtErrorOptions` and `ListenerHost`
+types.
+
+**`bugbottle/react`** — `useBugReport`, `BugReportBoundary`,
+`createRootErrorHandlers`, `describeRenderError`, and the
+`BugReportBoundaryProps`, `ReportErrorOptions`, `RootErrorHandlerOptions` and
+`RootErrorHandlers` types.
 
 **`bugbottle/html-to-image`** — `htmlToImage`, a `ScreenshotRenderer`.
 Requires `html-to-image`.
@@ -1135,6 +1251,7 @@ Requires `html-to-image`.
 
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
+`resetDedupe`, `fingerprint`, `stableHash`,
 `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
@@ -1144,8 +1261,8 @@ Requires `html-to-image`.
 `InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
-`HandleReportOptions`, `HandleReportResult`, `ReportSink` and `SinkContext`
-types, and the `MAX_*` limits.
+`HandleReportOptions`, `HandleReportResult`, `DedupeOptions`, `ReportSink` and
+`SinkContext` types, and the `MAX_*` limits.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
 served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).

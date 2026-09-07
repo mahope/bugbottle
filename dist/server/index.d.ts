@@ -11,7 +11,8 @@
  * authenticated route. Do not give it a public URL.
  */
 export { toMarkdown, type MarkdownOptions } from "../markdown.ts";
-export { handleReport, validateReport, collectExtra, resetRateLimits, toResend, toWebhook, toGithub, toLinear, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, type HandleReportOptions, type HandleReportResult, type RateLimitOptions, type ReportSink, type SinkContext, type ValidatedReport, } from "./handle.ts";
+export { fingerprint, stableHash, type FingerprintInput } from "../fingerprint.ts";
+export { handleReport, validateReport, collectExtra, resetRateLimits, resetDedupe, toResend, toWebhook, toGithub, toLinear, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, MAX_DEDUPE_ENTRIES, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, type DedupeOptions, type HandleReportOptions, type HandleReportResult, type RateLimitOptions, type ReportSink, type SinkContext, type ValidatedReport, } from "./handle.ts";
 export { expressHandler, type ExpressRequestLike, type ExpressResponseLike, } from "./express.ts";
 export { SinkError, type FetchLike } from "../sinks/error.ts";
 export { sendReportEmail, type SendReportEmailOptions, type SendReportEmailResult, } from "../sinks/resend.ts";

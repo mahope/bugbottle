@@ -76,12 +76,56 @@ change the API; the changelog says so when they do.
 - `site/docs.css` and `site/docs.js` for the documentation pages only. The
   landing page's stylesheet is untouched.
 
-### Changed
 
 - The "Docs" link in the header of both landing pages, and the "Read the docs"
   button in the hero, now point at `/docs/` instead of the README on GitHub.
 - `.dockerignore`: the site image is built from the repository root, so
   `node_modules` and `.git` no longer travel to the daemon on every build.
+- `bugbottle/triggers`, a new entry point: `onShortcut(combo, handler)` and
+  `onUncaughtError(handler, options)`, two listeners and nothing else. The
+  combination is written once as `"mod+shift+b"` — `mod` is Command on a Mac
+  and Control everywhere else — never fires while the reporter is typing in a
+  field or a `contenteditable` region, and is `preventDefault`ed when it
+  matches. `onUncaughtError` listens for `error` and `unhandledrejection`,
+  describes both the same way, and calls the handler at most once per
+  fingerprint per `dedupeMs` (60 000 by default), which is what makes it safe
+  to open a panel from. Both return the unsubscribe. Also exposed on
+  `window.bugbottle` in the script-tag build.
+- `fingerprint(report)` and `stableHash(text)` in `bugbottle` and
+  `bugbottle/server`: the type, the message and the first console error,
+  hashed with FNV-1a. One identity for a report computed the same way in the
+  browser and on the server, so a fingerprint a sink writes down means the same
+  thing on both sides. Its own module, imported by nothing in the core entry,
+  so it is tree-shaken when nobody deduplicates.
+- `mountBugbottle` takes `shortcut` (`"mod+shift+b"` by default, `false` for
+  none) and `openOnError` (off by default; `true` or `{ prefill: true }`). An
+  uncaught error opens the panel with the type set to bug and the new
+  `ui.openedByError` line where the intro usually is — "Something went wrong on
+  this page. Want to tell us what you were doing?", translated into all eight
+  locales — and with `prefill` the error message in the box, without
+  overwriting anything already written. The reporter still presses send.
+  `data-shortcut` and `data-open-on-error` do the same from the script tag.
+- `BugReportBoundary` and `createRootErrorHandlers` in `bugbottle/react`. The
+  boundary catches a render error and renders your `fallback(error, report)`;
+  `report()` sends the error, its stack and the component stack as a bug
+  report, and nothing is sent until it is called. The root handlers are React
+  19's `onCaughtError`/`onUncaughtError` and do send by themselves — there is
+  nobody left to ask — once per distinct error per `dedupeMs`. Written with no
+  JSX so that the package keeps building with plain `tsc`.
+- `handleReport` takes `dedupe: { windowMs, key? }`: a repeat of the same
+  report is answered `200 { id, duplicate: true }` with the first one's id,
+  without running `store` or the sinks again. The default key is `fingerprint`,
+  compared after scrubbing. In memory and per instance, with the same honest
+  caveat as the rate limit, and `resetDedupe()` for tests.
+
+
+- Budgets: `bugbottle/ui` moves from 8192 to 9216 bytes gzipped and the
+  script-tag build from 14336 to 15360, because the panel now imports
+  `bugbottle/triggers` so that a keyboard shortcut works with no wiring at all.
+  Measured 9043 and 15111. `bugbottle/triggers` is budgeted at 1200 and
+  measures 1133: the roadmap said 1 kB, and 2.3 kB of dense minified code with
+  nothing to share a compression dictionary with does not get there.
+
 
 ## 0.5.0
 

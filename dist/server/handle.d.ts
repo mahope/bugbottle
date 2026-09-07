@@ -103,6 +103,23 @@ export type RateLimitOptions = {
 export declare const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 /** Hard ceiling on the bucket map, whatever the traffic looks like. */
 export declare const MAX_RATE_LIMIT_BUCKETS = 10000;
+/**
+ * Answering the same report twice as if it were new. In memory, so per
+ * instance — the same caveat as the rate limit, and for the same reason.
+ */
+export type DedupeOptions = {
+    /** How long a repeat of the same report is answered as a duplicate. */
+    windowMs: number;
+    /**
+     * What counts as the same report. Default: `fingerprint` from `bugbottle`,
+     * the type, the message and the first console error, hashed — the same
+     * function the browser uses, so a client that deduplicates and a server that
+     * deduplicates agree.
+     */
+    key?: (report: ValidatedReport) => string;
+};
+/** Hard ceiling on the fingerprint map. */
+export declare const MAX_DEDUPE_ENTRIES = 10000;
 export type HandleReportOptions = {
     /** False answers 401 before the body is read. */
     authorize?: (request: Request) => boolean | Promise<boolean>;
@@ -139,11 +156,18 @@ export type HandleReportOptions = {
     cors?: string | boolean;
     /** In-memory, per instance. Fine per serverless isolate, not shared. */
     rateLimit?: RateLimitOptions;
+    /**
+     * Answer a repeat of the same report with 200 `{ id, duplicate: true }`
+     * instead of storing and delivering it again. In memory, per instance.
+     */
+    dedupe?: DedupeOptions;
     /** Passed through to `toMarkdown` — extra facts, a heading level. */
     markdown?: MarkdownOptions;
 };
 /** Exported for tests, which would otherwise leak counts into each other. */
 export declare function resetRateLimits(): void;
+/** Exported for tests, which would otherwise leak fingerprints into each other. */
+export declare function resetDedupe(): void;
 /**
  * The unknown top-level keys, capped. Strings are clipped, numbers and
  * booleans pass as they are, and anything else — an object, an array, a

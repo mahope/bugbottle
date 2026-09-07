@@ -45,6 +45,11 @@ export type UiTexts = {
     close: string;
     /** Shown after a successful send, with a button to close. */
     thanks: string;
+    /**
+     * Replaces `intro` when the panel was opened by an uncaught error rather
+     * than by the reporter. It has to explain itself: nobody asked for a panel.
+     */
+    openedByError: string;
 };
 /**
  * The wording of a report sent on by email — read by whoever receives it, not

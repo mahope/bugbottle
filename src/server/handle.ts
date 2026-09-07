@@ -35,6 +35,7 @@ import {
   type ReportContext,
   type ReportType,
 } from "../report-core.ts";
+import { fingerprint } from "../fingerprint.ts";
 import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { scrubReport, type ScrubOptions } from "../scrub.ts";
 import { sendReportEmail, type SendReportEmailOptions } from "../sinks/resend.ts";
@@ -147,6 +148,25 @@ export const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 /** Hard ceiling on the bucket map, whatever the traffic looks like. */
 export const MAX_RATE_LIMIT_BUCKETS = 10_000;
 
+/**
+ * Answering the same report twice as if it were new. In memory, so per
+ * instance — the same caveat as the rate limit, and for the same reason.
+ */
+export type DedupeOptions = {
+  /** How long a repeat of the same report is answered as a duplicate. */
+  windowMs: number;
+  /**
+   * What counts as the same report. Default: `fingerprint` from `bugbottle`,
+   * the type, the message and the first console error, hashed — the same
+   * function the browser uses, so a client that deduplicates and a server that
+   * deduplicates agree.
+   */
+  key?: (report: ValidatedReport) => string;
+};
+
+/** Hard ceiling on the fingerprint map. */
+export const MAX_DEDUPE_ENTRIES = 10_000;
+
 export type HandleReportOptions = {
   /** False answers 401 before the body is read. */
   authorize?: (request: Request) => boolean | Promise<boolean>;
@@ -185,6 +205,11 @@ export type HandleReportOptions = {
   cors?: string | boolean;
   /** In-memory, per instance. Fine per serverless isolate, not shared. */
   rateLimit?: RateLimitOptions;
+  /**
+   * Answer a repeat of the same report with 200 `{ id, duplicate: true }`
+   * instead of storing and delivering it again. In memory, per instance.
+   */
+  dedupe?: DedupeOptions;
   /** Passed through to `toMarkdown` — extra facts, a heading level. */
   markdown?: MarkdownOptions;
 };
@@ -199,6 +224,29 @@ const buckets = new Map<string, { count: number; resetAt: number }>();
 /** Exported for tests, which would otherwise leak counts into each other. */
 export function resetRateLimits(): void {
   buckets.clear();
+}
+
+/**
+ * The fingerprints answered so far, and the id each one was stored under.
+ * Module-level for the same reason the buckets are, and with the same honest
+ * limit: it stops one browser sending the same crash forty times, not two
+ * instances behind a load balancer storing it twice.
+ */
+const seenReports = new Map<string, { id?: string; at: number }>();
+
+/** Exported for tests, which would otherwise leak fingerprints into each other. */
+export function resetDedupe(): void {
+  seenReports.clear();
+}
+
+/** Drops what has expired, then the oldest, so the map cannot grow for ever. */
+function evictDedupe(now: number, windowMs: number): void {
+  for (const [key, seen] of seenReports) if (seen.at + windowMs <= now) seenReports.delete(key);
+  while (seenReports.size >= MAX_DEDUPE_ENTRIES) {
+    const oldest = seenReports.keys().next();
+    if (oldest.done) break;
+    seenReports.delete(oldest.value);
+  }
 }
 
 function defaultRateLimitKey(request: Request): string {
@@ -497,6 +545,26 @@ export async function handleReport(
       report = scrubReport(report, options.scrub === true ? {} : options.scrub);
     }
 
+    // Deduplicated after scrubbing, so two reports that only differ in what was
+    // redacted are one report, and before anything is stored or delivered: the
+    // whole point is that the second copy costs a row and an email less.
+    let dedupeKey: string | undefined;
+    if (options.dedupe) {
+      const now = Date.now();
+      dedupeKey = (options.dedupe.key ?? fingerprint)(report);
+      const seen = seenReports.get(dedupeKey);
+      if (seen && seen.at + options.dedupe.windowMs > now) {
+        // 200 rather than 201: nothing was created. The reporter is still told
+        // it arrived, because it did — the first time.
+        return json(
+          seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true },
+          200,
+          cors,
+        );
+      }
+      evictDedupe(now, options.dedupe.windowMs);
+    }
+
     // A rejected picture is not a rejected report: the message is the valuable
     // part, and the reporter is not the one who broke the encoding.
     const mode = options.screenshot ?? "keep";
@@ -530,6 +598,10 @@ export async function handleReport(
       const stored = await options.store(report, screenshot);
       if (stored && typeof stored === "object" && typeof stored.id === "string") id = stored.id;
     }
+
+    // Recorded once the report is stored, so a `store` that threw does not
+    // leave a fingerprint that swallows the retry.
+    if (dedupeKey !== undefined) seenReports.set(dedupeKey, { id, at: Date.now() });
 
     const markdown = toMarkdown(report, {
       ...options.markdown,

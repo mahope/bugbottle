@@ -12,6 +12,7 @@ export { DEFAULT_BLOCK_SELECTOR, DEFAULT_MASK_COLOUR, DEFAULT_MASK_SELECTOR, typ
 export { pickElement, describeElement, buildSelector, type PickOptions, } from "./element-picker.ts";
 export { buildReport, sendReport, SendFailedError, SendTimeoutError, DEFAULT_SEND_TIMEOUT_MS, type BuildReportInput, type SendOptions, type SendResult, } from "./send.ts";
 export { toMarkdown, type MarkdownOptions } from "./markdown.ts";
+export { fingerprint, stableHash, type FingerprintInput } from "./fingerprint.ts";
 export { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, type ScrubOptions, type Scrubber, type ScrubberName, } from "./scrub.ts";
 export { type Locale, type Messages, type UiTexts, type EmailTexts } from "./locales.ts";
 export { REPORT_TYPES, isReportType, normaliseMessage, normaliseContext, normaliseConsole, normaliseElements, normaliseBreadcrumbs, normaliseNetwork, MAX_MESSAGE_LENGTH, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_DATA_URL_LENGTH, MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, MAX_ELEMENTS, MAX_ELEMENT_TEXT_LENGTH, MAX_BREADCRUMBS, MAX_BREADCRUMB_TEXT_LENGTH, MAX_NETWORK_ENTRIES, type ReportType, type ReportContext, type BugReport, type ConsoleEntry, type ConsoleLevel, type ElementRef, type Breadcrumb, type BreadcrumbKind, type NetworkEntry, } from "./report-core.ts";

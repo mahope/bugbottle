@@ -36,6 +36,7 @@ import {
   type BuildReportInput,
   type SendOptions,
 } from "../send.ts";
+import { DEFAULT_SHORTCUT, onShortcut, onUncaughtError } from "../triggers.ts";
 
 export type Theme = {
   /** Accent: trigger button, primary action, focus ring. */
@@ -101,6 +102,20 @@ export type MountOptions = {
    * An element or selector makes that element the trigger instead.
    */
   trigger?: false | HTMLElement | string;
+  /**
+   * Key combination that opens and closes the panel. Default `"mod+shift+b"`,
+   * where `mod` is Command on a Mac and Control everywhere else. `false`
+   * installs no listener. Never fires while the reporter is typing in a field.
+   */
+  shortcut?: string | false;
+  /**
+   * Open the panel when the page throws an error nobody caught. Off by default:
+   * a panel that appears uninvited is a decision about the product, not a
+   * default. On, it opens once per distinct error, sets the type to bug and
+   * shows the locale's `openedByError` line; `{ prefill: true }` also puts the
+   * error message in the box. Nothing is sent until the reporter presses send.
+   */
+  openOnError?: boolean | { prefill?: boolean };
   /** Where to mount. Default `document.body`. */
   container?: HTMLElement;
   /** Extra fields merged into every report — app version, tenant id. */
@@ -281,6 +296,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   let pickController: AbortController | null = null;
   let sending = false;
   let isOpen = false;
+  // True only while a panel that an uncaught error opened is still open, so the
+  // intro can explain why it is there and go back to normal afterwards.
+  let openedByError = false;
 
   // ---- host + shadow
   const host = el("div", { "data-bugbottle": "ui", lang: locale.code, dir: locale.dir ?? "ltr" });
@@ -357,8 +375,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     title.textContent = options.brand?.name ?? ui.title;
     closeBtn.setAttribute("aria-label", ui.close);
     closeBtn.title = ui.close;
-    intro.textContent = ui.intro;
-    intro.hidden = !ui.intro;
+    applyIntro();
     for (const [t, b] of typeButtons) b.textContent = ui.types[t];
     messageLabel.textContent = ui.messageLabel;
     textarea.placeholder = ui.messagePlaceholder;
@@ -370,6 +387,12 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     thanksText.textContent = ui.thanks;
     thanksClose.textContent = ui.close;
     renderElements();
+  }
+
+  function applyIntro() {
+    const text = openedByError ? ui.openedByError : ui.intro;
+    intro.textContent = text;
+    intro.hidden = !text;
   }
 
   function setStatus(text: string, kind: "info" | "error" = "info") {
@@ -524,6 +547,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     form.hidden = false;
     thanks.hidden = true;
     panel.hidden = false;
+    applyIntro();
     trigger.setAttribute("aria-expanded", "true");
     textarea.focus();
     if (shotBox.checked) void capture();
@@ -532,6 +556,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   function close() {
     if (!isOpen) return;
     isOpen = false;
+    openedByError = false;
     pickController?.abort();
     panel.hidden = true;
     trigger.setAttribute("aria-expanded", "false");
@@ -569,6 +594,25 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     isOpen ? close() : open();
   }
 
+  /** Opens the panel for an error the reporter has not asked us about yet. */
+  function openForError(message: string, prefill: boolean) {
+    if (isOpen) return;
+    openedByError = true;
+    if (types.includes("bug")) setType("bug");
+    // Never overwrite what somebody has already written: they were here first.
+    if (prefill && !textarea.value.trim()) textarea.value = message;
+    open();
+  }
+
+  const unsubscribes: (() => void)[] = [];
+  if (options.shortcut !== false) {
+    unsubscribes.push(onShortcut(options.shortcut ?? DEFAULT_SHORTCUT, toggle));
+  }
+  if (options.openOnError) {
+    const prefill = options.openOnError !== true && options.openOnError.prefill === true;
+    unsubscribes.push(onUncaughtError((error) => openForError(error.message, prefill)));
+  }
+
   resetForm();
   applyTexts();
   container.append(host);
@@ -586,6 +630,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     },
     destroy() {
       pickController?.abort();
+      for (const off of unsubscribes) off();
       externalTrigger?.removeEventListener("click", toggle);
       host.remove();
     },

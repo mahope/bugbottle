@@ -51,6 +51,11 @@ export {
 
 export { toMarkdown, type MarkdownOptions } from "./markdown.ts";
 
+// Imported by nothing else here, like the scrubber, so a bundler drops it whole
+// when nobody deduplicates. `bugbottle/server` re-exports the same function, so
+// both sides of a deduplicated report agree on what "the same report" means.
+export { fingerprint, stableHash, type FingerprintInput } from "./fingerprint.ts";
+
 // Its own module, imported by nothing else here, so a bundler drops it whole
 // when the integrator does not scrub. See src/scrub.ts.
 export {

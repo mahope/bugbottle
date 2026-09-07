@@ -12,6 +12,10 @@ export { DEFAULT_BLOCK_SELECTOR, DEFAULT_MASK_COLOUR, DEFAULT_MASK_SELECTOR, } f
 export { pickElement, describeElement, buildSelector, } from "./element-picker.js";
 export { buildReport, sendReport, SendFailedError, SendTimeoutError, DEFAULT_SEND_TIMEOUT_MS, } from "./send.js";
 export { toMarkdown } from "./markdown.js";
+// Imported by nothing else here, like the scrubber, so a bundler drops it whole
+// when nobody deduplicates. `bugbottle/server` re-exports the same function, so
+// both sides of a deduplicated report agree on what "the same report" means.
+export { fingerprint, stableHash } from "./fingerprint.js";
 // Its own module, imported by nothing else here, so a bundler drops it whole
 // when the integrator does not scrub. See src/scrub.ts.
 export { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, } from "./scrub.js";

@@ -18,6 +18,7 @@
  * telling the reporter what broke.
  */
 import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, InvalidScreenshotError, } from "../report-core.js";
+import { fingerprint } from "../fingerprint.js";
 import { toMarkdown } from "../markdown.js";
 import { scrubReport } from "../scrub.js";
 import { sendReportEmail } from "../sinks/resend.js";
@@ -53,6 +54,8 @@ const KNOWN_KEYS = new Set([
 export const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 /** Hard ceiling on the bucket map, whatever the traffic looks like. */
 export const MAX_RATE_LIMIT_BUCKETS = 10_000;
+/** Hard ceiling on the fingerprint map. */
+export const MAX_DEDUPE_ENTRIES = 10_000;
 /**
  * The rate-limit buckets. Module-level on purpose and documented as such: a
  * serverless isolate gets its own, and two instances behind a load balancer do
@@ -62,6 +65,29 @@ const buckets = new Map();
 /** Exported for tests, which would otherwise leak counts into each other. */
 export function resetRateLimits() {
     buckets.clear();
+}
+/**
+ * The fingerprints answered so far, and the id each one was stored under.
+ * Module-level for the same reason the buckets are, and with the same honest
+ * limit: it stops one browser sending the same crash forty times, not two
+ * instances behind a load balancer storing it twice.
+ */
+const seenReports = new Map();
+/** Exported for tests, which would otherwise leak fingerprints into each other. */
+export function resetDedupe() {
+    seenReports.clear();
+}
+/** Drops what has expired, then the oldest, so the map cannot grow for ever. */
+function evictDedupe(now, windowMs) {
+    for (const [key, seen] of seenReports)
+        if (seen.at + windowMs <= now)
+            seenReports.delete(key);
+    while (seenReports.size >= MAX_DEDUPE_ENTRIES) {
+        const oldest = seenReports.keys().next();
+        if (oldest.done)
+            break;
+        seenReports.delete(oldest.value);
+    }
 }
 function defaultRateLimitKey(request) {
     const forwarded = request.headers.get("x-forwarded-for");
@@ -347,6 +373,21 @@ export async function handleReport(request, options = {}) {
         if (options.scrub) {
             report = scrubReport(report, options.scrub === true ? {} : options.scrub);
         }
+        // Deduplicated after scrubbing, so two reports that only differ in what was
+        // redacted are one report, and before anything is stored or delivered: the
+        // whole point is that the second copy costs a row and an email less.
+        let dedupeKey;
+        if (options.dedupe) {
+            const now = Date.now();
+            dedupeKey = (options.dedupe.key ?? fingerprint)(report);
+            const seen = seenReports.get(dedupeKey);
+            if (seen && seen.at + options.dedupe.windowMs > now) {
+                // 200 rather than 201: nothing was created. The reporter is still told
+                // it arrived, because it did — the first time.
+                return json(seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true }, 200, cors);
+            }
+            evictDedupe(now, options.dedupe.windowMs);
+        }
         // A rejected picture is not a rejected report: the message is the valuable
         // part, and the reporter is not the one who broke the encoding.
         const mode = options.screenshot ?? "keep";
@@ -383,6 +424,10 @@ export async function handleReport(request, options = {}) {
             if (stored && typeof stored === "object" && typeof stored.id === "string")
                 id = stored.id;
         }
+        // Recorded once the report is stored, so a `store` that threw does not
+        // leave a fingerprint that swallows the retry.
+        if (dedupeKey !== undefined)
+            seenReports.set(dedupeKey, { id, at: Date.now() });
         const markdown = toMarkdown(report, {
             ...options.markdown,
             ...(screenshotUrl ? { screenshotUrl } : {}),
