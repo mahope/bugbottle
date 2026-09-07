@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { captureScreenshot, ScreenshotTooLargeError } from "../capture.js";
+import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement as pickElementFromPage } from "../element-picker.js";
 import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
 import { buildReport, sendReport } from "../send.js";
@@ -34,7 +34,7 @@ export function useBugReport(options) {
         capturing.current = true;
         setStatus({ kind: "capturing" });
         try {
-            setScreenshot(await captureScreenshot(renderer));
+            setScreenshot(await captureScreenshot(renderer, { mask: latest.current.mask }));
             setStatus({ kind: "idle" });
         }
         catch (err) {

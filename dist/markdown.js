@@ -8,7 +8,7 @@
  * long). Every value goes through `normalise*` first, so this accepts the raw
  * body from the request as well as a validated report.
  */
-import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, } from "./report-core.js";
+import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
 /** Pipes and newlines would break a table cell. */
 function cell(value) {
@@ -55,6 +55,14 @@ function breadcrumbLine(crumb) {
     return `- ${bits.join(" ")}`;
 }
 /**
+ * One row of the Requests table. A request that never got a status shows the
+ * failure instead of a bare 0, which reads as a status nobody recognises.
+ */
+function requestRow(entry) {
+    const status = entry.status > 0 ? String(entry.status) : entry.error ? "failed" : "";
+    return `| ${cell(entry.method)} | \`${cell(entry.url)}\` | ${status} | ${entry.ms} |`;
+}
+/**
  * Renders a report (raw request body or validated) as Markdown. Never throws
  * on malformed input: missing sections are left out.
  */
@@ -65,6 +73,7 @@ export function toMarkdown(raw, options = {}) {
     const context = normaliseContext(r.context);
     const elements = normaliseElements(r.elements);
     const breadcrumbs = normaliseBreadcrumbs(r.breadcrumbs);
+    const network = normaliseNetwork(r.network);
     const consoleEntries = normaliseConsole(r.console, {
         maxEntries: options.maxConsoleEntries,
     });
@@ -114,6 +123,13 @@ export function toMarkdown(raw, options = {}) {
         out.push("### What happened before", "");
         for (const crumb of breadcrumbs)
             out.push(breadcrumbLine(crumb));
+        out.push("");
+    }
+    if (network.length > 0) {
+        out.push("### Requests", "");
+        out.push("| Method | URL | Status | ms |", "|---|---|---|---|");
+        for (const entry of network)
+            out.push(requestRow(entry));
         out.push("");
     }
     if (consoleEntries.length > 0) {

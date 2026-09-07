@@ -26,6 +26,8 @@ export const MAX_ELEMENT_TEXT_LENGTH = 200;
 export const MAX_BREADCRUMBS = 30;
 /** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
 export const MAX_BREADCRUMB_TEXT_LENGTH = 40;
+/** How many recorded requests a report may carry. Oldest are dropped first. */
+export const MAX_NETWORK_ENTRIES = 30;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 export const BREADCRUMB_KINDS = ["click", "navigation", "submit", "visibility"];
@@ -174,6 +176,41 @@ export function normaliseBreadcrumbs(raw, options = {}) {
         out.push(crumb);
     }
     return out.length > maxBreadcrumbs ? out.slice(-maxBreadcrumbs) : out;
+}
+/**
+ * Validates the recorded requests a report arrived with. An entry without a
+ * string `url` is not a request and is dropped; everything else is clipped,
+ * rounded or defaulted rather than rejected, and at most `maxEntries` are
+ * kept — the most recent ones. Never throws: a malformed section means "no
+ * requests", not a failed report.
+ */
+export function normaliseNetwork(raw, options = {}) {
+    const maxEntries = options.maxEntries ?? MAX_NETWORK_ENTRIES;
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const item of raw) {
+        if (typeof item !== "object" || item === null)
+            continue;
+        const o = item;
+        if (typeof o.url !== "string")
+            continue;
+        const status = typeof o.status === "number" && Number.isFinite(o.status) ? o.status : 0;
+        const ms = typeof o.ms === "number" && Number.isFinite(o.ms) ? o.ms : 0;
+        const entry = {
+            ts: typeof o.ts === "string" && !Number.isNaN(Date.parse(o.ts)) ? o.ts : "",
+            // A method is a short token by definition, so anything longer is either
+            // a mistake or an attempt to smuggle text through a field nobody reads.
+            method: typeof o.method === "string" ? stripNullBytes(o.method).slice(0, 20) : "GET",
+            url: stripNullBytes(o.url).slice(0, 500),
+            status: Math.min(Math.max(Math.trunc(status), 0), 999),
+            ms: Math.min(Math.max(Math.round(ms), 0), 3_600_000),
+        };
+        if (o.error === true)
+            entry.error = true;
+        out.push(entry);
+    }
+    return out.length > maxEntries ? out.slice(-maxEntries) : out;
 }
 export class InvalidScreenshotError extends Error {
     constructor(message) {

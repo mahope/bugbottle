@@ -20,6 +20,13 @@ export type BuildReportInput = {
      * nothing for the option.
      */
     includeBreadcrumbs?: boolean;
+    /**
+     * Attach the recorded requests. Default true, which means "whenever
+     * `initNetwork` from `bugbottle/network` is recording" — an application that
+     * never imports that module has nothing to attach and pays nothing for the
+     * option.
+     */
+    includeNetwork?: boolean;
     /** Elements the reporter pointed at, from `pickElement`. */
     elements?: ElementRef[];
     /**

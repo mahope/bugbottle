@@ -27,6 +27,8 @@ export declare const MAX_ELEMENT_TEXT_LENGTH = 200;
 export declare const MAX_BREADCRUMBS = 30;
 /** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
 export declare const MAX_BREADCRUMB_TEXT_LENGTH = 40;
+/** How many recorded requests a report may carry. Oldest are dropped first. */
+export declare const MAX_NETWORK_ENTRIES = 30;
 export type ConsoleLevel = "error" | "warn";
 export type ConsoleEntry = {
     /** ISO 8601 timestamp. */
@@ -82,6 +84,28 @@ export type Breadcrumb = {
     /** Path and query navigated to, or `hidden`/`visible` for a visibility change. */
     to?: string;
 };
+/**
+ * One request the browser made before the report. Recorded by
+ * `bugbottle/network`, which keeps the failed and the slow ones.
+ *
+ * Bodies and headers are never part of this, in either direction: that is
+ * where tokens and personal data live. What is left says which call failed and
+ * how long it took, which is the part that explains the report.
+ */
+export type NetworkEntry = {
+    /** ISO 8601 timestamp of when the request finished. */
+    ts: string;
+    /** The HTTP method, upper case. */
+    method: string;
+    /** Path and query, with sensitive query values redacted. Cross-origin URLs keep their origin. */
+    url: string;
+    /** The response status, or 0 when the request never got one. */
+    status: number;
+    /** How long the request took, in milliseconds. */
+    ms: number;
+    /** True when the request failed before a status — offline, CORS, aborted. */
+    error?: boolean;
+};
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
     type: ReportType;
@@ -92,6 +116,8 @@ export type BugReport = {
     elements?: ElementRef[];
     /** What the reporter did before reporting, oldest first. */
     breadcrumbs?: Breadcrumb[];
+    /** Requests that failed or were slow before the report, oldest first. */
+    network?: NetworkEntry[];
     screenshotDataUrl?: string;
 };
 export declare function isReportType(value: unknown): value is ReportType;
@@ -135,6 +161,16 @@ export declare function normaliseElements(raw: unknown, options?: {
 export declare function normaliseBreadcrumbs(raw: unknown, options?: {
     maxBreadcrumbs?: number;
 }): Breadcrumb[];
+/**
+ * Validates the recorded requests a report arrived with. An entry without a
+ * string `url` is not a request and is dropped; everything else is clipped,
+ * rounded or defaulted rather than rejected, and at most `maxEntries` are
+ * kept — the most recent ones. Never throws: a malformed section means "no
+ * requests", not a failed report.
+ */
+export declare function normaliseNetwork(raw: unknown, options?: {
+    maxEntries?: number;
+}): NetworkEntry[];
 export declare class InvalidScreenshotError extends Error {
     constructor(message: string);
 }

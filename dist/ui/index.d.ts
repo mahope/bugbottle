@@ -12,7 +12,7 @@
  * friends) pierce the shadow root, so a stylesheet can also restyle it from
  * outside without touching JavaScript.
  */
-import { type ScreenshotRenderer } from "../capture.ts";
+import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
 import { type ReportType } from "../report-core.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
@@ -65,6 +65,13 @@ export type MountOptions = {
     consoleFor?: (type: ReportType) => boolean;
     /** Tick the screenshot box by default. Default: for bugs only. */
     screenshotFor?: (type: ReportType) => boolean;
+    /**
+     * What to hide in the screenshot. Field values, `contenteditable` text and
+     * the `data-bugbottle-mask` / `data-bugbottle-block` regions are masked by
+     * default; pass an object to narrow it, or `false` to photograph the page as
+     * the reporter sees it. See `CaptureOptions["mask"]`.
+     */
+    mask?: CaptureOptions["mask"];
     /** Offer the element picker. Default true. */
     elementPicker?: boolean;
     /**

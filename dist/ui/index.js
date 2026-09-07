@@ -12,7 +12,7 @@
  * friends) pierce the shadow root, so a stylesheet can also restyle it from
  * outside without touching JavaScript.
  */
-import { captureScreenshot, ScreenshotTooLargeError } from "../capture.js";
+import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement } from "../element-picker.js";
 import { en } from "../locales.js";
 import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
@@ -247,7 +247,7 @@ export function mountBugbottle(options) {
         if (!render || screenshot)
             return;
         try {
-            screenshot = await captureScreenshot(render);
+            screenshot = await captureScreenshot(render, { mask: options.mask });
             preview.src = screenshot;
             preview.hidden = false;
         }

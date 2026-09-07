@@ -1,4 +1,4 @@
-import { type ScreenshotRenderer } from "../capture.ts";
+import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type ElementRef, type ReportType } from "../report-core.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
 import { type Messages } from "../locales.ts";
@@ -45,6 +45,13 @@ export type UseBugReportOptions = {
     screenshotFor?: (type: ReportType) => boolean;
     /** Attach the recorded console errors for this type. Defaults to bugs only. */
     consoleFor?: (type: ReportType) => boolean;
+    /**
+     * What to hide in the screenshot. Field values, `contenteditable` text and
+     * the `data-bugbottle-mask` / `data-bugbottle-block` regions are masked by
+     * default; pass an object to narrow it, or `false` to photograph the page as
+     * the reporter sees it. See `CaptureOptions["mask"]`.
+     */
+    mask?: CaptureOptions["mask"];
     /** Extra fields to send alongside the report. */
     extra?: Record<string, unknown>;
     /** Extra request headers — an auth token, a CSRF header. */

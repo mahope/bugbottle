@@ -48,6 +48,15 @@ export type ScrubOptions = {
 };
 export declare const DEFAULT_REPLACEMENT = "[redacted]";
 /**
+ * Redacts the sensitive query values in one URL, keeping the key that named
+ * them: `/orders?token=abc` becomes `/orders?token=[redacted]`. Everything
+ * else — the path, the ordinary parameters — is left exactly as it was.
+ *
+ * This is the one part of the scrubber that `bugbottle/network` needs, and it
+ * is exported separately so that module does not have to carry the rest.
+ */
+export declare function scrubUrl(url: string, replacement?: string): string;
+/**
  * The patterns that are on by default, in the order they are applied. Order
  * matters: the query scrubber runs before the ones that would match the value
  * it is about to redact, and the card scrubber runs last so it never eats the

@@ -7,7 +7,7 @@
  */
 import { collectContext } from "./capture.js";
 import { getConsoleBuffer } from "./console-buffer.js";
-import { readBreadcrumbs } from "./registry.js";
+import { readBreadcrumbs, readNetwork } from "./registry.js";
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
 export function buildReport(input) {
     const report = {
@@ -23,6 +23,11 @@ export function buildReport(input) {
         const crumbs = readBreadcrumbs();
         if (crumbs && crumbs.length > 0)
             report.breadcrumbs = crumbs;
+    }
+    if (input.includeNetwork ?? true) {
+        const requests = readNetwork();
+        if (requests && requests.length > 0)
+            report.network = requests;
     }
     if (input.screenshotDataUrl)
         report.screenshotDataUrl = input.screenshotDataUrl;
