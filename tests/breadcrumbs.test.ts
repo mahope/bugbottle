@@ -390,3 +390,85 @@ test("toMarkdown renders What happened before, between the elements and the cons
   );
   assert.doesNotMatch(toMarkdown({ type: "bug", message: "x" }), /What happened before/);
 });
+
+test("a beforeBreadcrumb that throws drops the crumb instead of the navigation", () => {
+  withBrowser(({ doc, history }) => {
+    initBreadcrumbs({
+      beforeBreadcrumb: () => {
+        throw new Error("the hook has a bug");
+      },
+    });
+    assert.doesNotThrow(
+      () => doc.dispatch("click", { target: element("button", { id: "save", text: "Save" }) }),
+      "a click is not the hook's chance to break the page",
+    );
+    assert.doesNotThrow(
+      () => history.pushState({}, "", "/orders/2"),
+      "the router's own pushState must not throw because a bugbottle hook did",
+    );
+    assert.deepEqual(history.calls, ["push:/orders/2"], "the real pushState still ran");
+  });
+  assert.equal(getBreadcrumbs().length, 0, "a hook that cannot decide drops the crumb");
+});
+
+test("text inside a contenteditable region is masked, selector only", () => {
+  withBrowser(({ doc }) => {
+    initBreadcrumbs();
+    doc.dispatch("click", {
+      target: element("div", {
+        id: "note-body",
+        text: "Ring Anna on 0123456789 about the invoice",
+        inside: ["[contenteditable]:not([contenteditable=\"false\"])"],
+      }),
+    });
+  });
+  const crumb = getBreadcrumbs()[0];
+  assert.equal(crumb?.target, "div#note-body");
+  assert.equal(crumb?.text, undefined, "a rich-text editor is a field, whatever tag it uses");
+});
+
+test("an option's label is masked the same way a select's value is", () => {
+  withBrowser(({ doc }) => {
+    initBreadcrumbs();
+    doc.dispatch("click", { target: element("option", { id: "plan", text: "Anna Berg" }) });
+  });
+  assert.equal(getBreadcrumbs()[0]?.text, undefined);
+});
+
+test("a navigation that goes nowhere is not recorded", () => {
+  withBrowser(({ win, history }) => {
+    initBreadcrumbs();
+    win.dispatchEvent(new Event("hashchange"));
+    win.dispatchEvent(new Event("hashchange"));
+    assert.ok(
+      getBreadcrumbs().length <= 1,
+      "two fragment changes on the same path are not two navigations",
+    );
+    history.replaceState({}, "", "/orders/1");
+    assert.equal(
+      getBreadcrumbs().filter((c) => c.kind === "navigation").length,
+      0,
+      "replaceState to the identical URL records nothing",
+    );
+  });
+});
+
+test("maxEntries: 0 records nothing at all", () => {
+  withBrowser(({ doc, history }) => {
+    initBreadcrumbs({ maxEntries: 0 });
+    assert.equal(isBreadcrumbsActive(), false, "there is nothing to be active for");
+    doc.dispatch("click", { target: element("button", { id: "save", text: "Save" }) });
+    history.pushState({}, "", "/orders/2");
+  });
+  assert.equal(getBreadcrumbs().length, 0);
+});
+
+test("a maxEntries that is not a number falls back to the default bound", () => {
+  withBrowser(({ doc }) => {
+    initBreadcrumbs({ maxEntries: Number.NaN });
+    for (let i = 0; i < MAX_BREADCRUMBS + 5; i++) {
+      doc.dispatch("click", { target: element("button", { id: `b${i}` }) });
+    }
+  });
+  assert.equal(getBreadcrumbs().length, MAX_BREADCRUMBS, "NaN must not remove the bound");
+});

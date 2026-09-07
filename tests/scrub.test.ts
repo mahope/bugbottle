@@ -91,6 +91,37 @@ test("nested fields are scrubbed: console, element text, href and data attribute
   assert.equal(element?.attributes.id, "invite", "structural attributes are left alone");
 });
 
+test("every attribute but the structural three is scrubbed, aria-label included", () => {
+  const out = scrubReport({
+    ...report("x"),
+    elements: [
+      {
+        selector: "button#invite",
+        tag: "button",
+        text: "Invite",
+        rect: { x: 1, y: 2, width: 3, height: 4 },
+        attributes: {
+          "aria-label": "Invite anna@example.com",
+          title: "Last invited by bo@example.com",
+          name: "invite anna@example.com",
+          placeholder: "anna@example.com",
+          id: "invite",
+          role: "button",
+          type: "submit",
+        },
+      },
+    ],
+  });
+  const attributes = out.elements?.[0]?.attributes;
+  assert.equal(attributes?.["aria-label"], `Invite ${R}`);
+  assert.equal(attributes?.title, `Last invited by ${R}`);
+  assert.equal(attributes?.name, `invite ${R}`);
+  assert.equal(attributes?.placeholder, R);
+  assert.equal(attributes?.id, "invite");
+  assert.equal(attributes?.role, "button");
+  assert.equal(attributes?.type, "submit");
+});
+
 test("breadcrumbs are scrubbed when the field is there, string by string", () => {
   const out = scrubReport({
     ...report("x"),
