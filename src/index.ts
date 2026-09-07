@@ -17,7 +17,9 @@ export {
 export {
   captureScreenshot,
   collectContext,
+  DEFAULT_BYTES_PER_PIXEL_ESTIMATE,
   ScreenshotTooLargeError,
+  type CaptureInfo,
   type CaptureOptions,
   type ScreenshotRenderer,
 } from "./capture.ts";

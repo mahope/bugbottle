@@ -168,9 +168,22 @@ const { id } = await sendReport("/api/feedback", report);
 `sendReport` resolves on a 2xx, throws `SendFailedError` (with `status` and
 the parsed body) on anything else, gives up with `SendTimeoutError` after
 15 seconds (`timeoutMs`), and lets network errors through untouched.
-`captureScreenshot` retries at half scale when the first render is larger than
-a server would accept, and throws `ScreenshotTooLargeError` if that is still
-too big. Treat either as "send without the picture".
+`captureScreenshot` estimates from the capture area whether a full-scale render
+would be larger than a server would accept, and starts at half scale when it
+would — rendering is expensive, so a page that was never going to fit should
+not be rendered twice. It still retries at half scale if the estimate was
+wrong, and throws `ScreenshotTooLargeError` if that is too big as well. Treat
+either as "send without the picture". Pass `pixelRatio` to skip the estimate
+and force a scale, `bytesPerPixelEstimate` to tune it for pages that compress
+unusually well or badly, and `onCapture` to see what each capture cost:
+
+```ts
+await captureScreenshot(htmlToImage, {
+  onCapture: ({ pixelRatio, length, attempts, ms }) => {
+    console.info(`screenshot: ${length} chars at ${pixelRatio}x, ${attempts} render(s), ${ms}ms`);
+  },
+});
+```
 
 ## The ready-made panel
 
