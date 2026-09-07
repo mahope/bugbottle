@@ -7,6 +7,20 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The adoptable release: one form state shared by React, Vue and Svelte; a
+panel that a keyboard and a screen reader can use; the offline queue; a
+keyboard shortcut and an opt-in open-on-error; stack frames and a wider page
+context on every report; the Linear sink and a JSON Schema for the payload;
+documentation generated from this README at bugbottle.dev/docs. No breaking
+changes for the ESM entries; the script-tag build grew from 13.7 kB to 18.1 kB
+gzipped because it carries every default in eight languages.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
+`bugbottle/react` 5.5 kB, `bugbottle/vue` 5.6 kB, `bugbottle/svelte` 5.4 kB,
+`bugbottle/ui` 10.1 kB, `bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network`
+1.2 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`dist/bugbottle.js` 18.1 kB, `bugbottle/server` validators 0.5 kB.
+
 ### Added
 
 - `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
