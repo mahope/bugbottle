@@ -10,7 +10,7 @@
 FROM nginx:alpine
 
 COPY site/nginx.conf /etc/nginx/conf.d/default.conf
-COPY site/index.html site/style.css site/demo.js site/og.png /usr/share/nginx/html/
+COPY site/index.html site/style.css site/demo.js site/og.png site/panel.png /usr/share/nginx/html/
 COPY site/da/ /usr/share/nginx/html/da/
 COPY dist/ /usr/share/nginx/html/dist/
 
