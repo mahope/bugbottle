@@ -11,6 +11,11 @@
  * authenticated route. Do not give it a public URL.
  */
 export { toMarkdown } from "../markdown.js";
+// The fast path over the validators below: one call from `Request` to
+// `Response`. Importing it is opt-in, so an integrator who only wants the
+// validators does not bundle the sinks it reaches for.
+export { handleReport, validateReport, collectExtra, resetRateLimits, toResend, toWebhook, toGithub, DEFAULT_MAX_BODY_BYTES, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, EMPTY_MESSAGE_ERROR, } from "./handle.js";
+export { expressHandler, } from "./express.js";
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.
 export { SinkError } from "../sinks/error.js";
