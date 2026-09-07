@@ -73,9 +73,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node --experimental-strip-types scripts/build-schema.ts && node scripts/build-iife.mjs",
+    "build:docs": "node scripts/build-docs.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test && npm run build",
+    "check": "npm run typecheck && npm test && npm run build && npm run build:docs",
     "prepublishOnly": "npm run check",
     "release": "node scripts/release.mjs"
   },
@@ -99,6 +100,7 @@
     "esbuild": "0.28.2",
     "happy-dom": "20.14.0",
     "html-to-image": "^1.11.13",
+    "marked": "18.0.12",
     "react": "^19.2.8",
     "react-dom": "19.2.8",
     "ts-json-schema-generator": "2.9.0",

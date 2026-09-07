@@ -32,6 +32,7 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
 | `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, `createLinearIssue` (GraphQL, so a rejected mutation arrives as a 200 with `errors` and still throws), the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
 | `site/` | The landing page (EN + DA), static, served by nginx from `site/Dockerfile` on Dokploy. Not part of the npm package | dist (at image build) |
+| `site/docs/` | **Generated, never committed.** One page per README section, written by `scripts/build-docs.mjs` (marked, pinned) in the Dockerfile's `node:22-alpine` builder stage. The README is the only copy of that text; a new `##` section must be placed in the script's `GROUPS` or the build fails | README.md (at image build) |
 | `src/server/` | Re-exports of report-core, markdown and the sinks for `bugbottle/server` | report-core, markdown, sinks |
 | `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express` | server/handle |
@@ -87,9 +88,10 @@ not closed and a branch is not merged with the docs lagging.
 ## Commands
 
 ```bash
-npm run check       # typecheck → test → build, in that order; run before "done"
+npm run check       # typecheck → test → build → docs, in that order; run before "done"
 npm test            # node --test on tests/*.test.ts (needs Node 22+)
 npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → IIFE
+npm run build:docs  # site/docs/ from README.md; fails on an ungrouped `##` section
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
 
