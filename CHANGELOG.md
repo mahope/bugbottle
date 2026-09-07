@@ -7,6 +7,29 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `captureScreenshot` options `pixelRatio` (force a scale and skip the
+  estimate), `bytesPerPixelEstimate` (tune the estimate for pages that compress
+  unusually well or badly, default `DEFAULT_BYTES_PER_PIXEL_ESTIMATE`, half a
+  byte per CSS pixel) and `onCapture`, a callback given the `pixelRatio`,
+  data-URL `length`, number of `attempts` and elapsed `ms` of every capture —
+  including one that ends in `ScreenshotTooLargeError`. That callback is how an
+  application measures what capture costs it.
+
+### Changed
+
+- `captureScreenshot` now picks the scale before rendering rather than
+  discovering it afterwards. Halving `pixelRatio` only changes the final raster
+  step — walking the DOM and inlining its styles happens identically either way
+  — so an oversized first render used to roughly double the reporter's wait for
+  nothing. The capture area (`root.scrollWidth * root.scrollHeight`) is now
+  turned into an estimated data-URL length, and a page whose estimate is over
+  the ceiling starts at half scale. The single retry stays as the safety net,
+  so correctness never depends on the estimate being right. No change to the
+  public contract: the same call with the same arguments still returns a data
+  URL or throws `ScreenshotTooLargeError`.
+
 ## 0.4.0
 
 The evidence release: what happened before, where it went, and what must never
