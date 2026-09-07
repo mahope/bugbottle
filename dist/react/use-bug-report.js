@@ -1,217 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
-import { pickElement as pickElementFromPage } from "../element-picker.js";
-import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
-import { buildReport, sendReport, SendFailedError, } from "../send.js";
-import { enMessages } from "../locales.js";
-const FALLBACK_MESSAGES = enMessages;
-const bugsOnly = (t) => t === "bug";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { REPORT_TYPES } from "../report-core.js";
+import { createReportState, statusText, } from "../report-state.js";
 export function useBugReport(options) {
-    const { endpoint, screenshot: render, initialType = "bug", screenshotFor = bugsOnly, consoleFor = bugsOnly, } = options;
-    const msg = { ...FALLBACK_MESSAGES, ...options.messages };
-    const canScreenshot = render !== undefined;
-    // Options are read through a ref at call time, so a consumer passing inline
-    // callbacks or a fresh `extra` object each render does not change the
-    // identity of `submit` and friends.
-    const latest = useRef(options);
-    latest.current = options;
-    const [type, setTypeState] = useState(initialType);
-    const [message, setMessage] = useState("");
-    const [screenshot, setScreenshot] = useState(null);
-    const [includeScreenshot, setIncludeScreenshot] = useState(canScreenshot && screenshotFor(initialType));
-    const [elements, setElements] = useState([]);
-    const [status, setStatus] = useState({ kind: "idle" });
-    const capturing = useRef(false);
-    const picking = useRef(null);
-    // A pick installs capture-phase listeners on the document that swallow
-    // clicks. If the form unmounts mid-pick — a modal closed, a route change —
-    // they must go with it, or every click on the page is eaten until Escape.
-    useEffect(() => () => picking.current?.abort(), []);
-    const capture = useCallback(async () => {
-        const renderer = latest.current.screenshot;
-        if (!renderer || capturing.current)
-            return;
-        capturing.current = true;
-        setStatus({ kind: "capturing" });
-        try {
-            setScreenshot(await captureScreenshot(renderer, { mask: latest.current.mask }));
-            setStatus({ kind: "idle" });
-        }
-        catch (err) {
-            // A failed picture must never block the report, so this only turns the
-            // attachment off and says why.
-            const tooLarge = err instanceof ScreenshotTooLargeError;
-            const m = { ...FALLBACK_MESSAGES, ...latest.current.messages };
-            setIncludeScreenshot(false);
-            setStatus({
-                kind: "error",
-                reason: tooLarge ? "screenshot-too-large" : "screenshot-failed",
-                message: tooLarge ? m.screenshotTooLarge : m.screenshotFailed,
-            });
-        }
-        finally {
-            capturing.current = false;
-        }
-    }, []);
-    /** Call when the form opens, so the picture shows what they were looking at. */
-    const open = useCallback(() => {
-        setStatus({ kind: "idle" });
-        if (canScreenshot && screenshotFor(type) && includeScreenshot && !screenshot)
-            void capture();
-    }, [canScreenshot, capture, includeScreenshot, screenshot, screenshotFor, type]);
-    const setType = useCallback((next) => {
-        setTypeState(next);
-        if (canScreenshot && screenshotFor(next) && !screenshot) {
-            setIncludeScreenshot(true);
-            void capture();
-        }
-    }, [canScreenshot, capture, screenshot, screenshotFor]);
-    const toggleScreenshot = useCallback((checked) => {
-        if (!canScreenshot)
-            return;
-        setIncludeScreenshot(checked);
-        if (checked && !screenshot)
-            void capture();
-        if (!checked)
-            setScreenshot(null);
-    }, [canScreenshot, capture, screenshot]);
-    /**
-     * Lets the reporter click the element the report is about. Resolves when
-     * they have clicked or pressed Escape. Calling it again while picking
-     * cancels the first pick. Up to `MAX_ELEMENTS` can be attached.
-     */
-    const pickElement = useCallback(async () => {
-        picking.current?.abort();
-        const controller = new AbortController();
-        picking.current = controller;
-        setStatus({ kind: "picking" });
-        try {
-            const picked = await pickElementFromPage({ signal: controller.signal });
-            if (picked)
-                setElements((prev) => [...prev, picked].slice(-MAX_ELEMENTS));
-            return picked;
-        }
-        finally {
-            if (picking.current === controller) {
-                picking.current = null;
-                setStatus((s) => (s.kind === "picking" ? { kind: "idle" } : s));
-            }
-        }
-    }, []);
-    const cancelPick = useCallback(() => picking.current?.abort(), []);
-    const removeElement = useCallback((index) => {
-        setElements((prev) => prev.filter((_, i) => i !== index));
-    }, []);
-    /** Clears the form and any status, ready for a new report. */
-    const reset = useCallback(() => {
-        picking.current?.abort();
-        setTypeState(initialType);
-        setMessage("");
-        setScreenshot(null);
-        setElements([]);
-        setIncludeScreenshot(canScreenshot && screenshotFor(initialType));
-        setStatus({ kind: "idle" });
-    }, [canScreenshot, initialType, screenshotFor]);
-    const submit = useCallback(async () => {
-        const opts = latest.current;
-        const m = { ...FALLBACK_MESSAGES, ...opts.messages };
-        if (!message.trim()) {
-            setStatus({ kind: "error", reason: "empty", message: m.empty });
-            return false;
-        }
-        setStatus({ kind: "sending" });
-        // A report that is on its way — or safely queued — leaves an empty form
-        // behind, so the next one does not start with the last one still in it.
-        const clearForm = () => {
-            setMessage("");
-            setScreenshot(null);
-            setElements([]);
-            setIncludeScreenshot(canScreenshot && screenshotFor(type));
-        };
-        // Kept outside the try so the failure path can hand the very same body to
-        // the queue rather than assembling a second one from stale state.
-        let report = null;
-        try {
-            report = buildReport({
-                type,
-                message,
-                screenshotDataUrl: includeScreenshot ? screenshot : null,
-                includeConsole: consoleFor(type),
-                elements,
-                extra: opts.extra,
-                scrub: opts.scrub,
-            });
-            const { id } = await sendReport(endpoint, report, {
-                headers: opts.headers,
-                credentials: opts.credentials,
-                timeoutMs: opts.timeoutMs,
-                parseError: opts.parseError,
-                beforeSend: opts.beforeSend,
-            });
-            setStatus({ kind: "sent", id });
-            clearForm();
-            opts.onSent?.(id);
-            return true;
-        }
-        catch (err) {
-            const queue = opts.queue;
-            const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
-            if (queue && report && !rejected) {
-                queue.enqueue(report);
-                setStatus({ kind: "queued" });
-                clearForm();
-                return true;
-            }
-            setStatus({
-                kind: "error",
-                reason: "send-failed",
-                message: err instanceof Error && err.message ? err.message : m.sendFailed,
-            });
-            return false;
-        }
-    }, [
-        canScreenshot,
-        consoleFor,
-        elements,
-        endpoint,
-        includeScreenshot,
-        message,
-        screenshot,
-        screenshotFor,
-        type,
-    ]);
+    // One store for the life of the form. Options are handed over on every
+    // render, so a consumer passing inline callbacks or a fresh `extra` object
+    // does not change the identity of `submit` and friends — they are the
+    // store's own, and never change at all.
+    const held = useRef(null);
+    held.current ??= createReportState(options);
+    const store = held.current;
+    store.setOptions(options);
+    const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+    useEffect(() => store.destroy, [store]);
     return {
         types: REPORT_TYPES,
-        type,
-        setType,
-        message,
-        setMessage,
-        /** Whether a renderer was supplied, so the form can hide the checkbox. */
-        canScreenshot,
-        screenshot,
-        includeScreenshot,
-        toggleScreenshot,
-        recapture: capture,
-        /** Elements the reporter has pointed at, in order. */
-        elements,
-        pickElement,
-        cancelPick,
-        removeElement,
-        open,
-        submit,
-        reset,
-        status,
+        // The state and the actions are already named the way a form wants them —
+        // `message`, `setMessage`, `submit` — so they are spread rather than
+        // relisted, and the two objects cannot drift out of step with this one.
+        ...state,
+        ...store.actions,
         /** Convenience flags, so consumers do not have to match on the union. */
-        isCapturing: status.kind === "capturing",
-        isPicking: status.kind === "picking",
-        isSending: status.kind === "sending",
-        statusMessage: status.kind === "error"
-            ? status.message
-            : status.kind === "sent"
-                ? msg.sent
-                : status.kind === "queued"
-                    ? msg.queued
-                    : "",
+        isCapturing: state.status.kind === "capturing",
+        isPicking: state.status.kind === "picking",
+        isSending: state.status.kind === "sending",
+        statusMessage: statusText(state.status, options.messages),
     };
 }
 //# sourceMappingURL=use-bug-report.js.map
