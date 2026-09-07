@@ -56,6 +56,10 @@
       "types": "./dist/html-to-image.d.ts",
       "default": "./dist/html-to-image.js"
     },
+    "./annotate": {
+      "types": "./dist/annotate.d.ts",
+      "default": "./dist/annotate.js"
+    },
     "./breadcrumbs": {
       "types": "./dist/breadcrumbs.d.ts",
       "default": "./dist/breadcrumbs.js"
@@ -91,6 +95,7 @@
     "build": "tsc -p tsconfig.build.json && node --experimental-strip-types scripts/build-schema.ts && node scripts/build-iife.mjs",
     "build:docs": "node scripts/build-docs.mjs",
     "a11y": "node scripts/a11y-audit.mjs",
+    "smoke:annotate": "node scripts/annotate-smoke.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build && npm run build:docs",

@@ -38,6 +38,23 @@ export type UiTexts = {
     screenshot: string;
     /** Shown next to the screenshot checkbox; say what the picture may contain. */
     screenshotNote: string;
+    /** Button that opens the annotator over the attached picture. */
+    annotate: string;
+    /**
+     * Accessible name of the drawing canvas. It is the only place the keyboard
+     * shortcuts of the annotator are said, so it says them: nothing on screen
+     * mentions Backspace or Escape.
+     */
+    annotateArea: string;
+    /** Accessible name of the tool radio group. Never shown. */
+    toolLabel: string;
+    toolRect: string;
+    toolArrow: string;
+    toolBlur: string;
+    /** Removes the last mark drawn on the picture. */
+    undo: string;
+    /** Closes the annotator and keeps the marked picture. */
+    done: string;
     pickElement: string;
     picking: string;
     /**

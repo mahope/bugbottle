@@ -76,6 +76,13 @@ export type MountOptions = {
     /** Offer the element picker. Default true. */
     elementPicker?: boolean;
     /**
+     * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
+     * arrow and a blur that pixelates what it covers. Default true. `false`
+     * renders no button — the annotator is still in the bundle, since the panel
+     * imports it, but nothing on screen leads to it.
+     */
+    annotate?: boolean;
+    /**
      * `false` renders no floating button — call `open()` from your own control.
      * An element or selector makes that element the trigger instead.
      */

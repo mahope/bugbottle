@@ -62,6 +62,32 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
   robots file that allows everything. Generated rather than hand-written, so a
   new documentation page cannot be left out of them; nginx serves the sitemap
   as `application/xml` and the robots file as `text/plain`.
+- `bugbottle/annotate`: `createAnnotator(canvas, dataUrl, options)`, the
+  reporter marking the screenshot before it is sent — a rectangle to point at
+  something, an arrow to point from somewhere, and a blur. Undo, pointer input
+  so a mouse, a pen and a finger all work, Backspace to undo and Escape to
+  abandon the mark in progress, and `toDataUrl()` for the PNG. A canvas and
+  nothing else: about 1.4 kB gzipped, no dependency, no strings of its own.
+  The blur is destructive on purpose — it reads the region back out of the
+  canvas, averages it in 12-pixel blocks and paints the averages over the top,
+  so the original pixels are gone from the export and cannot be recovered by
+  whoever receives the report. That makes it the privacy tool as much as the
+  marking one, for the customer name a masking rule did not know about.
+  `scripts/annotate-smoke.mjs` proves it in a real Chrome: every block inside
+  the region is one flat colour, none of them still carries the original
+  pixels, and not one pixel outside the region changed.
+- The panel gained the flow over it. Once a picture is attached, "Edit
+  picture" replaces the preview with the canvas and a toolbar: the three tools
+  as a labelled `radiogroup` the arrow keys walk through, undo, and done —
+  which folds the marked picture back into the report and returns focus to the
+  button that opened it. Eight new locale strings in all eight languages,
+  including a name for the canvas that says which keys work on it, since
+  nothing on screen does. `annotate: false` on `mountBugbottle` and
+  `data-annotate="off"` on the script tag switch it off; `createAnnotator` is
+  also on `window.bugbottle` for a page with its own form. `npm run a11y` now
+  audits five states rather than three, the two new ones with the editor open,
+  and reports no violations.
+
 - `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
   a composable over refs. `type` and `message` are writable computeds, so
   `v-model` binds to them; the subscription is torn down with the effect scope

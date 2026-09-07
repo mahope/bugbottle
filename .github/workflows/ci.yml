@@ -53,8 +53,15 @@ jobs:
           # 16.1 kB before the accessibility pass, 16.8 after it, about 17.7 with
           # the stack frames and the wider context: the script tag carries every
           # default in eight languages.
-          if [ "$iife" -gt 19456 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 19456" >&2
+          # 18432 was not enough for the picture annotator, which is why the
+          # budget is 20992 and the file measures 20450. About 1.4 kB of the
+          # rise is `src/annotate.ts` itself, which the panel imports, and the
+          # remaining kilobyte is its eight locale strings in eight languages —
+          # one of them a sentence, because it is where the annotator's keys
+          # are said to a screen reader. Neither half can be dropped without
+          # dropping the feature or its accessible names.
+          if [ "$iife" -gt 20992 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 20992" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -70,6 +77,7 @@ jobs:
           echo 'import { buildReport, sendReport, captureScreenshot, pickElement } from "bugbottle"; export { buildReport, sendReport, captureScreenshot, pickElement };' > form-core.js
           echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
           echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
+          echo 'import { createAnnotator } from "bugbottle/annotate"; export { createAnnotator };' > annotate.js
           echo 'import { initBreadcrumbs } from "bugbottle/breadcrumbs"; initBreadcrumbs();' > breadcrumbs.js
           echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
           echo 'import { createQueue } from "bugbottle/queue"; export { createQueue };' > queue.js
@@ -86,12 +94,13 @@ jobs:
           npx esbuild form-core.js --bundle --minify --format=esm --outfile=out-form-core.js
           npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
           npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
+          npx esbuild annotate.js --bundle --minify --format=esm --outfile=out-annotate.js
           npx esbuild breadcrumbs.js --bundle --minify --format=esm --outfile=out-breadcrumbs.js
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
-          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-breadcrumbs out-network out-queue out-triggers out-sign; do
+          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-queue out-triggers out-sign; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -132,8 +141,25 @@ jobs:
           # region, the two-scheme colours and five new strings — which is the
           # difference between a panel a keyboard user can leave and one they
           # cannot, and so is not optional.
-          if [ "$ui" -gt 10240 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 10240" >&2
+          # The budget then went from 10 kB to 12 kB for the picture annotator:
+          # `src/annotate.ts` is 1441 bytes gzipped on its own and the panel
+          # imports it unconditionally, so an application that mounts the panel
+          # pays for it whether or not it takes pictures — `annotate: false`
+          # hides the button, it does not shrink the bundle. The toolbar, the
+          # editor state and eight English strings are the remaining 300 bytes.
+          # A dynamic import would move the cost rather than remove it and
+          # would make the panel depend on a second network round trip in the
+          # middle of a report, which is worse than 1.7 kB.
+          if [ "$ui" -gt 12288 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12288" >&2
+            exit 1
+          fi
+          # The annotator on its own: a canvas, three tools, an undo stack and
+          # no dependency. 1441 bytes gzipped when it landed, against the
+          # 2048-byte budget the roadmap set for it.
+          annotate=$(gzip -c out-annotate.js | wc -c)
+          if [ "$annotate" -gt 2048 ]; then
+            echo "bugbottle/annotate is $annotate bytes gzipped; the budget is 2048" >&2
             exit 1
           fi
           # The breadcrumbs module itself is well under 1 kB; the rest of this

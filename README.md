@@ -538,9 +538,11 @@ const widget = mountBugbottle({
 ```
 
 It offers the three report types, a message, the screenshot checkbox (only
-when a renderer is given), the element picker, and a thank-you state. Pass
+when a renderer is given), "Edit picture" over the attached screenshot, the
+element picker, and a thank-you state. Pass
 `trigger: "#my-feedback-button"` to use your own button instead of the
-floating one, or `trigger: false` and call `open()` yourself. About 9.6 kB
+floating one, or `trigger: false` and call `open()` yourself, and
+`annotate: false` to leave the marking tools out. About 11.7 kB
 gzipped, no framework.
 
 **Accessibility.** The panel is meant to be switched on without an
@@ -548,17 +550,22 @@ accessibility regression, so it behaves like a dialog rather than a floating
 div. While it is open, focus is trapped inside the shadow root — Tab wraps at
 both ends — and Escape closes it; closing puts focus back on whatever opened
 it, the floating trigger or your own control. The report types are a
-`radiogroup` the arrow keys walk through, one stop in the tab order. Every
+`radiogroup` the arrow keys walk through, one stop in the tab order, and so
+are the drawing tools. Every
 control has a name: the trigger, the close button, the group of types, the
-screenshot note (as `aria-describedby` on the checkbox), and each remove
+screenshot note (as `aria-describedby` on the checkbox), each remove
 button, which is named after the element it removes rather than being one of
-several buttons called "Remove". A polite live region announces status
+several buttons called "Remove", and every control of the picture editor —
+whose canvas carries a name that also says which keys work on it, since
+nothing on screen mentions them. Closing the editor puts focus back on the
+button that opened it. A polite live region announces status
 messages, and announces the element picker starting and stopping, with the way
 out — that mode hides the panel and changes the pointer, neither of which a
 screen reader reports. Targets are at least 24x24, focus rings are visible in
 both colour schemes, the dark scheme lightens the accent and the error red so
 they hold their contrast, and `prefers-reduced-motion` is respected. axe-core
-reports no violations on the panel open in either scheme, or closed; run the
+reports no violations on the panel open in either scheme, closed, or with the
+picture editor open in either scheme; run the
 audit yourself with `npm run build && npm run a11y` (Chrome and
 `puppeteer-core` required). All of the announced text comes from the locale,
 so it is announced in the reporter's language.
@@ -567,7 +574,7 @@ so it is announced in the reporter's language.
 
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
-that mounts the panel from the tag itself. About 16.8 kB gzipped:
+that mounts the panel from the tag itself. About 20 kB gzipped:
 
 ```html
 <script
@@ -599,6 +606,7 @@ run on your page.
 | `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
+| `data-annotate="off"` | Leaves out "Edit picture" and its rectangle, arrow and blur. Only matters once you give `mount` a renderer; see [Marking the picture](#marking-the-picture). |
 | `data-shortcut` | The combination that opens the panel. `mod+shift+b` unless you say otherwise; `off` installs no listener. |
 | `data-open-on-error` | Present, with any value, opens the panel on an uncaught error. `prefill` also fills the message in. |
 
@@ -611,7 +619,8 @@ page that only wants the panel is the wrong trade. The bundle exposes the
 building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
 `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
 `locales`, `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`,
-`pickElement`, `onShortcut`, `onUncaughtError` and `version` — so a
+`pickElement`, `createAnnotator`, `onShortcut`, `onUncaughtError` and
+`version` — so a
 page that wants pictures can load `html-to-image` itself and call
 `window.bugbottle.mount({ endpoint, screenshot })`. Leave `data-endpoint` off
 the tag and nothing mounts on its own:
@@ -888,6 +897,56 @@ desktop behind it. That is a deliberate limit rather than a missing feature.
 
 What the reporter typed is hidden before the picture is taken; see
 [Masking](#masking).
+
+### Marking the picture
+
+A screenshot of the whole page rarely says which part of it is wrong. The
+reporter can mark it before sending: a rectangle to point at something, an
+arrow to point from somewhere, and a blur.
+
+The blur is the privacy tool as much as the marking one. It does not put a
+frosted rectangle over the region — it reads those pixels back out of the
+canvas, averages them in 12-pixel blocks and paints the averages on top, so
+the original pixels are gone from the exported PNG. Whoever receives the
+report cannot recover what was under it. That is the tool to reach for when a
+picture caught a customer name the masking rules did not know about.
+
+In the ready-made panel it is a button, "Edit picture", that appears once a
+picture is attached; it opens a toolbar and the canvas in place of the
+preview. Pass `annotate: false` to `mountBugbottle` (or `data-annotate="off"`
+on the script tag) to leave it out.
+
+With your own form, use the annotator directly. It is its own entry point,
+about 1.4 kB gzipped, and it draws on a canvas you supply:
+
+```ts
+import { createAnnotator } from "bugbottle/annotate";
+import { buildReport, sendReport, captureScreenshot } from "bugbottle";
+import { htmlToImage } from "bugbottle/html-to-image";
+
+const picture = await captureScreenshot(htmlToImage);
+const annotator = createAnnotator(canvas, picture);
+await annotator.ready; // the canvas is now the size of the picture
+
+toolbar.onclick = (e) => annotator.setTool(e.target.value); // "rect" | "arrow" | "blur"
+undoButton.onclick = () => annotator.undo();
+
+// When the reporter is finished, the marked picture is the attachment.
+const report = buildReport({
+  type: "bug",
+  message: message.value,
+  screenshotDataUrl: annotator.toDataUrl(),
+});
+await sendReport("/api/feedback", report);
+```
+
+`createAnnotator(canvas, dataUrl, options)` takes `tool`, `colour` (defaults
+to the computed `--bb-primary`), `lineWidth`, `blockSize` and an `onChange`
+called with the number of marks. It returns `ready`, `setTool`, `getTool`,
+`undo`, `clear`, `count`, `toDataUrl` and `destroy`. Drawing is by pointer, so
+a mouse, a pen and a finger all work; Backspace or Delete undoes and Escape
+abandons the mark being drawn. Nothing in it is a string the reporter reads,
+so it needs no locale of its own — the panel supplies the labels around it.
 
 ## Receiving a report
 
@@ -1516,6 +1575,9 @@ type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 bundles this build, adds the receiving endpoint, stores reports as a private
 post type with an admin list, and emails them if you want. One activation.
 
+**`bugbottle/annotate`** — `createAnnotator`, and the `Annotator`,
+`AnnotatorOptions` and `AnnotateTool` types. See "Marking the picture".
+
 **`bugbottle/breadcrumbs`** — `initBreadcrumbs`, `getBreadcrumbs`,
 `resetBreadcrumbs`, `isBreadcrumbsActive`, and the `BreadcrumbsOptions` type.
 
@@ -1551,8 +1613,8 @@ Optional peer `svelte` >= 4.
 **`bugbottle/html-to-image`** — `htmlToImage`, a `ScreenshotRenderer`.
 Requires `html-to-image`.
 
-**`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions`, `Theme`,
-`Brand` and `BugbottleWidget` types.
+**`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions` (including
+`annotate`), `Theme`, `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
 `locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,

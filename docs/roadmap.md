@@ -90,6 +90,16 @@ constant-time compare and a replay cache, all four failures answering one
 `401 { error: "Bad signature" }`. Documented honestly: a key in the browser is
 public, so it is spam deterrence beside a rate limit and never authentication.
 
+**0.6** — `bugbottle/annotate`: `createAnnotator(canvas, dataUrl, options)`,
+a rectangle, an arrow and a blur over the attached picture, with undo, pointer
+and keyboard handling and a PNG export, in about 1.4 kB gzipped and with no
+dependency. The blur pixelates in 12px blocks by reading the region back out
+of the canvas, so the pixels are gone from the export rather than covered up —
+it is the privacy tool as much as the marking one. The panel gained the "Edit
+picture" flow over it: a labelled toolbar, the tools as a `radiogroup`, focus
+back to the button that opened it, eight new strings in eight languages,
+`annotate: false` and `data-annotate="off"` to switch it off.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -116,8 +126,7 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 
 ## 1.0 — adoptable
 
-- `bugbottle/ui` annotation: rectangle/arrow/blur on the screenshot preview.
-  The blur tool doubles as a privacy feature.
+- Annotation shipped early, in 0.6; see "Already shipped".
 - `create-bugbottle` scaffold for a receiving endpoint.
 - Playground and StackBlitz demo; rrweb adapter.
 - Freeze the report schema and the `beforeSend` contract.
