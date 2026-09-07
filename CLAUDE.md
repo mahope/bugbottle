@@ -25,7 +25,10 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in | nothing |
 | `src/react/` | `useBugReport` hook over send.ts | everything above |
 | `src/ui/` | `mountBugbottle` — optional shadow-DOM panel over the same core; themed via `--bb-*` vars | everything above |
-| `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
+| `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
+| `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
+| `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
+| `site/` | The landing page (EN + DA), static, served by nginx from `site/Dockerfile` on Dokploy. Not part of the npm package | dist (at image build) |
 | `src/server/` | Re-exports of report-core, markdown and the sinks for `bugbottle/server` | report-core, markdown, sinks |
 | `tests/` | `node:test`, run on the TypeScript source directly | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
@@ -37,6 +40,15 @@ Seven entry points in `package.json#exports`: `.`, `./react`, `./server`,
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
+
+## Definition of done
+
+A change is done when the code, its tests, **and its documentation** land
+together: the README section and API list, `CHANGELOG.md` under Unreleased,
+`docs/roadmap.md` ("Already shipped" moves when something ships), this file's
+layout table and sizes, and CONTRIBUTING's budgets. Mads' standing rule
+(2026-09-07): "Husk altid at opdatere readme.md og docs også". An issue is
+not closed and a branch is not merged with the docs lagging.
 
 ## Rules that are not obvious from the code
 

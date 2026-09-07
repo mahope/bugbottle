@@ -55,6 +55,11 @@ The evidence release: what happened before, where it went, and what must never
 leave the browser. One breaking change: `Locale` now requires an `email` key
 (every bundled locale has it; a hand-written one needs the two strings).
 
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 0.8 kB,
+`bugbottle/react` 3.9 kB, `bugbottle/ui` 6.9 kB, `bugbottle/breadcrumbs`
+1.2 kB, `dist/bugbottle.js` 11.6 kB, `bugbottle/server` 0.3 kB (validators
+only; sinks and `toMarkdown` are tree-shaken when unused).
+
 ### Added
 
 - `dist/bugbottle.js`, a self-contained IIFE for pages with no build step:

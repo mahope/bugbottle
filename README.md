@@ -41,9 +41,13 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 0.6 kB gzipped; with the element picker and the React hook, 3.4 kB;
-  the optional ready-made panel, 6 kB. `html-to-image` is only pulled in by
-  the module that imports it.
+  is about 0.8 kB gzipped; with the element picker and the React hook, 3.9 kB;
+  the optional ready-made panel, 6.9 kB; breadcrumbs 1.2 kB; the everything
+  script tag, 11.6 kB. `html-to-image` is only pulled in by the module that
+  imports it, and the scrubber only by the code that calls it.
+- **Sends itself onward.** Email through Resend, a Slack, Discord or plain
+  webhook, or a GitHub issue — server-side helpers over one Markdown
+  rendering, keys never in the browser.
 - **Your language, your brand.** Eight bundled locales, every string
   overridable, and a panel themed with a handful of CSS variables.
 - **Server helpers included.** Every field a browser sends is checked before it
@@ -734,10 +738,21 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 ## API
 
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
-`captureScreenshot`, `collectContext`, `pickElement`, `describeElement`,
-`buildSelector`, `buildReport`, `sendReport`, `scrubReport`,
-`BUILTIN_SCRUBBERS`, `ScreenshotTooLargeError`, `SendFailedError`, the server
+`captureScreenshot` (with `CaptureInfo` and `DEFAULT_BYTES_PER_PIXEL_ESTIMATE`),
+`collectContext`, `pickElement`, `describeElement`, `buildSelector`,
+`buildReport`, `sendReport`, `scrubReport`, `BUILTIN_SCRUBBERS`,
+`ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
 validators below, and the shared types and limits.
+
+**`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
+`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `locales`, `resolveLocale`,
+`scrubReport`, `buildReport`, `sendReport`, `pickElement`, `version`, and
+`data-*` auto-mount. See "One script tag".
+
+**WordPress** — the plugin at
+[github.com/mahope/bugbottle-wordpress](https://github.com/mahope/bugbottle-wordpress)
+bundles this build, adds the receiving endpoint, stores reports as a private
+post type with an admin list, and emails them if you want. One activation.
 
 **`bugbottle/breadcrumbs`** — `initBreadcrumbs`, `getBreadcrumbs`,
 `resetBreadcrumbs`, `isBreadcrumbsActive`, and the `BreadcrumbsOptions` type.
