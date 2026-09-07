@@ -26,6 +26,7 @@ import { initNetwork } from "./network.ts";
 import { createQueue } from "./queue.ts";
 import { scrubReport } from "./scrub.ts";
 import { buildReport, sendReport } from "./send.ts";
+import { createSigner } from "./sign.ts";
 import { onShortcut, onUncaughtError } from "./triggers.ts";
 import { mountBugbottle, type MountOptions, type Theme } from "./ui/index.ts";
 
@@ -43,6 +44,7 @@ const api = {
   locales,
   resolveLocale,
   scrubReport,
+  createSigner,
   buildReport,
   sendReport,
   pickElement,
@@ -118,6 +120,10 @@ function autoMount(data: DOMStringMap): void {
   // Any value enables the scrubber, including the empty string of a bare
   // `data-scrub` attribute — the point is that ticking it is one word.
   if (data.scrub !== undefined) options.scrub = scrubReport;
+  // The key is in the page source for anyone who looks — that is the honest
+  // shape of signing from a browser, and the README says so. It raises the
+  // cost of a script posting to the endpoint; it authenticates nobody.
+  if (data.signKey) options.sign = createSigner({ key: data.signKey });
   const extra = readExtra(data.extra);
   if (extra) options.extra = extra;
 

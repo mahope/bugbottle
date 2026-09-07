@@ -94,6 +94,13 @@ export type UseBugReportOptions = {
    */
   beforeSend?: SendOptions["beforeSend"];
   /**
+   * Signs the body before it is sent. Pass the signer:
+   * `import { createSigner } from "bugbottle/sign"; sign: createSigner({ key })`.
+   * A key in the browser is public, so this deters spam rather than
+   * authenticating anybody. See the README.
+   */
+  sign?: SendOptions["sign"];
+  /**
    * Messages shown to the reporter. Pass a bundled locale
    * (`import { da } from "bugbottle/locales"; messages: da.messages`) or
    * your own strings. Defaults to English.
@@ -324,6 +331,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           timeoutMs: opts.timeoutMs,
           parseError: opts.parseError,
           beforeSend: opts.beforeSend,
+          sign: opts.sign,
         });
         set({ status: { kind: "sent", id } });
         clearForm();

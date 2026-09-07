@@ -37,6 +37,8 @@ export type ReportErrorOptions = {
   scrub?: BuildReportInput["scrub"];
   /** Last look at the report. Return it, a changed copy, or `null` to drop it. */
   beforeSend?: SendOptions["beforeSend"];
+  /** Signs the body. Pass `createSigner({ key })` from `bugbottle/sign`. */
+  sign?: SendOptions["sign"];
 };
 
 /**
@@ -72,6 +74,7 @@ async function sendRenderError(
     parseError: options.parseError,
     fetch: options.fetch,
     beforeSend: options.beforeSend,
+    sign: options.sign,
   });
   return id;
 }
