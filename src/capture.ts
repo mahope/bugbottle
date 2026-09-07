@@ -178,11 +178,14 @@ export async function captureScreenshot(
   const started = now();
   let attempts = 1;
   let dataUrl: string;
-  // Masking is applied once and covers the retry too: the second render is the
-  // same picture at a different scale, and unmasking between the two would put
-  // the reporter's data in the very capture we keep.
-  const restore = options.mask === false ? undefined : applyMask(root, options.mask ?? {});
+  let restore: (() => void) | undefined;
   try {
+    // Masking is applied once and covers the retry too: the second render is
+    // the same picture at a different scale, and unmasking between the two
+    // would put the reporter's data in the very capture we keep. It is applied
+    // inside the `try` so that a mask pass which throws part way through is
+    // covered by the same `finally` as a renderer that throws.
+    restore = options.mask === false ? undefined : applyMask(root, options.mask ?? {});
     dataUrl = await render(root, { filter, pixelRatio });
     if (dataUrl.length > maxLength && pixelRatio > REDUCED_PIXEL_RATIO) {
       pixelRatio = REDUCED_PIXEL_RATIO;

@@ -104,9 +104,12 @@ jobs:
           fi
           # The network log carries its own URL scrubber, which is the query
           # pattern from scrub.ts and nothing else; the rest of the scrubber is
-          # tree-shaken away. 1174 bytes gzipped at 0.5.0.
+          # tree-shaken away. 1174 bytes gzipped when it landed; about 100 bytes
+          # more once a reused XMLHttpRequest stopped recording itself twice and
+          # a reset stopped uninstalling other people's wrappers, which is a
+          # cheap price for entries that are neither duplicated nor stolen.
           network=$(gzip -c out-network.js | wc -c)
-          if [ "$network" -gt 1228 ]; then
-            echo "bugbottle/network is $network bytes gzipped; the budget is 1228" >&2
+          if [ "$network" -gt 1330 ]; then
+            echo "bugbottle/network is $network bytes gzipped; the budget is 1330" >&2
             exit 1
           fi

@@ -36,6 +36,8 @@ type Browser = {
 
 type FakeXhr = EventTarget & {
   status: number;
+  /** How many listeners the patch has hung on this instance. */
+  listeners: number;
   open(method: string, url: string): void;
   send(body?: unknown): void;
   /** Ends the request the way the browser would, through `loadend`. */
@@ -65,6 +67,12 @@ function withBrowser(fn: (env: Browser) => Promise<void> | void): Promise<void> 
     status = 0;
     method = "";
     url = "";
+    /** Counted, because a listener per `send` is exactly the bug to catch. */
+    listeners = 0;
+    override addEventListener(type: string, fn: EventListenerOrEventListenerObject | null): void {
+      this.listeners += 1;
+      super.addEventListener(type, fn);
+    }
     open(method: string, url: string): void {
       this.method = method;
       this.url = url;
@@ -424,4 +432,69 @@ test("toMarkdown renders a Requests table after breadcrumbs and before the conso
   );
   assert.ok(md.indexOf("### Requests") < md.indexOf("Console ("), "the console comes last");
   assert.ok(!toMarkdown({ type: "bug", message: "x" }).includes("### Requests"));
+});
+
+test("a reused XMLHttpRequest records one entry per send, timed from that send", async () => {
+  await withBrowser(async ({ Xhr }) => {
+    initNetwork();
+    // The same object, opened and sent three times, is what an application
+    // that keeps one XHR around does all day.
+    const xhr = new Xhr();
+    for (const path of ["/api/one", "/api/two", "/api/three"]) {
+      xhr.open("GET", path);
+      xhr.send();
+      await xhr.finish(500, 5);
+    }
+    const entries = getNetwork();
+    assert.deepEqual(
+      entries.map((e) => e.url),
+      ["/api/one", "/api/two", "/api/three"],
+      "one entry per request, not one per request per send so far",
+    );
+    for (const entry of entries) {
+      assert.ok(entry.ms >= 4, "each duration is measured from its own send");
+      assert.ok(entry.ms < 200, "and not from the first one");
+    }
+    assert.equal(xhr.listeners, 1, "the listener is registered once per instance");
+  });
+});
+
+test("a request in flight across a reset lands in no buffer at all", async () => {
+  await withBrowser(async ({ answer }) => {
+    initNetwork();
+    answer({ status: 500, delayMs: 20 });
+    const inFlight = fetch("/api/orders");
+    resetNetwork();
+    initNetwork();
+    await inFlight;
+    assert.equal(getNetwork().length, 0, "a straggler belongs to the session that started it");
+  });
+});
+
+test("a fetch another library wrapped after init is left alone by reset", async () => {
+  await withBrowser(async ({ answer }) => {
+    initNetwork();
+    const ours = globalThis.fetch;
+    // Somebody else instruments fetch after we did. Their wrapper calls ours.
+    const theirs = ((input: unknown, init?: unknown) =>
+      (ours as (i: unknown, n?: unknown) => Promise<unknown>)(input, init)) as typeof globalThis.fetch;
+    globalThis.fetch = theirs;
+    resetNetwork();
+    assert.equal(globalThis.fetch, theirs, "uninstalling a stranger is not ours to do");
+    answer({ status: 500 });
+    await fetch("/api/orders");
+    assert.equal(getNetwork().length, 0, "and the wrapper it still calls records nothing");
+  });
+});
+
+test("initNetwork starts from an empty buffer", async () => {
+  await withBrowser(async ({ answer }) => {
+    initNetwork();
+    answer({ status: 500 });
+    await fetch("/api/orders");
+    assert.equal(getNetwork().length, 1);
+    resetNetwork();
+    initNetwork();
+    assert.equal(getNetwork().length, 0, "a new session does not inherit the last one");
+  });
 });

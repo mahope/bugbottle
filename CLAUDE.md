@@ -99,9 +99,13 @@ The script-tag build is budgeted at 13 kB and measures 12.2 kB.
 `bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
 of its bundle is `buildSelector`, which an app that also points at elements
 already pays for — the marginal cost there is around 0.55 kB.
-`bugbottle/network` is budgeted at 1228 bytes and measures 1174; it imports
-`scrubUrl` alone, so the rest of `scrub.ts` is tree-shaken away. The IIFE
-budget is 13824 bytes gzipped (12600 at 0.4.0 plus the network log).
+`bugbottle/network` is budgeted at 1330 bytes and measured 1174 when it landed;
+the review fixes (one `loadend` listener per instance, an era guard on
+in-flight requests, and a reset that only unpatches what is still ours) cost
+about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
+tree-shaken away. The IIFE budget is 14336 bytes gzipped and the bundle
+measures 13754; masking replaced elements and shadow roots costs about 500 of
+those, and about 390 of the react and ui bundles.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

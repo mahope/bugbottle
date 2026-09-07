@@ -75,6 +75,16 @@ let shouldIgnore: ((url: string) => boolean) | null = null;
 let undo: (() => void)[] = [];
 
 /**
+ * Which run of `initNetwork` a patch belongs to. A request that is still in
+ * flight when `resetNetwork` is called settles afterwards and calls back into
+ * a patch that no longer speaks for anyone; comparing the era it was made in
+ * against the current one keeps that late answer out of the buffer — including
+ * out of the buffer of a later `initNetwork`, which is a different session and
+ * must not inherit the previous one's stragglers.
+ */
+let generation = 0;
+
+/**
  * Path and query for a same-origin request, the whole thing minus the fragment
  * for a cross-origin one. Which host failed is half the answer when the call
  * went somewhere else; when it did not, the origin is the page's own and says
@@ -110,6 +120,9 @@ function isInteresting(status: number, ms: number, error: boolean): boolean {
 }
 
 function record(method: string, raw: unknown, status: number, ms: number, error: boolean): void {
+  // Nothing is recording, so there is nothing to record into. A patch that
+  // another library wrapped may outlive `resetNetwork` and keep calling here.
+  if (!initialised) return;
   if (!isInteresting(status, ms, error)) return;
   const url = urlOf(raw);
   if (shouldIgnore) {
@@ -171,6 +184,7 @@ function ignoreEndpoint(endpoint: string): (url: string) => boolean {
 function patchFetch(): void {
   const original = globalThis.fetch;
   if (typeof original !== "function") return;
+  const era = generation;
   const patched: typeof globalThis.fetch = function (this: unknown, input, init) {
     const method = methodOf(input, init);
     const started = Date.now();
@@ -179,18 +193,23 @@ function patchFetch(): void {
     // fetch it wrote — including its rejections, rethrown as they were.
     return original.call(globalThis, input, init).then(
       (response) => {
-        record(method, input, response.status, Date.now() - started, false);
+        if (era === generation) record(method, input, response.status, Date.now() - started, false);
         return response;
       },
       (err: unknown) => {
-        record(method, input, 0, Date.now() - started, true);
+        if (era === generation) record(method, input, 0, Date.now() - started, true);
         throw err;
       },
     );
   };
   globalThis.fetch = patched;
   undo.push(() => {
-    globalThis.fetch = original;
+    // Only if it is still ours: another library may have wrapped our patch
+    // after we installed it, and putting the original back over the top of
+    // that wrapper would silently uninstall a stranger's instrumentation.
+    // Leaving the wrapper in place costs nothing — `record` no-ops once
+    // `initialised` is false — whereas breaking it costs somebody their logs.
+    if (globalThis.fetch === patched) globalThis.fetch = original;
   });
 }
 
@@ -203,30 +222,51 @@ function patchXhr(): void {
   // A WeakMap rather than a property on the instance: the host's object is not
   // ours to add fields to, and a request that is never sent is collected as if
   // this module had never seen it.
-  const pending = new WeakMap<XhrLike, { method: string; url: string }>();
+  const pending = new WeakMap<XhrLike, { method: string; url: string; started: number }>();
+  // An XMLHttpRequest is reusable: the same object can be opened and sent
+  // again and again. One `loadend` listener per `send` meant the second
+  // request reported itself twice and the third three times, each copy timed
+  // from an older `send` — duplicated entries with inflated durations. The
+  // listener is therefore registered once per instance and reads the start
+  // time from whatever `send` last recorded.
+  const listening = new WeakSet<XhrLike>();
+  const era = generation;
 
   proto.open = function (method, url, ...rest) {
-    pending.set(this, { method: String(method ?? "GET").toUpperCase(), url: String(url ?? "") });
+    pending.set(this, {
+      method: String(method ?? "GET").toUpperCase(),
+      url: String(url ?? ""),
+      started: Date.now(),
+    });
     return openOriginal.call(this, method, url, ...rest);
   };
 
   proto.send = function (body) {
     const request = pending.get(this);
     if (request) {
-      const started = Date.now();
-      // `loadend` is the one event that fires for every ending — load, error,
-      // abort and timeout alike — so the duration is recorded exactly once.
-      this.addEventListener("loadend", () => {
-        const status = Number(this.status) || 0;
-        record(request.method, request.url, status, Date.now() - started, status === 0);
-      });
+      request.started = Date.now();
+      if (!listening.has(this)) {
+        listening.add(this);
+        // `loadend` is the one event that fires for every ending — load, error,
+        // abort and timeout alike — so the duration is recorded exactly once.
+        const xhr = this;
+        xhr.addEventListener("loadend", () => {
+          const current = pending.get(xhr);
+          if (!current || era !== generation) return;
+          const status = Number(xhr.status) || 0;
+          record(current.method, current.url, status, Date.now() - current.started, status === 0);
+        });
+      }
     }
     return sendOriginal.call(this, body);
   };
 
+  const patchedOpen = proto.open;
+  const patchedSend = proto.send;
   undo.push(() => {
-    proto.open = openOriginal;
-    proto.send = sendOriginal;
+    // Same reasoning as `fetch`: restore only what is still ours.
+    if (proto.open === patchedOpen) proto.open = openOriginal;
+    if (proto.send === patchedSend) proto.send = sendOriginal;
   });
 }
 
@@ -245,6 +285,8 @@ export function initNetwork(options: NetworkOptions = {}): void {
   const cap = resolveMaxEntries(options.maxEntries);
   if (cap === 0) return;
   initialised = true;
+  // A fresh session starts empty, whatever a previous one left behind.
+  buffer = [];
   maxEntries = cap;
   slowMs =
     typeof options.slowMs === "number" && Number.isFinite(options.slowMs) && options.slowMs >= 0
@@ -270,9 +312,21 @@ export function isNetworkActive(): boolean {
   return initialised;
 }
 
-/** Empties the buffer and puts `fetch` and `XMLHttpRequest` back as they were. */
+/**
+ * Empties the buffer and puts `fetch` and `XMLHttpRequest` back as they were —
+ * but only where they are still ours. Another library may have wrapped our
+ * patch after `initNetwork` ran, and assigning the original over the top of
+ * that wrapper would uninstall somebody else's instrumentation without saying
+ * so. A wrapper we cannot safely remove is left where it is instead; it goes
+ * on calling a `record` that does nothing, which costs a function call and
+ * nothing else.
+ *
+ * A request still in flight when this is called settles into no buffer at all,
+ * not even the one a later `initNetwork` opens.
+ */
 export function resetNetwork(): void {
   buffer = [];
+  generation += 1;
   registerNetworkSource(null);
   for (const step of undo) step();
   undo = [];
