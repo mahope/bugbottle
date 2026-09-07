@@ -8,6 +8,7 @@
 
 import { collectContext } from "./capture.ts";
 import { getConsoleBuffer } from "./console-buffer.ts";
+import { readBreadcrumbs } from "./registry.ts";
 import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
 
 export type BuildReportInput = {
@@ -17,6 +18,13 @@ export type BuildReportInput = {
   screenshotDataUrl?: string | null;
   /** Attach the recorded console errors. Default true. */
   includeConsole?: boolean;
+  /**
+   * Attach the recorded breadcrumbs. Default true, which means "whenever
+   * `initBreadcrumbs` from `bugbottle/breadcrumbs` is recording" — an
+   * application that never imports that module has nothing to attach and pays
+   * nothing for the option.
+   */
+  includeBreadcrumbs?: boolean;
   /** Elements the reporter pointed at, from `pickElement`. */
   elements?: ElementRef[];
   /**
@@ -35,6 +43,10 @@ export function buildReport(input: BuildReportInput): BugReport & Record<string,
   };
   if (input.includeConsole ?? true) report.console = getConsoleBuffer();
   if (input.elements && input.elements.length > 0) report.elements = input.elements;
+  if (input.includeBreadcrumbs ?? true) {
+    const crumbs = readBreadcrumbs();
+    if (crumbs && crumbs.length > 0) report.breadcrumbs = crumbs;
+  }
   if (input.screenshotDataUrl) report.screenshotDataUrl = input.screenshotDataUrl;
   return { ...input.extra, ...report };
 }

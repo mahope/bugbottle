@@ -48,6 +48,10 @@
       "types": "./dist/html-to-image.d.ts",
       "default": "./dist/html-to-image.js"
     },
+    "./breadcrumbs": {
+      "types": "./dist/breadcrumbs.d.ts",
+      "default": "./dist/breadcrumbs.js"
+    },
     "./locales": {
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"

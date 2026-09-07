@@ -257,6 +257,58 @@ then falls back to `tag:nth-of-type` steps, at most five deep. It is meant to
 be read by a person or an agent, and to land on the right file — not to be a
 stable locator for a test suite.
 
+## What happened before
+
+`bugbottle/breadcrumbs` records the last few things the reporter did, so the
+report says what was happening when it broke — not only what broke. It is a
+separate entry point: an application that does not import it does not carry it.
+
+```ts
+import { initBreadcrumbs } from "bugbottle/breadcrumbs";
+
+initBreadcrumbs();
+```
+
+Four things are recorded and nothing else: clicks (a short selector and the
+element's visible text), navigation (path and query, including `pushState` and
+`replaceState`, which fire no event of their own), form submits (the selector
+only) and visibility changes. The last 30 are kept.
+
+```jsonc
+[
+  { "ts": "2026-09-07T08:12:29.100Z", "kind": "click", "target": "button#save-order", "text": "Save order" },
+  { "ts": "2026-09-07T08:12:30.400Z", "kind": "navigation", "from": "/orders/1", "to": "/orders/2?tab=notes" },
+  { "ts": "2026-09-07T08:12:31.000Z", "kind": "submit", "target": "form#checkout" },
+  { "ts": "2026-09-07T08:12:34.700Z", "kind": "visibility", "to": "hidden" }
+]
+```
+
+`buildReport` attaches them on its own while the buffer is recording, as
+`breadcrumbs`; pass `includeBreadcrumbs: false` to leave them out of one
+report. `toMarkdown` renders them as a "What happened before" list.
+
+Deliberately absent: input values, keystrokes, and anything read out of a
+field. A breadcrumb says *where* someone clicked, never *what they typed*. On
+top of that, three controls are yours:
+
+```ts
+initBreadcrumbs({
+  maxEntries: 30,
+  beforeBreadcrumb: (crumb) =>
+    crumb.to?.startsWith("/admin") ? null : { ...crumb, to: crumb.to?.replace(/\/\d+/, "/:id") },
+});
+```
+
+- `beforeBreadcrumb` sees every breadcrumb before it is stored. Return null to
+  drop it, or a changed one to redact it.
+- Anything inside `[data-bugbottle]` is skipped entirely — that is the
+  library's own furniture, including the panel from `bugbottle/ui`.
+- Anything inside `[data-bugbottle-mask]` records its selector and no text, so
+  a name, an address or an amount on a card never travels with the click.
+
+`getBreadcrumbs()` returns a copy of the timeline, and `resetBreadcrumbs()`
+empties it, removes the listeners and puts `history` back as it found it.
+
 ## Feeding reports to an agent
 
 A report with a selector, the element's text, the page path and the last few
@@ -427,6 +479,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
     { "selector": "form#checkout > button:nth-of-type(2)", "tag": "button", "text": "Save order",
       "rect": { "x": 912, "y": 640, "width": 118, "height": 36 }, "attributes": { "type": "submit" } }
   ],
+  "breadcrumbs": [                     // only while bugbottle/breadcrumbs is recording
+    { "ts": "2026-09-07T08:12:30.400Z", "kind": "navigation", "from": "/orders/1", "to": "/orders/2" }
+  ],
   "screenshotDataUrl": "data:image/png;base64,…"   // only when attached
 }
 ```
@@ -437,6 +492,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 `captureScreenshot`, `collectContext`, `pickElement`, `describeElement`,
 `buildSelector`, `buildReport`, `sendReport`, `ScreenshotTooLargeError`,
 `SendFailedError`, the server validators below, and the shared types and limits.
+
+**`bugbottle/breadcrumbs`** — `initBreadcrumbs`, `getBreadcrumbs`,
+`resetBreadcrumbs`, `isBreadcrumbsActive`, and the `BreadcrumbsOptions` type.
 
 **`bugbottle/react`** — `useBugReport`.
 
@@ -450,7 +508,8 @@ Requires `html-to-image`.
 `locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts` types.
 
 **`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
-`normaliseContext`, `normaliseConsole`, `normaliseElements`, `isReportType`,
+`normaliseContext`, `normaliseConsole`, `normaliseElements`,
+`normaliseBreadcrumbs`, `isReportType`,
 `toMarkdown`, `InvalidScreenshotError`, `REPORT_TYPES` and the `MAX_*` limits.
 
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any

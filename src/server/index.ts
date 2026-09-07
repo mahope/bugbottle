@@ -21,6 +21,7 @@ export {
   normaliseContext,
   normaliseConsole,
   normaliseElements,
+  normaliseBreadcrumbs,
   MAX_MESSAGE_LENGTH,
   MAX_SCREENSHOT_BYTES,
   MAX_SCREENSHOT_DATA_URL_LENGTH,
@@ -28,6 +29,8 @@ export {
   MAX_CONSOLE_MESSAGE_LENGTH,
   MAX_ELEMENTS,
   MAX_ELEMENT_TEXT_LENGTH,
+  MAX_BREADCRUMBS,
+  MAX_BREADCRUMB_TEXT_LENGTH,
   REPORT_TYPES,
   type ReportType,
   type ReportContext,
@@ -35,4 +38,6 @@ export {
   type ConsoleEntry,
   type ConsoleLevel,
   type ElementRef,
+  type Breadcrumb,
+  type BreadcrumbKind,
 } from "../report-core.ts";
