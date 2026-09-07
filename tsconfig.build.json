@@ -8,5 +8,9 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // src/global.ts is the esbuild entry point and nothing else: it declares a
+  // version constant that only esbuild defines, so tsc has nothing sensible to
+  // emit for it. `npm run typecheck` still covers it.
+  "exclude": ["src/global.ts"]
 }

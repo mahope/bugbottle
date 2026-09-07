@@ -9,6 +9,19 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `dist/bugbottle.js`, a self-contained IIFE for pages with no build step:
+  one `<script src>` from jsDelivr mounts the panel. The tag configures it —
+  `data-endpoint` (required, and the switch that turns the auto-mount on),
+  `data-locale`, `data-position`, `data-primary`, `data-brand`, `data-logo`,
+  `data-trigger`, `data-scrub` and `data-extra` — and the same building blocks
+  are on `window.bugbottle` (`mount`, `initConsoleBuffer`, `initBreadcrumbs`,
+  `locales`, `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`,
+  `pickElement`, `version`) for the programmatic case. Built from
+  `src/global.ts` by `scripts/build-iife.mjs`, which `npm run build` now runs
+  after tsc; esbuild is a pinned devDependency. 11.1 kB gzipped, budgeted in CI
+  at 12 kB. There is no screenshot renderer in this build — `html-to-image` is
+  larger than the rest of the bundle together — so a page that wants pictures
+  loads it itself and passes it to `window.bugbottle.mount`.
 - `sendReportEmail(report, options)` in `bugbottle/server`: renders the report
   with `toMarkdown` and emails it through Resend — subject from the report
   title and the locale, text and a minimal HTML body, the decoded screenshot

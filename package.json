@@ -63,7 +63,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/build-iife.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
@@ -84,6 +84,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "esbuild": "0.24.0",
     "html-to-image": "^1.11.13",
     "react": "^19.2.8",
     "typescript": "^5.7.0"
