@@ -23,6 +23,7 @@ import { type ScrubOptions } from "../scrub.ts";
 import { type SendReportEmailOptions } from "../sinks/resend.ts";
 import { type SendReportWebhookOptions } from "../sinks/webhook.ts";
 import { type CreateGithubIssueOptions } from "../sinks/github.ts";
+import { type CreateLinearIssueOptions } from "../sinks/linear.ts";
 /** Default ceiling for a request body: the screenshot dominates it. */
 export declare const DEFAULT_MAX_BODY_BYTES: number;
 /** Longest string kept for one `extra` value. */
@@ -173,4 +174,6 @@ export declare function toResend(options: Omit<SendReportEmailOptions, "screensh
 export declare function toWebhook(options: SendReportWebhookOptions): ReportSink;
 /** Files every report as a GitHub issue, linking the stored screenshot. */
 export declare function toGithub(options: CreateGithubIssueOptions): ReportSink;
+/** Files every report as a Linear issue, linking the stored screenshot. */
+export declare function toLinear(options: CreateLinearIssueOptions): ReportSink;
 //# sourceMappingURL=handle.d.ts.map

@@ -14,7 +14,7 @@ export { toMarkdown } from "../markdown.js";
 // The fast path over the validators below: one call from `Request` to
 // `Response`. Importing it is opt-in, so an integrator who only wants the
 // validators does not bundle the sinks it reaches for.
-export { handleReport, validateReport, collectExtra, resetRateLimits, toResend, toWebhook, toGithub, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, } from "./handle.js";
+export { handleReport, validateReport, collectExtra, resetRateLimits, toResend, toWebhook, toGithub, toLinear, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, } from "./handle.js";
 export { expressHandler, } from "./express.js";
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.
@@ -22,6 +22,7 @@ export { SinkError } from "../sinks/error.js";
 export { sendReportEmail, } from "../sinks/resend.js";
 export { sendReportWebhook, DISCORD_MAX_CONTENT, } from "../sinks/webhook.js";
 export { createGithubIssue, } from "../sinks/github.js";
+export { createLinearIssue, } from "../sinks/linear.js";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.
 export { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, } from "../scrub.js";

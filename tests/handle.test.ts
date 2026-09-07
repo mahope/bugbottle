@@ -4,19 +4,14 @@ import {
   handleReport,
   resetRateLimits,
   toGithub,
+  toLinear,
   toResend,
   toWebhook,
   type SinkContext,
   type ValidatedReport,
 } from "../src/server/handle.ts";
 import { expressHandler } from "../src/server/express.ts";
-
-const body = {
-  type: "bug",
-  message: "The save button does nothing",
-  context: { url: "/orders/91", viewport: "1440x900", userAgent: "Chrome 141" },
-  console: [{ level: "error", message: "save failed", ts: "2026-09-07T10:00:00.000Z" }],
-};
+import { PNG_BYTES, PNG_DATA_URL, reportBody as body } from "./report-fixtures.ts";
 
 /** A POST the way a browser sends one. */
 function post(payload: unknown, init: RequestInit = {}): Request {
@@ -27,10 +22,6 @@ function post(payload: unknown, init: RequestInit = {}): Request {
     ...init,
   });
 }
-
-/** The smallest valid PNG data URL: signature plus a byte, base64-encoded. */
-const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
-const PNG_DATA_URL = `data:image/png;base64,${Buffer.from(PNG_BYTES).toString("base64")}`;
 
 test("a valid report is stored and answered with 201 and the id", async () => {
   let stored: ValidatedReport | undefined;
@@ -384,6 +375,27 @@ test("toResend, toWebhook and toGithub hand the sink context to the sinks", asyn
   assert.match(String(calls[1]?.body.text), /shots\/2\.png/);
   assert.equal(calls[2]?.url, "https://api.github.com/repos/acme/app/issues");
   assert.match(String(calls[2]?.body.body), /shots\/2\.png/);
+});
+
+test("toLinear files the report and links the stored screenshot", async () => {
+  let sent: Record<string, unknown> = {};
+  const fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(
+      JSON.stringify({ data: { issueCreate: { success: true, issue: { id: "i1" } } } }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }) as typeof globalThis.fetch;
+
+  const response = await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    screenshot: async () => "https://private.example.com/shots/3.png",
+    sinks: [toLinear({ apiKey: "lin_key", teamId: "team-uuid", fetch })],
+  });
+
+  assert.equal(response.status, 202);
+  const input = (sent.variables as { input: Record<string, unknown> }).input;
+  assert.equal(input.teamId, "team-uuid");
+  assert.match(String(input.description), /shots\/3\.png/);
 });
 
 test("toResend attaches the kept screenshot bytes", async () => {

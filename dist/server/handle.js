@@ -23,6 +23,7 @@ import { scrubReport } from "../scrub.js";
 import { sendReportEmail } from "../sinks/resend.js";
 import { sendReportWebhook } from "../sinks/webhook.js";
 import { createGithubIssue } from "../sinks/github.js";
+import { createLinearIssue } from "../sinks/linear.js";
 /** Default ceiling for a request body: the screenshot dominates it. */
 export const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 /** Longest string kept for one `extra` value. */
@@ -432,6 +433,13 @@ export function toWebhook(options) {
 /** Files every report as a GitHub issue, linking the stored screenshot. */
 export function toGithub(options) {
     return async (report, ctx) => await createGithubIssue(report, {
+        ...options,
+        ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
+    });
+}
+/** Files every report as a Linear issue, linking the stored screenshot. */
+export function toLinear(options) {
+    return async (report, ctx) => await createLinearIssue(report, {
         ...options,
         ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
     });

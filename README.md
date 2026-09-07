@@ -710,7 +710,7 @@ failed response has an `error` or `message` field, it is shown to the reporter.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Three sinks live in
+Storing the report is one thing; seeing it is another. Four sinks live in
 `bugbottle/server`, each a formatter over one `fetch` call, none with a
 dependency of its own. None of them reads your environment: the key, the URL
 and the token are arguments, so it is visible at the call site where the secret
@@ -787,7 +787,33 @@ from the body. Anyone who can read the issue then follows that link, which
 means the storage decision below is the one that matters — a link out of an
 issue is only as private as the address it points at.
 
-All three throw `SinkError`, carrying the HTTP status and the response body,
+`createLinearIssue` does the same for Linear, which is where a lot of small
+teams already track what is broken. Linear takes ids rather than names, so the
+team, the project and the labels are UUIDs from your workspace, and the API key
+goes in the header as it is — no `Bearer` prefix:
+
+```ts
+import { createLinearIssue } from "bugbottle/server";
+
+const { identifier, url } = await createLinearIssue(payload, {
+  apiKey: process.env.LINEAR_API_KEY!,
+  teamId: "6f0a…",                       // required
+  projectId: "b21c…",                    // optional
+  labelIds: ["9d4e…"],                   // optional
+  screenshotUrl,                         // where you stored the picture
+});
+```
+
+The title and the body follow the same rules as the GitHub sink, and Linear
+cannot take an attachment either, so `screenshotUrl` is again a link to storage
+you control.
+
+Linear answers over GraphQL, which fails differently from the rest: a rejected
+mutation still comes back with a `200` and puts the reason in an `errors`
+array. The sink reads it and throws `SinkError` anyway, so a mistyped team id
+is a failure you can see rather than an issue that was never created.
+
+All four throw `SinkError`, carrying the HTTP status and the response body,
 when the service answers with anything but success. Catch it around the sink
 rather than around the whole handler: a report you have already stored should
 not be lost to a chat webhook that was revoked last week.
@@ -976,6 +1002,21 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 }
 ```
 
+The same shape as a JSON Schema (2020-12), generated from the TypeScript types
+at build time so it cannot drift from what the library sends:
+[bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json),
+shipped in the package as `bugbottle/report.schema.json`. It carries the JSDoc
+as `description`s and the `MAX_*` ceilings as `maxLength`/`maxItems`, so a
+receiver written in another language can enforce the same limits the validators
+do. Extra top-level fields are allowed, exactly as `handleReport` allows them.
+
+```ts
+import Ajv from "ajv/dist/2020.js";
+import schema from "bugbottle/report.schema.json" with { type: "json" };
+
+const valid = new Ajv().compile(schema)(payload);
+```
+
 ## API
 
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
@@ -1017,17 +1058,21 @@ Requires `html-to-image`.
 `EmailTexts` types.
 
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
-`toWebhook`, `toGithub`, `validateReport`, `collectExtra`, `resetRateLimits`,
+`toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
 `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
+`createLinearIssue`,
 `InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
 `HandleReportOptions`, `HandleReportResult`, `ReportSink` and `SinkContext`
 types, and the `MAX_*` limits.
+
+**`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
+served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).
 
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any
 evergreen browser on the client.

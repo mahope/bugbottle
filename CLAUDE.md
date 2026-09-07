@@ -29,18 +29,20 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/ui/` | `mountBugbottle` — optional shadow-DOM panel over the same core; themed via `--bb-*` vars | everything above |
 | `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
 | `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
-| `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
+| `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, `createLinearIssue` (GraphQL, so a rejected mutation arrives as a 200 with `errors` and still throws), the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
 | `site/` | The landing page (EN + DA), static, served by nginx from `site/Dockerfile` on Dokploy. Not part of the npm package | dist (at image build) |
 | `src/server/` | Re-exports of report-core, markdown and the sinks for `bugbottle/server` | report-core, markdown, sinks |
-| `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub` sink helpers | report-core, markdown, scrub, sinks |
+| `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express` | server/handle |
-| `tests/` | `node:test`, run on the TypeScript source directly | |
+| `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
+| `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts` | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
 Eight entry points in `package.json#exports`: `.`, `./react`, `./server`,
-`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`. Keep them separate:
+`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network` — plus
+`./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -86,7 +88,7 @@ not closed and a branch is not merged with the docs lagging.
 ```bash
 npm run check       # typecheck → test → build, in that order; run before "done"
 npm test            # node --test on tests/*.test.ts (needs Node 22+)
-npm run build       # tsc → dist/ (ESM + .d.ts + source maps)
+npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → IIFE
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
 

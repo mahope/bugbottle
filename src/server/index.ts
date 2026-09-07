@@ -24,6 +24,7 @@ export {
   toResend,
   toWebhook,
   toGithub,
+  toLinear,
   SinkTimeoutError,
   DEFAULT_MAX_BODY_BYTES,
   DEFAULT_BODY_TIMEOUT_MS,
@@ -71,6 +72,12 @@ export {
   type CreateGithubIssueOptions,
   type CreateGithubIssueResult,
 } from "../sinks/github.ts";
+
+export {
+  createLinearIssue,
+  type CreateLinearIssueOptions,
+  type CreateLinearIssueResult,
+} from "../sinks/linear.ts";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.
 export {

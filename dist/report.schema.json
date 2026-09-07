@@ -1,0 +1,260 @@
+{
+  "$defs": {
+    "Breadcrumb": {
+      "description": "One thing the reporter did before they reported. A short timeline of these turns \"it broke after I clicked save\" into something reproducible.\n\nWhich fields are set depends on the kind: a click or a submit carries the `target` selector (and, for a click, the visible `text`), a navigation carries `from` and `to`, and a visibility change carries `to`.",
+      "properties": {
+        "from": {
+          "description": "Path and query the navigation left, or nothing when it is not known.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/BreadcrumbKind"
+        },
+        "target": {
+          "description": "A short CSS selector for the element involved.",
+          "type": "string"
+        },
+        "text": {
+          "description": "Visible text of the clicked element, whitespace-collapsed and clipped.",
+          "maxLength": 40,
+          "type": "string"
+        },
+        "to": {
+          "description": "Path and query navigated to, or `hidden`/`visible` for a visibility change.",
+          "type": "string"
+        },
+        "ts": {
+          "description": "ISO 8601 timestamp.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ts",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "BreadcrumbKind": {
+      "enum": [
+        "click",
+        "navigation",
+        "submit",
+        "visibility"
+      ],
+      "type": "string"
+    },
+    "BugReport": {
+      "description": "The JSON body a report is sent as. Extra fields may be added by the client.",
+      "properties": {
+        "breadcrumbs": {
+          "description": "What the reporter did before reporting, oldest first.",
+          "items": {
+            "$ref": "#/$defs/Breadcrumb"
+          },
+          "maxItems": 30,
+          "type": "array"
+        },
+        "console": {
+          "items": {
+            "$ref": "#/$defs/ConsoleEntry"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        "context": {
+          "$ref": "#/$defs/ReportContext"
+        },
+        "elements": {
+          "description": "Elements the reporter pointed at, in the order they were attached.",
+          "items": {
+            "$ref": "#/$defs/ElementRef"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "message": {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        "network": {
+          "description": "Requests that failed or were slow before the report, oldest first.",
+          "items": {
+            "$ref": "#/$defs/NetworkEntry"
+          },
+          "maxItems": 30,
+          "type": "array"
+        },
+        "screenshotDataUrl": {
+          "maxLength": 2900000,
+          "pattern": "^data:image/png;base64,",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/ReportType"
+        }
+      },
+      "required": [
+        "type",
+        "message",
+        "context"
+      ],
+      "type": "object"
+    },
+    "ConsoleEntry": {
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/ConsoleLevel"
+        },
+        "message": {
+          "maxLength": 500,
+          "type": "string"
+        },
+        "ts": {
+          "description": "ISO 8601 timestamp.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ts",
+        "level",
+        "message"
+      ],
+      "type": "object"
+    },
+    "ConsoleLevel": {
+      "enum": [
+        "error",
+        "warn"
+      ],
+      "type": "string"
+    },
+    "ElementRef": {
+      "description": "An element the reporter pointed at: what it is, what it says, where it is.",
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "id, name, role, type, href, aria-label, placeholder, title and data-* — never data-bugbottle*.",
+          "type": "object"
+        },
+        "rect": {
+          "description": "Page coordinates in CSS pixels.",
+          "properties": {
+            "height": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "type": "object"
+        },
+        "selector": {
+          "description": "A short CSS selector, e.g. `form#checkout > button:nth-of-type(2)`.",
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "text": {
+          "description": "Visible text, whitespace-collapsed and clipped.",
+          "maxLength": 200,
+          "type": "string"
+        }
+      },
+      "required": [
+        "selector",
+        "tag",
+        "text",
+        "rect",
+        "attributes"
+      ],
+      "type": "object"
+    },
+    "NetworkEntry": {
+      "description": "One request the browser made before the report. Recorded by `bugbottle/network`, which keeps the failed and the slow ones.\n\nBodies and headers are never part of this, in either direction: that is where tokens and personal data live. What is left says which call failed and how long it took, which is the part that explains the report.",
+      "properties": {
+        "error": {
+          "description": "True when the request failed before a status — offline, CORS, aborted.",
+          "type": "boolean"
+        },
+        "method": {
+          "description": "The HTTP method, upper case.",
+          "type": "string"
+        },
+        "ms": {
+          "description": "How long the request took, in milliseconds.",
+          "type": "number"
+        },
+        "status": {
+          "description": "The response status, or 0 when the request never got one.",
+          "type": "number"
+        },
+        "ts": {
+          "description": "ISO 8601 timestamp of when the request finished.",
+          "type": "string"
+        },
+        "url": {
+          "description": "Path and query, with sensitive query values redacted. Cross-origin URLs keep their origin.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ts",
+        "method",
+        "url",
+        "status",
+        "ms"
+      ],
+      "type": "object"
+    },
+    "ReportContext": {
+      "description": "Where the reporter was, and in what.",
+      "properties": {
+        "url": {
+          "description": "Path and query of the page. The origin and the fragment are left out.",
+          "type": "string"
+        },
+        "userAgent": {
+          "type": "string"
+        },
+        "viewport": {
+          "description": "`${innerWidth}x${innerHeight}`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "viewport",
+        "userAgent"
+      ],
+      "type": "object"
+    },
+    "ReportType": {
+      "enum": [
+        "bug",
+        "idea",
+        "other"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://bugbottle.dev/schema/report.json",
+  "$ref": "#/$defs/BugReport",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The JSON body bugbottle POSTs to your endpoint. Generated from the BugReport type; the maxLength and maxItems ceilings are the ones the server-side validators enforce.",
+  "title": "bugbottle report"
+}
