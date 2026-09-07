@@ -74,7 +74,7 @@
           <a class="button" href="https://github.com/mahope/bugbottle#readme" hreflang="en">Læs dokumentationen</a>
         </div>
         <p class="stamp">
-          Version 0.4.0, udgivet 7. september 2026. Ingen afhængigheder.
+          Version 0.5.0, udgivet 7. september 2026. Ingen afhængigheder.
           <a href="https://github.com/mahope/bugbottle/blob/main/CHANGELOG.md" hreflang="en">Hvad der er ændret</a>.
         </p>
       </div>
@@ -112,7 +112,7 @@
           <dt>Det fylder ingenting</dt>
           <dd>
             Nul afhængigheder og syv indgange, så en side kun betaler for det, den
-            faktisk importerer. Kernen fylder 0,8 kB gzippet.
+            faktisk importerer. Kernen fylder 0,9 kB gzippet.
             <a href="#start">Tabellen længere nede</a> har resten.
           </dd>
         </div>
@@ -188,7 +188,7 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
             <div class="slab">
               <div class="slab-tab">index.html</div>
               <pre><code>&lt;script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.4.0/dist/bugbottle.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.5.0/dist/bugbottle.js"
   data-endpoint="/api/feedback"
   data-locale="da"
   data-brand="Acme"
@@ -217,7 +217,7 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
       </div>
 
       <table class="sizes">
-        <caption>Hvad hver indgang koster, målt ved 0.4.0</caption>
+        <caption>Hvad hver indgang koster, målt ved 0.5.0</caption>
         <thead>
           <tr>
             <th scope="col">Import</th>
@@ -227,23 +227,27 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
         <tbody>
           <tr>
             <th scope="row">bugbottle</th>
-            <td>0,8 kB</td>
+            <td>0,9 kB</td>
           </tr>
           <tr>
             <th scope="row">bugbottle/react</th>
-            <td>3,9 kB</td>
+            <td>5,0 kB</td>
           </tr>
           <tr>
             <th scope="row">bugbottle/ui</th>
-            <td>6,9 kB</td>
+            <td>8,0 kB</td>
           </tr>
           <tr>
             <th scope="row">bugbottle/breadcrumbs</th>
             <td>1,2 kB</td>
           </tr>
           <tr>
+            <th scope="row">bugbottle/network</th>
+            <td>1,2 kB</td>
+          </tr>
+          <tr>
             <th scope="row">script-tagget ovenfor</th>
-            <td>11,6 kB</td>
+            <td>13,7 kB</td>
           </tr>
         </tbody>
       </table>

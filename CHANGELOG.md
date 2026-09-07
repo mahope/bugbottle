@@ -7,6 +7,18 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.5.0
+
+The receiving release: one function that takes any web Request and turns it
+into a validated, scrubbed, delivered report; the network log; masking on by
+default in screenshots; and the landing page in its own voice at bugbottle.dev.
+No breaking changes.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 0.9 kB,
+`bugbottle/react` 5.0 kB, `bugbottle/ui` 8.0 kB, `bugbottle/breadcrumbs`
+1.2 kB, `bugbottle/network` 1.2 kB, `dist/bugbottle.js` 13.7 kB,
+`bugbottle/server` validators 0.8 kB.
+
 ### Added
 
 - `handleReport(request, options)` in `bugbottle/server`: one receiver that

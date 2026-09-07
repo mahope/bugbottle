@@ -73,7 +73,7 @@
           <a class="button" href="https://github.com/mahope/bugbottle#readme">Read the docs</a>
         </div>
         <p class="stamp">
-          Version 0.4.0, released 7 September 2026. Zero dependencies.
+          Version 0.5.0, released 7 September 2026. Zero dependencies.
           <a href="https://github.com/mahope/bugbottle/blob/main/CHANGELOG.md">What changed</a>.
         </p>
       </div>
@@ -111,7 +111,7 @@
           <dt>It stays small</dt>
           <dd>
             No runtime dependencies, and seven entry points so a page pays only for
-            what it imports. The core is 0.8 kB gzipped. The
+            what it imports. The core is 0.9 kB gzipped. The
             <a href="#start">table below</a> has the rest.
           </dd>
         </div>
@@ -185,7 +185,7 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
             <div class="slab">
               <div class="slab-tab">index.html</div>
               <pre><code>&lt;script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.4.0/dist/bugbottle.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.5.0/dist/bugbottle.js"
   data-endpoint="/api/feedback"
   data-brand="Acme"
 &gt;&lt;/script&gt;</code></pre>
@@ -213,7 +213,7 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
       </div>
 
       <table class="sizes">
-        <caption>What each entry point costs, measured at 0.4.0</caption>
+        <caption>What each entry point costs, measured at 0.5.0</caption>
         <thead>
           <tr>
             <th scope="col">Import</th>
@@ -223,23 +223,27 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
         <tbody>
           <tr>
             <th scope="row">bugbottle</th>
-            <td>0.8 kB</td>
+            <td>0.9 kB</td>
           </tr>
           <tr>
             <th scope="row">bugbottle/react</th>
-            <td>3.9 kB</td>
+            <td>5.0 kB</td>
           </tr>
           <tr>
             <th scope="row">bugbottle/ui</th>
-            <td>6.9 kB</td>
+            <td>8.0 kB</td>
           </tr>
           <tr>
             <th scope="row">bugbottle/breadcrumbs</th>
             <td>1.2 kB</td>
           </tr>
           <tr>
+            <th scope="row">bugbottle/network</th>
+            <td>1.2 kB</td>
+          </tr>
+          <tr>
             <th scope="row">the script tag above</th>
-            <td>11.6 kB</td>
+            <td>13.7 kB</td>
           </tr>
         </tbody>
       </table>

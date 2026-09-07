@@ -25,7 +25,7 @@ auto-mount, screenshot scale chosen up front with `onCapture` timing, email
 strings in every locale, hook tests on happy-dom, the landing page at
 bugbottle.dev in English and Danish.
 
-**Unreleased** — screenshot masking: field values, `contenteditable` text,
+**0.5** — screenshot masking: field values, `contenteditable` text,
 `data-bugbottle-mask` text and `data-bugbottle-block` regions are hidden while
 the picture is taken and restored afterwards, on by default, `mask: false` to
 switch it off. rrweb attribute names. And `bugbottle/network`: the failed and
