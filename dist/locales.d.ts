@@ -26,6 +26,8 @@ export type UiTexts = {
     title: string;
     /** Short line under the heading. Empty string hides it. */
     intro: string;
+    /** Accessible name of the report-type radio group. Never shown. */
+    typeLabel: string;
     types: {
         bug: string;
         idea: string;
@@ -38,11 +40,23 @@ export type UiTexts = {
     screenshotNote: string;
     pickElement: string;
     picking: string;
+    /**
+     * Announced when pick mode starts. The panel disappears and the pointer
+     * changes, neither of which a screen reader reports, so this line says what
+     * happened and how to get out of it again.
+     */
+    pickingAnnounce: string;
+    /** Announced when pick mode ends, whether an element was picked or not. */
+    pickingDone: string;
     attached: string;
     remove: string;
+    /** Accessible name of one remove button. `{element}` is the element itself. */
+    removeElement: string;
     send: string;
     sending: string;
     close: string;
+    /** Accessible name of the panel's close button, distinct from `close`. */
+    closeDialog: string;
     /** Shown after a successful send, with a button to close. */
     thanks: string;
     /**

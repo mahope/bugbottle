@@ -17,7 +17,10 @@ the script-tag build under 16 kB.
 element picker (`pickElement`), framework-agnostic `buildReport`/`sendReport`,
 server validators for every field, eight locales (`bugbottle/locales`), the
 optional themed panel (`bugbottle/ui`), `toMarkdown` for issue bodies and
-agent digests.
+agent digests. The panel has since had an accessibility pass — focus trap and
+return, a `radiogroup` with arrow keys, named controls, live-region
+announcements, contrast in both schemes — audited with `axe-core` at zero
+violations (`npm run a11y`).
 
 **0.4** — sinks in `bugbottle/server` (Resend email, json/Slack/Discord
 webhook, GitHub Issues), `bugbottle/breadcrumbs` (clicks, navigation,

@@ -44,8 +44,8 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 0.8 kB gzipped; with the element picker and the React, Vue or
-  Svelte adapter, 5.2 kB; the optional ready-made panel, 7.9 kB; breadcrumbs 1.3 kB; the network log
-  1.1 kB; the offline queue 1 kB; the everything script tag, 14.4 kB. `html-to-image` is only pulled in by the module that
+  Svelte adapter, 5.2 kB; the optional ready-made panel, 9.6 kB; breadcrumbs 1.3 kB; the network log
+  1.1 kB; the offline queue 1 kB; the everything script tag, 17 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
@@ -496,14 +496,34 @@ const widget = mountBugbottle({
 It offers the three report types, a message, the screenshot checkbox (only
 when a renderer is given), the element picker, and a thank-you state. Pass
 `trigger: "#my-feedback-button"` to use your own button instead of the
-floating one, or `trigger: false` and call `open()` yourself. About 6 kB
+floating one, or `trigger: false` and call `open()` yourself. About 9.6 kB
 gzipped, no framework.
+
+**Accessibility.** The panel is meant to be switched on without an
+accessibility regression, so it behaves like a dialog rather than a floating
+div. While it is open, focus is trapped inside the shadow root — Tab wraps at
+both ends — and Escape closes it; closing puts focus back on whatever opened
+it, the floating trigger or your own control. The report types are a
+`radiogroup` the arrow keys walk through, one stop in the tab order. Every
+control has a name: the trigger, the close button, the group of types, the
+screenshot note (as `aria-describedby` on the checkbox), and each remove
+button, which is named after the element it removes rather than being one of
+several buttons called "Remove". A polite live region announces status
+messages, and announces the element picker starting and stopping, with the way
+out — that mode hides the panel and changes the pointer, neither of which a
+screen reader reports. Targets are at least 24x24, focus rings are visible in
+both colour schemes, the dark scheme lightens the accent and the error red so
+they hold their contrast, and `prefers-reduced-motion` is respected. axe-core
+reports no violations on the panel open in either scheme, or closed; run the
+audit yourself with `npm run build && npm run a11y` (Chrome and
+`puppeteer-core` required). All of the announced text comes from the locale,
+so it is announced in the reporter's language.
 
 ## One script tag
 
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
-that mounts the panel from the tag itself. About 14 kB gzipped:
+that mounts the panel from the tag itself. About 16.8 kB gzipped:
 
 ```html
 <script
