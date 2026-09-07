@@ -22,6 +22,14 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run build:docs
+      - name: dist is committed and current
+        run: |
+          if ! git diff --quiet -- dist; then
+            echo "dist/ differs from the build. Run npm run build and git add -f dist before pushing." >&2
+            git diff --stat -- dist >&2
+            exit 1
+          fi
       - run: npm pack --dry-run
 
   bundle:
