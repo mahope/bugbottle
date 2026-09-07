@@ -7,6 +7,29 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `dist/report.schema.json`, the JSON Schema (2020-12) for the payload,
+  generated from the `BugReport` type by `scripts/build-schema.ts` as part of
+  `npm run build` and exported as `bugbottle/report.schema.json`. It carries
+  `$id: https://bugbottle.dev/schema/report.json`, the JSDoc on the types as
+  `description`s, and the `MAX_*` ceilings as `maxLength`/`maxItems`, so a
+  receiver written in another language can enforce the same limits the
+  validators do without depending on the library. The landing page serves it
+  at `/schema/report.json` from the same file. Generated rather than
+  hand-written so it cannot drift from what the browser sends, and serialised
+  with sorted keys so the committed `dist/` only changes when the schema does.
+- `createLinearIssue(report, options)` in `bugbottle/server` and the matching
+  `toLinear` sink for `handleReport`: files a report as a Linear issue through
+  the `issueCreate` GraphQL mutation, with `teamId`, an optional `projectId`
+  and `labelIds`, and returns `{ id, identifier, url }`. Linear rejects a
+  mutation with a `200` and an `errors` array rather than an HTTP error, so the
+  body is inspected as well as the status and either one throws `SinkError` —
+  a mistyped team id is a visible failure, not an issue that was never
+  created. Like the other sinks it is one `fetch`, the key is an argument, and
+  it never reads your environment.
+
+
 ## 0.5.0
 
 The receiving release: one function that takes any web Request and turns it

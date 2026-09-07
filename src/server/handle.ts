@@ -40,6 +40,7 @@ import { scrubReport, type ScrubOptions } from "../scrub.ts";
 import { sendReportEmail, type SendReportEmailOptions } from "../sinks/resend.ts";
 import { sendReportWebhook, type SendReportWebhookOptions } from "../sinks/webhook.ts";
 import { createGithubIssue, type CreateGithubIssueOptions } from "../sinks/github.ts";
+import { createLinearIssue, type CreateLinearIssueOptions } from "../sinks/linear.ts";
 
 /** Default ceiling for a request body: the screenshot dominates it. */
 export const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -584,6 +585,15 @@ export function toWebhook(options: SendReportWebhookOptions): ReportSink {
 export function toGithub(options: CreateGithubIssueOptions): ReportSink {
   return async (report, ctx) =>
     await createGithubIssue(report, {
+      ...options,
+      ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
+    });
+}
+
+/** Files every report as a Linear issue, linking the stored screenshot. */
+export function toLinear(options: CreateLinearIssueOptions): ReportSink {
+  return async (report, ctx) =>
+    await createLinearIssue(report, {
       ...options,
       ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
     });

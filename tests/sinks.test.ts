@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { sendReportEmail } from "../src/sinks/resend.ts";
 import { sendReportWebhook, DISCORD_MAX_CONTENT } from "../src/sinks/webhook.ts";
 import { createGithubIssue } from "../src/sinks/github.ts";
+import { createLinearIssue } from "../src/sinks/linear.ts";
 import { SinkError } from "../src/sinks/error.ts";
 import { da } from "../src/locales.ts";
 
@@ -308,4 +309,129 @@ test("a github answer without a number resolves rather than failing", async () =
     fetch,
   });
   assert.deepEqual(result, { number: undefined, url: undefined });
+});
+
+const linearOk = {
+  data: { issueCreate: { success: true, issue: { id: "iss_1", identifier: "ENG-214", url: "https://linear.app/acme/issue/ENG-214" } } },
+};
+
+/** The `input` of the single recorded GraphQL mutation. */
+function linearInput(calls: { init: RequestInit }[]): Record<string, unknown> {
+  const body = sentBody(calls);
+  const variables = body.variables as { input: Record<string, unknown> };
+  return variables.input;
+}
+
+test("the issue goes to Linear as a GraphQL mutation with the key sent as-is", async () => {
+  const { fetch, calls } = fakeFetch(200, linearOk);
+  const result = await createLinearIssue(report, {
+    apiKey: "lin_api_key",
+    teamId: "team-uuid",
+    fetch,
+  });
+
+  assert.deepEqual(result, {
+    id: "iss_1",
+    identifier: "ENG-214",
+    url: "https://linear.app/acme/issue/ENG-214",
+  });
+  assert.equal(calls[0]?.url, "https://api.linear.app/graphql");
+  assert.equal(calls[0]?.init.method, "POST");
+  // Linear takes a personal key without a Bearer prefix; adding one is a 401.
+  assert.equal(headerOf(calls[0]!.init, "Authorization"), "lin_api_key");
+
+  const input = linearInput(calls);
+  assert.equal(input.teamId, "team-uuid");
+  assert.equal(input.title, "Bug: The save button does nothing");
+  assert.match(String(input.description), /## Bug: The save button does nothing/);
+  assert.match(String(input.description), /`\/orders\/91`/);
+  assert.equal("projectId" in input, false, "no projectId key when none was asked for");
+  assert.equal("labelIds" in input, false, "no labelIds key when none were asked for");
+  assert.match(String(sentBody(calls).query), /issueCreate/);
+});
+
+test("a project, labels and an explicit title are passed along", async () => {
+  const { fetch, calls } = fakeFetch(200, linearOk);
+  await createLinearIssue(report, {
+    apiKey: "k",
+    teamId: "team-uuid",
+    projectId: "project-uuid",
+    labelIds: ["label-uuid-1", "label-uuid-2"],
+    title: "Something specific",
+    fetch,
+  });
+
+  const input = linearInput(calls);
+  assert.equal(input.projectId, "project-uuid");
+  assert.deepEqual(input.labelIds, ["label-uuid-1", "label-uuid-2"]);
+  assert.equal(input.title, "Something specific");
+});
+
+test("a screenshot url is linked in the linear description", async () => {
+  const { fetch, calls } = fakeFetch(200, linearOk);
+  await createLinearIssue(report, {
+    apiKey: "k",
+    teamId: "team-uuid",
+    screenshotUrl: "https://files.example.com/shots/abc.png",
+    fetch,
+  });
+
+  assert.match(String(linearInput(calls).description), /https:\/\/files\.example\.com\/shots\/abc\.png/);
+});
+
+test("graphql errors arrive with a 200 and still become a SinkError", async () => {
+  const { fetch } = fakeFetch(200, {
+    data: null,
+    errors: [{ message: "Team not found" }, { message: "Argument Validation Error" }],
+  });
+
+  await assert.rejects(
+    () => createLinearIssue(report, { apiKey: "k", teamId: "gone", fetch }),
+    (err: unknown) => {
+      assert.ok(err instanceof SinkError);
+      assert.equal(err.status, 200);
+      assert.equal(err.message, "Team not found; Argument Validation Error");
+      return true;
+    },
+  );
+});
+
+test("a mutation that answers success false is a SinkError, not a silent pass", async () => {
+  const { fetch } = fakeFetch(200, { data: { issueCreate: { success: false } } });
+  await assert.rejects(
+    () => createLinearIssue(report, { apiKey: "k", teamId: "t", fetch }),
+    (err: unknown) => {
+      assert.ok(err instanceof SinkError);
+      assert.equal(err.message, "Linear did not create the issue");
+      return true;
+    },
+  );
+});
+
+test("a rejected linear key becomes a SinkError carrying the status and body", async () => {
+  const { fetch } = fakeFetch(401, { message: "Authentication required" });
+  await assert.rejects(
+    () => createLinearIssue(report, { apiKey: "expired", teamId: "t", fetch }),
+    (err: unknown) => {
+      assert.ok(err instanceof SinkError);
+      assert.equal(err.status, 401);
+      assert.equal(err.message, "Authentication required");
+      assert.deepEqual(err.body, { message: "Authentication required" });
+      return true;
+    },
+  );
+});
+
+test("a malformed report is still filed in linear, with a fallback title", async () => {
+  const { fetch, calls } = fakeFetch(200, {
+    data: { issueCreate: { success: true, issue: { id: "iss_2" } } },
+  });
+  const result = await createLinearIssue(
+    { type: 42, message: null, console: "not an array" },
+    { apiKey: "k", teamId: "t", fetch },
+  );
+
+  assert.equal(result.id, "iss_2");
+  assert.equal(result.identifier, undefined);
+  assert.equal(linearInput(calls).title, "Feedback: Feedback");
 });
