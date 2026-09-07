@@ -42,7 +42,7 @@ change the API; the changelog says so when they do.
   a page without it hides nothing, and `prefers-reduced-motion` switches every
   animation and transition off. Install grew into a "get started" block with
   the three ways in (bundler, one script tag, WordPress plugin on the way), and
-  a first-person "Built by Mahope" section links to mahope.dk. Still no
+  a first-person "Built by Mahope" section links to mahoje.dk. Still no
   framework, no analytics, no cookies and no external request: system fonts
   only, about 50 kB of HTML, CSS and JavaScript.
 - `site/og.png` (1200x630, rendered from the new `site/og.svg` with headless
