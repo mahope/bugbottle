@@ -36,6 +36,53 @@ test("a full report renders title, message, facts, elements and console", () => 
   assert.ok(md.endsWith("\n") && !md.endsWith("\n\n"), "ends with exactly one newline");
 });
 
+test("the optional context facts become rows, and stack frames sit under their entry", () => {
+  const md = toMarkdown({
+    type: "bug",
+    message: "It threw",
+    context: {
+      url: "/orders/42",
+      viewport: "1440x900",
+      userAgent: "Mozilla/5.0 Test",
+      language: "en-GB",
+      timezone: "Europe/Copenhagen",
+      screen: "2560x1440@2",
+      colorScheme: "dark",
+      online: false,
+      connection: "4g",
+    },
+    console: [
+      {
+        ts: "",
+        level: "error",
+        message: "Uncaught: order.save is not a function",
+        stack: [
+          { file: "https://app.test/main.js", line: 12, col: 9, fn: "saveOrder" },
+          { file: "https://app.test/main.js", line: 44, col: 17 },
+          { file: "https://app.test/vendor.js", line: 1, col: 1, fn: "dispatch" },
+          { file: "https://app.test/vendor.js", line: 2, col: 2, fn: "notPrinted" },
+        ],
+      },
+    ],
+  });
+  assert.match(md, /\| Screen \| 2560x1440@2 \|/);
+  assert.match(md, /\| Language \| en-GB \|/);
+  assert.match(md, /\| Time zone \| Europe\/Copenhagen \|/);
+  assert.match(md, /\| Colour scheme \| dark \|/);
+  assert.match(md, /\| Online \| no \|/, "offline is a fact worth printing");
+  assert.match(md, /\| Connection \| 4g \|/);
+  assert.match(md, /\n {4}at saveOrder https:\/\/app\.test\/main\.js:12:9\n/);
+  assert.match(md, /\n {4}at https:\/\/app\.test\/main\.js:44:17\n/, "an anonymous frame still prints");
+  assert.ok(!md.includes("notPrinted"), "only the top three frames are rendered");
+});
+
+test("a context without the optional facts renders no rows for them", () => {
+  const md = toMarkdown(report);
+  for (const label of ["Screen", "Language", "Time zone", "Colour scheme", "Online", "Connection"]) {
+    assert.ok(!md.includes(`| ${label} |`), `${label} is left out when it was not sent`);
+  }
+});
+
 test("options change heading, title, console collapsing and screenshot url", () => {
   const md = toMarkdown(report, {
     headingLevel: 1,

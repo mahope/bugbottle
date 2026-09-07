@@ -18,9 +18,11 @@ import {
   MAX_CONSOLE_MESSAGE_LENGTH,
   type ConsoleEntry,
   type ConsoleLevel,
+  type StackFrame,
 } from "./report-core.ts";
+import { parseStack } from "./stack.ts";
 
-export type { ConsoleEntry, ConsoleLevel };
+export type { ConsoleEntry, ConsoleLevel, StackFrame };
 
 export type ConsoleBufferOptions = {
   /** How many entries to keep. Oldest are dropped first. Default 50. */
@@ -61,12 +63,14 @@ function serialise(args: unknown[], maxLength: number): string {
     .slice(0, maxLength);
 }
 
-function push(level: ConsoleLevel, args: unknown[]): void {
-  buffer.push({
+function push(level: ConsoleLevel, args: unknown[], stack?: StackFrame[]): void {
+  const entry: ConsoleEntry = {
     ts: new Date().toISOString(),
     level,
     message: serialise(args, limits.maxMessageLength),
-  });
+  };
+  if (stack && stack.length > 0) entry.stack = stack;
+  buffer.push(entry);
   if (buffer.length > limits.maxEntries) buffer = buffer.slice(-limits.maxEntries);
 }
 
@@ -101,11 +105,21 @@ export function initConsoleBuffer(options: ConsoleBufferOptions = {}): void {
   if (typeof window !== "undefined") {
     // Uncaught errors do not reach console.error in every browser, so they are
     // recorded directly.
+    // The message stays the one-liner it always was; the frames are the extra
+    // evidence, parsed from whatever the browser attached to the error itself.
     onError = (e) => {
-      push("error", [`Uncaught: ${e.message} (${e.filename}:${e.lineno})`]);
+      push(
+        "error",
+        [`Uncaught: ${e.message} (${e.filename}:${e.lineno})`],
+        parseStack((e.error as { stack?: unknown } | undefined)?.stack),
+      );
     };
     onRejection = (e) => {
-      push("error", [`Unhandled rejection: ${serialise([e.reason], limits.maxMessageLength)}`]);
+      push(
+        "error",
+        [`Unhandled rejection: ${serialise([e.reason], limits.maxMessageLength)}`],
+        parseStack((e.reason as { stack?: unknown } | undefined)?.stack),
+      );
     };
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);

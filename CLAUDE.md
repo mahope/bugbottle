@@ -15,7 +15,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | Path | Role | May import |
 |---|---|---|
 | `src/report-core.ts` | Types, limits, server validators. Pure. | nothing |
-| `src/console-buffer.ts` | `console.error/warn` + `window` error patching, ring buffer | report-core |
+| `src/console-buffer.ts` | `console.error/warn` + `window` error patching, ring buffer, stack frames on the uncaught ones | report-core, stack |
+| `src/stack.ts` | `parseStack(stack)` — one expression turning `error.stack` into at most ten `{ file, line, col, fn? }` frames, V8 and Firefox/Safari alike. Imported only by console-buffer, which keeps the parsing out of report-core; it does not make the core bundle smaller, since console-buffer is in it | report-core (types and limits) |
 | `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | mask, report-core |
 | `src/mask.ts` | `applyMask(root, options)` — hides field values and marked regions for the length of one render, returns the restore | nothing |
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
@@ -81,7 +82,15 @@ not closed and a branch is not merged with the docs lagging.
   decoded bytes, not the declared type.
 - **`log` and `debug` are not recorded**, and this is a feature. They are where
   stray user data ends up.
-- **`collectContext` sends path + query only** — no origin, no fragment.
+- **`collectContext` sends path + query only** — no origin, no fragment. The
+  optional facts around it (language, timezone, screen, colorScheme, online,
+  connection) are the whole list: no canvas, no fonts, no device enumeration,
+  nothing that identifies a person beyond what the user agent already does.
+- **A stack frame is a position, never source text.** `parseStack` keeps
+  `file`, `line`, `col` and `fn` and nothing else, and no code anywhere reads
+  the line it points at. Resolving a frame is the reader's job, with their own
+  source maps; a report that carried source would carry whatever was on screen
+  in that file.
 - **Privacy text in the README is load-bearing.** The "Please read this part"
   section exists because a public media bucket once nearly exposed screenshots.
   Do not soften or shorten it.
@@ -101,9 +110,12 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5376 bytes gzipped and `bugbottle/ui` under 9 kB (CI enforces both;
-about 5.2 kB and 9.0 kB with masking, the queued state and the triggers), and
-the bare core under 1 kB (0.8 kB). The react budget is measured on the hook
+stay under 5632 bytes gzipped and `bugbottle/ui` under 9600 (CI enforces both;
+about 5.4 kB and 9.4 kB with masking, the queued state, the triggers and the
+0.6 evidence), and the bare core under 1536 bytes (1393). The core budget was
+1 kB and 0.8 kB measured until 0.6: the stack parser costs about 250 bytes
+gzipped and the six optional context facts about 190, and both are on by
+default, so the core, the hook, the panel and the script tag all carry them. The react budget is measured on the hook
 alone; `BugReportBoundary` costs about 370 bytes more for the applications that
 import it. `bugbottle/ui` moved from 8 kB to 9 kB when the panel started
 importing `bugbottle/triggers`, so a keyboard shortcut works with no wiring.

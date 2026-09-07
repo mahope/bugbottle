@@ -41,9 +41,9 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 0.8 kB gzipped; with the element picker and the React hook, 5.1 kB;
-  the optional ready-made panel, 7.9 kB; breadcrumbs 1.3 kB; the network log
-  1.1 kB; the offline queue 1 kB; the everything script tag, 14.4 kB. `html-to-image` is only pulled in by the module that
+  is about 1.4 kB gzipped; with the element picker and the React hook, 5.3 kB;
+  the optional ready-made panel, 9.2 kB; breadcrumbs 1.3 kB; the network log
+  1.3 kB; the offline queue 1 kB; the everything script tag, 16.1 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
@@ -78,6 +78,13 @@ promise rejections. `log` and `debug` are deliberately left alone: they are
 noisy, and in most applications they are where stray user data ends up. The
 original console functions are always called through, so nothing disappears
 from your devtools.
+
+An uncaught error or a rejection also carries its stack, normalised to at most
+ten frames of `{ file, line, col, fn? }` — V8, Firefox and Safari all write it
+differently, and one small parser reads all three. A frame is a position and
+nothing else: no line of source is ever read or sent, so resolving it stays
+your side, with your own source maps. Entries from `console.error` carry no
+frames; the browser gives none.
 
 In a server-rendered app, make sure this runs in the browser only — it patches
 whichever `console` it finds.
@@ -1019,6 +1026,15 @@ Requiring people to be signed in is worth considering too. An anonymous
 screenshot is one nobody can be asked about later, and nobody can be told has
 been deleted.
 
+The context is the mild part of a report by comparison. It is the page path and
+query, the viewport, the user agent, and — when the browser offers them — the
+language, the time zone, the screen size and pixel ratio, the colour scheme,
+whether the browser thought it was online, and the effective connection type.
+Together they say which environment the bug happened in; none of them says more
+about the person than the user agent already does, and nothing is collected
+beyond that list: no canvas, no fonts, no device enumeration, no identifier of
+any kind. The origin and the fragment of the URL are still left out.
+
 ### Masking
 
 Screenshots are masked before they are taken. Every `input` and `textarea`
@@ -1161,10 +1177,19 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
   "context": {
     "url": "/orders/42?tab=notes",     // path and query; no origin, no fragment
     "viewport": "1440x900",
-    "userAgent": "Mozilla/5.0 …"
+    "userAgent": "Mozilla/5.0 …",
+    "language": "en-GB",               // everything below is best-effort and
+    "timezone": "Europe/Copenhagen",   // left out when the browser has no answer
+    "screen": "2560x1440@2",
+    "colorScheme": "dark",             // "dark" | "light"
+    "online": true,
+    "connection": "4g"
   },
   "console": [                         // bugs only by default, newest last
-    { "ts": "2026-09-07T08:12:31.004Z", "level": "error", "message": "TypeError: …" }
+    { "ts": "2026-09-07T08:12:31.004Z", "level": "error", "message": "TypeError: …",
+      "stack": [                       // uncaught errors and rejections only, max 10
+        { "file": "https://app.test/assets/main.js", "line": 12, "col": 9, "fn": "saveOrder" }
+      ] }
   ],
   "elements": [                        // only when the reporter pointed at something
     { "selector": "form#checkout > button:nth-of-type(2)", "tag": "button", "text": "Save order",
@@ -1205,7 +1230,8 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
 `fingerprint`, `stableHash`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
-validators below, and the shared types and limits.
+validators below, and the shared types and limits — including the `StackFrame`
+type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 
 **`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
@@ -1262,7 +1288,8 @@ Requires `html-to-image`.
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
 `HandleReportOptions`, `HandleReportResult`, `DedupeOptions`, `ReportSink` and
-`SinkContext` types, and the `MAX_*` limits.
+`SinkContext` types, the `StackFrame` type, and the `MAX_*` limits, including
+`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
 served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).

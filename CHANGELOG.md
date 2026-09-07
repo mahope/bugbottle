@@ -9,6 +9,27 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- Normalised stack frames on uncaught errors and unhandled rejections.
+  `ConsoleEntry` gains an optional `stack` of at most ten
+  `{ file, line, col, fn? }` frames, parsed by one small expression in
+  `src/stack.ts` that reads V8 (`at fn (file:line:col)` and
+  `at file:line:col`) and Firefox/Safari (`fn@file:line:col`) alike; a line
+  without a position, such as the `TypeError: ...` header, is skipped rather
+  than guessed at. The one-line `message` is unchanged, `normaliseConsole`
+  validates and caps the frames a report arrives with, and `toMarkdown` prints
+  the top three under their entry. No source text is ever read or sent: a
+  frame is a position, and resolving it stays with whoever has the maps.
+- Six optional facts on `collectContext`: `language`, `timezone`, `screen`
+  (with the device pixel ratio), `colorScheme`, `online` and `connection`.
+  Each is read behind a guard and left out when the browser has no answer, so
+  a receiver never has to tell "unknown" from an empty string.
+  `normaliseContext` clips them (35, 64, 32 and 16 characters) and drops
+  anything of the wrong type, and `toMarkdown` adds them to the facts table.
+  None of it says more about the person than the user agent already does, and
+  nothing beyond that list is collected — no canvas, no fonts, no device
+  enumeration. The schema regenerates from `ReportContext`, so the new
+  `maxLength`s and the `dark`/`light` enum travel with it.
+
 - `dist/report.schema.json`, the JSON Schema (2020-12) for the payload,
   generated from the `BugReport` type by `scripts/build-schema.ts` as part of
   `npm run build` and exported as `bugbottle/report.schema.json`. It carries

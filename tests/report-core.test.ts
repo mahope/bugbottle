@@ -9,6 +9,9 @@ import {
   normaliseMessage,
   MAX_CONSOLE_ENTRIES,
   MAX_CONSOLE_MESSAGE_LENGTH,
+  MAX_CONTEXT_LENGTHS,
+  MAX_STACK_FRAMES,
+  MAX_STACK_STRING_LENGTH,
   MAX_MESSAGE_LENGTH,
   MAX_SCREENSHOT_BYTES,
   REPORT_TYPES,
@@ -111,6 +114,44 @@ test("context strings are clipped so a browser cannot bloat a row", () => {
   assert.equal(Object.keys(c).length, 3, "no extra keys are carried through");
 });
 
+test("the optional context facts are clipped, and anything odd is dropped", () => {
+  const c = normaliseContext({
+    url: "/orders/42",
+    viewport: "1440x900",
+    userAgent: "Mozilla/5.0",
+    language: "e".repeat(100),
+    timezone: "t".repeat(100),
+    screen: "s".repeat(100),
+    connection: "c".repeat(100),
+    colorScheme: "dark",
+    online: false,
+  });
+  assert.equal(c.language?.length, MAX_CONTEXT_LENGTHS.language);
+  assert.equal(c.timezone?.length, MAX_CONTEXT_LENGTHS.timezone);
+  assert.equal(c.screen?.length, MAX_CONTEXT_LENGTHS.screen);
+  assert.equal(c.connection?.length, MAX_CONTEXT_LENGTHS.connection);
+  assert.equal(c.colorScheme, "dark");
+  assert.equal(c.online, false, "false is a fact, not a missing value");
+
+  const dropped = normaliseContext({
+    url: "/a",
+    viewport: "",
+    userAgent: "",
+    language: 42,
+    timezone: "",
+    screen: null,
+    colorScheme: "sepia",
+    online: "yes",
+    connection: { effectiveType: "4g" },
+    somethingElse: "ignored",
+  });
+  assert.deepEqual(
+    Object.keys(dropped),
+    ["url", "viewport", "userAgent"],
+    "a fact of the wrong type or an empty one is left out entirely",
+  );
+});
+
 test("missing or nonsense context does not throw", () => {
   const empty = { url: "", viewport: "", userAgent: "" };
   assert.deepEqual(normaliseContext(undefined), empty);
@@ -158,6 +199,45 @@ test("console entries are validated, clipped and capped at the most recent", () 
   assert.equal(capped.length, MAX_CONSOLE_ENTRIES);
   assert.equal(capped[0]?.message, "e30", "the oldest are dropped");
   assert.equal(normaliseConsole(many, { maxEntries: 5 }).length, 5);
+});
+
+test("stack frames are validated, clipped and capped, and a malformed one is dropped", () => {
+  const [entry] = normaliseConsole([
+    {
+      ts: "",
+      level: "error",
+      message: "Uncaught: boom",
+      stack: [
+        { file: "https://app.test/main.js", line: 12, col: 9, fn: "saveOrder" },
+        { file: "f".repeat(500), line: 1.6, col: -4, fn: "n".repeat(500) },
+        { file: 42, line: 1, col: 1 },
+        { line: 1, col: 1, fn: "no file at all" },
+        "a string",
+        null,
+      ],
+    },
+  ]);
+  assert.equal(entry?.stack?.length, 2, "a frame without a string file is not a frame");
+  assert.deepEqual(entry?.stack?.[0], {
+    file: "https://app.test/main.js",
+    line: 12,
+    col: 9,
+    fn: "saveOrder",
+  });
+  assert.equal(entry?.stack?.[1]?.file.length, MAX_STACK_STRING_LENGTH);
+  assert.equal(entry?.stack?.[1]?.fn?.length, MAX_STACK_STRING_LENGTH);
+  assert.equal(entry?.stack?.[1]?.line, 1, "a fractional line is truncated");
+  assert.equal(entry?.stack?.[1]?.col, 0, "a negative column becomes zero");
+
+  const deep = Array.from({ length: 40 }, (_, i) => ({ file: "a.js", line: i, col: 1 }));
+  const [capped] = normaliseConsole([{ ts: "", level: "error", message: "x", stack: deep }]);
+  assert.equal(capped?.stack?.length, MAX_STACK_FRAMES);
+
+  for (const bad of [undefined, "at a.js:1:1", 42, {}, [], [{}]]) {
+    const [none] = normaliseConsole([{ ts: "", level: "error", message: "x", stack: bad }]);
+    assert.equal(none?.stack, undefined, `${JSON.stringify(bad)} is not a stack`);
+    assert.equal(Object.keys(none ?? {}).length, 3, "no empty stack key is added");
+  }
 });
 
 test("a missing or nonsense console section is an empty list, never a throw", () => {
