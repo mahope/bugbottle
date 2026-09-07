@@ -9,7 +9,9 @@ gzipped and `bugbottle/react` under 3.5 kB.
 
 Already in 0.3: console buffer, page context, injectable screenshot renderer,
 element picker (`pickElement`), framework-agnostic `buildReport`/`sendReport`,
-server validators for every field.
+server validators for every field, eight locales (`bugbottle/locales`), and
+the optional themed panel (`bugbottle/ui`) — pulled forward from 1.0 because
+"brand it and translate it" turned out to be the first thing integrators ask.
 
 ## 0.4 — evidence and safety
 
@@ -50,8 +52,8 @@ server validators for every field.
 ## 1.0 — adoptable
 
 - Vue, Svelte and Solid adapters, each a few lines over `buildReport`.
-- `bugbottle/ui` — optional floating button and dialog in Shadow DOM, with
-  rectangle/arrow/blur annotation. Separate entry, so headless stays headless.
+- `bugbottle/ui` annotation: rectangle/arrow/blur on the screenshot preview.
+  The blur tool doubles as a privacy feature.
 - `create-bugbottle` scaffold for a receiving endpoint.
 - Playground and StackBlitz demo.
 - Remaining sinks (GitLab, Jira, Discord, Resend email), Sentry envelope,

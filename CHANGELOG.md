@@ -40,6 +40,14 @@ Everything else is additive.
   `timeoutMs`; stable callback identities; a pick is aborted on unmount.
 - `bugbottle/server`: `normaliseConsole`, `normaliseElements`, and the
   `MAX_CONSOLE_*` / `MAX_ELEMENT*` limits.
+- **`bugbottle/ui`** — `mountBugbottle`, an optional ready-made panel in a
+  shadow root: floating trigger (or your own), report types, message,
+  screenshot checkbox, element picker, thank-you state. Themed through
+  `theme` / `--bb-*` custom properties, branded with `brand.name` and
+  `brand.logo`, positioned in any corner, light/dark/auto. About 6 kB gzipped.
+- **`bugbottle/locales`** — `Locale` objects for en, da, sv, nb, de, nl, fr,
+  es with every reporter-facing string; `resolveLocale(navigator.language)`;
+  `texts` and `messages` overrides on the widget, `messages` on the hook.
 - Package metadata for npm (`author`, `main`/`types` fallbacks, keywords,
   `./package.json` export), CLAUDE.md, CONTRIBUTING, SECURITY, this
   changelog, `docs/roadmap.md` and the research behind it.
@@ -60,8 +68,9 @@ Everything else is additive.
   exist; it now serves the repository's `dist/`.
 
 Sizes (esbuild, minified + gzipped, without `html-to-image`): `bugbottle`
-core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element picker
-included), `bugbottle/server` 0.8 kB.
+core 0.6 kB, `bugbottle/react` 3.4 kB (React external, element picker
+included), `bugbottle/ui` 6.4 kB, one locale 0.5 kB, `bugbottle/server`
+0.8 kB.
 
 ## 0.2.4, 0.2.3, 0.2.2, 0.2.1
 

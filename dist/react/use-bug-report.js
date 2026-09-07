@@ -3,13 +3,8 @@ import { captureScreenshot, ScreenshotTooLargeError } from "../capture.js";
 import { pickElement as pickElementFromPage } from "../element-picker.js";
 import { MAX_ELEMENTS, REPORT_TYPES } from "../report-core.js";
 import { buildReport, sendReport } from "../send.js";
-const FALLBACK_MESSAGES = {
-    empty: "Write a message first",
-    screenshotTooLarge: "The picture is too large — sending without it",
-    screenshotFailed: "The picture could not be taken — you can still send without it",
-    sendFailed: "The report could not be sent",
-    sent: "Thank you — the report is on its way",
-};
+import { enMessages } from "../locales.js";
+const FALLBACK_MESSAGES = enMessages;
 const bugsOnly = (t) => t === "bug";
 export function useBugReport(options) {
     const { endpoint, screenshot: render, initialType = "bug", screenshotFor = bugsOnly, consoleFor = bugsOnly, } = options;

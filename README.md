@@ -39,18 +39,22 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 0.6 kB gzipped; with the element picker and the React hook, 3.2 kB.
-  `html-to-image` is only pulled in by the module that imports it.
+  is about 0.6 kB gzipped; with the element picker and the React hook, 3.4 kB;
+  the optional ready-made panel, 6 kB. `html-to-image` is only pulled in by
+  the module that imports it.
+- **Your language, your brand.** Eight bundled locales, every string
+  overridable, and a panel themed with a handful of CSS variables.
 - **Server helpers included.** Every field a browser sends is checked before it
   reaches your database, because that is where the sharp edges are.
 
 ### What it is not
 
-Not a widget, not a dashboard, not session replay. If you want a floating
-button that files annotated issues in Jira, look at Marker.io or Jam. If you
+Not a dashboard, not session replay, not a hosted service. If you want
+annotated issues filed in Jira by a vendor, look at Marker.io or Jam. If you
 want to record everything a user does, look at rrweb. bugbottle is the smallest
 thing that turns *"it's broken"* into a reproducible payload, and stays out of
-the way otherwise.
+the way otherwise. The optional panel in `bugbottle/ui` is a convenience over
+the same core, not the product.
 
 ## Recording console errors
 
@@ -165,6 +169,69 @@ the parsed body) on anything else, gives up with `SendTimeoutError` after
 `captureScreenshot` retries at half scale when the first render is larger than
 a server would accept, and throws `ScreenshotTooLargeError` if that is still
 too big. Treat either as "send without the picture".
+
+## The ready-made panel
+
+If you would rather not build a form, `bugbottle/ui` mounts a floating button
+and a small dialog in a shadow root, so your CSS and its CSS never meet:
+
+```ts
+import { initConsoleBuffer } from "bugbottle";
+import { mountBugbottle } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+import { da } from "bugbottle/locales";
+
+initConsoleBuffer();
+
+const widget = mountBugbottle({
+  endpoint: "/api/feedback",
+  screenshot: htmlToImage,
+  locale: da,
+  brand: { name: "Mahope", logo: "/logo.svg" },
+  theme: { primary: "#e11d48", radius: "8px", position: "bottom-left" },
+  extra: { appVersion: "1.4.2" },
+});
+
+// widget.open(), widget.close(), widget.setLocale(en), widget.destroy()
+```
+
+It offers the three report types, a message, the screenshot checkbox (only
+when a renderer is given), the element picker, and a thank-you state. Pass
+`trigger: "#my-feedback-button"` to use your own button instead of the
+floating one, or `trigger: false` and call `open()` yourself. About 6 kB
+gzipped, no framework.
+
+## Languages and branding
+
+Every string a reporter sees lives in a `Locale`: five status `messages` and
+the widget's `ui` labels. `bugbottle/locales` ships English, Danish, Swedish,
+Norwegian, German, Dutch, French and Spanish, and `resolveLocale(navigator.language)`
+picks one. Override any label, or write a locale of your own — the type tells
+you what is required:
+
+```ts
+import { da, resolveLocale } from "bugbottle/locales";
+
+useBugReport({ endpoint, messages: da.messages });
+
+mountBugbottle({
+  endpoint,
+  locale: resolveLocale(navigator.language),
+  texts: { title: "Hjælp os med at gøre det bedre", trigger: "Fejl?" },
+  messages: { sent: "Tak — vi kigger på det i morgen tidlig" },
+});
+```
+
+The panel's look comes from `theme` — `primary`, `onPrimary`, `background`,
+`text`, `muted`, `border`, `radius`, `font`, `shadow`, `zIndex`, `position`,
+and `scheme` (`"light"`, `"dark"` or `"auto"`) — and from `brand` (`name`,
+`logo` as an image URL or inline SVG). The same values are CSS custom
+properties on the host element (`--bb-primary`, `--bb-radius`, …), so a
+stylesheet can restyle it without touching JavaScript:
+
+```css
+[data-bugbottle="ui"] { --bb-primary: #0f766e; --bb-font: "Inter", sans-serif; }
+```
 
 ## Pointing at the element
 
@@ -336,6 +403,12 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 
 **`bugbottle/html-to-image`** — `htmlToImage`, a `ScreenshotRenderer`.
 Requires `html-to-image`.
+
+**`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions`, `Theme`,
+`Brand` and `BugbottleWidget` types.
+
+**`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
+`locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts` types.
 
 **`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`, `isReportType`,

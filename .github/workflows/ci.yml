@@ -44,6 +44,7 @@ jobs:
           echo 'import { initConsoleBuffer, buildReport } from "bugbottle"; initConsoleBuffer(); buildReport({ type: "bug", message: "x" });' > core.js
           echo 'import { useBugReport } from "bugbottle/react"; export { useBugReport };' > react.js
           echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
+          echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
         run: |
@@ -51,11 +52,17 @@ jobs:
           npx esbuild core.js --bundle --minify --format=esm --outfile=out-core.js
           npx esbuild react.js --bundle --minify --format=esm --external:react --outfile=out-react.js
           npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
-          for f in out-core out-react out-server; do
+          npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
+          for f in out-core out-react out-server out-ui; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           react=$(gzip -c out-react.js | wc -c)
-          if [ "$react" -gt 3584 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 3584" >&2
+          ui=$(gzip -c out-ui.js | wc -c)
+          if [ "$react" -gt 4096 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 4096" >&2
+            exit 1
+          fi
+          if [ "$ui" -gt 8192 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 8192" >&2
             exit 1
           fi

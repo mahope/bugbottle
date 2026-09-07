@@ -27,7 +27,10 @@ need Node 18.
   dependency for everyone.
 - The client entry points stayed small. Pack, install the tarball in a scratch
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
-  It should build, and it should stay under 3.5 kB gzipped (CI checks this).
+  It should build, and it should stay under 4 kB gzipped; `bugbottle/ui`
+  under 8 kB (CI checks both).
+- Any string a reporter can see goes through `src/locales.ts`, in every
+  bundled language. The locale test fails on a missing key.
 - `CHANGELOG.md` has a line under *Unreleased*.
 
 ## What fits

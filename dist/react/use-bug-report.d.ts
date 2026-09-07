@@ -1,6 +1,7 @@
 import { type ScreenshotRenderer } from "../capture.ts";
 import { type ElementRef, type ReportType } from "../report-core.ts";
 import { type SendOptions } from "../send.ts";
+import { type Messages } from "../locales.ts";
 /**
  * Everything a report form needs, and none of its markup.
  *
@@ -56,8 +57,12 @@ export type UseBugReportOptions = {
     onSent?: (id: string | undefined) => void;
     /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
     parseError?: SendOptions["parseError"];
-    /** Messages shown to the reporter. Supply translated strings here. */
-    messages?: Partial<Record<"empty" | "screenshotTooLarge" | "screenshotFailed" | "sendFailed" | "sent", string>>;
+    /**
+     * Messages shown to the reporter. Pass a bundled locale
+     * (`import { da } from "bugbottle/locales"; messages: da.messages`) or
+     * your own strings. Defaults to English.
+     */
+    messages?: Partial<Messages>;
 };
 export declare function useBugReport(options: UseBugReportOptions): {
     types: readonly ["bug", "idea", "other"];

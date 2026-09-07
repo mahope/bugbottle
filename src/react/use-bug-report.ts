@@ -3,6 +3,7 @@ import { captureScreenshot, ScreenshotTooLargeError, type ScreenshotRenderer } f
 import { pickElement as pickElementFromPage } from "../element-picker.ts";
 import { MAX_ELEMENTS, REPORT_TYPES, type ElementRef, type ReportType } from "../report-core.ts";
 import { buildReport, sendReport, type SendOptions } from "../send.ts";
+import { enMessages, type Messages } from "../locales.ts";
 
 /**
  * Everything a report form needs, and none of its markup.
@@ -56,19 +57,15 @@ export type UseBugReportOptions = {
   onSent?: (id: string | undefined) => void;
   /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
   parseError?: SendOptions["parseError"];
-  /** Messages shown to the reporter. Supply translated strings here. */
-  messages?: Partial<
-    Record<"empty" | "screenshotTooLarge" | "screenshotFailed" | "sendFailed" | "sent", string>
-  >;
+  /**
+   * Messages shown to the reporter. Pass a bundled locale
+   * (`import { da } from "bugbottle/locales"; messages: da.messages`) or
+   * your own strings. Defaults to English.
+   */
+  messages?: Partial<Messages>;
 };
 
-const FALLBACK_MESSAGES = {
-  empty: "Write a message first",
-  screenshotTooLarge: "The picture is too large — sending without it",
-  screenshotFailed: "The picture could not be taken — you can still send without it",
-  sendFailed: "The report could not be sent",
-  sent: "Thank you — the report is on its way",
-} as const;
+const FALLBACK_MESSAGES: Messages = enMessages;
 
 const bugsOnly = (t: ReportType) => t === "bug";
 

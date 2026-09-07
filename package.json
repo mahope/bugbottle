@@ -11,7 +11,10 @@
     "screenshot",
     "console",
     "error-context",
-    "react"
+    "react",
+    "i18n",
+    "widget",
+    "feedback-button"
   ],
   "author": "Mads Holst Jensen <mads@mahope.dk> (https://mahope.dk)",
   "license": "MIT",
@@ -44,6 +47,14 @@
     "./html-to-image": {
       "types": "./dist/html-to-image.d.ts",
       "default": "./dist/html-to-image.js"
+    },
+    "./locales": {
+      "types": "./dist/locales.d.ts",
+      "default": "./dist/locales.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "default": "./dist/ui/index.js"
     },
     "./package.json": "./package.json"
   },
