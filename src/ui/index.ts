@@ -21,7 +21,14 @@ import {
 } from "../capture.ts";
 import { pickElement } from "../element-picker.ts";
 import { en, type Locale, type Messages, type UiTexts } from "../locales.ts";
-import { MAX_ELEMENTS, REPORT_TYPES, type ElementRef, type ReportType } from "../report-core.ts";
+import {
+  MAX_ELEMENTS,
+  REPORT_TYPES,
+  type BugReport,
+  type ElementRef,
+  type ReportType,
+} from "../report-core.ts";
+import type { Queue } from "../queue.ts";
 import {
   buildReport,
   sendReport,
@@ -117,6 +124,13 @@ export type MountOptions = {
    * A dropped report still shows the reporter the ordinary thank-you panel.
    */
   beforeSend?: SendOptions["beforeSend"];
+  /**
+   * Where a report goes when the send fails. Pass a queue from
+   * `bugbottle/queue` and the reporter is thanked with the `queued` message
+   * rather than shown an error; the report is delivered when the browser is
+   * online again. A 4xx is never queued — the server has already refused it.
+   */
+  queue?: Queue;
   onSent?: (id: string | undefined) => void;
   onError?: (error: unknown) => void;
 };
@@ -443,8 +457,10 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     sendBtn.disabled = true;
     sendBtn.textContent = ui.sending;
     setStatus("");
+    // Assembled outside the try so the failure path can queue this very body.
+    let report: (BugReport & Record<string, unknown>) | null = null;
     try {
-      const report = buildReport({
+      report = buildReport({
         type,
         message: textarea.value,
         screenshotDataUrl: shotBox.checked ? screenshot : null,
@@ -462,13 +478,29 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         beforeSend: options.beforeSend,
       });
       resetForm();
+      thanksText.textContent = ui.thanks;
       form.hidden = true;
       thanks.hidden = false;
       thanksClose.focus();
       options.onSent?.(id);
     } catch (err) {
-      setStatus(err instanceof SendFailedError && err.message ? err.message : msg.sendFailed, "error");
-      options.onError?.(err);
+      const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
+      if (options.queue && report && !rejected) {
+        options.queue.enqueue(report);
+        resetForm();
+        // The same panel as a successful send, with the one line that differs:
+        // the report is safe, it is just not there yet.
+        thanksText.textContent = msg.queued;
+        form.hidden = true;
+        thanks.hidden = false;
+        thanksClose.focus();
+      } else {
+        setStatus(
+          err instanceof SendFailedError && err.message ? err.message : msg.sendFailed,
+          "error",
+        );
+        options.onError?.(err);
+      }
     } finally {
       sending = false;
       sendBtn.disabled = false;

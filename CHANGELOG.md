@@ -7,6 +7,42 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `bugbottle/queue`: `createQueue({ endpoint, storageKey?, maxItems?,
+  maxAgeMs?, headers?, credentials?, fetch? })`, a small durable queue in front
+  of the endpoint, so a report written during the outage it describes is not
+  lost when the `fetch` fails. Reports are kept in `localStorage` and delivered
+  oldest first — when the queue is created, when the browser fires `online`,
+  and when the tab becomes visible. Failed attempts back off exponentially
+  from one second to five minutes and never flush in parallel; a 4xx drops the
+  report (the server has refused it), a 5xx or a network error keeps it. Five
+  reports and seven days by default, the oldest evicted first. An item over
+  1 MB serialised loses its screenshot and keeps everything else, and a browser
+  with no usable `localStorage` degrades to memory-only rather than failing.
+  1.0 kB gzipped, with a CI budget of 1024 bytes.
+- `keepalive` on `SendOptions`: passed to `fetch` when the serialised body is
+  under 60 kB, so a send during unload survives the page closing. The browser
+  caps all in-flight keepalive bodies of a page at 64 KiB together, which is
+  why it is opt-in and why a report with a screenshot does not use it.
+- `onFailure(report, error)` on `SendOptions`, awaited before the error is
+  rethrown. It is the seam the queue integration is built on: a consumer can
+  enqueue the exact body that failed.
+- `queue` on `useBugReport` and on `mountBugbottle`. A failed send is enqueued
+  and the reporter sees the ordinary thank-you instead of an error they can do
+  nothing about: `status.kind === "queued"` in the hook, and the thank-you
+  panel with the queued line in the widget. A 4xx is never queued.
+- `queued` in `Messages` and in all eight bundled locales
+  ("Saved — it will be sent when you are back online").
+- `createQueue` on `window.bugbottle`, and `data-queue` on the script tag:
+  present with any value, the panel queues what it cannot send.
+
+### Changed
+
+- The CI size budgets for `bugbottle/react` (5120 → 5376 bytes) and
+  `dist/bugbottle.js` (14336 → 15360 bytes). The hook grew by the `queued`
+  state and its message; the script-tag build carries the whole queue.
+
 ## 0.5.0
 
 The receiving release: one function that takes any web Request and turns it

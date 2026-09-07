@@ -183,3 +183,54 @@ test("a scrub function passed to buildReport is the last thing to touch the body
   assert.equal(report.message, "scrubbed");
   assert.equal(report.appVersion, "1.2.3", "extras survive the scrub");
 });
+
+test("keepalive is asked for on a small body and skipped on a large one", async () => {
+  const small = fakeFetch(200, { id: "r_1" });
+  const report = buildReport({ type: "bug", message: "hi", includeConsole: false });
+  await sendReport("/api/feedback", report, { fetch: small.fetch, keepalive: true });
+  assert.equal(small.calls[0]?.init.keepalive, true);
+
+  // A report with a picture is far over the 64 KiB the browser allows a
+  // keepalive request, and fetch would reject it outright rather than send.
+  const large = fakeFetch(200, { id: "r_2" });
+  const withPicture = buildReport({
+    type: "bug",
+    message: "hi",
+    includeConsole: false,
+    screenshotDataUrl: `data:image/png;base64,${"A".repeat(70_000)}`,
+  });
+  await sendReport("/api/feedback", withPicture, { fetch: large.fetch, keepalive: true });
+  assert.equal(large.calls[0]?.init.keepalive, undefined, "too large to keep alive");
+});
+
+test("onFailure sees the report and the error, and the error still reaches the caller", async () => {
+  const seen: { message: string; error: unknown }[] = [];
+  const failing = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+  const report = buildReport({ type: "bug", message: "offline", includeConsole: false });
+  await assert.rejects(
+    sendReport("/api/feedback", report, {
+      fetch: failing as typeof globalThis.fetch,
+      onFailure: (r, error) => void seen.push({ message: r.message, error }),
+    }),
+    /Failed to fetch/,
+  );
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0]?.message, "offline");
+  assert.ok(seen[0]?.error instanceof TypeError);
+});
+
+test("onFailure runs for a rejected response too, and its own error is swallowed", async () => {
+  const { fetch } = fakeFetch(500, { error: "nope" });
+  const report = buildReport({ type: "bug", message: "x", includeConsole: false });
+  await assert.rejects(
+    sendReport("/api/feedback", report, {
+      fetch,
+      onFailure: () => {
+        throw new Error("the queue is broken as well");
+      },
+    }),
+    (err: unknown) => err instanceof SendFailedError && err.status === 500,
+  );
+});

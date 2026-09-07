@@ -56,6 +56,10 @@
       "types": "./dist/network.d.ts",
       "default": "./dist/network.js"
     },
+    "./queue": {
+      "types": "./dist/queue.d.ts",
+      "default": "./dist/queue.js"
+    },
     "./locales": {
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"
