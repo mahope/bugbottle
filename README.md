@@ -544,6 +544,74 @@ What the reporter typed is hidden before the picture is taken; see
 
 ## Receiving a report
 
+`handleReport` is the whole endpoint. It validates every field with the helpers
+below, optionally scrubs, decides what happens to the screenshot, stores the
+report and runs the sinks you configured — and answers with a `Response`:
+
+```ts
+import { handleReport, toResend } from "bugbottle/server";
+
+export const POST = (req: Request) =>
+  handleReport(req, { sinks: [toResend({ apiKey, from: "bugs@acme.com", to: "team@acme.com" })] });
+```
+
+That works unchanged in a Next.js route handler, Hono, Cloudflare Workers, Bun
+and Deno: they all speak the web `Request`. Nothing about it is magic, and
+everything is an option:
+
+```ts
+export const POST = (req: Request) =>
+  handleReport(req, {
+    authorize: async (r) => Boolean(await getUser(r)),     // false → 401
+    maxBodyBytes: 4 * 1024 * 1024,                         // over it → 413
+    scrub: true,                                           // redact on the way in
+    screenshot: async (bytes) => await putPrivate(bytes),  // returns a URL
+    store: async (report, screenshot) => await db.reports.insert(report),
+    sinks: [toGithub({ token, owner: "acme", repo: "app", labels: ["bug"] })],
+    onSinkError: (err) => logger.warn({ err }, "sink failed"),
+    cors: "https://app.acme.com",                          // answers OPTIONS too
+    rateLimit: { limit: 20, windowMs: 60_000 },
+  });
+```
+
+`store` receives a `ValidatedReport` — `{ type, message, context, console,
+elements, breadcrumbs, network, extra, receivedAt }` — and the decoded PNG when
+there was one. `extra` is every top-level key the client sent that bugbottle
+does not know about, so a tenant id or a build number arrives without a schema
+change; strings are clipped to 500 characters, numbers and booleans pass, and
+nested objects are dropped. The reply is `201 { id }` when `store` returned an
+id and `202 {}` when it did not; `respond` replaces it.
+
+`screenshot` decides what happens to the picture: `"keep"` (the default) hands
+the bytes to `store` and to the sinks, `"drop"` never decodes it, and a
+function stores it and returns a URL that reaches `toMarkdown` and the sinks as
+`screenshotUrl`. A rejected picture never fails the report.
+
+`rateLimit` counts in memory, so it is per instance: fine per serverless
+isolate against one looping browser, and not a shared limit across a fleet.
+
+For Express, `expressHandler` builds the `Request` and writes the `Response`
+back:
+
+```ts
+import express from "express";
+import { expressHandler, toWebhook } from "bugbottle/server";
+
+app.post(
+  "/api/bug-report",
+  express.json({ limit: "5mb" }),
+  expressHandler({ sinks: [toWebhook({ url: process.env.SLACK_WEBHOOK_URL!, format: "slack" })] }),
+);
+```
+
+It reads an already-parsed `req.body` when a parser ran and the raw stream when
+none did, so `express.json()` is convenient rather than required.
+
+### The manual path
+
+If you want to see and control every step — or you already have a handler —
+call the validators yourself. This is the same sequence `handleReport` runs:
+
 ```ts
 import {
   decodeScreenshotDataUrl,
@@ -584,7 +652,7 @@ export async function POST(req: Request) {
 }
 ```
 
-This works unchanged in a Next.js route handler, Hono, Cloudflare Workers,
+This too works unchanged in a Next.js route handler, Hono, Cloudflare Workers,
 Bun, Deno, or anything else built on the web `Request`. For Express, read
 `req.body` instead.
 
@@ -890,12 +958,16 @@ Requires `html-to-image`.
 `locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,
 `EmailTexts` types.
 
-**`bugbottle/server`** — `decodeScreenshotDataUrl`, `normaliseMessage`,
+**`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
+`toWebhook`, `toGithub`, `validateReport`, `collectExtra`, `resetRateLimits`,
+`decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
-`InvalidScreenshotError`, `SinkError`, `REPORT_TYPES` and the `MAX_*` limits.
+`InvalidScreenshotError`, `SinkError`, `REPORT_TYPES`, the `ValidatedReport`,
+`HandleReportOptions`, `HandleReportResult`, `ReportSink` and `SinkContext`
+types, and the `MAX_*` limits.
 
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any
 evergreen browser on the client.

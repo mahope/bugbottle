@@ -9,6 +9,36 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `handleReport(request, options)` in `bugbottle/server`: one receiver that
+  turns an incoming web `Request` into a validated report and a `Response`, so
+  a Next.js route handler, a Hono route, a Worker, Bun or Deno endpoint is
+  three lines. It runs the same `normalise*` helpers the manual path does, then
+  `authorize` (false → 401), a body ceiling (`maxBodyBytes`, 4 MB by default,
+  checked against `content-length` and counted on the stream → 413), malformed
+  JSON and an empty message → 400, optional server-side `scrub`, a `screenshot`
+  policy of `"keep"`, `"drop"` or a function that stores the picture and
+  returns a `screenshotUrl`, `store`, and ordered `sinks` whose failures are
+  collected through `onSinkError` rather than thrown. `respond` replaces the
+  default `201 { id }` / `202 {}`, `cors` adds the header and answers
+  `OPTIONS`, `rateLimit` answers 429 from an in-memory map (per instance, so
+  per serverless isolate — documented as such), and anything unexpected is a
+  500 with `onError` called and no internal message in the body.
+- `ValidatedReport`, the shape `store` and the sinks receive: every field
+  validated, plus `extra` — the top-level keys the client sent that bugbottle
+  does not know about, so a tenant id or a build number needs no schema change.
+  Strings are clipped to 500 characters, numbers and booleans pass, nested
+  objects are dropped, and at most 20 keys are kept.
+- `toResend`, `toWebhook` and `toGithub`: sink helpers over the existing
+  `sendReportEmail`, `sendReportWebhook` and `createGithubIssue`, so a sink is
+  a call rather than an arrow function. They pass the kept screenshot bytes and
+  the stored `screenshotUrl` on from the handler.
+- `expressHandler(options)` in `bugbottle/server` for Express: it builds a web
+  `Request` from `req` — an already-parsed `req.body` when a parser ran, the
+  raw stream when none did — and writes the `Response` back onto `res`.
+  Structurally typed, so it adds no dependency.
+- The server entry is still dependency-free and still tree-shakeable: a
+  consumer importing only `normaliseMessage` bundles 603 bytes with esbuild and
+  contains neither `handleReport` nor any sink.
 - `bugbottle/network`, a network log next to the console buffer: `initNetwork`
   patches `fetch` and `XMLHttpRequest` and keeps the last 30 requests that
   failed (status 400 and up, or no status at all) or took longer than `slowMs`

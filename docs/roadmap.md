@@ -31,7 +31,11 @@ the picture is taken and restored afterwards, on by default, `mask: false` to
 switch it off. rrweb attribute names. And `bugbottle/network`: the failed and
 slow requests before the report, `fetch` and `XMLHttpRequest` patched, no
 bodies and no headers ever, URLs scrubbed, `normaliseNetwork` and a
-"Requests" table in `toMarkdown`.
+"Requests" table in `toMarkdown`. And `handleReport` in `bugbottle/server`:
+one universal receiver from web `Request` to `Response` — authorisation, a
+body ceiling, every validator, optional scrubbing, a screenshot policy,
+`store` and ordered sinks with `toResend`/`toWebhook`/`toGithub`, CORS and an
+in-memory rate limit — with `expressHandler` for Express.
 
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
@@ -44,9 +48,6 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
   `localStorage`, flushed on `online`.
 - Dedup and rate limit by fingerprint.
-- `handleReport(request: Request)` — one universal receiver for Next.js, Hono,
-  Workers, Bun, Deno, with an Express wrapper. Validation, scrubbing and a
-  sink in one call.
 - `report.schema.json` generated from the types, so a receiver can be built
   without the library.
 

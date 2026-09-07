@@ -32,6 +32,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
 | `site/` | The landing page (EN + DA), static, served by nginx from `site/Dockerfile` on Dokploy. Not part of the npm package | dist (at image build) |
 | `src/server/` | Re-exports of report-core, markdown and the sinks for `bugbottle/server` | report-core, markdown, sinks |
+| `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: authorise, body cap, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub` sink helpers | report-core, markdown, scrub, sinks |
+| `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back. Structural types, no `@types/express` | server/handle |
 | `tests/` | `node:test`, run on the TypeScript source directly | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |

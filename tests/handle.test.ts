@@ -1,0 +1,503 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  handleReport,
+  resetRateLimits,
+  toGithub,
+  toResend,
+  toWebhook,
+  type SinkContext,
+  type ValidatedReport,
+} from "../src/server/handle.ts";
+import { expressHandler } from "../src/server/express.ts";
+
+const body = {
+  type: "bug",
+  message: "The save button does nothing",
+  context: { url: "/orders/91", viewport: "1440x900", userAgent: "Chrome 141" },
+  console: [{ level: "error", message: "save failed", ts: "2026-09-07T10:00:00.000Z" }],
+};
+
+/** A POST the way a browser sends one. */
+function post(payload: unknown, init: RequestInit = {}): Request {
+  return new Request("https://app.example.com/api/bug-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: typeof payload === "string" ? payload : JSON.stringify(payload),
+    ...init,
+  });
+}
+
+/** The smallest valid PNG data URL: signature plus a byte, base64-encoded. */
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
+const PNG_DATA_URL = `data:image/png;base64,${Buffer.from(PNG_BYTES).toString("base64")}`;
+
+test("a valid report is stored and answered with 201 and the id", async () => {
+  let stored: ValidatedReport | undefined;
+  const response = await handleReport(post(body), {
+    store: async (report) => {
+      stored = report;
+      return { id: "rep_1" };
+    },
+  });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), { id: "rep_1" });
+  assert.equal(stored?.message, "The save button does nothing");
+  assert.equal(stored?.type, "bug");
+  assert.equal(stored?.console.length, 1);
+  assert.equal(stored?.context.url, "/orders/91");
+  assert.ok(!Number.isNaN(Date.parse(stored?.receivedAt ?? "")));
+});
+
+test("without a store there is nothing to identify, so the answer is 202", async () => {
+  const response = await handleReport(post(body), {});
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), {});
+});
+
+test("an unknown type falls back to other and malformed sections are dropped", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(
+    post({
+      ...body,
+      type: "catastrophe",
+      console: "not an array",
+      elements: [{ nothing: true }],
+      breadcrumbs: [{ kind: "teleport" }],
+      network: [{ status: 500 }],
+    }),
+    { store: async (report) => void (stored = report) },
+  );
+
+  assert.equal(stored?.type, "other");
+  assert.deepEqual(stored?.console, []);
+  assert.deepEqual(stored?.elements, []);
+  assert.deepEqual(stored?.breadcrumbs, []);
+  assert.deepEqual(stored?.network, []);
+});
+
+test("authorize returning false answers 401 and never reads the body", async () => {
+  let stored = false;
+  const response = await handleReport(post(body), {
+    authorize: () => false,
+    store: async () => void (stored = true),
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(stored, false);
+});
+
+test("authorize may be asynchronous and sees the request headers", async () => {
+  const request = post(body, { headers: { "Content-Type": "application/json", "X-Key": "s3cret" } });
+  const response = await handleReport(request, {
+    authorize: async (req) => req.headers.get("x-key") === "s3cret",
+  });
+  assert.equal(response.status, 202);
+});
+
+test("malformed JSON answers 400 rather than throwing", async () => {
+  const response = await handleReport(post("{not json"), {});
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Malformed JSON" });
+});
+
+test("an empty message answers 400 with the locale-neutral text", async () => {
+  const response = await handleReport(post({ ...body, message: "   " }), {});
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Write a message first" });
+});
+
+test("a body over the ceiling answers 413", async () => {
+  const big = { ...body, message: "x".repeat(5000) };
+  const response = await handleReport(post(big), { maxBodyBytes: 100 });
+  assert.equal(response.status, 413);
+});
+
+test("a lying content-length is caught by counting the stream", async () => {
+  const request = new Request("https://app.example.com/api/bug-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Content-Length": "10" },
+    body: JSON.stringify({ ...body, message: "y".repeat(4000) }),
+  });
+  const response = await handleReport(request, { maxBodyBytes: 500 });
+  assert.equal(response.status, 413);
+});
+
+test("a screenshot is kept by default and reaches store and the sink context", async () => {
+  let storedBytes: Uint8Array | undefined;
+  let ctx: SinkContext | undefined;
+  await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    store: async (_report, screenshot) => void (storedBytes = screenshot),
+    sinks: [
+      async (_report, c) => {
+        ctx = c;
+      },
+    ],
+  });
+
+  assert.equal(storedBytes?.length, PNG_BYTES.length);
+  assert.equal(ctx?.screenshot?.length, PNG_BYTES.length);
+  assert.equal(ctx?.screenshotUrl, undefined);
+});
+
+test("screenshot: drop throws the picture away without decoding it", async () => {
+  let storedBytes: Uint8Array | undefined = new Uint8Array(1);
+  let ctx: SinkContext | undefined;
+  const response = await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    screenshot: "drop",
+    store: async (_report, screenshot) => void (storedBytes = screenshot),
+    sinks: [
+      async (_report, c) => {
+        ctx = c;
+      },
+    ],
+  });
+
+  assert.equal(response.status, 202);
+  assert.equal(storedBytes, undefined);
+  assert.equal(ctx?.screenshot, undefined);
+});
+
+test("a screenshot function stores the picture and its URL reaches markdown and the sink", async () => {
+  let seenBytes: Uint8Array | undefined;
+  let ctx: SinkContext | undefined;
+  await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    screenshot: async (bytes) => {
+      seenBytes = bytes;
+      return "https://private.example.com/shots/1.png";
+    },
+    sinks: [
+      async (_report, c) => {
+        ctx = c;
+      },
+    ],
+  });
+
+  assert.equal(seenBytes?.length, PNG_BYTES.length);
+  assert.equal(ctx?.screenshotUrl, "https://private.example.com/shots/1.png");
+  // The bytes are not handed on as well: the picture would then be attached
+  // twice, once inline and once by link.
+  assert.equal(ctx?.screenshot, undefined);
+  assert.match(ctx?.markdown ?? "", /https:\/\/private\.example\.com\/shots\/1\.png/);
+});
+
+test("a rejected screenshot still stores the report", async () => {
+  let stored: ValidatedReport | undefined;
+  let storedBytes: Uint8Array | undefined = new Uint8Array(1);
+  const response = await handleReport(
+    post({ ...body, screenshotDataUrl: "data:image/png;base64,bm90IGEgcG5n" }),
+    {
+      store: async (report, screenshot) => {
+        stored = report;
+        storedBytes = screenshot;
+        return { id: "rep_2" };
+      },
+    },
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(stored?.message, "The save button does nothing");
+  assert.equal(storedBytes, undefined);
+});
+
+test("scrub: true redacts the report before it is stored", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(post({ ...body, message: "mail me at ada@example.com" }), {
+    scrub: true,
+    store: async (report) => void (stored = report),
+  });
+
+  assert.equal(stored?.message, "mail me at [redacted]");
+});
+
+test("scrub options are passed through to scrubReport", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(post({ ...body, message: "mail me at ada@example.com" }), {
+    scrub: { replacement: "[gone]" },
+    store: async (report) => void (stored = report),
+  });
+
+  assert.equal(stored?.message, "mail me at [gone]");
+});
+
+test("sinks run in order after store, and one failing does not fail the response", async () => {
+  const order: string[] = [];
+  const errors: { error: unknown; index: number }[] = [];
+  const response = await handleReport(post(body), {
+    store: async () => {
+      order.push("store");
+      return { id: "rep_3" };
+    },
+    sinks: [
+      async () => void order.push("first"),
+      async () => {
+        order.push("second");
+        throw new Error("webhook revoked");
+      },
+      async () => void order.push("third"),
+    ],
+    onSinkError: (error, index) => errors.push({ error, index }),
+  });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(order, ["store", "first", "second", "third"]);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0]?.index, 1);
+  assert.equal((errors[0]?.error as Error).message, "webhook revoked");
+});
+
+test("an unexpected error answers 500 without leaking the message, and calls onError", async () => {
+  let seen: unknown;
+  const response = await handleReport(post(body), {
+    store: async () => {
+      throw new Error("the database is on fire");
+    },
+    onError: (err) => void (seen = err),
+  });
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: "Could not store the report" });
+  assert.equal((seen as Error).message, "the database is on fire");
+});
+
+test("respond replaces the reply and still gets the CORS header", async () => {
+  const response = await handleReport(post(body), {
+    cors: "https://app.example.com",
+    store: async () => ({ id: "rep_4" }),
+    respond: (result) => new Response(result.report.message, { status: 200 }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "The save button does nothing");
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://app.example.com");
+});
+
+test("a CORS preflight is answered without touching the body", async () => {
+  const request = new Request("https://app.example.com/api/bug-report", { method: "OPTIONS" });
+  const response = await handleReport(request, { cors: true });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+  assert.match(response.headers.get("Access-Control-Allow-Methods") ?? "", /POST/);
+});
+
+test("cors adds the header to a normal answer too", async () => {
+  const response = await handleReport(post(body), { cors: true });
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+});
+
+test("the rate limit answers 429 once the window is full", async () => {
+  resetRateLimits();
+  const options = { rateLimit: { limit: 2, windowMs: 60_000, key: () => "one-caller" } };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  const third = await handleReport(post(body), options);
+
+  assert.equal(third.status, 429);
+  assert.deepEqual(await third.json(), { error: "Too many reports" });
+  resetRateLimits();
+});
+
+test("the rate limit counts callers separately", async () => {
+  resetRateLimits();
+  let caller = "a";
+  const options = { rateLimit: { limit: 1, windowMs: 60_000, key: () => caller } };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 429);
+  caller = "b";
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  resetRateLimits();
+});
+
+test("extra keeps unknown scalars, clips strings and drops nested objects", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(
+    post({
+      ...body,
+      tenant: "acme",
+      build: 1421,
+      beta: true,
+      long: "z".repeat(900),
+      nested: { user: "ada" },
+      list: [1, 2, 3],
+      "bad key": "dropped",
+    }),
+    { store: async (report) => void (stored = report) },
+  );
+
+  assert.equal(stored?.extra.tenant, "acme");
+  assert.equal(stored?.extra.build, 1421);
+  assert.equal(stored?.extra.beta, true);
+  assert.equal((stored?.extra.long as string).length, 500);
+  assert.equal("nested" in (stored?.extra ?? {}), false);
+  assert.equal("list" in (stored?.extra ?? {}), false);
+  assert.equal("bad key" in (stored?.extra ?? {}), false);
+  // The known fields are not repeated in extra.
+  assert.equal("message" in (stored?.extra ?? {}), false);
+});
+
+test("extra keeps at most twenty keys", async () => {
+  let stored: ValidatedReport | undefined;
+  const many: Record<string, unknown> = { ...body };
+  for (let i = 0; i < 40; i += 1) many[`k${i}`] = i;
+  await handleReport(post(many), { store: async (report) => void (stored = report) });
+
+  assert.equal(Object.keys(stored?.extra ?? {}).length, 20);
+});
+
+test("a null byte in an extra value is stripped, as everywhere else", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(post({ ...body, tenant: `ac${String.fromCharCode(0)}me` }), {
+    store: async (report) => void (stored = report),
+  });
+
+  assert.equal(stored?.extra.tenant, "acme");
+});
+
+test("toResend, toWebhook and toGithub hand the sink context to the sinks", async () => {
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+  const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(url), body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+    return new Response(JSON.stringify({ id: "x", number: 7, html_url: "u" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof globalThis.fetch;
+
+  const response = await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    screenshot: async () => "https://private.example.com/shots/2.png",
+    sinks: [
+      toResend({ apiKey: "re_key", from: "bugs@example.com", to: "team@example.com", fetch }),
+      toWebhook({ url: "https://hooks.example.com/x", format: "slack", fetch }),
+      toGithub({ token: "gh_token", owner: "acme", repo: "app", fetch }),
+    ],
+  });
+
+  assert.equal(response.status, 202);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0]?.url, "https://api.resend.com/emails");
+  assert.match(String(calls[0]?.body.text), /shots\/2\.png/);
+  assert.equal(calls[1]?.url, "https://hooks.example.com/x");
+  assert.match(String(calls[1]?.body.text), /shots\/2\.png/);
+  assert.equal(calls[2]?.url, "https://api.github.com/repos/acme/app/issues");
+  assert.match(String(calls[2]?.body.body), /shots\/2\.png/);
+});
+
+test("toResend attaches the kept screenshot bytes", async () => {
+  let sent: Record<string, unknown> = {};
+  const fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ id: "re_1" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof globalThis.fetch;
+
+  await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    sinks: [toResend({ apiKey: "re_key", from: "a@example.com", to: "b@example.com", fetch })],
+  });
+
+  const attachments = sent.attachments as { filename: string }[] | undefined;
+  assert.equal(attachments?.length, 1);
+  assert.equal(attachments?.[0]?.filename, "screenshot.png");
+});
+
+/** The smallest Express response that records what the adapter wrote. */
+function fakeRes() {
+  const state: { status: number; headers: Record<string, string>; body: string } = {
+    status: 0,
+    headers: {},
+    body: "",
+  };
+  return {
+    state,
+    res: {
+      status(code: number) {
+        state.status = code;
+        return this;
+      },
+      setHeader(name: string, value: string) {
+        state.headers[name.toLowerCase()] = value;
+      },
+      send(payload?: unknown) {
+        state.body = String(payload ?? "");
+      },
+    },
+  };
+}
+
+test("the Express adapter round-trips a parsed body", async () => {
+  const { state, res } = fakeRes();
+  let stored: ValidatedReport | undefined;
+  const handler = expressHandler({
+    cors: true,
+    store: async (report) => {
+      stored = report;
+      return { id: "rep_5" };
+    },
+  });
+
+  handler(
+    {
+      method: "POST",
+      originalUrl: "/api/bug-report",
+      headers: { host: "app.example.com", "content-type": "application/json" },
+      body,
+    },
+    res,
+  );
+  // The handler is deliberately synchronous in the Express sense; wait for the
+  // promise it started before reading what it wrote.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(state.status, 201);
+  assert.deepEqual(JSON.parse(state.body), { id: "rep_5" });
+  assert.equal(state.headers["access-control-allow-origin"], "*");
+  assert.equal(stored?.message, "The save button does nothing");
+});
+
+test("the Express adapter reads a raw body when no parser ran", async () => {
+  const { state, res } = fakeRes();
+  const text = JSON.stringify(body);
+  const req = {
+    method: "POST",
+    url: "/api/bug-report",
+    headers: { host: "app.example.com", "content-length": "999" },
+    [Symbol.asyncIterator]: async function* () {
+      yield new TextEncoder().encode(text);
+    },
+  };
+
+  expressHandler({ store: async () => ({ id: "rep_6" }) })(req, res);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(state.status, 201);
+  assert.deepEqual(JSON.parse(state.body), { id: "rep_6" });
+});
+
+test("the Express adapter answers 400 for an empty body", async () => {
+  const { state, res } = fakeRes();
+  expressHandler({})(
+    { method: "POST", url: "/api/bug-report", headers: { host: "app.example.com" }, body: {} },
+    res,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(state.status, 400);
+  assert.deepEqual(JSON.parse(state.body), { error: "Write a message first" });
+});
+
+test("the Express adapter answers a CORS preflight", async () => {
+  const { state, res } = fakeRes();
+  expressHandler({ cors: true })(
+    { method: "OPTIONS", url: "/api/bug-report", headers: { host: "app.example.com" } },
+    res,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(state.status, 204);
+  assert.equal(state.headers["access-control-allow-origin"], "*");
+});
