@@ -40,6 +40,14 @@
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
     },
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "default": "./dist/vue/index.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte/index.d.ts",
+      "default": "./dist/svelte/index.js"
+    },
     "./server": {
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
@@ -86,13 +94,21 @@
   },
   "peerDependencies": {
     "html-to-image": "^1.11.0",
-    "react": ">=18"
+    "react": ">=18",
+    "svelte": ">=4",
+    "vue": ">=3"
   },
   "peerDependenciesMeta": {
     "html-to-image": {
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   },
@@ -107,8 +123,10 @@
     "marked": "18.0.12",
     "react": "^19.2.8",
     "react-dom": "19.2.8",
+    "svelte": "5.57.0",
     "ts-json-schema-generator": "2.9.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vue": "3.5.42"
   },
   "engines": {
     "node": ">=18"

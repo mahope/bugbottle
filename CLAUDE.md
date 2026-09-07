@@ -7,8 +7,8 @@ two client apps; those are the first consumers to migrate.
 ## What it is, in one breath
 
 A console ring buffer + page context + optional DOM screenshot, assembled into
-a JSON report and POSTed to an endpoint the user owns. A React hook wraps it;
-server-side validators check what arrives. No UI, no backend, no hosted service.
+a JSON report and POSTed to an endpoint the user owns. React, Vue and Svelte
+adapters wrap it; server-side validators check what arrives. No UI, no backend, no hosted service.
 
 ## Layout
 
@@ -29,7 +29,10 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/send.ts` | `buildReport`, `sendReport` — framework-agnostic | capture, console-buffer, report-core |
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
 | `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in | nothing |
-| `src/react/` | `useBugReport` hook over send.ts | everything above |
+| `src/report-state.ts` | `createReportState(options)` — the form as a state machine with no framework in it: `getState`, `subscribe`, `actions`, `setOptions`, `destroy`, plus `statusText`. The three adapters are bindings over it | capture, element-picker, send, queue (types), locales, report-core |
+| `src/react/` | `useBugReport` hook — `useSyncExternalStore` over report-state | report-state, report-core |
+| `src/vue/` | `useBugReport` composable — refs and computeds over report-state, `vue` an optional peer (>=3). Own entry point | report-state, report-core |
+| `src/svelte/` | `createBugReport` — a readable store (the contract implemented here, not imported) plus the actions, `svelte` an optional peer (>=4) and only for its `Readable` type. Own entry point | report-state, report-core |
 | `src/ui/` | `mountBugbottle` — optional shadow-DOM panel over the same core; themed via `--bb-*` vars | everything above |
 | `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
 | `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
@@ -45,7 +48,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Ten entry points in `package.json#exports`: `.`, `./react`, `./server`,
+Twelve entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+`./svelte`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
 `./queue`, `./triggers` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
@@ -117,7 +121,15 @@ the review fixes (one `loadend` listener per instance, an era guard on
 in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
 tree-shaken away. `bugbottle/queue` is budgeted at 1024 bytes and measures
-about 1000: it imports only a type, so that number is the module itself. The
+about 1000: it imports only a type, so that number is the module itself.
+`bugbottle/vue` and `bugbottle/svelte` are budgeted at 1536 bytes each, but
+*marginally*: a bundle of either weighs about 5.2 kB, nearly all of it the
+capture, the picker and the send that any form pays for, so CI subtracts a
+bundle of `buildReport`/`sendReport`/`captureScreenshot`/`pickElement`
+(4004 bytes) and checks the difference — 1315 bytes for Vue and 1186 for
+Svelte when they landed. The refactor onto `src/report-state.ts` cost
+`bugbottle/react` 66 bytes (5174 → 5240), which is what one machine shared by
+three frameworks costs. The
 IIFE budget is 16384 bytes gzipped (16.1 kB with the queue and the triggers); masking, the queue and the triggers each
 cost it roughly half a kilobyte to a kilobyte.
 

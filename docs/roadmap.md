@@ -7,8 +7,9 @@ Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1 kB gzipped, `bugbottle/react` under 5.25 kB, `bugbottle/ui`
 under 9 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
-1.3 kB, `bugbottle/queue` under 1 kB, `bugbottle/triggers` under 1.2 kB, the
-script-tag build under 15 kB.
+1.3 kB, `bugbottle/queue` under 1 kB, `bugbottle/triggers` under 1.2 kB,
+`bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
+the script-tag build under 16 kB.
 
 ## Already shipped
 
@@ -63,6 +64,13 @@ and React 19's `createRootErrorHandlers` in `bugbottle/react`. And the shared
 a repeat answers 200 `{ id, duplicate: true }` without storing or delivering it
 twice.
 
+**0.6** — `bugbottle/vue` (`useBugReport`, a composable over refs) and
+`bugbottle/svelte` (`createBugReport`, a readable store plus the actions), over
+the new framework-agnostic `createReportState` in `src/report-state.ts` that
+the React hook was refactored onto — one state machine, three bindings, about
+1.3 and 1.2 kB gzipped over the core a form pays for anyway. Both peers are
+optional.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -79,7 +87,7 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 
 ## 0.6 — adapters and triggers
 
-- Vue, Svelte and Solid adapters, each a few lines over `buildReport`.
+- Solid adapter. (Vue and Svelte shipped; see "Already shipped".)
 - Shake-to-report in its own entry. (The keyboard shortcut, the auto-open and
   the React error boundary shipped; see "Already shipped".)
 - Performance snapshot from buffered `PerformanceObserver` entries; storage

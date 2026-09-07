@@ -54,6 +54,9 @@ jobs:
           npm i --silent /tmp/bugbottle-*.tgz esbuild@0.24.0
           echo 'import { initConsoleBuffer, buildReport } from "bugbottle"; initConsoleBuffer(); buildReport({ type: "bug", message: "x" });' > core.js
           echo 'import { useBugReport } from "bugbottle/react"; export { useBugReport };' > react.js
+          echo 'import { useBugReport } from "bugbottle/vue"; export { useBugReport };' > vue.js
+          echo 'import { createBugReport } from "bugbottle/svelte"; export { createBugReport };' > svelte.js
+          echo 'import { buildReport, sendReport, captureScreenshot, pickElement } from "bugbottle"; export { buildReport, sendReport, captureScreenshot, pickElement };' > form-core.js
           echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
           echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
           echo 'import { initBreadcrumbs } from "bugbottle/breadcrumbs"; initBreadcrumbs();' > breadcrumbs.js
@@ -66,13 +69,16 @@ jobs:
           set -e
           npx esbuild core.js --bundle --minify --format=esm --outfile=out-core.js
           npx esbuild react.js --bundle --minify --format=esm --external:react --outfile=out-react.js
+          npx esbuild vue.js --bundle --minify --format=esm --external:vue --outfile=out-vue.js
+          npx esbuild svelte.js --bundle --minify --format=esm --outfile=out-svelte.js
+          npx esbuild form-core.js --bundle --minify --format=esm --outfile=out-form-core.js
           npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
           npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
           npx esbuild breadcrumbs.js --bundle --minify --format=esm --outfile=out-breadcrumbs.js
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
-          for f in out-core out-react out-server out-ui out-breadcrumbs out-network out-queue out-triggers; do
+          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-breadcrumbs out-network out-queue out-triggers; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -127,6 +133,8 @@ jobs:
           queue=$(gzip -c out-queue.js | wc -c)
           if [ "$queue" -gt 1024 ]; then
             echo "bugbottle/queue is $queue bytes gzipped; the budget is 1024" >&2
+            exit 1
+          fi
           # Two listeners, a shortcut parser and the shared fingerprint hash.
           # The roadmap aimed at 1 kB; it lands at 1133 because the module is
           # small enough that gzip has nothing to share — 2.3 kB of dense
@@ -138,5 +146,26 @@ jobs:
           triggers=$(gzip -c out-triggers.js | wc -c)
           if [ "$triggers" -gt 1200 ]; then
             echo "bugbottle/triggers is $triggers bytes gzipped; the budget is 1200" >&2
+            exit 1
+          fi
+          # The two adapters are budgeted on what they add, not on what they
+          # weigh: a `bugbottle/vue` bundle is about 5.2 kB, and nearly all of
+          # it is the capture, the picker and the send that any form pays for
+          # whichever framework renders it. `form-core.js` imports exactly that
+          # much of the core, so the difference is the adapter and the state
+          # machine underneath it — 1315 bytes for Vue and 1186 for Svelte when
+          # they landed, against the same 1536-byte budget the other small
+          # entries get.
+          formcore=$(gzip -c out-form-core.js | wc -c)
+          vue=$(( $(gzip -c out-vue.js | wc -c) - formcore ))
+          svelte=$(( $(gzip -c out-svelte.js | wc -c) - formcore ))
+          echo "bugbottle/vue adds $vue bytes gzipped over the shared core"
+          echo "bugbottle/svelte adds $svelte bytes gzipped over the shared core"
+          if [ "$vue" -gt 1536 ]; then
+            echo "bugbottle/vue adds $vue bytes gzipped; the budget is 1536" >&2
+            exit 1
+          fi
+          if [ "$svelte" -gt 1536 ]; then
+            echo "bugbottle/svelte adds $svelte bytes gzipped; the budget is 1536" >&2
             exit 1
           fi

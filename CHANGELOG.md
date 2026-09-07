@@ -9,6 +9,25 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
+  a composable over refs. `type` and `message` are writable computeds, so
+  `v-model` binds to them; the subscription is torn down with the effect scope
+  the composable was called in, and `destroy()` is there for a call outside
+  one. `vue` is an optional peer dependency (`>= 3`). About 1.3 kB gzipped over
+  the capture, the picker and the send any form pays for.
+- `bugbottle/svelte`: `createBugReport(options)`, the same form as a readable
+  store plus the actions — `$form.message` in the markup, `form.setMessage()`
+  in the handlers. The store contract is implemented in the adapter rather than
+  imported, so only the `Readable` type comes from `svelte` and nothing of it
+  reaches the bundle; `svelte` is an optional peer dependency (`>= 4`). About
+  1.2 kB gzipped over the same shared core.
+- `src/report-state.ts`: `createReportState(options)` returning `{ getState,
+  subscribe, actions, setOptions, destroy }` — the form as a state machine with
+  no framework in it, and `statusText(status, messages)` for the one line that
+  is not state. The three adapters are bindings over it, so they cannot drift
+  apart, and a framework without an adapter is one `subscribe` away from a
+  working form.
+
 - `dist/report.schema.json`, the JSON Schema (2020-12) for the payload,
   generated from the `BugReport` type by `scripts/build-schema.ts` as part of
   `npm run build` and exported as `bugbottle/report.schema.json`. It carries
@@ -59,6 +78,21 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- `useBugReport` from `bugbottle/react` is now a thin wrapper over
+  `createReportState`, subscribed with `useSyncExternalStore`. No behaviour
+  changed — the hook's tests are untouched and still pass — and the returned
+  object is the same shape, but the actions are the store's own and never
+  change identity now. The entry costs 5240 bytes gzipped rather than 5174,
+  which is the price of a machine three frameworks share.
+- The CI bundle job weighs `bugbottle/vue` and `bugbottle/svelte` against a
+  bundle of `buildReport`/`sendReport`/`captureScreenshot`/`pickElement`, and
+  budgets the difference at 1536 bytes each: nearly all of an adapter bundle is
+  the shared core, and what the adapter itself adds is the number worth
+  guarding. The queue check in that job was also missing its `exit 1` and its
+  `fi`, which left the whole step unparseable.
+- `scripts/build-docs.mjs` groups "Catching render errors (React)", "Opening it
+  without a button" and "When the network is down", which shipped without a
+  group and had been failing `npm run build:docs` since.
 - The CI budget for `dist/bugbottle.js` is 16 kB gzipped: the script-tag build
   now carries the queue and the triggers as well, and measures 16.1 kB.
 - The CI size budgets for `bugbottle/react` (5120 → 5376 bytes) and

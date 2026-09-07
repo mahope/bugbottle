@@ -31,6 +31,9 @@ need Node 18.
   `bugbottle/react` 5.25 kB, `bugbottle/ui` 9 kB, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/queue` 1 kB,
   `bugbottle/triggers` 1200 bytes,
+  `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
+  `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
+  are small; the core they share is not),
   `dist/bugbottle.js` 16 kB.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a

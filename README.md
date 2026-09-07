@@ -34,15 +34,17 @@ npm install github:mahope/bugbottle#v0.5.0
 import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.5.0/dist/index.js";
 ```
 
-- **Headless.** You render the form. The chrome around a feedback widget is
-  exactly the part that differs between applications, so this owns the state,
-  the capture and the submit — not your markup.
+- **Headless, in your framework.** You render the form — with the React hook,
+  the Vue composable, the Svelte store, or the three plain functions
+  underneath them. The chrome around a feedback widget is exactly the part
+  that differs between applications, so this owns the state, the capture and
+  the submit — not your markup.
 - **Bring your own backend.** There is no dashboard and no hosted service to
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 0.8 kB gzipped; with the element picker and the React hook, 5.1 kB;
-  the optional ready-made panel, 7.9 kB; breadcrumbs 1.3 kB; the network log
+  is about 0.8 kB gzipped; with the element picker and the React, Vue or
+  Svelte adapter, 5.2 kB; the optional ready-made panel, 7.9 kB; breadcrumbs 1.3 kB; the network log
   1.1 kB; the offline queue 1 kB; the everything script tag, 14.4 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
@@ -150,6 +152,120 @@ merged into the body — an app version, a tenant id), `headers` and
 `credentials` (for an authenticated or cross-origin endpoint), `timeoutMs`,
 `onSent`, `parseError`, and `messages` for translated strings. The defaults are English.
 
+## The form (Vue)
+
+The same state machine, as refs. `type` and `message` are writable, so
+`v-model` works on them directly.
+
+```vue
+<script setup lang="ts">
+import { useBugReport } from "bugbottle/vue";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+
+const report = useBugReport({
+  endpoint: "/api/feedback",
+  screenshot: htmlToImage, // leave out to disable screenshots
+});
+</script>
+
+<template>
+  <form data-bugbottle @submit.prevent="report.submit()">
+    <button v-for="t in report.types" :key="t" type="button" @click="report.setType(t)">
+      {{ t }}
+    </button>
+
+    <textarea v-model="report.message" />
+
+    <label v-if="report.canScreenshot">
+      <input
+        type="checkbox"
+        :checked="report.includeScreenshot"
+        @change="report.toggleScreenshot(($event.target as HTMLInputElement).checked)"
+      />
+      Attach a picture of this page
+    </label>
+    <img v-if="report.screenshot" :src="report.screenshot" alt="" />
+
+    <button type="button" @click="report.pickElement()">
+      {{ report.isPicking ? "Click anything to attach it — Esc to stop" : "Point at the element" }}
+    </button>
+    <ul>
+      <li v-for="(el, i) in report.elements" :key="i">
+        <code>{{ el.selector }}</code> {{ el.text }}
+        <button type="button" @click="report.removeElement(i)">×</button>
+      </li>
+    </ul>
+
+    <p role="status">{{ report.statusMessage }}</p>
+    <button :disabled="report.isSending">Send</button>
+  </form>
+</template>
+```
+
+Call `report.open()` when the form appears. The subscription is torn down with
+the effect scope the composable was called in — the component, normally; call
+`report.destroy()` yourself if you called it outside one. `vue` is an optional
+peer dependency, so nothing about it reaches a project that does not use it.
+
+## The form (Svelte)
+
+The same state machine, as a readable store: `$form` for the values, the
+methods on `form` for everything the reporter does.
+
+```svelte
+<script lang="ts">
+  import { createBugReport } from "bugbottle/svelte";
+  import { htmlToImage } from "bugbottle/html-to-image"; // optional
+  import { onDestroy, onMount } from "svelte";
+
+  const form = createBugReport({
+    endpoint: "/api/feedback",
+    screenshot: htmlToImage, // leave out to disable screenshots
+  });
+
+  onMount(() => form.open());
+  onDestroy(() => form.destroy());
+</script>
+
+<form data-bugbottle on:submit|preventDefault={() => form.submit()}>
+  {#each $form.types as t}
+    <button type="button" on:click={() => form.setType(t)}>{t}</button>
+  {/each}
+
+  <textarea value={$form.message} on:input={(e) => form.setMessage(e.currentTarget.value)} />
+
+  {#if $form.canScreenshot}
+    <label>
+      <input
+        type="checkbox"
+        checked={$form.includeScreenshot}
+        on:change={(e) => form.toggleScreenshot(e.currentTarget.checked)}
+      />
+      Attach a picture of this page
+    </label>
+  {/if}
+  {#if $form.screenshot}<img src={$form.screenshot} alt="" />{/if}
+
+  <button type="button" on:click={() => form.pickElement()}>
+    {$form.isPicking ? "Click anything to attach it — Esc to stop" : "Point at the element"}
+  </button>
+  <ul>
+    {#each $form.elements as el, i}
+      <li><code>{el.selector}</code> {el.text}
+        <button type="button" on:click={() => form.removeElement(i)}>×</button>
+      </li>
+    {/each}
+  </ul>
+
+  <p role="status">{$form.statusMessage}</p>
+  <button disabled={$form.isSending}>Send</button>
+</form>
+```
+
+`svelte` is an optional peer dependency, and only its `Readable` type is used:
+the store contract is one function, implemented here, so the adapter adds no
+runtime dependency at all.
+
 ## Catching render errors (React)
 
 When a component throws, there is no screen left to point at — but there is a
@@ -244,7 +360,7 @@ From the script tag it is `data-shortcut` (`data-shortcut="off"` for none) and
 
 ## The form (anything else)
 
-The hook is a thin layer over three functions that work anywhere:
+Every adapter is a thin layer over three functions that work anywhere:
 
 ```ts
 import { captureScreenshot, pickElement, buildReport, sendReport } from "bugbottle";
@@ -1238,6 +1354,13 @@ types.
 `createRootErrorHandlers`, `describeRenderError`, and the
 `BugReportBoundaryProps`, `ReportErrorOptions`, `RootErrorHandlerOptions` and
 `RootErrorHandlers` types.
+
+**`bugbottle/vue`** — `useBugReport`, a composable over refs, and the
+`UseBugReportOptions` and `BugReportStatus` types. Optional peer `vue` >= 3.
+
+**`bugbottle/svelte`** — `createBugReport`, a readable store plus the actions,
+and the `BugReportView`, `UseBugReportOptions` and `BugReportStatus` types.
+Optional peer `svelte` >= 4.
 
 **`bugbottle/html-to-image`** — `htmlToImage`, a `ScreenshotRenderer`.
 Requires `html-to-image`.
