@@ -13,7 +13,12 @@
  * outside without touching JavaScript.
  */
 
-import { captureScreenshot, ScreenshotTooLargeError, type ScreenshotRenderer } from "../capture.ts";
+import {
+  captureScreenshot,
+  ScreenshotTooLargeError,
+  type CaptureOptions,
+  type ScreenshotRenderer,
+} from "../capture.ts";
 import { pickElement } from "../element-picker.ts";
 import { en, type Locale, type Messages, type UiTexts } from "../locales.ts";
 import { MAX_ELEMENTS, REPORT_TYPES, type ElementRef, type ReportType } from "../report-core.ts";
@@ -75,6 +80,13 @@ export type MountOptions = {
   consoleFor?: (type: ReportType) => boolean;
   /** Tick the screenshot box by default. Default: for bugs only. */
   screenshotFor?: (type: ReportType) => boolean;
+  /**
+   * What to hide in the screenshot. Field values, `contenteditable` text and
+   * the `data-bugbottle-mask` / `data-bugbottle-block` regions are masked by
+   * default; pass an object to narrow it, or `false` to photograph the page as
+   * the reporter sees it. See `CaptureOptions["mask"]`.
+   */
+  mask?: CaptureOptions["mask"];
   /** Offer the element picker. Default true. */
   elementPicker?: boolean;
   /**
@@ -364,7 +376,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     const render = options.screenshot;
     if (!render || screenshot) return;
     try {
-      screenshot = await captureScreenshot(render);
+      screenshot = await captureScreenshot(render, { mask: options.mask });
       preview.src = screenshot;
       preview.hidden = false;
     } catch (err) {

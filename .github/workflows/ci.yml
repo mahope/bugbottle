@@ -42,8 +42,8 @@ jobs:
           set -e
           iife=$(gzip -c dist/bugbottle.js | wc -c)
           echo "dist/bugbottle.js: $iife bytes gzipped"
-          if [ "$iife" -gt 12288 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 12288" >&2
+          if [ "$iife" -gt 13312 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 13312" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -79,8 +79,13 @@ jobs:
             exit 1
           fi
           breadcrumbs=$(gzip -c out-breadcrumbs.js | wc -c)
-          if [ "$react" -gt 4096 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 4096" >&2
+          # 4.5 kB of this is the hook and its dependencies; the 0.65 kB that
+          # took it past the old 4 kB budget is screenshot masking, which the
+          # hook pays for whether or not it takes pictures because it is on by
+          # default. A privacy default that a consumer has to remember to
+          # import is not a default at all.
+          if [ "$react" -gt 5120 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 5120" >&2
             exit 1
           fi
           if [ "$ui" -gt 8192 ]; then

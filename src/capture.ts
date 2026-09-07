@@ -1,3 +1,4 @@
+import { applyMask, type MaskOptions } from "./mask.ts";
 import { MAX_SCREENSHOT_DATA_URL_LENGTH, type ReportContext } from "./report-core.ts";
 
 /**
@@ -44,6 +45,18 @@ export type CaptureOptions = {
    * `data-bugbottle`, so the report panel does not photograph itself.
    */
   exclude?: (node: Node) => boolean;
+  /**
+   * What to hide before the picture is taken. On by default: input and
+   * textarea values, `contenteditable` text, the text of anything marked
+   * `data-bugbottle-mask`, and a solid overlay over anything marked
+   * `data-bugbottle-block`. The elements stay where they are, so the layout of
+   * the screenshot is unchanged — unlike `exclude`, which removes the node.
+   *
+   * Pass an object to narrow it, or `false` to photograph the page as it is.
+   * Everything is restored the moment the renderer returns, including when it
+   * throws.
+   */
+  mask?: MaskOptions | false;
   /** Longest data URL to produce. Larger captures are retried at half scale. */
   maxDataUrlLength?: number;
   /** Root to render. Defaults to `document.body`. */
@@ -164,11 +177,22 @@ export async function captureScreenshot(
 
   const started = now();
   let attempts = 1;
-  let dataUrl = await render(root, { filter, pixelRatio });
-  if (dataUrl.length > maxLength && pixelRatio > REDUCED_PIXEL_RATIO) {
-    pixelRatio = REDUCED_PIXEL_RATIO;
-    attempts += 1;
+  let dataUrl: string;
+  // Masking is applied once and covers the retry too: the second render is the
+  // same picture at a different scale, and unmasking between the two would put
+  // the reporter's data in the very capture we keep.
+  const restore = options.mask === false ? undefined : applyMask(root, options.mask ?? {});
+  try {
     dataUrl = await render(root, { filter, pixelRatio });
+    if (dataUrl.length > maxLength && pixelRatio > REDUCED_PIXEL_RATIO) {
+      pixelRatio = REDUCED_PIXEL_RATIO;
+      attempts += 1;
+      dataUrl = await render(root, { filter, pixelRatio });
+    }
+  } finally {
+    // A renderer that throws leaves the page masked otherwise, and a form full
+    // of bullets is worse than a missing screenshot.
+    restore?.();
   }
   const ms = now() - started;
 

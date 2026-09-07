@@ -41,9 +41,9 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 0.8 kB gzipped; with the element picker and the React hook, 3.9 kB;
-  the optional ready-made panel, 6.9 kB; breadcrumbs 1.2 kB; the everything
-  script tag, 11.6 kB. `html-to-image` is only pulled in by the module that
+  is about 0.9 kB gzipped; with the element picker and the React hook, 4.5 kB;
+  the optional ready-made panel, 7.4 kB; breadcrumbs 1.3 kB; the everything
+  script tag, 12.2 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
@@ -224,7 +224,7 @@ gzipped, no framework.
 
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
-that mounts the panel from the tag itself. About 11 kB gzipped:
+that mounts the panel from the tag itself. About 12 kB gzipped:
 
 ```html
 <script
@@ -252,6 +252,7 @@ run on your page.
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
+| `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
 
 The tag also patches the console immediately and starts breadcrumbs, so an
 error thrown before the page finishes loading is still in the report.
@@ -472,6 +473,9 @@ The capture renders from the DOM, not from the screen, so it can only ever
 show the page the reporter is on — never another tab, another window, or the
 desktop behind it. That is a deliberate limit rather than a missing feature.
 
+What the reporter typed is hidden before the picture is taken; see
+[Masking](#masking).
+
 ## Receiving a report
 
 ```ts
@@ -636,6 +640,48 @@ Requiring people to be signed in is worth considering too. An anonymous
 screenshot is one nobody can be asked about later, and nobody can be told has
 been deleted.
 
+### Masking
+
+Screenshots are masked before they are taken. Every `input` and `textarea`
+value becomes bullets of the same length, placeholders are cleared, and
+`contenteditable` text is bulleted too — so a picture of a checkout or an
+intake form shows a filled-in form of the right shape without carrying the card
+number or the diagnosis. Two attributes, borrowed from rrweb so a team that
+already annotated its templates does not annotate them twice:
+
+```html
+<p data-bugbottle-mask>Ada Lovelace, born 1815</p>   <!-- text -> bullets -->
+<div data-bugbottle-block><canvas id="revenue"></canvas></div>  <!-- covered -->
+```
+
+`data-bugbottle-mask` bullets the text of the element and everything inside it.
+`data-bugbottle-block` covers the element with a solid rectangle of its exact
+size, for a region whose shape says as much as its text: a chart, a photograph,
+an avatar. The colour is the element's `--bb-mask` custom property, or `#999`.
+
+The element stays where it is either way, so the layout of the screenshot is
+unchanged. That is the difference from `exclude`, which removes the node and
+takes the layout with it.
+
+It is on by default and restored the moment the renderer returns, including
+when it throws. Narrow it or switch it off per capture:
+
+```ts
+captureScreenshot(htmlToImage, {
+  mask: { inputs: true, selector: "[data-private]", block: false },
+});
+captureScreenshot(htmlToImage, { mask: false });   // the page as it is
+```
+
+`useBugReport({ mask })` and `mountBugbottle({ mask })` pass the same option
+through, and the script tag switches it off with `data-mask="off"`.
+
+Masking is not encryption and it is not a substitute for the three points
+above: it hides the fields it knows about, and a value your application paints
+into a `div` is only hidden if you mark it. Buttons, checkboxes and the other
+inputs that hold no typed text are left readable on purpose, because a
+screenshot of a form with every label blacked out helps nobody.
+
 ### Scrubbing
 
 The text of a report is written in a hurry, and it arrives carrying whatever was
@@ -663,8 +709,8 @@ On by default: email addresses, `Bearer <token>`, JWTs (`eyJ…`), 13 to 19 digi
 card numbers that pass the Luhn check, IBANs, and query values whose key matches
 `/token|key|secret|password|auth/i`. They are applied to `message`,
 `console[].message`, `context.url`, `elements[].text`, an element's `href` and
-`data-*` attributes, and `breadcrumbs` if you add them. The screenshot is not
-touched: masking pixels is a different job.
+`data-*` attributes, and `breadcrumbs` if you add them. The pixels of the
+screenshot are a separate job, done by the masking below.
 
 An order number of 16 digits is kept, because it fails Luhn. Prose that happens
 to say `key=value` is kept, because the query pattern only runs on URLs.
@@ -738,7 +784,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 ## API
 
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
-`captureScreenshot` (with `CaptureInfo` and `DEFAULT_BYTES_PER_PIXEL_ESTIMATE`),
+`captureScreenshot` (with `CaptureInfo`, `DEFAULT_BYTES_PER_PIXEL_ESTIMATE` and
+the `MaskOptions` of its `mask` option, whose defaults are
+`DEFAULT_MASK_SELECTOR`, `DEFAULT_BLOCK_SELECTOR` and `DEFAULT_MASK_COLOUR`),
 `collectContext`, `pickElement`, `describeElement`, `buildSelector`,
 `buildReport`, `sendReport`, `scrubReport`, `BUILTIN_SCRUBBERS`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server

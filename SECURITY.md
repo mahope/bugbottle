@@ -25,6 +25,11 @@ was not.
 - Page context is path and query only — no origin, no fragment.
 - Screenshots are rendered from the DOM, never from the screen, so a capture
   cannot include another tab, window, or the desktop.
+- Screenshots are masked before they are taken and restored immediately after:
+  field values and `contenteditable` text become bullets, `data-bugbottle-mask`
+  text is bulleted and `data-bugbottle-block` regions are covered. On by
+  default, `mask: false` to switch it off. It hides the fields it knows about,
+  so anything else sensitive on the page still has to be marked.
 - No cookies, no identifiers, no third-party calls. A report goes to the
   endpoint you configure and nowhere else.
 - `scrubReport` redacts email addresses, bearer tokens, JWTs, Luhn-valid card
@@ -37,7 +42,9 @@ was not.
 - Decide where screenshots are stored. Use a bucket with no public read
   policy, and serve pictures back through an authenticated route.
 - Authenticate the reporter. Do it in your endpoint before touching the body.
-- Redact what is on the page. If a screenshot could contain someone else's
+- Mark what only you can recognise. Masking covers form fields on its own;
+  a name your application paints into a `div` is hidden only if you add
+  `data-bugbottle-mask`. If a screenshot could still contain someone else's
   data, say so next to the checkbox, or leave the screenshot option out.
 
 The README section *Please read this part* covers this in more detail.

@@ -16,7 +16,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 |---|---|---|
 | `src/report-core.ts` | Types, limits, server validators. Pure. | nothing |
 | `src/console-buffer.ts` | `console.error/warn` + `window` error patching, ring buffer | report-core |
-| `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | report-core |
+| `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | mask, report-core |
+| `src/mask.ts` | `applyMask(root, options)` — hides field values and marked regions for the length of one render, returns the restore | nothing |
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
 | `src/registry.ts` | One slot: `initBreadcrumbs` registers a getter, `send.ts` reads it. Keeps the core free of the recorder | report-core (types) |
@@ -55,6 +56,12 @@ not closed and a branch is not merged with the docs lagging.
 - **Never import `html-to-image` outside `src/html-to-image.ts`.** Bundlers
   resolve every import they see, so an import anywhere else makes it a hard
   dependency for everyone. Verified empirically with esbuild; see CHANGELOG.
+- **Masking mutates the live DOM, so it must always be undone.** A renderer
+  clones the page inside itself, where we cannot reach the clone, so
+  `applyMask` swaps values in the real document and `captureScreenshot`
+  restores them in a `finally` that covers both render attempts. Anything added
+  there must be restorable and must not throw on a root that is not an element:
+  `tests/capture.test.ts` passes a bare object as the root.
 - **Screenshots fail open.** A failed or oversized picture turns the attachment
   off and explains why. It never blocks the report. The message is the
   valuable part.
@@ -83,8 +90,9 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 4 kB gzipped and `bugbottle/ui` under 8 kB (CI enforces both;
-3.4 kB and 6.4 kB at 0.3.0), and the bare core under 1 kB.
+stay under 5 kB gzipped and `bugbottle/ui` under 8 kB (CI enforces both;
+4.5 kB and 7.4 kB with masking), and the bare core under 1 kB (0.9 kB).
+The script-tag build is budgeted at 13 kB and measures 12.2 kB.
 `bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
 of its bundle is `buildSelector`, which an app that also points at elements
 already pays for — the marginal cost there is around 0.55 kB.

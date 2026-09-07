@@ -16,6 +16,22 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- Screenshot masking, on by default. `captureScreenshot` now hides what the
+  reporter typed before it calls the renderer and puts it back in a `finally`,
+  so a picture taken of a checkout or an intake form never carries the card
+  number or the diagnosis, and a renderer that throws still leaves the page
+  usable. Input and textarea values become bullets of the same length,
+  placeholders are cleared, `contenteditable` text is bulleted, elements marked
+  `data-bugbottle-mask` have their text bulleted, and elements marked
+  `data-bugbottle-block` are covered by a solid overlay in their `--bb-mask`
+  colour (default `#999`). The attribute names are rrweb's, so annotations made
+  for session replay are reused as they are. The element is kept in every case
+  — only its content is hidden — so the layout of the screenshot is unchanged,
+  which is what makes this different from `exclude`. Narrow it with
+  `mask: { inputs, selector, block, colour }` or switch it off with
+  `mask: false`; `useBugReport` and `mountBugbottle` pass the option through and
+  the script-tag build reads `data-mask="off"`.
+
 - `captureScreenshot` options `pixelRatio` (force a scale and skip the
   estimate), `bytesPerPixelEstimate` (tune the estimate for pages that compress
   unusually well or badly, default `DEFAULT_BYTES_PER_PIXEL_ESTIMATE`, half a
@@ -25,6 +41,14 @@ change the API; the changelog says so when they do.
   application measures what capture costs it.
 
 ### Changed
+
+- The budget for `bugbottle/react` rises from 4 kB gzipped to 5 kB and the
+  script-tag build from 12 kB to 13 kB, both measured after masking landed
+  (4.5 kB and 12.2 kB). Masking costs about 0.65 kB gzipped and the hook pays
+  it whether or not it takes pictures, because it is on by default: a privacy
+  default a consumer has to remember to import is not a default. The bare core
+  is unchanged at 0.9 kB — `captureScreenshot` and the masking behind it are
+  tree-shaken out of a bundle that only builds and sends reports.
 
 - `captureScreenshot` now picks the scale before rendering rather than
   discovering it afterwards. Halving `pixelRatio` only changes the final raster

@@ -95,6 +95,9 @@ function autoMount(data: DOMStringMap): void {
     if (data.logo) options.brand.logo = data.logo;
   }
   if (data.trigger) options.trigger = data.trigger;
+  // Masking is on by default, so the attribute only exists to switch it off:
+  // a page that wants the screenshot exactly as the reporter sees it says so.
+  if (data.mask === "off") options.mask = false;
   // Any value enables the scrubber, including the empty string of a bare
   // `data-scrub` attribute — the point is that ticking it is one word.
   if (data.scrub !== undefined) options.scrub = scrubReport;
