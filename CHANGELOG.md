@@ -7,6 +7,13 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- The canonical address of the project is now <https://bugbottle.dev>: canonical,
+  `hreflang` and OpenGraph tags on the landing page, the README link and the
+  npm `homepage` point there. bugbottle.mahoje.dk stays as an alias for the
+  same deployment.
+
 ### Added
 
 - `captureScreenshot` options `pixelRatio` (force a scale and skip the

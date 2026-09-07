@@ -52,7 +52,7 @@ const widget = mountBugbottle({
   theme: { position: "bottom-right", primary: "#a8102b", onPrimary: "#ffffff" },
   onSent() {
     out.textContent = lastReport
-      ? toMarkdown(lastReport, { facts: { Demo: "bugbottle.mahoje.dk" } })
+      ? toMarkdown(lastReport, { facts: { Demo: "bugbottle.dev" } })
       : "";
     out.scrollIntoView({ block: "nearest", behavior: "smooth" });
   },

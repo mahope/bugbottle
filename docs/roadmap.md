@@ -23,7 +23,7 @@ submits, visibility, with `beforeBreadcrumb` and masking), `scrubReport` with
 built-in patterns and `beforeSend`, the one-script-tag build with `data-*`
 auto-mount, screenshot scale chosen up front with `onCapture` timing, email
 strings in every locale, hook tests on happy-dom, the landing page at
-bugbottle.mahoje.dk in English and Danish.
+bugbottle.dev in English and Danish.
 
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub

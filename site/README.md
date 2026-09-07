@@ -1,6 +1,6 @@
 # site/
 
-The landing page for [bugbottle.mahoje.dk](https://bugbottle.mahoje.dk), in
+The landing page for [bugbottle.dev](https://bugbottle.dev), in
 English at `/` and Danish at `/da/`. Two static HTML files, one stylesheet, one
 module. No framework, no build step for the page itself, no analytics, no
 cookies, and no external request of any kind — the fonts are the system stack
@@ -104,7 +104,7 @@ container platform polls.
 
 Dokploy application, Dockerfile build, `site/Dockerfile` with the repository
 root as the context, port 80, health check path `/health`, domain
-`bugbottle.mahoje.dk` with TLS from Traefik. Because `dist/` is baked into the
+`bugbottle.dev` with TLS from Traefik. Because `dist/` is baked into the
 image, a release that rebuilds `dist/` needs a redeploy for the demo to run the
 new version.
 
