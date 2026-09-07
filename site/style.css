@@ -6,9 +6,15 @@
  *
  * The page is set almost entirely in the system serif, the way a long email
  * is, with the system sans kept for the things that are furniture: navigation,
- * buttons, table headers, small print. The seal red appears three times on the
- * page (the bottle in the wordmark, the primary button, the stamp under the
- * hero) and nowhere else, so it still means something when it shows up.
+ * buttons, table headers, small print. The seal red appears in four places
+ * (the bottle in the wordmark, the primary button, the stamp under the hero,
+ * the focus ring) and nowhere else, so it still means something when it shows
+ * up.
+ *
+ * Two scales carry the rhythm, and nothing outside them should be invented
+ * ad hoc: --s-1..--s-8 for space and --t-2xs..--t-2xl for size. Sections are
+ * spaced with --section-y so the page breathes at one interval rather than
+ * six.
  */
 
 :root {
@@ -17,18 +23,55 @@
   --paper: #edf0ec;
   --surface: #ffffff;
   --ink: #0d2a24;
-  --muted: #4c6660;
+  --muted: #4a635d;
   --rule: #d3dcd6;
   --rule-soft: #e2e9e4;
   --accent: #a8102b;
   --accent-ink: #ffffff;
+  /* The accent at mark size — the wordmark bottle and the stamp square. It is
+     the same red in light; in dark a small solid needs lifting to be seen. */
+  --accent-mark: #a8102b;
+  /* The focus ring is held apart from the fill so each can be tuned for its
+     own contrast job: 4.5:1 against text, 3:1 against its neighbour. */
+  --focus: #a8102b;
+  /* The current segment of the language switch. Filled with the ink in light;
+     in dark a full-strength fill would be a white block in the corner of the
+     header, so it becomes a raised green instead. */
+  --seg-on: #0d2a24;
+  --seg-on-ink: #ffffff;
   --slab: #0d2a24;
   --slab-ink: #d7e5df;
   --slab-rule: #21473f;
-  --slab-key: #86c9b4;
+  --slab-key: #8fd0bc;
+  --shadow: 0 1px 2px rgb(13 42 36 / 0.06), 0 8px 24px -12px rgb(13 42 36 / 0.18);
 
   --radius: 4px;
   --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4.5rem;
+  --section-y: clamp(3rem, 6.5vw, 5rem);
+
+  --t-2xs: 0.75rem;
+  --t-xs: 0.8125rem;
+  --t-sm: 0.875rem;
+  --t-base: 1.0625rem;
+  --t-md: 1.1875rem;
+  --t-lg: 1.375rem;
+  --t-xl: clamp(1.4rem, 1.15rem + 0.85vw, 1.8rem);
+  --t-2xl: clamp(2.05rem, 1.4rem + 2.1vw, 2.8rem);
+
+  /* Around 65 characters of the system serif at --t-base. */
+  --measure: 34rem;
+  --measure-narrow: 30rem;
+
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -39,15 +82,23 @@
     --paper: #071a16;
     --surface: #0c2620;
     --ink: #e3ece8;
-    --muted: #9ab3ab;
+    --muted: #a2bab2;
     --rule: #1e3b34;
     --rule-soft: #14302a;
-    --accent: #ff8898;
-    --accent-ink: #14100f;
+    /* Deep enough not to glow on the dark ground, light enough to carry
+       white text at 5.3:1. The bright rose is kept for marks and the ring,
+       where a solid fill would be too much light. */
+    --accent: #c22a44;
+    --accent-ink: #ffffff;
+    --accent-mark: #ff8898;
+    --focus: #ff8898;
+    --seg-on: #244a41;
+    --seg-on-ink: #eef5f2;
     --slab: #041310;
     --slab-ink: #cfe0da;
     --slab-rule: #1a3b34;
     --slab-key: #6fbfa8;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
 }
 
@@ -57,14 +108,24 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* The header is not sticky (see the header block below), so an anchor needs
+     only a little air above it. */
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 1.0625rem/1.7 var(--serif);
+  font: var(--t-base)/1.7 var(--serif);
   font-synthesis-weight: none;
+  overflow-wrap: break-word;
 }
 
 .wrap {
@@ -77,6 +138,7 @@ a {
   color: inherit;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.15em;
+  transition: text-decoration-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
@@ -84,8 +146,9 @@ a:hover {
 }
 
 a:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
   border-radius: 2px;
 }
@@ -96,34 +159,36 @@ h3 {
   font-family: var(--serif);
   font-weight: 700;
   letter-spacing: -0.005em;
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: clamp(2rem, 1.35rem + 2.2vw, 2.85rem);
-  line-height: 1.12;
-  margin: 0 0 1.4rem;
-  max-width: 19ch;
+  font-size: var(--t-2xl);
+  line-height: 1.08;
+  margin: 0 0 var(--s-5);
+  max-width: 18ch;
 }
 
 h2 {
-  font-size: clamp(1.35rem, 1.15rem + 0.75vw, 1.7rem);
-  line-height: 1.2;
-  margin: 0 0 1.3rem;
+  font-size: var(--t-xl);
+  line-height: 1.18;
+  margin: 0 0 var(--s-5);
   max-width: 26ch;
 }
 
 h3 {
-  font-size: 1.0625rem;
-  margin: 0 0 0.35rem;
+  font-size: var(--t-base);
+  line-height: 1.4;
+  margin: 0 0 var(--s-1);
 }
 
 p {
-  margin: 0 0 1.05rem;
-  max-width: 33rem;
+  margin: 0 0 var(--s-4);
+  max-width: var(--measure);
 }
 
-.sans {
-  font-family: var(--sans);
+:target {
+  scroll-margin-top: var(--s-6);
 }
 
 .muted {
@@ -131,10 +196,15 @@ p {
 }
 
 .small {
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
 }
 
 /* ---------------------------------------------------------------- header */
+
+/* Deliberately not sticky. The page is one read from top to bottom with no
+   in-page navigation to come back to, and a fixed bar would cost 60 of the
+   844 pixels a phone has for the whole of it. The three links are repeated in
+   the footer, which is where a reader who has finished is already looking. */
 
 .site-header {
   background: var(--surface);
@@ -144,157 +214,199 @@ p {
 .site-header .wrap {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--s-3) var(--s-5);
   min-height: 3.75rem;
   flex-wrap: wrap;
+  padding-top: var(--s-3);
+  padding-bottom: var(--s-3);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--s-2);
   font-family: var(--sans);
   font-weight: 650;
   letter-spacing: -0.03em;
-  font-size: 1.0625rem;
+  font-size: var(--t-base);
   color: var(--ink);
   text-decoration: none;
 }
 
-/* One of the three places the accent is allowed. */
+/* One of the four places the accent is allowed. */
 .brand svg {
   width: 19px;
   height: 25px;
   flex: none;
-  color: var(--accent);
+  color: var(--accent-mark);
 }
 
-.site-header nav {
+.site-nav {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: var(--s-5);
   font-family: var(--sans);
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
 }
 
-.site-header nav a {
+.site-nav a {
   color: var(--muted);
   text-decoration: none;
+  text-decoration-color: transparent;
 }
 
-.site-header nav a:hover {
+.site-nav a:hover {
   color: var(--ink);
   text-decoration: underline;
+  text-decoration-color: currentColor;
 }
 
+/* The language switch is a segmented control rather than two links with a
+   slash between them: the reader is choosing between two states of the same
+   page, and the filled segment says which one they are in without an
+   asterisk. It sits outside the site navigation because it is a different
+   kind of choice, which also lets it move independently on a phone. */
 .lang {
   display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--paper);
+  font-family: var(--sans);
+  line-height: 1;
+}
+
+.lang a {
+  padding: 0.4rem 0.65rem;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  text-decoration: none;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding-left: 1.25rem;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.lang a + a {
   border-left: 1px solid var(--rule);
 }
 
-.site-header .lang a[aria-current="true"] {
+.lang a:hover {
+  background: var(--surface);
   color: var(--ink);
-  font-weight: 650;
 }
 
-.lang span {
-  color: var(--rule);
+.lang a[aria-current="page"] {
+  background: var(--seg-on);
+  color: var(--seg-on-ink);
+}
+
+.lang a:focus-visible {
+  outline-offset: -3px;
+  border-radius: 0;
+}
+
+/* On a phone the header is two deliberate rows — the wordmark with the
+   switch, then the links — rather than a wrap that looks like an accident. */
+@media (max-width: 34rem) {
+  .brand {
+    flex: 1 1 auto;
+  }
+
+  .lang {
+    order: 2;
+  }
+
+  .site-nav {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    gap: var(--s-4);
+  }
 }
 
 /* -------------------------------------------------------------- sections */
 
-/* Deliberately uneven: the page breathes differently around the parts that
-   are read slowly (privacy) than around the parts that are scanned. */
+/* One vertical interval, not six. The two that are read slowly — the demo and
+   the privacy note — get a step more air; the rest sit on --section-y. */
 
 main > section {
   border-top: 1px solid var(--rule);
+  padding: var(--section-y) 0;
 }
 
 main > section:first-child {
   border-top: 0;
 }
 
-#specs {
-  padding: clamp(2.75rem, 6vw, 4.25rem) 0 clamp(2.5rem, 5vw, 3.5rem);
-}
-
-#start {
-  padding: clamp(3rem, 7vw, 5.5rem) 0;
-  background: var(--surface);
-}
-
-#demo {
-  padding: clamp(2.75rem, 6vw, 4.5rem) 0;
-}
-
-#privacy {
-  padding: clamp(3.25rem, 8vw, 6rem) 0;
-}
-
+#start,
 #colophon {
-  padding: clamp(2.75rem, 6vw, 4rem) 0 clamp(3rem, 7vw, 5rem);
   background: var(--surface);
+}
+
+#demo,
+#privacy {
+  padding: calc(var(--section-y) + var(--s-5)) 0;
 }
 
 /* ------------------------------------------------------------------ hero */
 
 .hero {
   background: var(--surface);
-  padding: clamp(2.5rem, 6vw, 4.25rem) 0 clamp(2.75rem, 6vw, 4.5rem);
 }
 
 .hero-grid {
   display: grid;
-  gap: clamp(2.25rem, 5vw, 3rem);
+  gap: var(--s-7);
   align-items: start;
 }
 
 @media (min-width: 62rem) {
   .hero-grid {
-    grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
-    gap: 4rem;
+    grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+    gap: var(--s-7);
   }
 
   /* The picture starts a little below the headline rather than level with it:
      the two columns are not a matched pair. */
   .shot {
-    margin-top: 1.1rem;
+    margin-top: 0.6rem;
   }
 }
 
 .hero p {
-  max-width: 32rem;
+  max-width: var(--measure);
 }
 
 .why {
-  font-size: 1.15rem;
+  font-size: var(--t-md);
   line-height: 1.55;
-  margin-bottom: 1.4rem;
-  max-width: 30rem;
+  margin-bottom: var(--s-5);
+  max-width: var(--measure-narrow);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1.6rem;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
 }
 
 .button {
   display: inline-block;
   font-family: var(--sans);
   font-weight: 550;
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
+  line-height: 1.4;
   padding: 0.6rem 1.1rem;
   border-radius: var(--radius);
   border: 1px solid var(--rule);
   text-decoration: none;
   color: var(--ink);
-  background: transparent;
+  background: var(--surface);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
@@ -303,7 +415,7 @@ main > section:first-child {
   background: var(--paper);
 }
 
-/* Two of three: the one button that starts the demo. */
+/* Two of four: the one button that starts the demo. */
 .button.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -320,20 +432,21 @@ button.button {
   font: inherit;
   font-family: var(--sans);
   font-weight: 550;
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
   cursor: pointer;
 }
 
-/* Three of three, and the last trace of the case-file idea the page used to
+/* Three of four, and the last trace of the case-file idea the page used to
    be built around: a small stamp holding the numbers that go stale. */
 .stamp {
   font-family: var(--sans);
-  font-size: 0.875rem;
+  font-size: var(--t-sm);
+  line-height: 1.55;
   color: var(--muted);
-  margin: 1.75rem 0 0;
+  margin: var(--s-6) 0 0;
   padding-left: 1.05rem;
   position: relative;
-  max-width: 30rem;
+  max-width: var(--measure-narrow);
 }
 
 .stamp::before {
@@ -343,7 +456,7 @@ button.button {
   top: 0.62em;
   width: 7px;
   height: 7px;
-  background: var(--accent);
+  background: var(--accent-mark);
 }
 
 .stamp a {
@@ -353,26 +466,62 @@ button.button {
 /* --------------------------------------------------------- the screenshot */
 
 /* A real capture of the panel, taken from this page with headless Chrome.
-   width/height are on the <img> so the hero does not move when it loads. */
+   width/height are on the <img> and the frame carries the same ratio, so
+   nothing moves while it loads.
+
+   The frame is the point: a bare light screenshot dropped on a dark page
+   reads as a lamp. Matting it in the page's own surface, with a hairline and
+   a shadow that is the ink colour rather than black, turns it into an object
+   sitting on the page. In dark mode the shadow goes and the picture is taken
+   down a few percent instead. */
 
 .shot {
   margin: 0;
 }
 
+.shot-frame {
+  padding: var(--s-3);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  aspect-ratio: 16 / 11;
+}
+
+/* The capture is wider than the frame, and the panel sits at its right edge,
+   so the crop comes off the left — where the page behind it is only a texture
+   of type too small to read anyway. */
 .shot img {
   display: block;
   width: 100%;
-  height: auto;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-lg);
-  background: var(--paper);
+  height: 100%;
+  object-fit: cover;
+  object-position: 100% 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+@media (prefers-color-scheme: dark) {
+  .shot img {
+    filter: brightness(0.84) contrast(1.02) saturate(0.94);
+  }
+}
+
+/* On a phone the panel is what matters, not the page behind it: the frame
+   crops harder rather than shrinking the whole capture to an illegible
+   strip. */
+@media (max-width: 48rem) {
+  .shot-frame {
+    aspect-ratio: 5 / 4;
+  }
 }
 
 .shot figcaption {
   font-family: var(--sans);
-  font-size: 0.8125rem;
+  font-size: var(--t-xs);
+  line-height: 1.6;
   color: var(--muted);
-  margin-top: 0.6rem;
+  margin-top: var(--s-3);
   max-width: 28rem;
 }
 
@@ -380,18 +529,19 @@ button.button {
 
 /* Six things, as a list of terms and what they mean, in one column of text.
    Rows rather than cards: a card would make six equal claims, and they are
-   not equal. */
+   not equal. The term column is fixed so the definitions start on one line
+   down the page; on a phone the pair stacks and the rule does the work. */
 
 .specs {
   margin: 0;
-  max-width: 52rem;
+  max-width: 54rem;
 }
 
 .specs div {
-  padding: 1.05rem 0;
+  padding: var(--s-4) 0;
   border-top: 1px solid var(--rule-soft);
   display: grid;
-  gap: 0.15rem 2.5rem;
+  gap: var(--s-1) var(--s-6);
 }
 
 .specs div:first-child {
@@ -399,24 +549,30 @@ button.button {
   padding-top: 0;
 }
 
+.specs div:last-child {
+  padding-bottom: 0;
+}
+
 @media (min-width: 50rem) {
   .specs div {
-    grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+    grid-template-columns: 13rem minmax(0, 1fr);
     align-items: baseline;
+    gap: var(--s-1) var(--s-7);
   }
 }
 
 .specs dt {
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
   line-height: 1.5;
+  color: var(--ink);
 }
 
 .specs dd {
   margin: 0;
   color: var(--muted);
-  max-width: 36rem;
+  max-width: var(--measure);
 }
 
 /* --------------------------------------------------------- code and slab */
@@ -431,24 +587,62 @@ code {
   border: 1px solid var(--slab-rule);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  margin: 0 0 1rem;
+  margin: 0 0 var(--s-4);
 }
 
 .slab-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: var(--t-2xs);
   color: var(--slab-key);
-  padding: 0.5rem 1rem;
+  padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4);
+  min-height: 2.25rem;
   border-bottom: 1px solid var(--slab-rule);
+}
+
+/* Injected by demo.js only where the clipboard exists, so a button that
+   cannot copy is never drawn. */
+.copy {
+  font-family: var(--sans);
+  font-size: var(--t-2xs);
+  font-weight: 550;
+  line-height: 1;
+  color: var(--slab-key);
+  background: transparent;
+  border: 1px solid var(--slab-rule);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  flex: none;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.copy:hover {
+  background: var(--slab-rule);
+  color: var(--slab-ink);
+}
+
+.copy[data-copied="true"] {
+  border-color: var(--slab-key);
+  color: var(--slab-ink);
+}
+
+.copy:focus-visible {
+  outline-color: var(--slab-key);
 }
 
 .slab pre {
   margin: 0;
-  padding: 0.9rem 1rem 1rem;
+  padding: var(--s-4);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   color: var(--slab-ink);
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-size: var(--t-xs);
+  line-height: 1.65;
+  tab-size: 2;
 }
 
 p code,
@@ -468,16 +662,16 @@ td code {
 
 .options {
   display: grid;
-  gap: 1.75rem;
-  margin: 1.75rem 0 2.25rem;
+  gap: var(--s-6);
+  margin: var(--s-6) 0 var(--s-7);
   max-width: 58rem;
 }
 
 .option {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
-  padding-top: 1.5rem;
+  gap: var(--s-4);
+  padding-top: var(--s-5);
   border-top: 1px solid var(--rule);
 }
 
@@ -494,8 +688,8 @@ td code {
 
 @media (min-width: 56rem) {
   .option {
-    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
-    gap: 2.5rem;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: var(--s-7);
     align-items: start;
   }
 }
@@ -503,7 +697,7 @@ td code {
 .option-text p,
 .option-code p {
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
   max-width: 32rem;
 }
 
@@ -524,8 +718,8 @@ td code {
 .sizes {
   border-collapse: collapse;
   font-family: var(--sans);
-  font-size: 0.9375rem;
-  margin: 0 0 0.85rem;
+  font-size: var(--t-sm);
+  margin: 0 0 var(--s-3);
   width: 100%;
   max-width: 34rem;
 }
@@ -533,28 +727,28 @@ td code {
 .sizes caption {
   text-align: left;
   font-family: var(--serif);
-  font-size: 1.0625rem;
-  padding-bottom: 0.5rem;
+  font-size: var(--t-base);
+  padding-bottom: var(--s-2);
 }
 
 .sizes th,
 .sizes td {
   text-align: left;
-  padding: 0.4rem 1rem 0.4rem 0;
+  padding: 0.4rem var(--s-4) 0.4rem 0;
   border-bottom: 1px solid var(--rule);
   vertical-align: baseline;
 }
 
 .sizes thead th {
   font-weight: 600;
-  font-size: 0.8125rem;
+  font-size: var(--t-xs);
   color: var(--muted);
 }
 
 .sizes tbody th {
   font-weight: 400;
   font-family: var(--mono);
-  font-size: 0.8125rem;
+  font-size: var(--t-xs);
 }
 
 .sizes td:last-child {
@@ -564,21 +758,79 @@ td code {
 
 /* ------------------------------------------------------------------ demo */
 
+/* The centre of the page, and the only section that lifts onto a plate: the
+   claim the whole page makes is "read the payload yourself", and this is
+   where a reader can. It gets the largest heading, the widest gutter and the
+   one raised surface. */
+
+#demo h2 {
+  font-size: clamp(1.6rem, 1.2rem + 1.3vw, 2.15rem);
+  max-width: 26ch;
+}
+
+.demo-lede {
+  font-size: var(--t-md);
+  line-height: 1.55;
+  max-width: var(--measure-narrow);
+  margin-bottom: var(--s-5);
+}
+
+.demo-plate {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  padding: clamp(1.25rem, 3.5vw, 2.25rem);
+  transition: border-color 0.3s ease;
+}
+
+/* While the panel is open the plate says so, quietly. The panel keeps
+   aria-expanded on its trigger up to date and demo.js mirrors it here. */
+.panel-open .demo-plate {
+  border-color: var(--accent-mark);
+}
+
 .demo-grid {
   display: grid;
-  gap: 2rem;
+  gap: var(--s-6);
 }
 
 @media (min-width: 62rem) {
   .demo-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 3rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: var(--s-7);
     align-items: start;
   }
 }
 
+.demo-grid > div:first-child p {
+  max-width: 30rem;
+}
+
+.demo-out h3 {
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  margin-bottom: var(--s-3);
+}
+
+.demo-out .slab {
+  margin-bottom: var(--s-3);
+}
+
+.demo-note {
+  font-family: var(--sans);
+  font-size: var(--t-xs);
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+  max-width: 34rem;
+}
+
 #payload {
-  min-height: 9rem;
+  min-height: 11rem;
+  max-height: 26rem;
+  overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -587,38 +839,29 @@ td code {
   content: attr(data-empty);
   color: var(--slab-key);
   font-family: var(--sans);
-  font-size: 0.875rem;
-}
-
-/* When the panel is open the demo section lifts off the paper, quietly. */
-#demo {
-  transition: background-color 0.3s ease;
-}
-
-.panel-open #demo {
-  background: var(--surface);
+  font-size: var(--t-sm);
 }
 
 /* --------------------------------------------------------------- privacy */
 
 #privacy ol {
   padding-left: 1.25rem;
-  max-width: 33rem;
+  max-width: var(--measure);
 }
 
 #privacy li {
-  margin-bottom: 0.8rem;
+  margin-bottom: var(--s-3);
 }
 
 /* -------------------------------------------------------------- colophon */
 
 .signature {
   font-family: var(--sans);
-  font-size: 0.9375rem;
-  margin-top: 1.5rem;
+  font-size: var(--t-sm);
+  margin-top: var(--s-5);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
+  gap: var(--s-2) var(--s-5);
   align-items: baseline;
   max-width: none;
 }
@@ -627,49 +870,67 @@ td code {
   font-weight: 650;
 }
 
-/* Body links are ink with an underline; only the three accent places above
-   use the red. Inside prose that keeps the eye on the sentence. */
+/* Body links are ink with an underline; only the four accent places above
+   use the red. Inside prose that keeps the eye on the sentence. The hover
+   thickens the rule and warms the word, which is enough of a state. */
 main p a,
 main li a,
 main dd a,
 footer a {
   text-decoration: underline;
+  text-decoration-color: var(--rule);
+}
+
+main p a:hover,
+main li a:hover,
+main dd a:hover {
+  text-decoration-color: currentColor;
 }
 
 /* ---------------------------------------------------------------- footer */
 
+/* The end of the page, so it says less: one size down, muted throughout, and
+   the links underlined only when the pointer is on them. */
+
 footer {
-  padding: 2.25rem 0 3.5rem;
+  padding: var(--s-7) 0 var(--s-8);
   color: var(--muted);
   font-family: var(--sans);
-  font-size: 0.9375rem;
+  font-size: var(--t-sm);
   border-top: 1px solid var(--rule);
 }
 
 footer p {
   max-width: 40rem;
-  margin: 0 0 0.6rem;
+  margin: 0 0 var(--s-2);
 }
 
 footer nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 1.5rem;
-  margin-bottom: 1rem;
+  gap: var(--s-2) var(--s-5);
+  margin-bottom: var(--s-5);
 }
 
 footer a {
+  color: var(--muted);
+  text-decoration-color: var(--rule);
+}
+
+footer a:hover {
   color: var(--ink);
+  text-decoration-color: currentColor;
 }
 
 /* --------------------------------------------------------- scroll reveal */
 
-/* The class is set by demo.js, so a page without JavaScript never hides
-   anything. Reduced motion opts out entirely. */
+/* One piece of motion on the page, and it degrades to a finished page: the
+   class that hides a section is set by demo.js, so a browser without
+   JavaScript never hides anything. Reduced motion opts out entirely. */
 .reveal-ready .reveal {
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
 .reveal-ready .reveal.seen {

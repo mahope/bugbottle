@@ -13,7 +13,7 @@ and the favicon is an inline SVG.
 | `da/index.html` | Danish page — same structure, same sections, written for a Danish reader rather than translated |
 | `style.css` | Shared by every page. Colour tokens on `:root`, redefined once for dark mode |
 | `docs.css` | The documentation pages only, loaded after `style.css` and leaning on its tokens |
-| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal |
+| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
 | `docs.js` | The documentation pages only: copy buttons, and the current heading in "On this page" |
 | `docs/` | **Generated, never committed.** Written by `scripts/build-docs.mjs`; see "The documentation" below |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
@@ -44,7 +44,14 @@ renderer is given and the panel does not offer the checkbox.
 page, message filled in, an element pointed at, taken headless at 2x with the
 global `puppeteer-core` and Chrome and saved at `site/panel.png`. It carries
 `width`/`height` on the `<img>` so the hero does not shift while it loads, and
-it must stay under 150 kB. Re-capture it whenever the panel's own look changes
+it must stay under 150 kB.
+
+The `<img>` sits inside a `.shot-frame`, which is what actually reserves the
+space: the frame owns the aspect ratio (16/11 on a desktop, 5/4 on a phone)
+and the picture fills it with `object-fit: cover` anchored to its right edge,
+where the panel is. So the crop comes off the left, which is only the page
+behind the panel at a size nobody can read. A replacement capture should keep
+the panel at the right of the frame or the crop will cut it. Re-capture it whenever the panel's own look changes
 enough that the screenshot stops matching — there is no build step that keeps
 it in sync automatically.
 
@@ -108,6 +115,15 @@ when its button is pressed. Note that headless Chrome refuses
 falls back to a selection and `execCommand`, which is the path that check
 actually exercises — and that Windows hands the text back with CRLF line
 endings, so compare normalised.
+
+## The copy buttons
+
+Every `.slab` on the page gets a copy button, built in `demo.js` rather than
+written into the two HTML files: the label then follows
+`document.documentElement.lang` in one place, and a browser without
+`navigator.clipboard` — or a page served over plain HTTP — never gets a button
+that cannot do anything. The button on the demo payload starts hidden and
+appears when there is a report to copy.
 
 ## Motion
 

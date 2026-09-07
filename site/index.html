@@ -36,15 +36,14 @@
       </svg>
       bugbottle
     </a>
-    <nav aria-label="Site">
+    <nav class="site-nav" aria-label="Site">
+      <a href="/docs/">Docs</a>
       <a href="https://github.com/mahope/bugbottle">GitHub</a>
       <a href="https://www.npmjs.com/package/bugbottle">npm</a>
-      <a href="/docs/">Docs</a>
-      <span class="lang">
-        <a href="/" aria-current="true" lang="en" hreflang="en">EN</a>
-        <span aria-hidden="true">/</span>
-        <a href="/da/" lang="da" hreflang="da">DA</a>
-      </span>
+    </nav>
+    <nav class="lang" aria-label="Language">
+      <a href="/" aria-current="page" lang="en" hreflang="en">EN</a>
+      <a href="/da/" lang="da" hreflang="da">DA</a>
     </nav>
   </div>
 </header>
@@ -79,7 +78,9 @@
       </div>
 
       <figure class="shot">
-        <img src="/panel.png" width="1760" height="1074" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+        <div class="shot-frame">
+          <img src="/panel.png" width="1760" height="1074" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+        </div>
         <figcaption>
           The panel from <code>bugbottle/ui</code>, captured on this page. The button in
           the corner opens the same one.
@@ -263,28 +264,34 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
   <section id="demo" class="reveal">
     <div class="wrap">
       <h2>Open the panel and read what it would have sent</h2>
-      <div class="demo-grid">
-        <div>
-          <p>
-            The button in the corner is the real <code>bugbottle/ui</code> panel, running
-            from the same <code>dist/</code> that npm ships. Open it, write a line, point
-            at something on this page, press send.
-          </p>
-          <p>
-            There is no endpoint behind it. The demo hands the library a
-            <code>fetch</code> of its own, keeps the body that would have been posted,
-            and renders it here with <code>toMarkdown</code> from
-            <code>bugbottle/server</code>, which is the same function you would use for
-            an issue body. Nothing leaves your browser. Screenshots are off here, since
-            the demo has nowhere private to put one.
-          </p>
-          <p><button type="button" class="button primary" id="demo-open">Open the panel</button></p>
-        </div>
-        <div>
-          <h3 id="payload-heading">The report, as Markdown</h3>
-          <div class="slab">
-            <div class="slab-tab">toMarkdown(report)</div>
-            <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send a report and it appears here."></pre>
+      <div class="demo-plate">
+        <div class="demo-grid">
+          <div>
+            <p class="demo-lede">
+              The button in the corner is the real <code>bugbottle/ui</code> panel,
+              running from the same <code>dist/</code> that npm ships. Open it, write a
+              line, point at something on this page, press send.
+            </p>
+            <p>
+              There is no endpoint behind it. The demo hands the library a
+              <code>fetch</code> of its own, keeps the body that would have been posted,
+              and renders it here with <code>toMarkdown</code> from
+              <code>bugbottle/server</code>, which is the same function you would use for
+              an issue body. Screenshots are off here, since the demo has nowhere
+              private to put one.
+            </p>
+            <p><button type="button" class="button primary" id="demo-open">Open the panel</button></p>
+          </div>
+          <div class="demo-out">
+            <h3 id="payload-heading">The report, as Markdown</h3>
+            <div class="slab">
+              <div class="slab-tab">toMarkdown(report)</div>
+              <pre id="payload" aria-labelledby="payload-heading" aria-live="polite" data-empty="Send a report and it appears here."></pre>
+            </div>
+            <p class="demo-note">
+              Nothing is sent. There is no endpoint on this host: the report is built
+              and rendered in your browser, and closing the tab is the end of it.
+            </p>
           </div>
         </div>
       </div>

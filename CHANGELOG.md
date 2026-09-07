@@ -128,6 +128,32 @@ change the API; the changelog says so when they do.
   measures 1133: the roadmap said 1 kB, and 2.3 kB of dense minified code with
   nothing to share a compression dictionary with does not get there.
 
+### Changed
+
+- The landing page, both languages, is set on one spacing and one type scale
+  (`--s-*` and `--t-*` on `:root`) instead of a clamp invented per section, so
+  the vertical rhythm is the same everywhere and the measure of running text
+  stays around 65 characters. Nothing about the page's structure or voice
+  changed.
+- The hero screenshot is matted in a frame that carries its own aspect ratio,
+  so it cannot shift the hero while it loads, crops to the panel rather than
+  the page behind it on a phone, and is taken down a few percent in dark mode
+  where a bare light capture used to read as a lamp.
+- Dark mode holds two reds rather than one: a deep fill for the primary button
+  that carries white text at 5.3:1, and the bright rose kept for the wordmark,
+  the stamp and the focus ring, where a full-strength fill was too much light.
+- The demo is the centre of the page: it sits on a raised plate, carries the
+  largest heading, and says under the payload that nothing is sent and no
+  endpoint exists on the host.
+- Every code slab, including the demo payload, has a copy button. `demo.js`
+  builds it, so the label follows the page language and a browser without a
+  clipboard never gets a button that cannot do anything.
+- The language switch is a segmented control instead of two links with a slash
+  between them, the header carries a Docs link to `/docs/`, and on a phone the
+  header is two deliberate rows rather than a wrap. The header is still not
+  sticky: the page is one read with no in-page navigation to return to.
+- The footer is quieter — one size down, muted throughout, links underlined
+  with a hairline rather than shouting.
 
 ## 0.5.0
 
