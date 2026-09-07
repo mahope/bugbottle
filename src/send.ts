@@ -8,7 +8,7 @@
 
 import { collectContext } from "./capture.ts";
 import { getConsoleBuffer } from "./console-buffer.ts";
-import { readBreadcrumbs } from "./registry.ts";
+import { readBreadcrumbs, readNetwork } from "./registry.ts";
 import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
 
 export type BuildReportInput = {
@@ -25,6 +25,13 @@ export type BuildReportInput = {
    * nothing for the option.
    */
   includeBreadcrumbs?: boolean;
+  /**
+   * Attach the recorded requests. Default true, which means "whenever
+   * `initNetwork` from `bugbottle/network` is recording" — an application that
+   * never imports that module has nothing to attach and pays nothing for the
+   * option.
+   */
+  includeNetwork?: boolean;
   /** Elements the reporter pointed at, from `pickElement`. */
   elements?: ElementRef[];
   /**
@@ -61,6 +68,10 @@ export function buildReport(input: BuildReportInput): BugReport & Record<string,
   if (input.includeBreadcrumbs ?? true) {
     const crumbs = readBreadcrumbs();
     if (crumbs && crumbs.length > 0) report.breadcrumbs = crumbs;
+  }
+  if (input.includeNetwork ?? true) {
+    const requests = readNetwork();
+    if (requests && requests.length > 0) report.network = requests;
   }
   if (input.screenshotDataUrl) report.screenshotDataUrl = input.screenshotDataUrl;
   const body = { ...input.extra, ...report };

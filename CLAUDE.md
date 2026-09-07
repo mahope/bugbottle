@@ -19,7 +19,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | report-core |
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
-| `src/registry.ts` | One slot: `initBreadcrumbs` registers a getter, `send.ts` reads it. Keeps the core free of the recorder | report-core (types) |
+| `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |
+| `src/registry.ts` | Two slots: `initBreadcrumbs` and `initNetwork` register getters, `send.ts` reads them. Keeps the core free of the recorders | report-core (types) |
 | `src/send.ts` | `buildReport`, `sendReport` — framework-agnostic | capture, console-buffer, report-core |
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
 | `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in | nothing |
@@ -35,8 +36,8 @@ server-side validators check what arrives. No UI, no backend, no hosted service.
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in every release commit | |
 
-Seven entry points in `package.json#exports`: `.`, `./react`, `./server`,
-`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`. Keep them separate:
+Eight entry points in `package.json#exports`: `.`, `./react`, `./server`,
+`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -88,6 +89,9 @@ stay under 4 kB gzipped and `bugbottle/ui` under 8 kB (CI enforces both;
 `bugbottle/breadcrumbs` is budgeted at 1.5 kB rather than 1 kB: about 0.5 kB
 of its bundle is `buildSelector`, which an app that also points at elements
 already pays for — the marginal cost there is around 0.55 kB.
+`bugbottle/network` is budgeted at 1228 bytes and measures 1174; it imports
+`scrubUrl` alone, so the rest of `scrub.ts` is tree-shaken away. The IIFE
+budget is 13824 bytes gzipped (12600 at 0.4.0 plus the network log).
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

@@ -29,7 +29,7 @@ need Node 18.
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
   It should build, and the budgets CI enforces are: bare core 1 kB gzipped,
   `bugbottle/react` 4 kB, `bugbottle/ui` 8 kB, `bugbottle/breadcrumbs`
-  1.5 kB, `dist/bugbottle.js` 12 kB.
+  1.5 kB, `bugbottle/network` 1228 bytes, `dist/bugbottle.js` 13824 bytes.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a
   file is added.

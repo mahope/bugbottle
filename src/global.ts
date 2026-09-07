@@ -22,6 +22,7 @@ import { initBreadcrumbs } from "./breadcrumbs.ts";
 import { initConsoleBuffer } from "./console-buffer.ts";
 import { pickElement } from "./element-picker.ts";
 import { locales, resolveLocale, type Locale } from "./locales.ts";
+import { initNetwork } from "./network.ts";
 import { scrubReport } from "./scrub.ts";
 import { buildReport, sendReport } from "./send.ts";
 import { mountBugbottle, type MountOptions, type Theme } from "./ui/index.ts";
@@ -35,6 +36,7 @@ const api = {
   mountBugbottle,
   initConsoleBuffer,
   initBreadcrumbs,
+  initNetwork,
   locales,
   resolveLocale,
   scrubReport,
@@ -103,6 +105,9 @@ function autoMount(data: DOMStringMap): void {
 
   initConsoleBuffer();
   initBreadcrumbs();
+  // Any value enables the network log, the same way `data-scrub` does. It is
+  // opt-in rather than on: patching fetch is a bigger promise than listening.
+  if (data.network !== undefined) initNetwork({ endpoint });
   mountBugbottle(options);
 }
 

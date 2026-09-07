@@ -23,6 +23,10 @@ was not.
 - The console buffer records `error` and `warn` only. `log` and `debug`, where
   stray user data usually ends up, are never captured.
 - Page context is path and query only — no origin, no fragment.
+- The network log in `bugbottle/network` records the method, URL, status and
+  duration of a request and nothing else. Request and response bodies are never
+  recorded, and neither are headers, in either direction; sensitive query
+  values in the URL are redacted before the entry is stored.
 - Screenshots are rendered from the DOM, never from the screen, so a capture
   cannot include another tab, window, or the desktop.
 - No cookies, no identifiers, no third-party calls. A report goes to the

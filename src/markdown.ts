@@ -16,8 +16,10 @@ import {
   normaliseContext,
   normaliseElements,
   normaliseMessage,
+  normaliseNetwork,
   type Breadcrumb,
   type ElementRef,
+  type NetworkEntry,
 } from "./report-core.ts";
 
 export type MarkdownOptions = {
@@ -80,6 +82,15 @@ function breadcrumbLine(crumb: Breadcrumb): string {
 }
 
 /**
+ * One row of the Requests table. A request that never got a status shows the
+ * failure instead of a bare 0, which reads as a status nobody recognises.
+ */
+function requestRow(entry: NetworkEntry): string {
+  const status = entry.status > 0 ? String(entry.status) : entry.error ? "failed" : "";
+  return `| ${cell(entry.method)} | \`${cell(entry.url)}\` | ${status} | ${entry.ms} |`;
+}
+
+/**
  * Renders a report (raw request body or validated) as Markdown. Never throws
  * on malformed input: missing sections are left out.
  */
@@ -90,6 +101,7 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   const context = normaliseContext(r.context);
   const elements = normaliseElements(r.elements);
   const breadcrumbs = normaliseBreadcrumbs(r.breadcrumbs);
+  const network = normaliseNetwork(r.network);
   const consoleEntries = normaliseConsole(r.console, {
     maxEntries: options.maxConsoleEntries,
   });
@@ -131,6 +143,13 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   if (breadcrumbs.length > 0) {
     out.push("### What happened before", "");
     for (const crumb of breadcrumbs) out.push(breadcrumbLine(crumb));
+    out.push("");
+  }
+
+  if (network.length > 0) {
+    out.push("### Requests", "");
+    out.push("| Method | URL | Status | ms |", "|---|---|---|---|");
+    for (const entry of network) out.push(requestRow(entry));
     out.push("");
   }
 
