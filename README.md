@@ -564,31 +564,69 @@ export const POST = (req: Request) =>
   handleReport(req, {
     authorize: async (r) => Boolean(await getUser(r)),     // false → 401
     maxBodyBytes: 4 * 1024 * 1024,                         // over it → 413
+    bodyTimeoutMs: 15_000,                                 // slower than that → 408
     scrub: true,                                           // redact on the way in
     screenshot: async (bytes) => await putPrivate(bytes),  // returns a URL
     store: async (report, screenshot) => await db.reports.insert(report),
     sinks: [toGithub({ token, owner: "acme", repo: "app", labels: ["bug"] })],
+    sinkTimeoutMs: 10_000,                                 // a hung sink is a failed sink
     onSinkError: (err) => logger.warn({ err }, "sink failed"),
     cors: "https://app.acme.com",                          // answers OPTIONS too
     rateLimit: { limit: 20, windowMs: 60_000 },
   });
 ```
 
+Only a `POST` carries a report: anything else is answered with `405`, and an
+`OPTIONS` preflight is answered before that when `cors` is set — reflecting the
+`Access-Control-Request-Headers` the browser asked for, so your own header
+(a CSRF token, a tracing id) needs no configuration here.
+
+The body is bounded in two directions. `maxBodyBytes` is counted on the stream
+as well as read from `content-length`, which is a claim rather than a fact, and
+`bodyTimeoutMs` (15 s by default) bounds the whole read, so a sender that
+dribbles one byte at a time is answered with `408` instead of holding the
+connection open. `sinkTimeoutMs` (10 s by default) does the same for a
+delivery: a sink that has not answered by then is abandoned and counted in
+`sinkErrors` and `onSinkError` exactly like one that threw, and the sink is
+handed an `AbortSignal` in its context that it can pass to `fetch`.
+
 `store` receives a `ValidatedReport` — `{ type, message, context, console,
 elements, breadcrumbs, network, extra, receivedAt }` — and the decoded PNG when
 there was one. `extra` is every top-level key the client sent that bugbottle
 does not know about, so a tenant id or a build number arrives without a schema
 change; strings are clipped to 500 characters, numbers and booleans pass, and
-nested objects are dropped. The reply is `201 { id }` when `store` returned an
+nested objects are dropped, as are `__proto__`, `constructor` and `prototype`,
+which mean something to the language rather than to you. The reply is
+`201 { id }` when `store` returned an
 id and `202 {}` when it did not; `respond` replaces it.
 
 `screenshot` decides what happens to the picture: `"keep"` (the default) hands
 the bytes to `store` and to the sinks, `"drop"` never decodes it, and a
 function stores it and returns a URL that reaches `toMarkdown` and the sinks as
-`screenshotUrl`. A rejected picture never fails the report.
+`screenshotUrl`. Only `"keep"` hands bytes on — with a function, `store` and
+the sinks see the URL and no bytes, so the same picture is never both uploaded
+and attached. A rejected picture never fails the report, and neither does a
+storage bucket that is down: a `screenshot` function that throws reaches
+`onError` and the report is stored and delivered without a `screenshotUrl`.
 
 `rateLimit` counts in memory, so it is per instance: fine per serverless
 isolate against one looping browser, and not a shared limit across a fleet.
+The default key is the first entry of `x-forwarded-for`, falling back to
+`cf-connecting-ip` — **both are headers, which means both are things the
+caller can write**. It is only a limit if a proxy you control overwrites
+`x-forwarded-for` on the way in; behind anything else, one client varies the
+header and gets a fresh allowance every request. The key is clipped to 64
+characters and the bucket map is capped at 10 000 entries (expired buckets
+evicted first, then the oldest) so that a forged header cannot grow the map,
+but the honest fix is to count something you issued:
+
+```ts
+rateLimit: {
+  limit: 20,
+  windowMs: 60_000,
+  key: (req) => sessionIdFrom(req.headers.get("cookie")) ?? "anonymous",
+}
+```
 
 For Express, `expressHandler` builds the `Request` and writes the `Response`
 back:
@@ -605,7 +643,10 @@ app.post(
 ```
 
 It reads an already-parsed `req.body` when a parser ran and the raw stream when
-none did, so `express.json()` is convenient rather than required.
+none did, so `express.json()` is convenient rather than required. A raw stream
+is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
+answers `413` and calls `req.destroy()` rather than buffering the rest of a
+body it has already refused.
 
 ### The manual path
 
@@ -965,7 +1006,9 @@ Requires `html-to-image`.
 `normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
-`InvalidScreenshotError`, `SinkError`, `REPORT_TYPES`, the `ValidatedReport`,
+`InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
+the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
+`DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
 `HandleReportOptions`, `HandleReportResult`, `ReportSink` and `SinkContext`
 types, and the `MAX_*` limits.
 

@@ -480,8 +480,16 @@ test("the Express adapter reads a raw body when no parser ran", async () => {
 
 test("the Express adapter answers 400 for an empty body", async () => {
   const { state, res } = fakeRes();
+  // What `express.json()` actually leaves behind: an empty object, and a
+  // stream it has already drained, which iterates zero chunks and reads as "".
   expressHandler({})(
-    { method: "POST", url: "/api/bug-report", headers: { host: "app.example.com" }, body: {} },
+    {
+      method: "POST",
+      url: "/api/bug-report",
+      headers: { host: "app.example.com" },
+      body: {},
+      [Symbol.asyncIterator]: async function* () {},
+    },
     res,
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -500,4 +508,282 @@ test("the Express adapter answers a CORS preflight", async () => {
 
   assert.equal(state.status, 204);
   assert.equal(state.headers["access-control-allow-origin"], "*");
+});
+
+/** A `Request` whose body is a stream, the way a chunked upload arrives. */
+function streamed(
+  stream: ReadableStream<Uint8Array>,
+  headers: Record<string, string> = {},
+): Request {
+  return new Request("https://app.example.com/api/bug-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: stream,
+    duplex: "half",
+  } as unknown as RequestInit);
+}
+
+test("anything that is not a POST is answered with 405", async () => {
+  const request = new Request("https://app.example.com/api/bug-report", { method: "GET" });
+  const response = await handleReport(request, { store: async () => ({ id: "never" }) });
+
+  assert.equal(response.status, 405);
+  assert.deepEqual(await response.json(), { error: "Method not allowed" });
+});
+
+test("a preflight reflects the headers the client asked to send", async () => {
+  const request = new Request("https://app.example.com/api/bug-report", {
+    method: "OPTIONS",
+    headers: { "Access-Control-Request-Headers": "content-type, x-csrf-token" },
+  });
+  const response = await handleReport(request, { cors: true });
+
+  assert.equal(response.status, 204);
+  assert.equal(
+    response.headers.get("Access-Control-Allow-Headers"),
+    "content-type, x-csrf-token",
+  );
+});
+
+test("a preflight that asks for nothing still lists the usual headers", async () => {
+  const request = new Request("https://app.example.com/api/bug-report", { method: "OPTIONS" });
+  const response = await handleReport(request, { cors: true });
+
+  assert.equal(response.headers.get("Access-Control-Allow-Headers"), "Content-Type, Authorization");
+});
+
+test("an authorize that throws answers 500 rather than escaping the handler", async () => {
+  let seen: unknown;
+  let stored = false;
+  const response = await handleReport(post(body), {
+    authorize: () => {
+      throw new Error("the session store is down");
+    },
+    store: async () => void (stored = true),
+    onError: (err) => void (seen = err),
+  });
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: "Could not store the report" });
+  assert.equal((seen as Error).message, "the session store is down");
+  assert.equal(stored, false);
+});
+
+test("__proto__ and constructor in extra are ignored rather than assigned", async () => {
+  let stored: ValidatedReport | undefined;
+  const payload =
+    '{"message":"The save button does nothing","tenant":"acme",' +
+    '"__proto__":"polluted","constructor":"replaced"}';
+  await handleReport(post(payload), { store: async (report) => void (stored = report) });
+
+  const extra = stored?.extra ?? {};
+  assert.equal(extra.tenant, "acme");
+  assert.equal(Object.hasOwn(extra, "__proto__"), false);
+  assert.equal(Object.hasOwn(extra, "constructor"), false);
+  // Nothing reached Object.prototype on the way past either.
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+});
+
+test("a chunked body with no content-length is capped, and the stream is cancelled", async () => {
+  let cancelled = false;
+  const chunk = new TextEncoder().encode("x".repeat(100));
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      controller.enqueue(chunk);
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  const response = await handleReport(streamed(stream), { maxBodyBytes: 500 });
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "Report is too large" });
+  assert.equal(cancelled, true);
+});
+
+test("a body that dribbles in for ever is answered with 408", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (cancelled) return;
+      try {
+        controller.enqueue(new TextEncoder().encode(" "));
+      } catch {
+        // The reader gave up between the wait and the enqueue.
+      }
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  const response = await handleReport(streamed(stream), { bodyTimeoutMs: 40 });
+
+  assert.equal(response.status, 408);
+  assert.deepEqual(await response.json(), { error: "Report took too long to arrive" });
+  assert.equal(cancelled, true);
+});
+
+test("a sink that never answers is abandoned and counted like one that threw", async () => {
+  const order: string[] = [];
+  const errors: { error: unknown; index: number }[] = [];
+  const response = await handleReport(post(body), {
+    sinkTimeoutMs: 20,
+    store: async () => ({ id: "rep_8" }),
+    sinks: [
+      () => new Promise<void>(() => order.push("hung")),
+      async () => void order.push("second"),
+    ],
+    onSinkError: (error, index) => errors.push({ error, index }),
+  });
+
+  assert.equal(response.status, 201);
+  // The one that hung did not stop the one after it.
+  assert.deepEqual(order, ["hung", "second"]);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0]?.index, 0);
+  assert.equal((errors[0]?.error as Error).name, "SinkTimeoutError");
+});
+
+test("a sink is handed a signal it can pass to fetch", async () => {
+  let signal: AbortSignal | undefined;
+  await handleReport(post(body), {
+    sinkTimeoutMs: 50,
+    sinks: [
+      async (_report, ctx) => {
+        signal = ctx.signal;
+      },
+    ],
+  });
+
+  assert.ok(signal instanceof AbortSignal);
+  assert.equal(signal?.aborted, false);
+});
+
+test("a screenshot store that throws still stores the report and runs the sinks", async () => {
+  let stored: ValidatedReport | undefined;
+  let ctx: SinkContext | undefined;
+  let seen: unknown;
+  const response = await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    screenshot: async () => {
+      throw new Error("the bucket is gone");
+    },
+    store: async (report) => {
+      stored = report;
+      return { id: "rep_9" };
+    },
+    sinks: [
+      async (_report, c) => {
+        ctx = c;
+      },
+    ],
+    onError: (err) => void (seen = err),
+  });
+
+  assert.equal(response.status, 201);
+  assert.equal(stored?.message, "The save button does nothing");
+  assert.equal(ctx?.screenshotUrl, undefined);
+  assert.equal((seen as Error).message, "the bucket is gone");
+});
+
+test("a screenshot function keeps the bytes: store is handed undefined", async () => {
+  let storedBytes: Uint8Array | undefined = new Uint8Array(1);
+  await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+    screenshot: async () => "https://private.example.com/shots/3.png",
+    store: async (_report, screenshot) => void (storedBytes = screenshot),
+  });
+
+  assert.equal(storedBytes, undefined);
+});
+
+test("a rate-limit key longer than 64 characters is clipped", async () => {
+  resetRateLimits();
+  let caller = `${"a".repeat(64)}-one`;
+  const options = { rateLimit: { limit: 1, windowMs: 60_000, key: () => caller } };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  // Two keys that differ only past the clip are one caller, so a long header
+  // cannot be varied into an unbounded number of buckets.
+  caller = `${"a".repeat(64)}-two`;
+  assert.equal((await handleReport(post(body), options)).status, 429);
+  resetRateLimits();
+});
+
+test("the bucket map is capped, and the oldest key is evicted to make room", async () => {
+  resetRateLimits();
+  let caller = "first";
+  const options = { rateLimit: { limit: 1, windowMs: 60_000, key: () => caller } };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 429);
+
+  // Ten thousand fresh, unexpired keys: nothing can be pruned by age, so the
+  // ceiling has to evict the oldest entry, which is the caller above.
+  for (let i = 0; i < 10_000; i += 1) {
+    caller = `k${i}`;
+    await handleReport(post("{}"), options);
+  }
+
+  caller = "first";
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  resetRateLimits();
+});
+
+test("the Express adapter caps a raw stream, hangs up, and answers 413", async () => {
+  const { state, res } = fakeRes();
+  let destroyed = false;
+  let yielded = 0;
+  const req = {
+    method: "POST",
+    url: "/api/bug-report",
+    headers: { host: "app.example.com" },
+    destroy() {
+      destroyed = true;
+    },
+    [Symbol.asyncIterator]: async function* () {
+      for (let i = 0; i < 1000; i += 1) {
+        yielded += 1;
+        yield new TextEncoder().encode("x".repeat(100));
+      }
+    },
+  };
+
+  expressHandler({ maxBodyBytes: 500 })(req, res);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(state.status, 413);
+  assert.deepEqual(JSON.parse(state.body), { error: "Report is too large" });
+  assert.equal(destroyed, true);
+  // The rest of the body was never read, which is the point of the cap.
+  assert.ok(yielded < 20, `read ${yielded} chunks`);
+});
+
+test("a multi-byte character split across two chunks survives the raw read", async () => {
+  const { state, res } = fakeRes();
+  let stored: ValidatedReport | undefined;
+  const message = "den grønne knap gør ingenting (æøå)";
+  const bytes = new TextEncoder().encode(JSON.stringify({ ...body, message }));
+  // Split immediately after the lead byte of the first two-byte character, so
+  // the boundary falls inside it.
+  const cut = bytes.indexOf(0xc3) + 1;
+  assert.ok(cut > 0);
+
+  const req = {
+    method: "POST",
+    url: "/api/bug-report",
+    headers: { host: "app.example.com" },
+    [Symbol.asyncIterator]: async function* () {
+      yield bytes.slice(0, cut);
+      yield bytes.slice(cut);
+    },
+  };
+
+  expressHandler({ store: async (report) => void (stored = report) })(req, res);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(state.status, 202);
+  assert.equal(stored?.message, message);
 });

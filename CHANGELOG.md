@@ -135,6 +135,54 @@ change the API; the changelog says so when they do.
   Chrome) is wired as `og:image` and `twitter:image` on both pages, and the
   Dockerfile copies it into the image.
 
+### Fixed
+
+Nine findings from a review of `handleReport` and the Express adapter, each
+with a test. None of them changes a documented option, and all of them are
+about what an endpoint on the public internet is handed rather than about what
+a well-behaved browser sends.
+
+- The Express adapter read a raw stream without a ceiling: a route mounted
+  without `express.json({ limit })` buffered whatever arrived. It now counts
+  the bytes against `maxBodyBytes`, calls `req.destroy()` and answers 413
+  without reading the rest.
+- The Express adapter decoded every chunk on its own, so a multi-byte
+  character split across a chunk boundary — `æøå` in a Danish report — arrived
+  as replacement characters. One streaming `TextDecoder` now spans the whole
+  read and is flushed at the end.
+- The Express adapter treated the "" that an already-drained `IncomingMessage`
+  reads as a body, so `express.json()` plus an empty request answered "Malformed
+  JSON" instead of "Write a message first". An empty read now means the same
+  as no read at all.
+- A `screenshot` store function that threw took the whole report with it: the
+  reply was 500 and nothing was stored. It now reaches `onError`, and the
+  report is stored and delivered without a `screenshotUrl`.
+- A `screenshot` store function was also handed to `store` as bytes, against
+  the documented rule that only `"keep"` hands bytes on. `store` now sees the
+  same thing the sinks do.
+- The rate-limit key was whatever the `key` function returned, which by default
+  is an attacker-controlled header. It is clipped to 64 characters, and the
+  bucket map is hard-capped at 10 000 entries — expired buckets evicted first,
+  then the oldest — rather than only pruning expired ones. The README now says
+  plainly that the default key is only a limit behind a proxy that overwrites
+  `x-forwarded-for`, and shows a `key` that counts a session instead.
+- A sink that never answered held the request open for as long as it liked.
+  `sinkTimeoutMs` (10 s by default) abandons it and counts it in `sinkErrors`
+  and `onSinkError` like a sink that threw; the sink context now also carries
+  the `AbortSignal` so a `fetch` can be dropped with it.
+- A body that dribbled in a byte at a time never tripped the size cap and was
+  read for ever. `bodyTimeoutMs` (15 s by default) bounds the whole read and
+  answers 408.
+- A CORS preflight answered with a fixed `Access-Control-Allow-Headers`, so a
+  client sending its own header (a CSRF token, a tracing id) was refused by the
+  browser. It now reflects `access-control-request-headers` when the browser
+  asks, and keeps the old list when it does not.
+- `__proto__` and `constructor` in `extra` were only excluded by accident of
+  how assignment behaves; `constructor` was written as an own property.
+  `collectExtra` now rejects them, and `prototype`, by name.
+- Anything that is not a `POST` (and not a preflight) is answered with 405,
+  rather than being validated as an empty body and answered with 400.
+
 ## 0.4.0
 
 The evidence release: what happened before, where it went, and what must never
