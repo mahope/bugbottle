@@ -679,7 +679,7 @@ const widget = mountBugbottle({
 It offers the three report types, a message, the screenshot checkbox (only
 when a renderer is given), the element picker, and a thank-you state. Pass
 `trigger: "#my-feedback-button"` to use your own button instead of the
-floating one, or `trigger: false` and call `open()` yourself. About 10.7 kB
+floating one, or `trigger: false` and call `open()` yourself. About 11.1 kB
 gzipped, no framework.
 
 "Edit picture" over the attached screenshot is the one thing the panel does
