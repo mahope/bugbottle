@@ -847,10 +847,16 @@ messages, and announces the element picker starting and stopping, with the way
 out — that mode hides the panel and changes the pointer, neither of which a
 screen reader reports. Targets are at least 24x24, focus rings are visible in
 both colour schemes, the dark scheme lightens the accent and the error red so
-they hold their contrast, and `prefers-reduced-motion` is respected. axe-core
+they hold their contrast. A reporter who asks for
+`prefers-reduced-motion: reduce` gets every state change at once rather than
+over time: the panel still opens, the picture still attaches and the status is
+still announced, none of it travels there, and a smooth scroll is switched off
+along with the transitions. axe-core
 reports no violations on the panel open in either scheme, closed, with the
-picture editor open in either scheme, or with the contact field on in either
-scheme. Windows High Contrast is audited too — the panel and the picture editor
+picture editor open in either scheme, with the contact field on in either
+scheme, or with reduced motion asked for. That last state is read for movement
+as well, because axe has no rule for it: no element in the shadow root may have
+a transition or a running animation longer than zero seconds. Windows High Contrast is audited too — the panel and the picture editor
 again under `forced-colors: active`, and then photographed, because axe reads a
 stylesheet the browser has already overridden: the picture proves the trigger
 still has an edge, the selected type still differs from the two beside it, its

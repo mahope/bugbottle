@@ -265,6 +265,14 @@ const POSITIONS: Record<NonNullable<Theme["position"]>, string> = {
  *
  * The block is last in the sheet on purpose: every rule in it has the same
  * weight as the one it replaces, so order is the only thing that makes it win.
+ *
+ * A reporter who asked for `prefers-reduced-motion: reduce` gets every state
+ * change at once instead of over time: the panel opens, the picture attaches
+ * and the toast appears exactly as before, they simply do not travel there.
+ * `*` matches neither the host nor a pseudo-element, so both are named beside
+ * it, and `scroll-behavior` is included because a smooth scroll is motion no
+ * transition property describes. `scripts/a11y-audit.mjs` reads the computed
+ * durations back out of the shadow root in that state.
  */
 const CSS = `
 :host{
@@ -280,7 +288,7 @@ const CSS = `
   :host([data-scheme="auto"]){--bb-bg:#111827;--bb-text:#f3f4f6;--bb-muted:#9ca3af;--bb-border:#374151;
     --bb-error:#f87171;--bb-accent-text:#93c5fd}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){:host,*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 *,*::before,*::after{box-sizing:border-box}
 .sr{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 button,textarea,input{font:inherit;color:inherit}

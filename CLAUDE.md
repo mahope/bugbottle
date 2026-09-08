@@ -71,8 +71,9 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
 | `scripts/build-openapi.ts` | Generates `dist/openapi.json`, an OpenAPI 3.1 description of the report endpoint, from the schema above (3.1 is a superset of 2020-12, so the `$defs` move into `components/schemas` and only the `$ref` targets are rewritten) and from `handleReport`'s answers. Sorted keys like the schema, and run by `npm run build` straight after it; `tests/openapi.test.ts` imports it and exercises the handler for every status it can answer, per operation rather than pooled across the path item. It must lint clean under the pinned Redocly (CI runs it after the build), which is why the identifier is `x-bugbottle-id` rather than a root `$id` — 3.1 closes the root object — and why `servers` is present with the one honest entry, `/` | build-schema, sign, server/handle |
 | `scripts/chrome.mjs` | `findChrome()` and `loadPuppeteer()` — the one answer the five browser scripts share. `CHROME_BIN` then `CHROME_PATH`, then the runner's `/usr/bin/google-chrome`, a distribution Chromium, macOS and Windows, then the same names on PATH; `puppeteer-core` from this repository or from the global root. Nothing downloads a browser | nothing |
-| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over nine states through `puppeteer-core`, two of them with the forced-colours palette, then photographs that one and reads pixels out of the picture. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser, but CI's `browser` job runs it on every push and pull request | dist (at run time), chrome |
-| `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page, the search field on results, the theme playground with four controls moved, the two comparison pages, the Danish getting-started page and the changelog, in both colour schemes, failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first, and runs in CI's `browser` job beside the panel audit | site, dist (at run time), chrome |
+| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over ten states through `puppeteer-core`, two of them with the forced-colours palette and one with `prefers-reduced-motion: reduce`, then photographs the forced-colours one and reads pixels out of the picture, and reads the computed durations out of the reduced-motion one. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser, but CI's `browser` job runs it on every push and pull request | dist (at run time), chrome |
+| `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page, the search field on results, the theme playground with four controls moved, the two comparison pages, the Danish getting-started page, the changelog, and the landing and deep documentation pages again under `prefers-reduced-motion: reduce`, in both colour schemes — thirty runs — failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first, and runs in CI's `browser` job beside the panel audit | site, dist (at run time), chrome |
+| `scripts/motionless.mjs` | `movingElements(tab)` + `reportMotion(label, moving)` — the reduced-motion check both audits make, in one place because both ask the same question. Walks the document and every open shadow root and returns a line per element whose `transition-duration`, or a running `animation-duration`, is above zero, plus one for a document that still scrolls smoothly. axe has no rule for motion, so this is the only thing that would notice | nothing (runs inside the page) |
 | `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time), chrome |
 | `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time), chrome |
 | `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate`, and the last step of CI's `browser` job | dist (at run time), chrome |
@@ -149,7 +150,15 @@ not closed and a branch is not merged with the docs lagging.
   announces: it is a locale string or it is not said. The panel is a dialog
   with a focus trap, so a control added outside `panel` is unreachable while
   it is open; check `tests/ui-a11y.test.ts` and re-run
-  `node scripts/a11y-audit.mjs` (zero axe violations, nine states).
+  `node scripts/a11y-audit.mjs` (zero axe violations, ten states).
+- **Nothing in the panel may move under `prefers-reduced-motion: reduce`.**
+  The state changes stay — the panel opens, the picture attaches, the status is
+  announced — they just happen at once. A transition or animation added to
+  `src/ui/` is therefore also added to the media block at the top of `CSS`, and
+  a scroll a script asks for reads the media query itself, because no
+  stylesheet can reach one. `scripts/a11y-audit.mjs` and
+  `scripts/a11y-site.mjs` read the computed durations back out in that state
+  through `scripts/motionless.mjs`; a duration above zero fails the run.
 - **The contact field is off by default, everywhere.** `contact` on a report is
   personal data the application asked for, so nothing switches it on for
   anybody: not the panel, not the script tag, not an adapter. It is free text
@@ -366,16 +375,23 @@ in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 `puppeteer-core` and Chrome, and check the posted body.
 `scripts/a11y-audit.mjs` is that procedure written down: it serves `dist/`,
 mounts the panel with everything showing and runs the pinned `axe-core` over
-nine states (closed, open light, open dark, annotator light, annotator dark,
-contact light, contact dark, and the panel and the annotator again under
-`forced-colors: active`),
+ten states (closed, open light, open dark, annotator light, annotator dark,
+contact light, contact dark, the panel and the annotator again under
+`forced-colors: active`, and the panel under
+`prefers-reduced-motion: reduce`),
 exiting non-zero on a violation. The forced-colours state also ends in a
 screenshot it reads pixels out of, because axe reads a stylesheet the browser
 has already overridden: it checks that the trigger has an edge, that the
 selected type differs from the two beside it, that its label still crosses
 several colour edges rather than reading as one blank block, and that the
-focus ring differs from the panel behind it. `scripts/a11y-site.mjs` is the same procedure
-aimed at `site/`: eight pages in two colour schemes, and a console message counts
+focus ring differs from the panel behind it. The reduced-motion state ends the
+same way, for the same reason: a transition is not in the accessibility tree,
+so the run reads every computed `transition-duration` and
+`animation-duration` out of the shadow root and fails on any above zero.
+`scripts/a11y-site.mjs` is the same procedure
+aimed at `site/`: fifteen pages and states in two colour schemes, the last two
+of them the reduced-motion check over the landing and documentation pages, and
+a console message counts
 as a failure there too. Site changes also carry a performance floor —
 Lighthouse mobile on `/` must stay at or above 95, and it measured 97 with no
 layout shift — but measure it against a server that gzips text, because nginx

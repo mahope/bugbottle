@@ -111,10 +111,14 @@ need Node 18.
   bundled language. The locale test fails on a missing key. A new control in
   `src/ui/` also has an accessible name, and that name is a locale string too.
 - A change to `src/ui/` keeps `node scripts/a11y-audit.mjs` at zero axe
-  violations, over all nine states — two of which force the Windows High
+  violations, over all ten states — two of which force the Windows High
   Contrast palette and then measure the picture, since axe cannot see a
-  colour the browser threw away — and a change to `site/` keeps
-  `node scripts/a11y-site.mjs` at zero over its twenty-two page-and-scheme runs —
+  colour the browser threw away, and one of which asks for
+  `prefers-reduced-motion: reduce` and then reads the computed durations back
+  out of the shadow root, since axe has no rule for motion — and a change to
+  `site/` keeps
+  `node scripts/a11y-site.mjs` at zero over its thirty page-and-scheme runs, two
+  of which are the same reduced-motion check on the pages —
   a console message counts there too. A change to `src/annotate.ts` also keeps
   `node scripts/annotate-smoke.mjs` green, which is the only place the blur is
   proved to destroy pixels rather than to cover them. All three need Chrome and
@@ -147,8 +151,9 @@ need Node 18.
   esbuild and weighs each against its budget, and greps the server bundle for
   DOM globals.
 - **Browser audits** — builds, generates the site, then runs `npm run a11y`
-  (axe over the panel's nine states and the site's sixteen page-and-scheme
-  runs, with the real security headers served) and `npm run smoke:annotate`
+  (axe over the panel's ten states and the site's thirty page-and-scheme
+  runs, with the real security headers served, plus the reduced-motion duration
+  check on both) and `npm run smoke:annotate`
   (the blur destroyed the pixels it covered) in the Chrome the runner image
   ships. `puppeteer-core` is installed globally there and downloads no browser;
   `scripts/chrome.mjs` finds the executable through `CHROME_BIN`, `CHROME_PATH`
