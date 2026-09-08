@@ -29,6 +29,24 @@ change the API; the changelog says so when they do.
   256 and 1024 on a Discord embed, and 6000 across it, where the description is
   what gives way first because the facts are what somebody triages from.
 
+### Changed
+
+- **Breaking, for the panel:** `mountBugbottle`'s `annotate` option is now the
+  `createAnnotator` function itself rather than a boolean. This corrects the
+  annotator entry above: the panel imported `src/annotate.ts` unconditionally,
+  so every application that mounted the panel shipped a canvas editor it might
+  never open — `bugbottle/ui` went from 10 229 to 12 131 bytes gzipped and
+  `annotate: false` hid the button without shrinking anything. The annotator is
+  now handed in the way `screenshot`, `scrub` and `sign` are:
+  `mountBugbottle({ endpoint, screenshot, annotate: createAnnotator })`. Leave
+  it out and the editor is not in your bundle at all; `bugbottle/ui` is back to
+  10 951 bytes, and the CI budget with it, from 12 kB to 11 kB. What is left of
+  the 720-byte difference against the pre-annotator panel is the panel's own
+  toolbar, its CSS and its eight English strings, which no bundler can remove
+  from a static import. The script tag is unchanged for its readers: it is the
+  build that carries everything, so it hands the annotator in itself and
+  `data-annotate="off"` still switches the button off.
+
 ## 0.6.0 — 2026-09-07
 
 The adoptable release: one form state shared by React, Vue and Svelte; a

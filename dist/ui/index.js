@@ -12,7 +12,6 @@
  * friends) pierce the shadow root, so a stylesheet can also restyle it from
  * outside without touching JavaScript.
  */
-import { createAnnotator } from "../annotate.js";
 import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement } from "../element-picker.js";
 import { en } from "../locales.js";
@@ -193,7 +192,9 @@ export function mountBugbottle(options) {
     const types = options.types ?? REPORT_TYPES;
     const consoleFor = options.consoleFor ?? bugsOnly;
     const screenshotFor = options.screenshotFor ?? bugsOnly;
-    const annotateOn = options.annotate !== false;
+    // The annotator is a function the application hands in, so leaving it out
+    // keeps the canvas editor out of the bundle entirely.
+    const makeAnnotator = typeof options.annotate === "function" ? options.annotate : null;
     const theme = options.theme ?? {};
     const container = options.container ?? document.body;
     let locale = options.locale ?? en;
@@ -377,13 +378,13 @@ export function mountBugbottle(options) {
     }
     /** Replaces the preview with the canvas and hands the picture to the annotator. */
     async function openEditor() {
-        if (annotator || !screenshot)
+        if (annotator || !screenshot || !makeAnnotator)
             return;
         editBtn.hidden = true;
         preview.hidden = true;
         editor.hidden = false;
         undoBtn.disabled = true;
-        const open = createAnnotator(canvas, screenshot, {
+        const open = makeAnnotator(canvas, screenshot, {
             tool,
             onChange: (marks) => {
                 undoBtn.disabled = marks === 0;
@@ -421,7 +422,7 @@ export function mountBugbottle(options) {
         open.destroy();
         editor.hidden = true;
         preview.hidden = !screenshot;
-        editBtn.hidden = !screenshot || !annotateOn;
+        editBtn.hidden = !screenshot || !makeAnnotator;
     }
     async function capture() {
         const render = options.screenshot;
@@ -431,7 +432,7 @@ export function mountBugbottle(options) {
             screenshot = await captureScreenshot(render, { mask: options.mask });
             preview.src = screenshot;
             preview.hidden = false;
-            editBtn.hidden = !annotateOn;
+            editBtn.hidden = !makeAnnotator;
         }
         catch (err) {
             shotBox.checked = false;

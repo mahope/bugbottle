@@ -12,6 +12,7 @@
  * friends) pierce the shadow root, so a stylesheet can also restyle it from
  * outside without touching JavaScript.
  */
+import type { createAnnotator } from "../annotate.ts";
 import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
 import { type ReportType } from "../report-core.ts";
@@ -77,11 +78,13 @@ export type MountOptions = {
     elementPicker?: boolean;
     /**
      * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
-     * arrow and a blur that pixelates what it covers. Default true. `false`
-     * renders no button — the annotator is still in the bundle, since the panel
-     * imports it, but nothing on screen leads to it.
+     * arrow and a blur that pixelates what it covers. Hand in `createAnnotator`
+     * from `bugbottle/annotate` to get the button; leave it out and the panel
+     * never mentions the annotator and never carries it. The same seam as
+     * `screenshot`, `scrub` and `sign`: an optional capability is a function you
+     * pass in, so a bundler can drop what nobody asked for.
      */
-    annotate?: boolean;
+    annotate?: typeof createAnnotator | false;
     /**
      * `false` renders no floating button — call `open()` from your own control.
      * An element or selector makes that element the trigger instead.

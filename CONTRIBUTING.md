@@ -28,7 +28,7 @@ need Node 18.
 - The client entry points stayed small. Pack, install the tarball in a scratch
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
-  `bugbottle/react` 5.5 kB, `bugbottle/ui` 12 kB, `bugbottle/annotate` 2048
+  `bugbottle/react` 5.5 kB, `bugbottle/ui` 11 kB, `bugbottle/annotate` 2048
   bytes, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/sign` 512 bytes,
@@ -38,11 +38,15 @@ need Node 18.
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
-  picture annotator, which the panel imports whether or not `annotate: false`
-  hides its button: 1441 bytes for `src/annotate.ts`, about 300 for the toolbar
-  and the editor state, and the eight new locale strings in eight languages on
-  top of that in the script-tag build. Every budget rise is argued in a comment
-  beside it in `.github/workflows/ci.yml`; a new one needs the same.
+  picture annotator, and the panel gave most of it back when `annotate` became
+  a function you hand in rather than a boolean: `src/annotate.ts` (1441 bytes)
+  is now in the bundles that ask for it and no others, leaving the panel about
+  720 bytes over what it weighed before — its own toolbar, that toolbar's CSS
+  and eight English strings, none of which a bundler can drop from a static
+  import. The script-tag build carries everything, including those strings in
+  eight languages, so its budget did not come down. Every budget rise is argued
+  in a comment beside it in `.github/workflows/ci.yml`; a new one needs the
+  same, and so does every fall.
   `bugbottle/server` is measured and printed rather than budgeted: it is a
   server entry, and everything in it — the sinks included — is tree-shaken away
   from a consumer that imports only the validators. The number to watch there is
