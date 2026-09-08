@@ -177,8 +177,11 @@ IIFE from 18432 to 20992 bytes, because the panel imported the annotator
 whether or not anybody marked a picture. #39 undid that half: `annotate` is a
 function the application hands in, like `screenshot`, `scrub` and `sign`, so
 those 1441 bytes are in a bundle only when `createAnnotator` is passed to
-`mountBugbottle`, and the panel budget came back to 11 kB (measures 10 951
-against the 10 229 it weighed before the annotator existed). The 720 bytes in
+`mountBugbottle`, and the panel budget came back to 11 kB (measures 10 997
+against the 10 229 it weighed before the annotator existed; #48 added about
+fifty bytes for Escape leaving the editor and the longer sentence the canvas
+reads out). The IIFE gzips to 21 377 against its 21 504, so the eight
+languages leave little room: measure it before lengthening a locale string. The 720 bytes in
 between are the panel's own half — the toolbar, its CSS, the open/close wiring
 and eight English strings — and they cannot be tree-shaken out of a static
 import, so 10 kB is not reachable again with the feature in the panel; a
