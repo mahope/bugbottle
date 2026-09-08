@@ -259,7 +259,8 @@ pages it belongs to.
 ## The accessibility audit
 
 `scripts/a11y-site.mjs` is the check that a stylesheet cannot quietly break.
-It serves `site/` and `dist/` the way nginx does, and runs the pinned
+It serves `site/` and `dist/` the way nginx does — the security headers
+included, parsed straight out of `site/security-headers.conf` — and runs the pinned
 `axe-core` over both landing pages, the documentation index, one deep
 documentation page, the documentation index again with the search field
 holding results, and the two comparison pages, in **both colour schemes** —
@@ -359,8 +360,9 @@ file as `text/plain` and unlogged.
 
 ## The security headers
 
-Two headers, `X-Content-Type-Options: nosniff` and `Referrer-Policy:
-no-referrer`, and they live in `site/security-headers.conf` rather than in
+Three headers — `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+no-referrer` and a `Content-Security-Policy` — and they live in
+`site/security-headers.conf` rather than in
 `nginx.conf`, because nginx does not merge `add_header` down the block chain.
 A block inherits the enclosing set only for as long as it adds no header of its
 own; the moment a `location` sets a `Cache-Control`, it replaces the
@@ -377,6 +379,43 @@ way to lose a header is to add a location that forgets the include, which is
 why the include is the first line of every block rather than buried in one:
 a missing first line is visible where a missing header is not. The check is in
 "Building and running" below: `curl -sI` every kind of URL and compare.
+
+### The Content-Security-Policy
+
+```
+default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
+object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+```
+
+The footer promises the page makes no external request. `default-src 'self'`
+is that promise written where a browser enforces it: the site is static, it
+self-hosts both typefaces and its copy of `dist/`, and it speaks to nothing
+off-origin, so the strict default costs the site nothing and a third-party
+script that ever appeared in one of these files would simply not run.
+
+Two directives are wider than `'self'`, and both are the panel rather than the
+pages. `img-src` allows `data:` because a screenshot arrives as a
+`data:image/png;base64,` URL, is shown in an `<img>` before it is sent, and is
+exported the same way by the annotator. `style-src` allows `'unsafe-inline'`
+because `bugbottle/ui` renders into a shadow root, puts its stylesheet there as
+a `<style>` element and sets the host's position and the `--bb-*` custom
+properties through a style attribute; CSP judges both as inline style even
+inside a shadow root. Measured on the image, with `style-src 'self'` and
+nothing else: one `style-src-elem` violation, the host `position: static`
+instead of `fixed`, the trigger `border-radius: 0px` instead of `999px`, and
+the panel 800px wide with no padding — an unstyled form in the document flow.
+Nothing in `site/*.html`, `demo.js`, `docs.js` or the generated documentation
+carries an inline style or an inline script, so `'unsafe-inline'` is the
+panel's cost alone; the pages themselves would be served by `style-src 'self'`
+today. `object-src 'none'` because there are no plugins,
+`frame-ancestors 'none'` because nobody frames this site, `base-uri 'self'` so
+an injected `<base>` cannot re-point every relative URL, and
+`form-action 'self'` because the site posts nowhere.
+
+`scripts/a11y-site.mjs` parses this file and answers with the same headers, so
+the audited pages see the policy that will be served and a blocked resource
+fails the audit — Chrome logs one as a console error, and the script also
+listens for `securitypolicyviolation` so the report names the directive.
 
 ## The copy buttons
 
@@ -439,18 +478,18 @@ curl -si localhost:8089/panel-narrow.png | head -1
 `/health` returns `ok` as `text/plain` and is not logged — it is what the
 container platform polls.
 
-And that every one of them carries the same two security headers, which is the
-thing an `add_header` in a `location` quietly takes away:
+And that every one of them carries the same three security headers, which is
+the thing an `add_header` in a `location` quietly takes away:
 
 ```bash
-for p in / /robots.txt /sitemap.xml /dist/bugbottle.js /style.css /docs/          /fonts/sourcesans3-400.woff2 /health; do
+for p in / /robots.txt /sitemap.xml /dist/bugbottle.js /style.css /docs/          /fonts/sourcesans3-400.woff2 /schema/report.json /health /nope; do
   echo "== $p"
-  curl -sI "localhost:8089$p" | grep -i -E 'x-content-type-options|referrer-policy'
+  curl -sI "localhost:8089$p" | grep -i -E 'x-content-type-options|referrer-policy|content-security-policy'
 done
 ```
 
-Two lines under every path, or something in `nginx.conf` has stopped including
-the snippet.
+Three lines under every path — the 404 included, which is why `/nope` is in the
+list — or something in `nginx.conf` has stopped including the snippet.
 
 ## Deploying
 
