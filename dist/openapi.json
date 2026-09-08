@@ -1,0 +1,775 @@
+{
+  "$id": "https://bugbottle.dev/schema/openapi.json",
+  "components": {
+    "schemas": {
+      "Accepted": {
+        "description": "Deliberately empty: there was no `store`, so there is no id.",
+        "properties": {},
+        "title": "Accepted",
+        "type": "object"
+      },
+      "Breadcrumb": {
+        "description": "One thing the reporter did before they reported. A short timeline of these turns \"it broke after I clicked save\" into something reproducible.\n\nWhich fields are set depends on the kind: a click or a submit carries the `target` selector (and, for a click, the visible `text`), a navigation carries `from` and `to`, and a visibility change carries `to`.",
+        "properties": {
+          "from": {
+            "description": "Path and query the navigation left, or nothing when it is not known.",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BreadcrumbKind"
+          },
+          "target": {
+            "description": "A short CSS selector for the element involved.",
+            "type": "string"
+          },
+          "text": {
+            "description": "Visible text of the clicked element, whitespace-collapsed and clipped.",
+            "maxLength": 40,
+            "type": "string"
+          },
+          "to": {
+            "description": "Path and query navigated to, or `hidden`/`visible` for a visibility change.",
+            "type": "string"
+          },
+          "ts": {
+            "description": "ISO 8601 timestamp.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "BreadcrumbKind": {
+        "enum": [
+          "click",
+          "navigation",
+          "submit",
+          "visibility"
+        ],
+        "type": "string"
+      },
+      "BugReport": {
+        "description": "The JSON body a report is sent as. Extra fields may be added by the client.",
+        "properties": {
+          "breadcrumbs": {
+            "description": "What the reporter did before reporting, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/Breadcrumb"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "console": {
+            "items": {
+              "$ref": "#/components/schemas/ConsoleEntry"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "contact": {
+            "description": "How to reach the reporter, when the form asked for it and they answered. Free text: an email address, a phone number, a name in your own chat. Off by default everywhere, and personal data the moment it is on — see the privacy section of the README before you store it.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ReportContext"
+          },
+          "elements": {
+            "description": "Elements the reporter pointed at, in the order they were attached.",
+            "items": {
+              "$ref": "#/components/schemas/ElementRef"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "message": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "network": {
+            "description": "Requests that failed or were slow before the report, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/NetworkEntry"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "perf": {
+            "$ref": "#/components/schemas/PerfSnapshot",
+            "description": "What the page cost, when `bugbottle/perf` was measuring."
+          },
+          "replay": {
+            "$ref": "#/components/schemas/ReplayCapture",
+            "description": "The last seconds before the report, when `bugbottle/rrweb` was recording."
+          },
+          "screenshotDataUrl": {
+            "maxLength": 2900000,
+            "pattern": "^data:image/png;base64,",
+            "type": "string"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageSnapshot",
+            "description": "What was in the browser's stores, when `bugbottle/perf` was measuring."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ReportType"
+          }
+        },
+        "required": [
+          "type",
+          "message",
+          "context"
+        ],
+        "type": "object"
+      },
+      "ConsoleEntry": {
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/ConsoleLevel"
+          },
+          "message": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "stack": {
+            "description": "Frames parsed from an uncaught error or a rejection, innermost first.",
+            "items": {
+              "$ref": "#/components/schemas/StackFrame"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "ts": {
+            "description": "ISO 8601 timestamp.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "level",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ConsoleLevel": {
+        "enum": [
+          "error",
+          "warn"
+        ],
+        "type": "string"
+      },
+      "Created": {
+        "description": "The report was stored under this id.",
+        "properties": {
+          "id": {
+            "description": "Whatever `store` returned.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "Created",
+        "type": "object"
+      },
+      "Duplicate": {
+        "description": "A repeat of a report already seen inside the dedupe window.",
+        "properties": {
+          "duplicate": {
+            "const": true
+          },
+          "id": {
+            "description": "The first copy's id, when it had one.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "duplicate"
+        ],
+        "title": "Duplicate",
+        "type": "object"
+      },
+      "ElementRef": {
+        "description": "An element the reporter pointed at: what it is, what it says, where it is.",
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "description": "id, name, role, type, href, aria-label, placeholder, title and data-* — never data-bugbottle*.",
+            "type": "object"
+          },
+          "rect": {
+            "description": "Page coordinates in CSS pixels.",
+            "properties": {
+              "height": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "width",
+              "height"
+            ],
+            "type": "object"
+          },
+          "selector": {
+            "description": "A short CSS selector, e.g. `form#checkout > button:nth-of-type(2)`.",
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "text": {
+            "description": "Visible text, whitespace-collapsed and clipped.",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "selector",
+          "tag",
+          "text",
+          "rect",
+          "attributes"
+        ],
+        "type": "object"
+      },
+      "ErrorBody": {
+        "description": "Every refusal has this shape. The client shows `error` to the reporter, so it is a sentence in English and never a machine code.",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "Error",
+        "type": "object"
+      },
+      "NetworkEntry": {
+        "description": "One request the browser made before the report. Recorded by `bugbottle/network`, which keeps the failed and the slow ones.\n\nBodies and headers are never part of this, in either direction: that is where tokens and personal data live. What is left says which call failed and how long it took, which is the part that explains the report.",
+        "properties": {
+          "error": {
+            "description": "True when the request failed before a status — offline, CORS, aborted.",
+            "type": "boolean"
+          },
+          "method": {
+            "description": "The HTTP method, upper case.",
+            "type": "string"
+          },
+          "ms": {
+            "description": "How long the request took, in milliseconds.",
+            "type": "number"
+          },
+          "status": {
+            "description": "The response status, or 0 when the request never got one.",
+            "type": "number"
+          },
+          "ts": {
+            "description": "ISO 8601 timestamp of when the request finished.",
+            "type": "string"
+          },
+          "url": {
+            "description": "Path and query, with sensitive query values redacted. Cross-origin URLs keep their origin.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "method",
+          "url",
+          "status",
+          "ms"
+        ],
+        "type": "object"
+      },
+      "PerfSnapshot": {
+        "description": "What the page cost the reporter, measured by `bugbottle/perf`.\n\nEvery field is optional because every field is a measurement that may not have happened: a browser without `PerformanceObserver`, a page nobody interacted with, a runtime that does not expose the heap. Milliseconds are whole numbers and `cls` is rounded to three decimals — this is evidence for a reader, not a benchmark.",
+        "properties": {
+          "cls": {
+            "description": "Cumulative Layout Shift, excluding shifts that followed a recent input.",
+            "type": "number"
+          },
+          "domContentLoaded": {
+            "description": "When `DOMContentLoaded` finished, in milliseconds from navigation start.",
+            "type": "number"
+          },
+          "inp": {
+            "description": "Interaction to Next Paint: the worst interaction, in milliseconds.",
+            "type": "number"
+          },
+          "lcp": {
+            "description": "Largest Contentful Paint, in milliseconds from navigation start.",
+            "type": "number"
+          },
+          "load": {
+            "description": "When the load event finished, in milliseconds from navigation start.",
+            "type": "number"
+          },
+          "longTasks": {
+            "description": "Tasks that blocked the main thread for over 50 ms.",
+            "properties": {
+              "count": {
+                "type": "number"
+              },
+              "totalMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count",
+              "totalMs"
+            ],
+            "type": "object"
+          },
+          "memory": {
+            "description": "The JS heap, where the browser exposes it. Chromium only.",
+            "properties": {
+              "limitMB": {
+                "type": "number"
+              },
+              "usedMB": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "usedMB",
+              "limitMB"
+            ],
+            "type": "object"
+          },
+          "ttfb": {
+            "description": "Time to First Byte, in milliseconds from navigation start.",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ReplayCapture": {
+        "description": "A session replay: the events and how long they cover.\n\nThis is the heaviest and the most sensitive thing a report can carry — a recording of somebody using your application — so it is only ever here because the application called `attachRrweb` and handed its own rrweb `record` in.",
+        "properties": {
+          "events": {
+            "description": "rrweb events, oldest first, starting at a full snapshot.",
+            "items": {
+              "$ref": "#/components/schemas/ReplayEvent"
+            },
+            "maxItems": 20000,
+            "type": "array"
+          },
+          "seconds": {
+            "description": "How many seconds the events span, rounded.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "events",
+          "seconds"
+        ],
+        "type": "object"
+      },
+      "ReplayEvent": {
+        "additionalProperties": {},
+        "description": "One rrweb event, as rrweb wrote it.\n\nOnly `type` and `timestamp` are read — by the buffer in `bugbottle/rrweb` to find the checkouts, and by the validator to tell an event from whatever else arrived in the array. The rest is rrweb's payload and is carried through unread, because this library does not know how to play a replay and should not pretend to. That is also why the whole thing is bounded by size rather than field by field: it is somebody else's format.",
+        "properties": {
+          "timestamp": {
+            "description": "Epoch milliseconds.",
+            "type": "number"
+          },
+          "type": {
+            "description": "rrweb's event type number. 2 is a full snapshot.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "type",
+          "timestamp"
+        ],
+        "type": "object"
+      },
+      "ReportContext": {
+        "description": "Where the reporter was, and in what.\n\nEverything after `userAgent` is optional and best-effort: a browser that does not offer a fact simply leaves it out. None of it identifies a person more than the user agent already does.",
+        "properties": {
+          "colorScheme": {
+            "description": "What `prefers-color-scheme` said at the time of the report.",
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "type": "string"
+          },
+          "connection": {
+            "description": "The Network Information API's effective type, e.g. `4g`.",
+            "maxLength": 16,
+            "type": "string"
+          },
+          "language": {
+            "description": "The browser's preferred language tag, e.g. `en-GB`.",
+            "maxLength": 35,
+            "type": "string"
+          },
+          "online": {
+            "description": "Whether the browser believed it was online.",
+            "type": "boolean"
+          },
+          "screen": {
+            "description": "`${screenWidth}x${screenHeight}@${devicePixelRatio}`.",
+            "maxLength": 32,
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA time zone the browser resolved, e.g. `Europe/Copenhagen`.",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "url": {
+            "description": "Path and query of the page. The origin and the fragment are left out.",
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "viewport": {
+            "description": "`${innerWidth}x${innerHeight}`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "viewport",
+          "userAgent"
+        ],
+        "type": "object"
+      },
+      "ReportType": {
+        "enum": [
+          "bug",
+          "idea",
+          "other"
+        ],
+        "type": "string"
+      },
+      "StackFrame": {
+        "description": "One line of a parsed stack: where the code was, never what it said. Source text is deliberately absent — a frame points at a file and a position, and resolving that to a line of code is the reader's job, with their own maps.",
+        "properties": {
+          "col": {
+            "description": "1-based column number.",
+            "type": "number"
+          },
+          "file": {
+            "description": "Script the frame is in: a URL or a path, as the browser wrote it.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "fn": {
+            "description": "Function name, when the browser named one.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "line": {
+            "description": "1-based line number.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "file",
+          "line",
+          "col"
+        ],
+        "type": "object"
+      },
+      "StorageKeyRef": {
+        "description": "One key of a web storage: its name and how long its value was. Never the value.",
+        "properties": {
+          "key": {
+            "description": "The key, clipped.",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "length": {
+            "description": "How many characters the value had.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "length"
+        ],
+        "type": "object"
+      },
+      "StorageSnapshot": {
+        "description": "What was in the browser's stores when the report was written.\n\nNames and lengths, never values — a key called `authToken` says the state the page was in, and its value says rather more than a bug report should. `values` is the one exception and it is opt-in per key: `initPerf` copies a value in only when the integrator named that key in `allowValues`.",
+        "properties": {
+          "cookies": {
+            "description": "Cookie names. Never cookie values, allow-list or not.",
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "local": {
+            "description": "`localStorage` keys, in the order the browser lists them.",
+            "items": {
+              "$ref": "#/components/schemas/StorageKeyRef"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "session": {
+            "description": "`sessionStorage` keys, in the order the browser lists them.",
+            "items": {
+              "$ref": "#/components/schemas/StorageKeyRef"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "values": {
+            "additionalProperties": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "description": "Values of the allow-listed keys, clipped.",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bugbottleSignature": {
+        "description": "An HMAC-SHA-256 over `<timestamp>.<body>`, sent as `t=<ms>,v1=<hex>` and verified over the raw text before anything parses it. Read this honestly: the key ships inside the browser bundle, so it is public, and this is spam deterrence beside a rate limit — it is not authentication and it identifies nobody. What it buys is that a script pointed at the endpoint has to read your bundle and implement HMAC before it can post, and that a captured body cannot be replayed once the timestamp is stale. `authorize` is the hook for real authentication, and what it checks is yours to decide, so it is not described here.",
+        "in": "header",
+        "name": "X-Bugbottle-Signature",
+        "type": "apiKey"
+      }
+    }
+  },
+  "externalDocs": {
+    "description": "The README",
+    "url": "https://bugbottle.dev/docs/"
+  },
+  "info": {
+    "contact": {
+      "name": "bugbottle",
+      "url": "https://bugbottle.dev"
+    },
+    "description": "bugbottle is a client library, not a service: this describes the endpoint **you** run, as `handleReport` from `bugbottle/server` behaves. The request body is the published report schema (https://bugbottle.dev/schema/report.json), inlined here so the document stands on its own; the responses are the ones the handler gives. The path below is the one the README's examples use — yours is wherever you mounted the route, and no server is listed because there is no bugbottle server to list.\n\nSeveral answers only occur when the matching option is set: 200 needs `dedupe`, 401 needs `authorize` or `signature`, 429 needs `rateLimit`, and 204 needs `cors`. A handler configured without them simply never sends them, which is why they are documented rather than promised.",
+    "license": {
+      "identifier": "MIT",
+      "name": "MIT"
+    },
+    "summary": "The endpoint a bugbottle client POSTs a report to.",
+    "title": "bugbottle report endpoint",
+    "version": "0.12.0"
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/bug-report": {
+      "options": {
+        "description": "Answered only when `cors` is set. The requested headers are reflected back, so a client may send its own — a CSRF token, a tracing id — without this document listing them.",
+        "operationId": "preflightBugReport",
+        "responses": {
+          "204": {
+            "description": "The preflight is allowed. No body.",
+            "headers": {
+              "Access-Control-Allow-Headers": {
+                "description": "Whatever `Access-Control-Request-Headers` asked for, or `Content-Type, Authorization` when it asked for nothing.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "description": "Always `POST, OPTIONS`.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Max-Age": {
+                "description": "Always `86400`.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "CORS preflight"
+      },
+      "post": {
+        "description": "The body is validated field by field, optionally scrubbed and deduplicated, the screenshot is decoded and checked against the PNG signature in its bytes, and the report is stored and fanned out to the sinks. Unknown top-level fields are kept as `extra` rather than refused, so the request schema allows them.",
+        "operationId": "postBugReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReport"
+              }
+            }
+          },
+          "description": "The report. At most 4 MB by default; over that is a 413.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "duplicate": true,
+                  "id": "rep_7"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Duplicate"
+                }
+              }
+            },
+            "description": "A duplicate of a report already seen inside the dedupe window. Nothing was stored and no sink ran; the id, when there is one, is the first copy's."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "rep_7"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Created"
+                }
+              }
+            },
+            "description": "Stored. The id is whatever your `store` returned, and the client hands it to `onSent`."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {},
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "description": "Accepted and delivered to the sinks, but no `store` was configured, so there is no id to give back."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Write a message first"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The body was not JSON, or the report had no message. The `error` is shown to the reporter, so it is a sentence rather than a code."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Not allowed"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "`authorize` said no, or the `X-Bugbottle-Signature` header was missing, stale or wrong."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Method not allowed"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The route was reached with something other than POST (or the CORS preflight below). Documented here because it is this path's answer; the other methods are not operations of their own."
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Report took too long to arrive"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The body was still arriving when the deadline passed. The stream is cancelled rather than drained."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Report is too large"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The body was over the ceiling — 4 MB unless `maxBodyBytes` says otherwise. Counted as it arrives, so an oversized upload is cut off rather than buffered."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Too many reports"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Past the rate limit for this caller. A rate-limit store that is down fails open, so this is a real count rather than an outage."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Could not store the report"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Something the handler did not expect — a `store` that threw, most likely. Whatever broke, its message stays on the server."
+          }
+        },
+        "security": [
+          {},
+          {
+            "bugbottleSignature": []
+          }
+        ],
+        "summary": "Receive a bug report"
+      },
+      "summary": "One report in, one answer out."
+    }
+  }
+}

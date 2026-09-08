@@ -67,6 +67,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/server/file-store.ts` | `fileStore({ dir, maxReports?, screenshots? })` — the `store` function `handleReport` takes, backed by a directory, plus `list()`, `read(id, { screenshot? })` and `remove(id)`. One JSON file per report named `<receivedAt>-<id>.json` with the decoded PNG beside it as `<id>.png`, an index built by one walk on the first call that needs it and kept up to date by every write and delete, and `maxReports` deleting the oldest first. The only module under `src/server/` that reaches for Node, and nothing the validators reach imports it, so the validator-only bundle still mentions neither `node:fs` nor `readFile`. Every write is a tmp file renamed into place, so a crash leaves a `.tmp` nothing lists rather than half a report; an id is matched against the `randomUUID` shape **before** a path is built, which is the whole traversal defence; a picture is signature-checked in its bytes before it is written under a `.png` name, and a failed one is dropped while the report is stored | report-core, handle (types only) |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express`. A signed route mounted behind `express.json()` cannot be verified at all, so it calls `onError` once per handler naming the parser and answers the same 401 | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
+| `scripts/build-openapi.ts` | Generates `dist/openapi.json`, an OpenAPI 3.1 description of the report endpoint, from the schema above (3.1 is a superset of 2020-12, so the `$defs` move into `components/schemas` and only the `$ref` targets are rewritten) and from `handleReport`'s answers. Sorted keys like the schema, and run by `npm run build` straight after it; `tests/openapi.test.ts` imports it and exercises the handler for every status it can answer | build-schema, sign, server/handle |
 | `scripts/chrome.mjs` | `findChrome()` and `loadPuppeteer()` — the one answer the five browser scripts share. `CHROME_BIN` then `CHROME_PATH`, then the runner's `/usr/bin/google-chrome`, a distribution Chromium, macOS and Windows, then the same names on PATH; `puppeteer-core` from this repository or from the global root. Nothing downloads a browser | nothing |
 | `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over seven states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser, but CI's `browser` job runs it on every push and pull request | dist (at run time), chrome |
 | `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page, the search field on results, the theme playground with four controls moved, the two comparison pages, the Danish getting-started page and the changelog, in both colour schemes, failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first, and runs in CI's `browser` job beside the panel audit | site, dist (at run time), chrome |
@@ -86,7 +87,8 @@ Nineteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./html-to-image`, `./locales`, `./locales-extra`, `./ui`, `./breadcrumbs`,
 `./network`,
 `./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign`,
-`./rrweb` — plus `./report.schema.json`, which is data rather than code.
+`./rrweb` — plus `./report.schema.json` and `./openapi.json`, which are data
+rather than code.
 `tests/exports.test.ts` pins that count: an entry added here without the
 README's API section and this paragraph following it fails the suite. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
@@ -160,7 +162,7 @@ not closed and a branch is not merged with the docs lagging.
 ```bash
 npm run check       # typecheck → test → build → docs, in that order; run before "done"
 npm test            # node --test on tests/*.test.ts (needs Node 22+)
-npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → both IIFEs
+npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → openapi.json → both IIFEs
 npm run build:docs  # site/docs/ (the changelog included), /compare/, /da/sammenlign/, sitemap.xml, robots.txt; fails on an ungrouped, a ghost or a duplicated `##` section
 npm run a11y        # axe-core over the panel and over the site pages, in a real Chrome; needs a build and build:docs first
                     # CI's `browser` job runs this and smoke:annotate on every push and pull request

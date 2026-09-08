@@ -65,6 +65,7 @@ test("the README's API section names every entry point", () => {
     assert.ok(api.includes(named), `the API section never mentions ${named}`);
   }
   assert.ok(api.includes("`bugbottle/report.schema.json`"), "the schema is an entry too");
+  assert.ok(api.includes("`bugbottle/openapi.json`"), "so is the OpenAPI document");
 });
 
 /**

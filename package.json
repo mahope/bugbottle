@@ -109,10 +109,11 @@
       "default": "./dist/ui/index.js"
     },
     "./report.schema.json": "./dist/report.schema.json",
+    "./openapi.json": "./dist/openapi.json",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node --experimental-strip-types scripts/build-schema.ts && node scripts/build-iife.mjs",
+    "build": "tsc -p tsconfig.build.json && node --experimental-strip-types scripts/build-schema.ts && node --experimental-strip-types scripts/build-openapi.ts && node scripts/build-iife.mjs",
     "build:docs": "node scripts/build-docs.mjs",
     "a11y": "node scripts/a11y-audit.mjs && node scripts/a11y-site.mjs",
     "shot:panel": "node scripts/capture-panel.mjs",
