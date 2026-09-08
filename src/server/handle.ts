@@ -300,7 +300,9 @@ function evictDedupe(now: number, windowMs: number): void {
 }
 
 /**
- * The signatures accepted so far, and when. Module-level with the same honest
+ * The signatures accepted so far, against the timestamp each one signed rather
+ * than the moment it arrived, so an entry survives exactly as long as the
+ * signature it stands for would still be accepted. Module-level with the same honest
  * limit as the buckets and the fingerprints: one instance remembers its own
  * traffic, and two instances behind a load balancer do not share a cache. It
  * stops a captured body being replayed at the instance that saw it, which is
@@ -343,10 +345,18 @@ function parseSignature(value: string): { timestamp: number; digest: string } | 
   return { timestamp, digest };
 }
 
-/** Drops what has aged out of the skew window, then the oldest. */
+/**
+ * Drops what can no longer be accepted anyway, then the oldest.
+ *
+ * The value is the *signed* timestamp, not the moment the request arrived, and
+ * the difference matters: the window runs in both directions, so a signature
+ * dated ahead of our clock stays valid for nearly twice `maxSkewMs` after it
+ * first turns up. Forgetting it at arrival + `maxSkewMs` would hand back the
+ * rest of that as a replay window for a body somebody captured.
+ */
 function evictSignatures(now: number, maxSkewMs: number): void {
-  for (const [digest, at] of seenSignatures) {
-    if (at + maxSkewMs <= now) seenSignatures.delete(digest);
+  for (const [digest, timestamp] of seenSignatures) {
+    if (timestamp + maxSkewMs <= now) seenSignatures.delete(digest);
   }
   while (seenSignatures.size >= MAX_SIGNATURE_ENTRIES) {
     const oldest = seenSignatures.keys().next();
@@ -396,7 +406,7 @@ async function verifySignature(
   // with digests of their own choosing.
   if (seenSignatures.has(parsed.digest)) return false;
   evictSignatures(now, maxSkewMs);
-  seenSignatures.set(parsed.digest, now);
+  seenSignatures.set(parsed.digest, parsed.timestamp);
   return true;
 }
 

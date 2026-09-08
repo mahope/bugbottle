@@ -121,6 +121,30 @@ test("the same signature is only accepted once", async () => {
   assert.deepEqual(await replay.json(), { error: "Bad signature" });
 });
 
+test("a signature is remembered for as long as it would still be accepted", async () => {
+  // The skew window runs in both directions, so a signature dated ahead of our
+  // clock stays valid for nearly twice the window after it first arrives.
+  // Remembering it only from the moment it arrived lets it be replayed for the
+  // remainder — the cache forgets it while the window is still open. Small
+  // numbers here so the test is a third of a second rather than ten minutes.
+  const maxSkewMs = 400;
+  const signature = await computeSignature(KEY, TEXT, Date.now() + 300);
+  const options = { signature: { key: KEY, maxSkewMs }, store: async () => ({ id: "rep_1" }) };
+  assert.equal((await handleReport(post(TEXT, signature), options)).status, 201);
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Any other honest report prunes the cache on its way through, which is what
+  // drops the entry above while its signature is still inside the window.
+  const other = JSON.stringify({ ...body, message: "an unrelated report" });
+  assert.equal((await handleReport(post(other, await computeSignature(KEY, other)), options)).status, 201);
+
+  // Still inside the window — 200 ms past a timestamp 400 ms wide either way —
+  // so this is a replay of a captured body, not an expired signature.
+  const replay = await handleReport(post(TEXT, signature), options);
+  assert.equal(replay.status, 401, "the captured body was replayed after the cache forgot it");
+  assert.deepEqual(await replay.json(), { error: "Bad signature" });
+});
+
 test("a rejected signature is not remembered, so the honest retry still works", async () => {
   const signature = await computeSignature("some other key", TEXT);
   const options = { signature: { key: KEY } };
