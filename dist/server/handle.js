@@ -332,7 +332,7 @@ async function verifySignature(request, body, options) {
     // with digests of their own choosing — though a public key means they can
     // still mint digests that do verify, which is why the in-memory store bounds
     // itself per signed second and why `signature.store` exists at all.
-    const store = options.store ?? options.replayStore;
+    const { store } = options;
     if (store) {
         // A store that throws propagates: `handleReport` answers 500 rather than
         // accept a signature it could not check against what it has already seen.
@@ -368,7 +368,7 @@ async function overRateLimit(request, address, options, onError) {
     // and a `key` of your own may read one. Clipping it bounds one entry, and
     // the ceiling below bounds the whole map.
     const key = (options.key ? options.key(request, address) : address).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
-    const store = options.store ?? options.rateLimitStore;
+    const { store } = options;
     if (store) {
         try {
             // The count is checked before it is compared, for the same reason the
@@ -727,7 +727,7 @@ export async function handleReport(request, options = {}) {
         let dedupeKey;
         if (options.dedupe) {
             const now = Date.now();
-            const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
+            const dedupeStore = options.dedupe.store;
             dedupeKey = (options.dedupe.key ?? fingerprint)(report);
             let seen;
             if (dedupeStore) {
@@ -804,7 +804,7 @@ export async function handleReport(request, options = {}) {
         // Recorded once the report is stored, so a `store` that threw does not
         // leave a fingerprint that swallows the retry.
         if (dedupeKey !== undefined && options.dedupe) {
-            const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
+            const dedupeStore = options.dedupe.store;
             if (dedupeStore) {
                 try {
                     await dedupeStore.set(dedupeKey, { id }, Date.now() + options.dedupe.windowMs);
@@ -854,12 +854,24 @@ export async function handleReport(request, options = {}) {
         return decide(json({ error: "Could not store the report" }, 500, cors), "error");
     }
 }
+/**
+ * The screenshot address a sink is to use: its own option where it has one,
+ * and the address `handleReport` stored otherwise. An option set on the sink
+ * is the call site nearest the storage decision, so it wins — which is what
+ * `screenshotUrl ?? ctx.screenshotUrl` says inside the sinks that take a
+ * context of their own. `screenshotUrlFrom` is left alone here: it reads the
+ * report, so the sink resolves it after this.
+ */
+function withStoredScreenshot(options, ctx) {
+    if (options.screenshotUrl || !ctx.screenshotUrl)
+        return options;
+    return { ...options, screenshotUrl: ctx.screenshotUrl };
+}
 /** Sends every report on to Resend. The screenshot is attached when it was kept. */
 export function toResend(options) {
     return async (report, ctx) => await sendReportEmail(report, {
-        ...options,
+        ...withStoredScreenshot(options, ctx),
         ...(ctx.screenshot ? { screenshot: ctx.screenshot } : {}),
-        markdown: { ...options.markdown, ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}) },
     });
 }
 /** POSTs every report to a webhook — `json`, `slack` or `discord`. */
@@ -871,16 +883,10 @@ export function toWebhook(options) {
 }
 /** Files every report as a GitHub issue, linking the stored screenshot. */
 export function toGithub(options) {
-    return async (report, ctx) => await createGithubIssue(report, {
-        ...options,
-        ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
-    });
+    return async (report, ctx) => await createGithubIssue(report, withStoredScreenshot(options, ctx));
 }
 /** Files every report as a Linear issue, linking the stored screenshot. */
 export function toLinear(options) {
-    return async (report, ctx) => await createLinearIssue(report, {
-        ...options,
-        ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
-    });
+    return async (report, ctx) => await createLinearIssue(report, withStoredScreenshot(options, ctx));
 }
 //# sourceMappingURL=handle.js.map

@@ -14,6 +14,7 @@ import { looksLikeEmail, normaliseContact } from "../report-core.js";
 import { toMarkdown } from "../markdown.js";
 import { en } from "../locales.js";
 import { messageFromBody, readBody, SinkError } from "./error.js";
+import { resolveUrl } from "./chat.js";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 /** Base64 without a dependency: `btoa` exists in Node 18+, workers and Deno. */
 function bytesToBase64(bytes) {
@@ -54,7 +55,15 @@ function titleOf(report, options) {
  */
 export async function sendReportEmail(report, options) {
     const locale = options.locale ?? en;
-    const markdownOptions = options.markdown ?? {};
+    // The same two keys as every other sink: the address you already have, or
+    // the function that reads it out of the report. Either one wins over a
+    // `screenshotUrl` sitting in the Markdown options, because it is the call
+    // site nearest the storage decision.
+    const screenshotUrl = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl);
+    const markdownOptions = {
+        ...options.markdown,
+        ...(screenshotUrl ? { screenshotUrl } : {}),
+    };
     const markdown = toMarkdown(report, markdownOptions);
     const title = titleOf(report, markdownOptions);
     const subject = options.subject ?? locale.email.subject.replace("{title}", () => title);

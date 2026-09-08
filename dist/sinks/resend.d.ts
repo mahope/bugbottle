@@ -13,6 +13,7 @@
 import { type MarkdownOptions } from "../markdown.ts";
 import { type Locale } from "../locales.ts";
 import { type FetchLike } from "./error.ts";
+import { type UrlFrom } from "./chat.ts";
 export type SendReportEmailOptions = {
     /** A Resend API key. Read it from your own configuration and pass it in. */
     apiKey: string;
@@ -32,6 +33,13 @@ export type SendReportEmailOptions = {
     fetch?: FetchLike;
     /** Decoded PNG bytes from `decodeScreenshotDataUrl`, attached as a file. */
     screenshot?: Uint8Array;
+    /**
+     * Where you stored the screenshot, linked from the mail. A separate thing
+     * from `screenshot`, which is the picture itself travelling as a file.
+     */
+    screenshotUrl?: string;
+    /** Picks the screenshot address out of the report, when it travels there. */
+    screenshotUrlFrom?: UrlFrom;
     /** Wording of subject and intro. Default English. */
     locale?: Locale;
     /** Passed through to `toMarkdown` — extra facts, a screenshot URL. */

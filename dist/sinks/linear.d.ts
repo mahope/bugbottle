@@ -19,6 +19,7 @@
  */
 import { type MarkdownOptions } from "../markdown.ts";
 import { type FetchLike } from "./error.ts";
+import { type UrlFrom } from "./chat.ts";
 export type CreateLinearIssueOptions = {
     /**
      * A Linear API key. Personal keys and OAuth access tokens both go in the
@@ -39,6 +40,8 @@ export type CreateLinearIssueOptions = {
      * mutation cannot carry the picture itself.
      */
     screenshotUrl?: string;
+    /** Picks the screenshot address out of the report, when it travels there. */
+    screenshotUrlFrom?: UrlFrom;
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
     /** Passed through to `toMarkdown` — extra facts, a heading level. */

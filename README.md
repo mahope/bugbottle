@@ -628,9 +628,6 @@ queue.clear();         // throw them away
 queue.destroy();       // remove the listeners; the reports stay in storage
 ```
 
-The cap was called `maxItems` until 0.9, the one recorder that did not call it
-`maxEntries`. That name still works and is deprecated; it goes in 1.0.
-
 ### When the quota runs out
 
 `localStorage` is a few megabytes for the whole origin, shared with whatever
@@ -756,9 +753,6 @@ await sendReport("/api/feedback", report, {
   onError: (failed) => queue.enqueue(failed),
 });
 ```
-
-It was called `onFailure` until 0.9. That name still works and is deprecated;
-it goes in 1.0, and where both are given `onError` is the one that runs.
 
 ## The ready-made panel
 
@@ -2044,8 +2038,8 @@ handleReport(req, {
 ```
 
 All three are called `store`, inside `rateLimit`, `dedupe` and `signature`.
-They were `rateLimitStore`, `dedupeStore` and `replayStore` until 0.9; those
-names still work, are deprecated, and go in 1.0.
+`HandleReportOptions.store`, the top-level one that persists a report, is a
+different option.
 
 **Two of them fail open and one fails closed, and that is deliberate.** A
 rate-limit store that throws lets the report through: refusing an honest
@@ -2396,6 +2390,22 @@ None of the numbers is a budget CI enforces; they are here so the cost of a
 sink is known before it is imported, and every one of them is dwarfed by the
 framework already in a server bundle.
 
+**The picture, once for all eleven.** Only Resend and Sentry can carry the
+bytes; every other sink links to an address you stored the picture at. That
+address reaches a sink in one of two ways, spelled the same in all of them
+since 1.0:
+
+- `screenshotUrl?: string` — the address you already have.
+- `screenshotUrlFrom?: (report) => string | undefined` — read it out of the
+  report, for a signed URL built per report.
+
+`screenshotUrlFrom` wins where both are given, because it is the one that saw
+the report; and where neither is, a sink run by `handleReport` falls back to
+the address the `screenshot` function stored. A `data:` URL is never used: the
+services fetch the address themselves, so a data URL is silently dropped rather
+than sent. Read "Please read this part" before that address becomes a public
+one.
+
 `sendReportEmail` posts to Resend. It renders the report with `toMarkdown`,
 attaches the decoded screenshot as `screenshot.png` when you pass the bytes,
 and returns the message id:
@@ -2453,10 +2463,10 @@ await sendReportWebhook(payload, {
 });
 ```
 
-The address was `url` until 0.9, where everything else in the package calls it
-`endpoint`. That name still works and is deprecated; it goes in 1.0. A vendor's
-own address keeps the vendor's own word — `webhookUrl` for the Slack, Discord
-and Teams sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
+The address is `endpoint`, the word everything else in the package uses for
+somewhere you POST a report. A vendor's own address keeps the vendor's own
+word — `webhookUrl` for the Slack, Discord and Teams sinks below, `host` for
+GitLab, `site` for Jira, `dsn` for Sentry.
 
 ### Your own SMTP server
 
@@ -2565,9 +2575,10 @@ export const POST = (req: Request) =>
         webhookUrl: process.env.SLACK_WEBHOOK_URL!,   // the URL is the credential
         username: "bugbottle",
         iconEmoji: ":beetle:",
-        // Both are optional, and both are functions of the report, so the URL
-        // can be built from whatever you stored.
-        screenshotUrl: (r) => signedUrlFor(r),
+        // Both are optional. `screenshotUrlFrom` is a function of the report,
+        // so the address can be built from whatever you stored; pass
+        // `screenshotUrl` instead when you already have it.
+        screenshotUrlFrom: (r) => signedUrlFor(r),
         reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
       }),
       discordSink({
@@ -2623,9 +2634,10 @@ export const POST = (req: Request) =>
     sinks: [
       teamsSink({
         webhookUrl: process.env.TEAMS_WEBHOOK_URL!,   // the URL is the credential
-        // Both are optional, and both are functions of the report, so the URL
-        // can be built from whatever you stored.
-        screenshotUrl: (r) => signedUrlFor(r),
+        // Both are optional. `screenshotUrlFrom` is a function of the report,
+        // so the address can be built from whatever you stored; pass
+        // `screenshotUrl` instead when you already have it.
+        screenshotUrlFrom: (r) => signedUrlFor(r),
         reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
         buttonText: "Open report",                    // the default
       }),
@@ -3265,6 +3277,23 @@ const valid = new Ajv().compile(schema)(payload);
 
 ## API
 
+### 1.0 — what it promises
+
+From 1.0 this list is a contract rather than a description. Semantic versioning
+applies to every name in it: **removing or renaming an export, an option or a
+`data-*` attribute needs a major version**, **adding an entry point needs a
+minor one**, and a patch changes behaviour only where the behaviour was a bug.
+The seven naming rules in `CLAUDE.md` are what the next name will be chosen by,
+and `docs/api-audit-1.0.md` holds the whole surface — every export of every
+entry point, generated from the build — so a rename is visible as a diff rather
+than as a surprise. `tests/exports.test.ts` fails if the exports map, this
+section or `CLAUDE.md` stop agreeing.
+
+What is *not* frozen: the wire format grows fields rather than changing them (a
+report is validated field by field, so an older server ignores a newer one's
+additions), the bundle sizes are budgets rather than promises, and anything
+under `site/`, `examples/` or `scripts/` is not published at all.
+
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
 `captureScreenshot` (with `CaptureInfo`, `DEFAULT_BYTES_PER_PIXEL_ESTIMATE` and
 the `MaskOptions` of its `mask` option, whose defaults are
@@ -3273,12 +3302,15 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
 `fingerprint`, `stableHash`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`,
-`toMarkdown` (with `MarkdownOptions`; it and the validators live in
-`bugbottle/server` as well, which is where they belong — see
-`docs/api-audit-1.0.md`), the server
-validators below, and the shared types and limits — including the `StackFrame`
-type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
-`MAX_CONTEXT_LENGTHS`.
+`REPORT_TYPES`, `isReportType`, and the shared types and limits — including the
+`StackFrame` type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`,
+`MAX_CONTACT_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+
+The validators and `toMarkdown` are **not** here: they are what a receiving
+server does with a report that has arrived, so since 1.0 they live on
+`bugbottle/server` alone. `REPORT_TYPES` and `isReportType` stay, because the
+panel and the adapters build the type radiogroup out of them and `ReportType`
+would otherwise be a type with no values behind it.
 
 The option and payload types come with them: `BugReport`, `ReportContext`,
 `ReportType`, `ConsoleEntry`, `ConsoleLevel`, `ElementRef`, `Breadcrumb`,
@@ -3414,9 +3446,7 @@ with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `buildDiscordMessage`, `buildTeamsMessage`, `escapeSlack`, `escapeTeams`,
 `DISCORD_COLOURS`, `TEAMS_CARD_SCHEMA`, `TEAMS_CARD_VERSION`,
 `TEAMS_CARD_CONTENT_TYPE`, the `MAX_SLACK_*`,
-`MAX_DISCORD_*` and `MAX_TEAMS_*` limits (the vendor-first `SLACK_MAX_*` and
-`DISCORD_MAX_*`
-spellings still exist, deprecated, and go in 1.0), `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
+`MAX_DISCORD_*` and `MAX_TEAMS_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `DiscordSinkOptions`, `TeamsSinkOptions`, `ChatSink`, `ChatSinkContext` and
 `UrlFrom` types,
 `sentrySink`, `buildSentryEvent`, `buildSentryEnvelope`, `parseSentryDsn`,

@@ -39,7 +39,7 @@ export async function sendReportWebhook(report, options) {
     const format = options.format ?? "json";
     const markdown = toMarkdown(report, options.markdown ?? {});
     const doFetch = options.fetch ?? globalThis.fetch;
-    const response = await doFetch(options.endpoint ?? options.url, {
+    const response = await doFetch(options.endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...options.headers },
         body: JSON.stringify(bodyFor(report, format, markdown)),
@@ -51,9 +51,4 @@ export async function sendReportWebhook(report, options) {
     }
     return { status: response.status };
 }
-/**
- * @deprecated Renamed to `MAX_DISCORD_CONTENT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_CONTENT = MAX_DISCORD_CONTENT;
 //# sourceMappingURL=webhook.js.map

@@ -20,6 +20,7 @@
  */
 import { type MarkdownOptions } from "../markdown.ts";
 import { type FetchLike } from "./error.ts";
+import { type UrlFrom } from "./chat.ts";
 export type CreateGithubIssueOptions = {
     /** A token with issues write on the repository. Fine-grained is enough. */
     token: string;
@@ -36,6 +37,8 @@ export type CreateGithubIssueOptions = {
      * cannot carry the picture itself.
      */
     screenshotUrl?: string;
+    /** Picks the screenshot address out of the report, when it travels there. */
+    screenshotUrlFrom?: UrlFrom;
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
     /** Passed through to `toMarkdown` — extra facts, a heading level. */

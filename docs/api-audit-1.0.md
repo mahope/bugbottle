@@ -1,26 +1,31 @@
-# The public API, read once before 1.0
+# The public API, frozen at 1.0
 
 One reading of the whole public surface at 0.8.0, on 8 September 2026, before
-1.0 freezes it: every export of the eighteen entry points, every option object,
-every `data-*` attribute and every `window.bugbottle` member, looked at for
-naming consistency, option shapes, things exported by accident, and things
-documented but not typed or typed but not documented. Issue #62.
+1.0 froze it: every export of the eighteen entry points there were then, every
+option object, every `data-*` attribute and every `window.bugbottle` member,
+looked at for naming consistency, option shapes, things exported by accident,
+and things documented but not typed or typed but not documented. Issue #62.
+Refreshed at 1.0 (#97), where the aliases it added were removed again and the
+table at the end became the contract.
 
-The table at the end is the whole surface. This half is what it says.
+The table at the end is the whole surface, generated from the build. This half
+is what it says.
 
 ## What was read
 
-`package.json#exports`, the eighteen `dist/*.d.ts` trees behind it, the README
+`package.json#exports`, the `dist/*.d.ts` trees behind it, the README
 "API" section and its script-tag attribute table, `src/global.ts` and
 `src/global-slim.ts` for `window.bugbottle`, and `dist/report.schema.json`.
 
+At 1.0 (the numbers below are the generated table's, not the 0.8.0 reading's):
+
 | | |
 |---|---|
-| Entry points | 18 code + `./report.schema.json` + `./package.json` |
-| Exported bindings | 412 (315 distinct names: 159 types, 127 constants, 118 functions, 8 classes) |
+| Entry points | 20 code + `./report.schema.json` + `./openapi.json` + `./package.json` |
+| Exported bindings | 454 (367 distinct names: 124 types, 122 constants, 113 functions, 8 classes) |
 | Untyped exports | 0 — every entry is a `tsc`-emitted declaration, so nothing can be exported without a type |
 | Documented in the README but not exported | 0 |
-| Exported but not named in the README | 75 distinct names, of which 40 are `MAX_*`/`SLACK_MAX_*`/`DISCORD_MAX_*` limits the README covers as a group; the remaining 35 are named individually in this change |
+| Exported but not named in the README | 0 individually or by a group line; `tests/exports.test.ts` fails when that stops being true |
 
 The schema cannot drift from the types: `scripts/build-schema.ts` generates
 `report.schema.json` from `BugReport` and `tests/schema.test.ts` pins its
@@ -93,24 +98,65 @@ export names the README never mentioned, and `tests/exports.test.ts`, which
 fails if `package.json#exports` gains or loses an entry without CLAUDE.md's
 count and the README's API list following it.
 
-## What is left for 1.0
+## What 1.0 removed
 
-Breaking, so each is its own issue rather than a change here.
+Every alias the table above added has gone, and the removals are the whole of
+1.0's breaking half. The migration is mechanical in all seven cases.
 
-- **#63–#67** remove the seven aliases above.
-- **#68** takes the thirteen server validators and `toMarkdown` off the `.`
-  entry. They are tree-shaken today, so this is about what the core entry says
-  it is, not about bytes.
-- **#69** gives the seven sinks one shape for the picture address:
-  `screenshotUrl` a string, `screenshotUrlFrom` a function. Slack and Discord
-  currently take the function under the first name, which is the only place in
-  the package where one key has two types depending on the import.
+| Gone in 1.0 | Use instead | Issue |
+|---|---|---|
+| `SendOptions.onFailure` | `SendOptions.onError` | #63 |
+| `QueueOptions.maxItems` | `QueueOptions.maxEntries` | #64 |
+| `SLACK_MAX_*`, `DISCORD_MAX_*` (13) | `MAX_SLACK_*`, `MAX_DISCORD_*` | #65 |
+| `RateLimitOptions.rateLimitStore` | `RateLimitOptions.store` | #66 |
+| `DedupeOptions.dedupeStore` | `DedupeOptions.store` | #66 |
+| `SignatureOptions.replayStore` | `SignatureOptions.store` | #66 |
+| `SendReportWebhookOptions.url` | `SendReportWebhookOptions.endpoint` | #67 |
+
+Two shapes changed with them:
+
+- **#68** took the eleven server validators and `toMarkdown` off the `.` entry.
+  They are on `bugbottle/server`, which re-exported every one of them all
+  along; only the import path changes. `REPORT_TYPES` and `isReportType` stay
+  on `.`, because the panel and the adapters build the type radiogroup out of
+  them. They were tree-shaken before, so no bundle shrank: the core measured
+  1540 bytes gzipped before and 1543 after.
+- **#69** gave all eleven sinks one shape for the picture address:
+  `screenshotUrl` a string, `screenshotUrlFrom` a function of the report, the
+  function winning where both are given. Slack, Discord and Teams took the
+  function under the first name, which was the only place in the package where
+  one key had two types depending on the import.
+
 - ~~**#70** mirrors `data-network` and `data-perf` with `network` and `perf`
-  mount options on the hand-it-in seam.~~ Landed: `MountOptions.network` and
-  `MountOptions.perf` take `initNetwork` and `initPerf`, or `{ on, …options }`,
-  started on mount and stopped in `destroy()`. Typed structurally, so
-  `src/ui/` imports neither module. It was additive, and it was the one hole in
-  rules 3 and 6.
+  mount options on the hand-it-in seam.~~ Landed before 1.0:
+  `MountOptions.network` and `MountOptions.perf` take `initNetwork` and
+  `initPerf`, or `{ on, …options }`, started on mount and stopped in
+  `destroy()`. Typed structurally, so `src/ui/` imports neither module. It was
+  additive, and it was the one hole in rules 3 and 6.
+
+## Nothing else was left half-renamed
+
+Every `### Changed` section from 0.9.0 to 0.15.0 was read again before the
+freeze, looking for a shape that was announced as provisional and never
+settled. There is none:
+
+- **0.9.0** is the audit itself: seven aliases, all removed above.
+- **0.10.0**, **0.11.0**, **0.12.0**: additive — sinks, entry points and the
+  panel's seams. No option changed meaning.
+- **0.13.0** carries the one other note that called itself a pre-1.0 shape
+  change: `QueueStorage` is one function rather than two, `read` having been
+  required of every storage and called from nowhere (#88). That landed whole in
+  0.13.0 — `createIdbStorage` lost its `read` in the same release — and nothing
+  about it is pending.
+- **0.14.0** changed one default rather than a shape: `handleReport` no longer
+  reads `X-Forwarded-For` or `CF-Connecting-IP` unless `trustProxy` says it
+  may (#90). The option is the settled name and the behaviour is the settled
+  one.
+- **0.15.0** added `onDecision` and the reduced-motion pass, and says in its
+  own summary that no public API changed shape.
+
+No `@deprecated` marker is left anywhere under `src/`, which is the mechanical
+half of the same check.
 
 ## Deliberately left alone
 
@@ -135,508 +181,603 @@ Breaking, so each is its own issue rather than a change here.
 
 ## Every export
 
-Read at 0.8.0, before the fixes above landed; the verdict column is what was
-decided about each. A name that appears under more than one entry is the same
-symbol re-exported, not a copy.
+The whole public surface, generated from the build by
+`node scripts/api-table.mjs` and regenerated whenever an export changes.
+20 entry points; a name under more than one of them is the same symbol
+re-exported, not a copy. From 1.0 this table is the contract: removing a row
+needs a major version, and adding an entry point needs a minor one.
 
 ### `bugbottle`
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `Breadcrumb` | type | `src/report-core.ts` | no | documented in this change |
-| `BreadcrumbKind` | type | `src/report-core.ts` | no | documented in this change |
-| `BugReport` | type | `src/report-core.ts` | no | documented in this change |
-| `buildReport` | function | `src/send.ts` | yes | keep |
-| `BuildReportInput` | type | `src/send.ts` | no | documented in this change |
-| `buildSelector` | function | `src/element-picker.ts` | yes | keep |
-| `BUILTIN_SCRUBBERS` | const | `src/scrub.ts` | yes | keep |
-| `CaptureInfo` | type | `src/capture.ts` | yes | keep |
-| `CaptureOptions` | type | `src/capture.ts` | no | documented in this change |
-| `captureScreenshot` | function | `src/capture.ts` | yes | keep |
-| `collectContext` | function | `src/capture.ts` | yes | keep |
-| `ConsoleBufferOptions` | type | `src/console-buffer.ts` | no | documented in this change |
-| `ConsoleEntry` | type | `src/report-core.ts` | no | documented in this change |
-| `ConsoleLevel` | type | `src/report-core.ts` | no | documented in this change |
-| `DEFAULT_BLOCK_SELECTOR` | const | `src/mask.ts` | yes | keep |
-| `DEFAULT_BYTES_PER_PIXEL_ESTIMATE` | const | `src/capture.ts` | yes | keep |
-| `DEFAULT_MASK_COLOUR` | const | `src/mask.ts` | yes | keep |
-| `DEFAULT_MASK_SELECTOR` | const | `src/mask.ts` | yes | keep |
-| `DEFAULT_REPLACEMENT` | const | `src/scrub.ts` | no | documented in this change |
-| `DEFAULT_SEND_TIMEOUT_MS` | const | `src/send.ts` | no | documented in this change |
-| `describeElement` | function | `src/element-picker.ts` | yes | keep |
-| `ElementRef` | type | `src/report-core.ts` | no | documented in this change |
-| `EmailTexts` | type | `src/locales.ts` | yes | keep |
-| `fingerprint` | function | `src/fingerprint.ts` | yes | keep — verb reading, one identity per report |
-| `FingerprintInput` | type | `src/fingerprint.ts` | no | documented in this change |
-| `getConsoleBuffer` | function | `src/console-buffer.ts` | yes | keep |
-| `initConsoleBuffer` | function | `src/console-buffer.ts` | yes | keep |
-| `isReportType` | function | `src/report-core.ts` | yes | keep |
-| `Locale` | type | `src/locales.ts` | yes | keep |
-| `MarkdownOptions` | type | `src/markdown.ts` | no | server-only; off `.` in 1.0 (#68) |
-| `MaskOptions` | type | `src/mask.ts` | yes | keep |
-| `MAX_BREADCRUMB_TEXT_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_BREADCRUMBS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_CONSOLE_ENTRIES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_CONSOLE_MESSAGE_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_CONTACT_LENGTH` | const | `src/report-core.ts` | yes | keep |
-| `MAX_CONTEXT_LENGTHS` | const | `src/report-core.ts` | yes | keep |
-| `MAX_COOKIE_NAMES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_ELEMENT_TEXT_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_ELEMENTS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_MESSAGE_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_NETWORK_ENTRIES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_PERF_MS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_REPLAY_BYTES` | const | `src/report-core.ts` | yes | keep |
-| `MAX_REPLAY_EVENTS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_SCREENSHOT_BYTES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_SCREENSHOT_DATA_URL_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STACK_FRAMES` | const | `src/report-core.ts` | yes | keep |
-| `MAX_STACK_STRING_LENGTH` | const | `src/report-core.ts` | yes | keep |
-| `MAX_STORAGE_KEY_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STORAGE_KEYS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STORAGE_VALUE_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STORAGE_VALUES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `Messages` | type | `src/locales.ts` | yes | keep |
-| `NetworkEntry` | type | `src/report-core.ts` | yes | keep |
-| `normaliseBreadcrumbs` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseConsole` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseContact` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseContext` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseElements` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseMessage` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseNetwork` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normalisePerf` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseReplay` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `normaliseStorage` | function | `src/report-core.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `PerfSnapshot` | type | `src/report-core.ts` | yes | keep |
-| `pickElement` | function | `src/element-picker.ts` | yes | keep |
-| `PickOptions` | type | `src/element-picker.ts` | no | documented in this change |
-| `ReplayCapture` | type | `src/report-core.ts` | yes | keep |
-| `ReplayEvent` | type | `src/report-core.ts` | yes | keep |
-| `REPORT_TYPES` | const | `src/report-core.ts` | yes | keep |
-| `ReportContext` | type | `src/report-core.ts` | no | documented in this change |
-| `ReportType` | type | `src/report-core.ts` | no | documented in this change |
-| `resetConsoleBuffer` | function | `src/console-buffer.ts` | yes | keep |
-| `ScreenshotRenderer` | type | `src/capture.ts` | yes | keep |
-| `ScreenshotTooLargeError` | class | `src/capture.ts` | yes | keep |
-| `Scrubber` | type | `src/scrub.ts` | no | documented in this change |
-| `ScrubberName` | type | `src/scrub.ts` | no | documented in this change |
-| `ScrubOptions` | type | `src/scrub.ts` | no | documented in this change |
-| `scrubReport` | function | `src/scrub.ts` | yes | keep |
-| `scrubUrl` | function | `src/scrub.ts` | yes | keep |
-| `SendFailedError` | class | `src/send.ts` | yes | keep |
-| `SendOptions` | type | `src/send.ts` | yes | keep |
-| `sendReport` | function | `src/send.ts` | yes | keep |
-| `SendResult` | type | `src/send.ts` | no | documented in this change |
-| `SendTimeoutError` | class | `src/send.ts` | yes | keep |
-| `stableHash` | function | `src/fingerprint.ts` | yes | keep — noun, but it is the hash, not the hashing |
-| `StackFrame` | type | `src/report-core.ts` | yes | keep |
-| `StorageKeyRef` | type | `src/report-core.ts` | yes | keep |
-| `StorageSnapshot` | type | `src/report-core.ts` | yes | keep |
-| `toMarkdown` | function | `src/markdown.ts` | yes | server-only; off `.` in 1.0 (#68) |
-| `UiTexts` | type | `src/locales.ts` | yes | keep |
+82 exports.
 
-### `bugbottle./react`
+| Name | Kind | Source |
+|---|---|---|
+| `Breadcrumb` | type | `src/report-core.ts` |
+| `BreadcrumbKind` | type | `src/report-core.ts` |
+| `BugReport` | type | `src/report-core.ts` |
+| `buildReport` | function | `src/send.ts` |
+| `BuildReportInput` | type | `src/send.ts` |
+| `buildSelector` | function | `src/element-picker.ts` |
+| `BUILTIN_SCRUBBERS` | const | `src/scrub.ts` |
+| `CaptureInfo` | type | `src/capture.ts` |
+| `CaptureOptions` | type | `src/capture.ts` |
+| `captureScreenshot` | function | `src/capture.ts` |
+| `collectContext` | function | `src/capture.ts` |
+| `ConsoleBufferOptions` | type | `src/console-buffer.ts` |
+| `ConsoleEntry` | type | `src/report-core.ts` |
+| `ConsoleLevel` | type | `src/report-core.ts` |
+| `DEFAULT_BLOCK_SELECTOR` | const | `src/mask.ts` |
+| `DEFAULT_BYTES_PER_PIXEL_ESTIMATE` | const | `src/capture.ts` |
+| `DEFAULT_MASK_COLOUR` | const | `src/mask.ts` |
+| `DEFAULT_MASK_SELECTOR` | const | `src/mask.ts` |
+| `DEFAULT_REPLACEMENT` | const | `src/scrub.ts` |
+| `DEFAULT_SEND_TIMEOUT_MS` | const | `src/send.ts` |
+| `describeElement` | function | `src/element-picker.ts` |
+| `ElementRef` | type | `src/report-core.ts` |
+| `EmailTexts` | type | `src/locales.ts` |
+| `fingerprint` | function | `src/fingerprint.ts` |
+| `FingerprintInput` | type | `src/fingerprint.ts` |
+| `getConsoleBuffer` | function | `src/console-buffer.ts` |
+| `initConsoleBuffer` | function | `src/console-buffer.ts` |
+| `isReportType` | function | `src/report-core.ts` |
+| `Locale` | type | `src/locales.ts` |
+| `MaskOptions` | type | `src/mask.ts` |
+| `MAX_BREADCRUMB_TEXT_LENGTH` | const | `src/report-core.ts` |
+| `MAX_BREADCRUMBS` | const | `src/report-core.ts` |
+| `MAX_CONSOLE_ENTRIES` | const | `src/report-core.ts` |
+| `MAX_CONSOLE_MESSAGE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_CONTACT_LENGTH` | const | `src/report-core.ts` |
+| `MAX_CONTEXT_LENGTHS` | const | `src/report-core.ts` |
+| `MAX_COOKIE_NAMES` | const | `src/report-core.ts` |
+| `MAX_ELEMENT_TEXT_LENGTH` | const | `src/report-core.ts` |
+| `MAX_ELEMENTS` | const | `src/report-core.ts` |
+| `MAX_MESSAGE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_NETWORK_ENTRIES` | const | `src/report-core.ts` |
+| `MAX_NOTE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_NOTES` | const | `src/report-core.ts` |
+| `MAX_PERF_MS` | const | `src/report-core.ts` |
+| `MAX_REPLAY_BYTES` | const | `src/report-core.ts` |
+| `MAX_REPLAY_EVENTS` | const | `src/report-core.ts` |
+| `MAX_SCREENSHOT_BYTES` | const | `src/report-core.ts` |
+| `MAX_SCREENSHOT_DATA_URL_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STACK_FRAMES` | const | `src/report-core.ts` |
+| `MAX_STACK_STRING_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STORAGE_KEY_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STORAGE_KEYS` | const | `src/report-core.ts` |
+| `MAX_STORAGE_VALUE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STORAGE_VALUES` | const | `src/report-core.ts` |
+| `Messages` | type | `src/locales.ts` |
+| `NetworkEntry` | type | `src/report-core.ts` |
+| `PerfSnapshot` | type | `src/report-core.ts` |
+| `pickElement` | function | `src/element-picker.ts` |
+| `PickOptions` | type | `src/element-picker.ts` |
+| `ReplayCapture` | type | `src/report-core.ts` |
+| `ReplayEvent` | type | `src/report-core.ts` |
+| `REPORT_TYPES` | const | `src/report-core.ts` |
+| `ReportContext` | type | `src/report-core.ts` |
+| `ReportType` | type | `src/report-core.ts` |
+| `resetConsoleBuffer` | function | `src/console-buffer.ts` |
+| `ScreenshotRenderer` | type | `src/capture.ts` |
+| `ScreenshotTooLargeError` | class | `src/capture.ts` |
+| `Scrubber` | type | `src/scrub.ts` |
+| `ScrubberName` | type | `src/scrub.ts` |
+| `ScrubOptions` | type | `src/scrub.ts` |
+| `scrubReport` | function | `src/scrub.ts` |
+| `scrubUrl` | function | `src/scrub.ts` |
+| `SendFailedError` | class | `src/send.ts` |
+| `SendOptions` | type | `src/send.ts` |
+| `sendReport` | function | `src/send.ts` |
+| `SendResult` | type | `src/send.ts` |
+| `SendTimeoutError` | class | `src/send.ts` |
+| `stableHash` | function | `src/fingerprint.ts` |
+| `StackFrame` | type | `src/report-core.ts` |
+| `StorageKeyRef` | type | `src/report-core.ts` |
+| `StorageSnapshot` | type | `src/report-core.ts` |
+| `UiTexts` | type | `src/locales.ts` |
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `BugReportBoundary` | class | `src/react/boundary.ts` | yes | keep |
-| `BugReportBoundaryProps` | type | `src/react/boundary.ts` | yes | keep |
-| `BugReportStatus` | type | `src/report-state.ts` | yes | keep |
-| `createRootErrorHandlers` | function | `src/react/boundary.ts` | yes | keep |
-| `describeRenderError` | function | `src/react/boundary.ts` | yes | keep |
-| `ElementRef` | type | `src/report-core.ts` | no | documented in this change |
-| `REPORT_TYPES` | const | `src/report-core.ts` | yes | keep |
-| `ReportErrorOptions` | type | `src/react/boundary.ts` | yes | keep |
-| `ReportType` | type | `src/report-core.ts` | no | documented in this change |
-| `RootErrorHandlerOptions` | type | `src/react/boundary.ts` | yes | keep |
-| `RootErrorHandlers` | type | `src/react/boundary.ts` | yes | keep |
-| `ScreenshotRenderer` | type | `src/capture.ts` | yes | keep |
-| `useBugReport` | function | `src/react/use-bug-report.ts` | yes | keep |
-| `UseBugReportOptions` | type | `src/report-state.ts` | yes | keep |
+### `bugbottle/react`
 
-### `bugbottle./vue`
+14 exports.
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `BugReportStatus` | type | `src/report-state.ts` | yes | keep |
-| `ElementRef` | type | `src/report-core.ts` | no | documented in this change |
-| `REPORT_TYPES` | const | `src/report-core.ts` | yes | keep |
-| `ReportType` | type | `src/report-core.ts` | no | documented in this change |
-| `ScreenshotRenderer` | type | `src/capture.ts` | yes | keep |
-| `useBugReport` | function | `src/vue/index.ts` | yes | keep |
-| `UseBugReportOptions` | type | `src/report-state.ts` | yes | keep |
+| Name | Kind | Source |
+|---|---|---|
+| `BugReportBoundary` | class | `src/react/boundary.ts` |
+| `BugReportBoundaryProps` | type | `src/react/boundary.ts` |
+| `BugReportStatus` | type | `src/report-state.ts` |
+| `createRootErrorHandlers` | function | `src/react/boundary.ts` |
+| `describeRenderError` | function | `src/react/boundary.ts` |
+| `ElementRef` | type | `src/report-core.ts` |
+| `REPORT_TYPES` | const | `src/report-core.ts` |
+| `ReportErrorOptions` | type | `src/react/boundary.ts` |
+| `ReportType` | type | `src/report-core.ts` |
+| `RootErrorHandlerOptions` | type | `src/react/boundary.ts` |
+| `RootErrorHandlers` | type | `src/react/boundary.ts` |
+| `ScreenshotRenderer` | type | `src/capture.ts` |
+| `useBugReport` | function | `src/react/use-bug-report.ts` |
+| `UseBugReportOptions` | type | `src/report-state.ts` |
 
-### `bugbottle./svelte`
+### `bugbottle/vue`
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `BugReportStatus` | type | `src/report-state.ts` | yes | keep |
-| `BugReportView` | type | `src/svelte/index.ts` | yes | keep |
-| `createBugReport` | function | `src/svelte/index.ts` | yes | keep |
-| `ElementRef` | type | `src/report-core.ts` | no | documented in this change |
-| `REPORT_TYPES` | const | `src/report-core.ts` | yes | keep |
-| `ReportType` | type | `src/report-core.ts` | no | documented in this change |
-| `ScreenshotRenderer` | type | `src/capture.ts` | yes | keep |
-| `UseBugReportOptions` | type | `src/report-state.ts` | yes | keep |
+7 exports.
 
-### `bugbottle./solid`
+| Name | Kind | Source |
+|---|---|---|
+| `BugReportStatus` | type | `src/report-state.ts` |
+| `ElementRef` | type | `src/report-core.ts` |
+| `REPORT_TYPES` | const | `src/report-core.ts` |
+| `ReportType` | type | `src/report-core.ts` |
+| `ScreenshotRenderer` | type | `src/capture.ts` |
+| `useBugReport` | function | `src/vue/index.ts` |
+| `UseBugReportOptions` | type | `src/report-state.ts` |
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `BugReportStatus` | type | `src/report-state.ts` | yes | keep |
-| `createBugReport` | function | `src/solid/index.ts` | yes | keep |
-| `ElementRef` | type | `src/report-core.ts` | no | documented in this change |
-| `REPORT_TYPES` | const | `src/report-core.ts` | yes | keep |
-| `ReportType` | type | `src/report-core.ts` | no | documented in this change |
-| `ScreenshotRenderer` | type | `src/capture.ts` | yes | keep |
-| `UseBugReportOptions` | type | `src/report-state.ts` | yes | keep |
+### `bugbottle/svelte`
 
-### `bugbottle./server`
+8 exports.
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `AdfDoc` | type | `src/sinks/jira.ts` | yes | keep |
-| `AdfNode` | type | `src/sinks/jira.ts` | yes | keep |
-| `BAD_SIGNATURE_ERROR` | const | `src/server/handle.ts` | yes | keep |
-| `Breadcrumb` | type | `src/report-core.ts` | no | documented in this change |
-| `BreadcrumbKind` | type | `src/report-core.ts` | no | documented in this change |
-| `BugReport` | type | `src/report-core.ts` | no | documented in this change |
-| `buildDiscordMessage` | function | `src/sinks/discord.ts` | yes | keep |
-| `buildJiraDescription` | function | `src/sinks/jira.ts` | yes | keep |
-| `buildSentryEnvelope` | function | `src/sinks/sentry.ts` | yes | keep |
-| `buildSentryEvent` | function | `src/sinks/sentry.ts` | yes | keep |
-| `buildSlackMessage` | function | `src/sinks/slack.ts` | yes | keep |
-| `BUILTIN_SCRUBBERS` | const | `src/scrub.ts` | yes | keep |
-| `ChatSink` | type | `src/sinks/chat.ts` | yes | keep |
-| `ChatSinkContext` | type | `src/sinks/chat.ts` | yes | keep |
-| `clipBytes` | function | `src/sinks/sentry.ts` | yes | keep — documented; the byte clip a Sentry payload needs |
-| `collectExtra` | function | `src/server/handle.ts` | yes | keep |
-| `ConsoleEntry` | type | `src/report-core.ts` | no | documented in this change |
-| `ConsoleLevel` | type | `src/report-core.ts` | no | documented in this change |
-| `createGithubIssue` | function | `src/sinks/github.ts` | yes | keep |
-| `CreateGithubIssueOptions` | type | `src/sinks/github.ts` | no | documented in this change |
-| `CreateGithubIssueResult` | type | `src/sinks/github.ts` | no | documented in this change |
-| `CreateGitlabIssueResult` | type | `src/sinks/gitlab.ts` | yes | keep |
-| `CreateJiraIssueResult` | type | `src/sinks/jira.ts` | yes | keep |
-| `createLinearIssue` | function | `src/sinks/linear.ts` | yes | keep |
-| `CreateLinearIssueOptions` | type | `src/sinks/linear.ts` | no | documented in this change |
-| `CreateLinearIssueResult` | type | `src/sinks/linear.ts` | no | documented in this change |
-| `decodeScreenshotDataUrl` | function | `src/report-core.ts` | yes | keep |
-| `DedupeEntry` | type | `src/server/handle.ts` | yes | keep |
-| `DedupeOptions` | type | `src/server/handle.ts` | yes | keep |
-| `DedupeStore` | type | `src/server/handle.ts` | yes | keep |
-| `DEFAULT_BODY_TIMEOUT_MS` | const | `src/server/handle.ts` | yes | keep |
-| `DEFAULT_GITLAB_HOST` | const | `src/sinks/gitlab.ts` | yes | keep |
-| `DEFAULT_JIRA_ISSUE_TYPE` | const | `src/sinks/jira.ts` | yes | keep |
-| `DEFAULT_MAX_BODY_BYTES` | const | `src/server/handle.ts` | yes | keep |
-| `DEFAULT_REPLACEMENT` | const | `src/scrub.ts` | no | documented in this change |
-| `DEFAULT_SENTRY_RETRY_AFTER` | const | `src/sinks/sentry.ts` | yes | keep |
-| `DEFAULT_SIGNATURE_SKEW_MS` | const | `src/server/handle.ts` | yes | keep |
-| `DEFAULT_SINK_TIMEOUT_MS` | const | `src/server/handle.ts` | yes | keep |
-| `DISCORD_COLOURS` | const | `src/sinks/discord.ts` | yes | keep — vendor palette, not a limit |
-| `DISCORD_MAX_CONTENT` | const | `src/sinks/webhook.ts` | no | alias of `MAX_DISCORD_CONTENT` (#65) |
-| `DISCORD_MAX_EMBED_DESCRIPTION` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_EMBED_DESCRIPTION` (#65) |
-| `DISCORD_MAX_EMBED_FIELDS` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_EMBED_FIELDS` (#65) |
-| `DISCORD_MAX_EMBED_TITLE` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_EMBED_TITLE` (#65) |
-| `DISCORD_MAX_EMBED_TOTAL` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_EMBED_TOTAL` (#65) |
-| `DISCORD_MAX_FIELD_NAME` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_FIELD_NAME` (#65) |
-| `DISCORD_MAX_FIELD_VALUE` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_FIELD_VALUE` (#65) |
-| `DISCORD_MAX_FOOTER_TEXT` | const | `src/sinks/discord.ts` | no | alias of `MAX_DISCORD_FOOTER_TEXT` (#65) |
-| `discordSink` | function | `src/sinks/discord.ts` | yes | keep |
-| `DiscordSinkOptions` | type | `src/sinks/discord.ts` | yes | keep |
-| `ElementRef` | type | `src/report-core.ts` | no | documented in this change |
-| `EMPTY_MESSAGE_ERROR` | const | `src/server/handle.ts` | no | documented in this change |
-| `escapeSlack` | function | `src/sinks/slack.ts` | yes | keep — documented; text bound for a Slack block |
-| `expressHandler` | function | `src/server/express.ts` | yes | keep |
-| `ExpressRequestLike` | type | `src/server/express.ts` | no | documented in this change |
-| `ExpressResponseLike` | type | `src/server/express.ts` | no | documented in this change |
-| `FetchLike` | type | `src/sinks/error.ts` | no | documented in this change |
-| `fingerprint` | function | `src/fingerprint.ts` | yes | keep — verb reading, one identity per report |
-| `FingerprintInput` | type | `src/fingerprint.ts` | no | documented in this change |
-| `GitlabSink` | type | `src/sinks/gitlab.ts` | yes | keep |
-| `gitlabSink` | function | `src/sinks/gitlab.ts` | yes | keep |
-| `GitlabSinkOptions` | type | `src/sinks/gitlab.ts` | yes | keep |
-| `handleReport` | function | `src/server/handle.ts` | yes | keep |
-| `HandleReportOptions` | type | `src/server/handle.ts` | yes | keep |
-| `HandleReportResult` | type | `src/server/handle.ts` | yes | keep |
-| `InvalidScreenshotError` | class | `src/report-core.ts` | yes | keep |
-| `isReportType` | function | `src/report-core.ts` | yes | keep |
-| `jiraAuthHeader` | function | `src/sinks/jira.ts` | yes | keep — documented beside `jiraSink` |
-| `jiraBaseUrl` | function | `src/sinks/jira.ts` | yes | keep — documented, and a server may build the URL itself |
-| `JiraSink` | type | `src/sinks/jira.ts` | yes | keep |
-| `jiraSink` | function | `src/sinks/jira.ts` | yes | keep |
-| `JiraSinkOptions` | type | `src/sinks/jira.ts` | yes | keep |
-| `looksLikeEmail` | function | `src/report-core.ts` | yes | keep |
-| `MarkdownOptions` | type | `src/markdown.ts` | no | documented in this change |
-| `MAX_BREADCRUMB_TEXT_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_BREADCRUMBS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_CHAT_CONSOLE_ENTRIES` | const | `src/sinks/chat.ts` | yes | keep |
-| `MAX_CONSOLE_ENTRIES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_CONSOLE_MESSAGE_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_CONTACT_LENGTH` | const | `src/report-core.ts` | yes | keep |
-| `MAX_CONTEXT_LENGTHS` | const | `src/report-core.ts` | yes | keep |
-| `MAX_COOKIE_NAMES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_DEDUPE_ENTRIES` | const | `src/server/handle.ts` | no | keep — the README documents these as a group |
-| `MAX_ELEMENT_TEXT_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_ELEMENTS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_EXTRA_KEYS` | const | `src/server/handle.ts` | no | keep — the README documents these as a group |
-| `MAX_EXTRA_STRING_LENGTH` | const | `src/server/handle.ts` | no | keep — the README documents these as a group |
-| `MAX_GITLAB_DESCRIPTION` | const | `src/sinks/gitlab.ts` | yes | keep |
-| `MAX_GITLAB_TITLE` | const | `src/sinks/gitlab.ts` | yes | keep |
-| `MAX_JIRA_CONSOLE_ENTRIES` | const | `src/sinks/jira.ts` | yes | keep |
-| `MAX_JIRA_SUMMARY` | const | `src/sinks/jira.ts` | yes | keep |
-| `MAX_MESSAGE_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_NETWORK_ENTRIES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_PERF_MS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_RATE_LIMIT_BUCKETS` | const | `src/server/handle.ts` | no | keep — the README documents these as a group |
-| `MAX_RATE_LIMIT_KEY_LENGTH` | const | `src/server/handle.ts` | no | keep — the README documents these as a group |
-| `MAX_REPLAY_BYTES` | const | `src/report-core.ts` | yes | keep |
-| `MAX_REPLAY_EVENTS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_SCREENSHOT_BYTES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_SCREENSHOT_DATA_URL_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_SENTRY_BREADCRUMBS` | const | `src/sinks/sentry.ts` | no | keep — the README documents these as a group |
-| `MAX_SENTRY_ENVELOPE_BYTES` | const | `src/sinks/sentry.ts` | no | keep — the README documents these as a group |
-| `MAX_SENTRY_EVENT_BYTES` | const | `src/sinks/sentry.ts` | no | keep — the README documents these as a group |
-| `MAX_SENTRY_FEEDBACK_MESSAGE` | const | `src/sinks/sentry.ts` | no | keep — the README documents these as a group |
-| `MAX_SENTRY_MESSAGE_BYTES` | const | `src/sinks/sentry.ts` | no | keep — the README documents these as a group |
-| `MAX_SIGNATURE_ENTRIES` | const | `src/server/handle.ts` | yes | keep |
-| `MAX_SIGNATURE_ENTRIES_PER_SECOND` | const | `src/server/handle.ts` | yes | keep |
-| `MAX_SIGNATURE_SECONDS` | const | `src/server/handle.ts` | yes | keep |
-| `MAX_STACK_FRAMES` | const | `src/report-core.ts` | yes | keep |
-| `MAX_STACK_STRING_LENGTH` | const | `src/report-core.ts` | yes | keep |
-| `MAX_STORAGE_KEY_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STORAGE_KEYS` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STORAGE_VALUE_LENGTH` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `MAX_STORAGE_VALUES` | const | `src/report-core.ts` | no | keep — the README documents these as a group |
-| `messageFromGitlabBody` | function | `src/sinks/gitlab.ts` | yes | keep |
-| `messageFromJiraBody` | function | `src/sinks/jira.ts` | yes | keep |
-| `NetworkEntry` | type | `src/report-core.ts` | yes | keep |
-| `normaliseBreadcrumbs` | function | `src/report-core.ts` | yes | keep |
-| `normaliseConsole` | function | `src/report-core.ts` | yes | keep |
-| `normaliseContact` | function | `src/report-core.ts` | yes | keep |
-| `normaliseContext` | function | `src/report-core.ts` | yes | keep |
-| `normaliseElements` | function | `src/report-core.ts` | yes | keep |
-| `normaliseMessage` | function | `src/report-core.ts` | yes | keep |
-| `normaliseNetwork` | function | `src/report-core.ts` | yes | keep |
-| `normalisePerf` | function | `src/report-core.ts` | yes | keep |
-| `normaliseReplay` | function | `src/report-core.ts` | yes | keep |
-| `normaliseStorage` | function | `src/report-core.ts` | yes | keep |
-| `parseSentryDsn` | function | `src/sinks/sentry.ts` | yes | keep |
-| `PerfSnapshot` | type | `src/report-core.ts` | yes | keep |
-| `RateLimitOptions` | type | `src/server/handle.ts` | yes | keep |
-| `RateLimitStore` | type | `src/server/handle.ts` | yes | keep |
-| `ReplayCapture` | type | `src/report-core.ts` | yes | keep |
-| `ReplayEvent` | type | `src/report-core.ts` | yes | keep |
-| `ReplayStore` | type | `src/server/handle.ts` | yes | keep |
-| `REPORT_TYPES` | const | `src/report-core.ts` | yes | keep |
-| `ReportContext` | type | `src/report-core.ts` | no | documented in this change |
-| `ReportSink` | type | `src/server/handle.ts` | yes | keep |
-| `ReportType` | type | `src/report-core.ts` | no | documented in this change |
-| `resetDedupe` | function | `src/server/handle.ts` | yes | keep |
-| `resetRateLimits` | function | `src/server/handle.ts` | yes | keep |
-| `resetSignatures` | function | `src/server/handle.ts` | yes | keep |
-| `Scrubber` | type | `src/scrub.ts` | no | documented in this change |
-| `ScrubberName` | type | `src/scrub.ts` | no | documented in this change |
-| `ScrubOptions` | type | `src/scrub.ts` | no | documented in this change |
-| `scrubReport` | function | `src/scrub.ts` | yes | keep |
-| `scrubUrl` | function | `src/scrub.ts` | yes | keep |
-| `sendReportEmail` | function | `src/sinks/resend.ts` | yes | keep |
-| `SendReportEmailOptions` | type | `src/sinks/resend.ts` | no | documented in this change |
-| `SendReportEmailResult` | type | `src/sinks/resend.ts` | no | documented in this change |
-| `sendReportWebhook` | function | `src/sinks/webhook.ts` | yes | keep |
-| `SendReportWebhookOptions` | type | `src/sinks/webhook.ts` | no | documented in this change |
-| `SendReportWebhookResult` | type | `src/sinks/webhook.ts` | no | documented in this change |
-| `SENTRY_CLIENT` | const | `src/sinks/sentry.ts` | yes | keep |
-| `SENTRY_CLIENT_NAME` | const | `src/sinks/sentry.ts` | yes | keep |
-| `SENTRY_CLIENT_VERSION` | const | `src/sinks/sentry.ts` | yes | keep |
-| `SENTRY_VERSION` | const | `src/sinks/sentry.ts` | yes | keep |
-| `sentryAuthHeader` | function | `src/sinks/sentry.ts` | yes | keep — documented beside `sentrySink` |
-| `SentryDsn` | type | `src/sinks/sentry.ts` | yes | keep |
-| `SentryEnvelope` | type | `src/sinks/sentry.ts` | yes | keep |
-| `SentryItemType` | type | `src/sinks/sentry.ts` | yes | keep |
-| `sentrySink` | function | `src/sinks/sentry.ts` | yes | keep |
-| `SentrySinkContext` | type | `src/sinks/sentry.ts` | yes | keep |
-| `SentrySinkError` | class | `src/sinks/sentry.ts` | yes | keep |
-| `SentrySinkOptions` | type | `src/sinks/sentry.ts` | yes | keep |
-| `SentryTruncation` | type | `src/sinks/sentry.ts` | yes | keep |
-| `SignatureOptions` | type | `src/server/handle.ts` | yes | keep |
-| `SinkContext` | type | `src/server/handle.ts` | yes | keep |
-| `SinkError` | class | `src/sinks/error.ts` | yes | keep |
-| `SinkTimeoutError` | class | `src/server/handle.ts` | yes | keep |
-| `SLACK_MAX_BLOCKS` | const | `src/sinks/slack.ts` | no | alias of `MAX_SLACK_BLOCKS` (#65) |
-| `SLACK_MAX_FIELD_TEXT` | const | `src/sinks/slack.ts` | no | alias of `MAX_SLACK_FIELD_TEXT` (#65) |
-| `SLACK_MAX_FIELDS` | const | `src/sinks/slack.ts` | no | alias of `MAX_SLACK_FIELDS` (#65) |
-| `SLACK_MAX_HEADER_TEXT` | const | `src/sinks/slack.ts` | no | alias of `MAX_SLACK_HEADER_TEXT` (#65) |
-| `SLACK_MAX_TEXT` | const | `src/sinks/slack.ts` | no | alias of `MAX_SLACK_TEXT` (#65) |
-| `slackSink` | function | `src/sinks/slack.ts` | yes | keep |
-| `SlackSinkOptions` | type | `src/sinks/slack.ts` | yes | keep |
-| `stableHash` | function | `src/fingerprint.ts` | yes | keep — noun, but it is the hash, not the hashing |
-| `StackFrame` | type | `src/report-core.ts` | yes | keep |
-| `StorageKeyRef` | type | `src/report-core.ts` | yes | keep |
-| `StorageSnapshot` | type | `src/report-core.ts` | yes | keep |
-| `toGithub` | function | `src/server/handle.ts` | yes | keep |
-| `toLinear` | function | `src/server/handle.ts` | yes | keep |
-| `toMarkdown` | function | `src/markdown.ts` | yes | keep |
-| `TOO_LARGE_ERROR` | const | `src/server/handle.ts` | no | documented in this change |
-| `toResend` | function | `src/server/handle.ts` | yes | keep |
-| `toWebhook` | function | `src/server/handle.ts` | yes | keep |
-| `UrlFrom` | type | `src/sinks/chat.ts` | yes | keep |
-| `ValidatedReport` | type | `src/server/handle.ts` | yes | keep |
-| `validateReport` | function | `src/server/handle.ts` | yes | keep |
-| `WebhookFormat` | type | `src/sinks/webhook.ts` | no | documented in this change |
+| Name | Kind | Source |
+|---|---|---|
+| `BugReportStatus` | type | `src/report-state.ts` |
+| `BugReportView` | type | `src/svelte/index.ts` |
+| `createBugReport` | function | `src/svelte/index.ts` |
+| `ElementRef` | type | `src/report-core.ts` |
+| `REPORT_TYPES` | const | `src/report-core.ts` |
+| `ReportType` | type | `src/report-core.ts` |
+| `ScreenshotRenderer` | type | `src/capture.ts` |
+| `UseBugReportOptions` | type | `src/report-state.ts` |
 
-### `bugbottle./html-to-image`
+### `bugbottle/solid`
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `htmlToImage` | const | `src/html-to-image.ts` | yes | keep — a renderer value, so a noun is right |
+7 exports.
 
-### `bugbottle./annotate`
+| Name | Kind | Source |
+|---|---|---|
+| `BugReportStatus` | type | `src/report-state.ts` |
+| `createBugReport` | function | `src/solid/index.ts` |
+| `ElementRef` | type | `src/report-core.ts` |
+| `REPORT_TYPES` | const | `src/report-core.ts` |
+| `ReportType` | type | `src/report-core.ts` |
+| `ScreenshotRenderer` | type | `src/capture.ts` |
+| `UseBugReportOptions` | type | `src/report-state.ts` |
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `AnnotateTool` | type | `src/annotate.ts` | yes | keep |
-| `Annotator` | type | `src/annotate.ts` | yes | keep |
-| `AnnotatorOptions` | type | `src/annotate.ts` | yes | keep |
-| `createAnnotator` | function | `src/annotate.ts` | yes | keep |
+### `bugbottle/server`
 
-### `bugbottle./breadcrumbs`
+230 exports.
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `Breadcrumb` | type | `src/report-core.ts` | no | documented in this change |
-| `BreadcrumbKind` | type | `src/report-core.ts` | no | documented in this change |
-| `BreadcrumbsOptions` | type | `src/breadcrumbs.ts` | yes | keep |
-| `getBreadcrumbs` | function | `src/breadcrumbs.ts` | yes | keep |
-| `initBreadcrumbs` | function | `src/breadcrumbs.ts` | yes | keep |
-| `isBreadcrumbsActive` | function | `src/breadcrumbs.ts` | yes | keep |
-| `resetBreadcrumbs` | function | `src/breadcrumbs.ts` | yes | keep |
+| Name | Kind | Source |
+|---|---|---|
+| `AdfDoc` | type | `src/sinks/jira.ts` |
+| `AdfNode` | type | `src/sinks/jira.ts` |
+| `BAD_SIGNATURE_ERROR` | const | `src/server/handle.ts` |
+| `Breadcrumb` | type | `src/report-core.ts` |
+| `BreadcrumbKind` | type | `src/report-core.ts` |
+| `BugReport` | type | `src/report-core.ts` |
+| `buildDiscordMessage` | function | `src/sinks/discord.ts` |
+| `buildJiraDescription` | function | `src/sinks/jira.ts` |
+| `buildMessage` | function | `src/sinks/smtp.ts` |
+| `buildSentryEnvelope` | function | `src/sinks/sentry.ts` |
+| `buildSentryEvent` | function | `src/sinks/sentry.ts` |
+| `buildSlackMessage` | function | `src/sinks/slack.ts` |
+| `buildTeamsMessage` | function | `src/sinks/teams.ts` |
+| `BUILTIN_SCRUBBERS` | const | `src/scrub.ts` |
+| `ChatSink` | type | `src/sinks/chat.ts` |
+| `ChatSinkContext` | type | `src/sinks/chat.ts` |
+| `clientAddress` | function | `src/server/handle.ts` |
+| `clipBytes` | function | `src/sinks/sentry.ts` |
+| `collectExtra` | function | `src/server/handle.ts` |
+| `ConsoleEntry` | type | `src/report-core.ts` |
+| `ConsoleLevel` | type | `src/report-core.ts` |
+| `createGithubIssue` | function | `src/sinks/github.ts` |
+| `CreateGithubIssueOptions` | type | `src/sinks/github.ts` |
+| `CreateGithubIssueResult` | type | `src/sinks/github.ts` |
+| `CreateGitlabIssueResult` | type | `src/sinks/gitlab.ts` |
+| `CreateJiraIssueResult` | type | `src/sinks/jira.ts` |
+| `createLinearIssue` | function | `src/sinks/linear.ts` |
+| `CreateLinearIssueOptions` | type | `src/sinks/linear.ts` |
+| `CreateLinearIssueResult` | type | `src/sinks/linear.ts` |
+| `DecisionReason` | type | `src/server/handle.ts` |
+| `decodeScreenshotDataUrl` | function | `src/report-core.ts` |
+| `DedupeEntry` | type | `src/server/handle.ts` |
+| `DedupeOptions` | type | `src/server/handle.ts` |
+| `DedupeStore` | type | `src/server/handle.ts` |
+| `DEFAULT_BODY_TIMEOUT_MS` | const | `src/server/handle.ts` |
+| `DEFAULT_GITLAB_HOST` | const | `src/sinks/gitlab.ts` |
+| `DEFAULT_JIRA_ISSUE_TYPE` | const | `src/sinks/jira.ts` |
+| `DEFAULT_MAX_BODY_BYTES` | const | `src/server/handle.ts` |
+| `DEFAULT_MAX_REPORTS` | const | `src/server/file-store.ts` |
+| `DEFAULT_REPLACEMENT` | const | `src/scrub.ts` |
+| `DEFAULT_SENTRY_RETRY_AFTER` | const | `src/sinks/sentry.ts` |
+| `DEFAULT_SIGNATURE_SKEW_MS` | const | `src/server/handle.ts` |
+| `DEFAULT_SINK_TIMEOUT_MS` | const | `src/server/handle.ts` |
+| `DEFAULT_SMTP_PORT` | const | `src/sinks/smtp.ts` |
+| `DEFAULT_SMTP_TIMEOUT_MS` | const | `src/sinks/smtp.ts` |
+| `DISCORD_COLOURS` | const | `src/sinks/discord.ts` |
+| `discordSink` | function | `src/sinks/discord.ts` |
+| `DiscordSinkOptions` | type | `src/sinks/discord.ts` |
+| `dotStuff` | function | `src/sinks/smtp.ts` |
+| `ElementRef` | type | `src/report-core.ts` |
+| `EMPTY_MESSAGE_ERROR` | const | `src/server/handle.ts` |
+| `escapeSlack` | function | `src/sinks/slack.ts` |
+| `escapeTeams` | function | `src/sinks/teams.ts` |
+| `expressHandler` | function | `src/server/express.ts` |
+| `ExpressRequestLike` | type | `src/server/express.ts` |
+| `ExpressResponseLike` | type | `src/server/express.ts` |
+| `FetchLike` | type | `src/sinks/error.ts` |
+| `fileStore` | function | `src/server/file-store.ts` |
+| `FileStore` | type | `src/server/file-store.ts` |
+| `FileStoreOptions` | type | `src/server/file-store.ts` |
+| `fingerprint` | function | `src/fingerprint.ts` |
+| `FingerprintInput` | type | `src/fingerprint.ts` |
+| `foldHeader` | function | `src/sinks/smtp.ts` |
+| `gitlabSink` | function | `src/sinks/gitlab.ts` |
+| `GitlabSink` | type | `src/sinks/gitlab.ts` |
+| `GitlabSinkOptions` | type | `src/sinks/gitlab.ts` |
+| `handleReport` | function | `src/server/handle.ts` |
+| `HandleReportOptions` | type | `src/server/handle.ts` |
+| `HandleReportResult` | type | `src/server/handle.ts` |
+| `InvalidScreenshotError` | class | `src/report-core.ts` |
+| `isReportType` | function | `src/report-core.ts` |
+| `jiraBaseUrl` | function | `src/sinks/jira.ts` |
+| `jiraSink` | function | `src/sinks/jira.ts` |
+| `JiraSink` | type | `src/sinks/jira.ts` |
+| `JiraSinkOptions` | type | `src/sinks/jira.ts` |
+| `jiraAuthHeader` | function | `src/sinks/jira.ts` |
+| `looksLikeEmail` | function | `src/report-core.ts` |
+| `MarkdownOptions` | type | `src/markdown.ts` |
+| `MAX_BREADCRUMB_TEXT_LENGTH` | const | `src/report-core.ts` |
+| `MAX_BREADCRUMBS` | const | `src/report-core.ts` |
+| `MAX_CHAT_CONSOLE_ENTRIES` | const | `src/sinks/chat.ts` |
+| `MAX_CONSOLE_ENTRIES` | const | `src/report-core.ts` |
+| `MAX_CONSOLE_MESSAGE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_CONTACT_LENGTH` | const | `src/report-core.ts` |
+| `MAX_CONTEXT_LENGTHS` | const | `src/report-core.ts` |
+| `MAX_COOKIE_NAMES` | const | `src/report-core.ts` |
+| `MAX_DEDUPE_ENTRIES` | const | `src/server/handle.ts` |
+| `MAX_DISCORD_CONTENT` | const | `src/sinks/webhook.ts` |
+| `MAX_DISCORD_EMBED_DESCRIPTION` | const | `src/sinks/discord.ts` |
+| `MAX_DISCORD_EMBED_FIELDS` | const | `src/sinks/discord.ts` |
+| `MAX_DISCORD_EMBED_TITLE` | const | `src/sinks/discord.ts` |
+| `MAX_DISCORD_EMBED_TOTAL` | const | `src/sinks/discord.ts` |
+| `MAX_DISCORD_FIELD_NAME` | const | `src/sinks/discord.ts` |
+| `MAX_DISCORD_FIELD_VALUE` | const | `src/sinks/discord.ts` |
+| `MAX_DISCORD_FOOTER_TEXT` | const | `src/sinks/discord.ts` |
+| `MAX_ELEMENT_TEXT_LENGTH` | const | `src/report-core.ts` |
+| `MAX_ELEMENTS` | const | `src/report-core.ts` |
+| `MAX_EXTRA_KEYS` | const | `src/server/handle.ts` |
+| `MAX_EXTRA_STRING_LENGTH` | const | `src/server/handle.ts` |
+| `MAX_GITLAB_DESCRIPTION` | const | `src/sinks/gitlab.ts` |
+| `MAX_GITLAB_TITLE` | const | `src/sinks/gitlab.ts` |
+| `MAX_JIRA_CONSOLE_ENTRIES` | const | `src/sinks/jira.ts` |
+| `MAX_JIRA_SUMMARY` | const | `src/sinks/jira.ts` |
+| `MAX_MESSAGE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_NETWORK_ENTRIES` | const | `src/report-core.ts` |
+| `MAX_NOTE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_NOTES` | const | `src/report-core.ts` |
+| `MAX_PERF_MS` | const | `src/report-core.ts` |
+| `MAX_RATE_LIMIT_BUCKETS` | const | `src/server/handle.ts` |
+| `MAX_RATE_LIMIT_KEY_LENGTH` | const | `src/server/handle.ts` |
+| `MAX_REPLAY_BYTES` | const | `src/report-core.ts` |
+| `MAX_REPLAY_EVENTS` | const | `src/report-core.ts` |
+| `MAX_SCREENSHOT_BYTES` | const | `src/report-core.ts` |
+| `MAX_SCREENSHOT_DATA_URL_LENGTH` | const | `src/report-core.ts` |
+| `MAX_SENTRY_BREADCRUMBS` | const | `src/sinks/sentry.ts` |
+| `MAX_SENTRY_ENVELOPE_BYTES` | const | `src/sinks/sentry.ts` |
+| `MAX_SENTRY_EVENT_BYTES` | const | `src/sinks/sentry.ts` |
+| `MAX_SENTRY_FEEDBACK_MESSAGE` | const | `src/sinks/sentry.ts` |
+| `MAX_SENTRY_MESSAGE_BYTES` | const | `src/sinks/sentry.ts` |
+| `MAX_SIGNATURE_ENTRIES` | const | `src/server/handle.ts` |
+| `MAX_SIGNATURE_ENTRIES_PER_SECOND` | const | `src/server/handle.ts` |
+| `MAX_SIGNATURE_SECONDS` | const | `src/server/handle.ts` |
+| `MAX_SLACK_BLOCKS` | const | `src/sinks/slack.ts` |
+| `MAX_SLACK_FIELD_TEXT` | const | `src/sinks/slack.ts` |
+| `MAX_SLACK_FIELDS` | const | `src/sinks/slack.ts` |
+| `MAX_SLACK_HEADER_TEXT` | const | `src/sinks/slack.ts` |
+| `MAX_SLACK_TEXT` | const | `src/sinks/slack.ts` |
+| `MAX_STACK_FRAMES` | const | `src/report-core.ts` |
+| `MAX_STACK_STRING_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STORAGE_KEY_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STORAGE_KEYS` | const | `src/report-core.ts` |
+| `MAX_STORAGE_VALUE_LENGTH` | const | `src/report-core.ts` |
+| `MAX_STORAGE_VALUES` | const | `src/report-core.ts` |
+| `MAX_TEAMS_BUTTON_TEXT` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_CONSOLE` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_FACT_TITLE` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_FACT_VALUE` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_FACTS` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_MESSAGE` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_MESSAGE_BYTES` | const | `src/sinks/teams.ts` |
+| `MAX_TEAMS_TITLE` | const | `src/sinks/teams.ts` |
+| `messageFromGitlabBody` | function | `src/sinks/gitlab.ts` |
+| `messageFromJiraBody` | function | `src/sinks/jira.ts` |
+| `NetworkEntry` | type | `src/report-core.ts` |
+| `normaliseBreadcrumbs` | function | `src/report-core.ts` |
+| `normaliseConsole` | function | `src/report-core.ts` |
+| `normaliseContact` | function | `src/report-core.ts` |
+| `normaliseContext` | function | `src/report-core.ts` |
+| `normaliseElements` | function | `src/report-core.ts` |
+| `normaliseMessage` | function | `src/report-core.ts` |
+| `normaliseNetwork` | function | `src/report-core.ts` |
+| `normaliseNotes` | function | `src/report-core.ts` |
+| `normalisePerf` | function | `src/report-core.ts` |
+| `normaliseReplay` | function | `src/report-core.ts` |
+| `normaliseStorage` | function | `src/report-core.ts` |
+| `parseSentryDsn` | function | `src/sinks/sentry.ts` |
+| `PerfSnapshot` | type | `src/report-core.ts` |
+| `RateLimitOptions` | type | `src/server/handle.ts` |
+| `RateLimitStore` | type | `src/server/handle.ts` |
+| `ReplayCapture` | type | `src/report-core.ts` |
+| `ReplayEvent` | type | `src/report-core.ts` |
+| `ReplayStore` | type | `src/server/handle.ts` |
+| `REPORT_TYPES` | const | `src/report-core.ts` |
+| `ReportContext` | type | `src/report-core.ts` |
+| `ReportDecision` | type | `src/server/handle.ts` |
+| `ReportSink` | type | `src/server/handle.ts` |
+| `ReportType` | type | `src/report-core.ts` |
+| `resetDedupe` | function | `src/server/handle.ts` |
+| `resetRateLimits` | function | `src/server/handle.ts` |
+| `resetSignatures` | function | `src/server/handle.ts` |
+| `Scrubber` | type | `src/scrub.ts` |
+| `ScrubberName` | type | `src/scrub.ts` |
+| `ScrubOptions` | type | `src/scrub.ts` |
+| `scrubReport` | function | `src/scrub.ts` |
+| `scrubUrl` | function | `src/scrub.ts` |
+| `sendReportEmail` | function | `src/sinks/resend.ts` |
+| `SendReportEmailOptions` | type | `src/sinks/resend.ts` |
+| `SendReportEmailResult` | type | `src/sinks/resend.ts` |
+| `sendReportSmtp` | function | `src/sinks/smtp.ts` |
+| `SendReportSmtpResult` | type | `src/sinks/smtp.ts` |
+| `sendReportWebhook` | function | `src/sinks/webhook.ts` |
+| `SendReportWebhookOptions` | type | `src/sinks/webhook.ts` |
+| `SendReportWebhookResult` | type | `src/sinks/webhook.ts` |
+| `SendReportWebhookTarget` | type | `src/sinks/webhook.ts` |
+| `SENTRY_CLIENT` | const | `src/sinks/sentry.ts` |
+| `SENTRY_CLIENT_NAME` | const | `src/sinks/sentry.ts` |
+| `SENTRY_CLIENT_VERSION` | const | `src/sinks/sentry.ts` |
+| `SENTRY_VERSION` | const | `src/sinks/sentry.ts` |
+| `sentryAuthHeader` | function | `src/sinks/sentry.ts` |
+| `SentryDsn` | type | `src/sinks/sentry.ts` |
+| `SentryEnvelope` | type | `src/sinks/sentry.ts` |
+| `SentryItemType` | type | `src/sinks/sentry.ts` |
+| `sentrySink` | function | `src/sinks/sentry.ts` |
+| `SentrySinkContext` | type | `src/sinks/sentry.ts` |
+| `SentrySinkError` | class | `src/sinks/sentry.ts` |
+| `SentrySinkOptions` | type | `src/sinks/sentry.ts` |
+| `SentryTruncation` | type | `src/sinks/sentry.ts` |
+| `SignatureOptions` | type | `src/server/handle.ts` |
+| `SinkContext` | type | `src/server/handle.ts` |
+| `SinkError` | class | `src/sinks/error.ts` |
+| `SinkTimeoutError` | class | `src/server/handle.ts` |
+| `slackSink` | function | `src/sinks/slack.ts` |
+| `SlackSinkOptions` | type | `src/sinks/slack.ts` |
+| `SMTP_NO_REPLY` | const | `src/sinks/smtp.ts` |
+| `SMTP_TLS_PORT` | const | `src/sinks/smtp.ts` |
+| `smtpSink` | function | `src/sinks/smtp.ts` |
+| `SmtpSink` | type | `src/sinks/smtp.ts` |
+| `SmtpSinkOptions` | type | `src/sinks/smtp.ts` |
+| `stableHash` | function | `src/fingerprint.ts` |
+| `StackFrame` | type | `src/report-core.ts` |
+| `StorageKeyRef` | type | `src/report-core.ts` |
+| `StorageSnapshot` | type | `src/report-core.ts` |
+| `StoredReport` | type | `src/server/file-store.ts` |
+| `StoredReportFile` | type | `src/server/file-store.ts` |
+| `TEAMS_CARD_CONTENT_TYPE` | const | `src/sinks/teams.ts` |
+| `TEAMS_CARD_SCHEMA` | const | `src/sinks/teams.ts` |
+| `TEAMS_CARD_VERSION` | const | `src/sinks/teams.ts` |
+| `teamsSink` | function | `src/sinks/teams.ts` |
+| `TeamsSinkOptions` | type | `src/sinks/teams.ts` |
+| `toGithub` | function | `src/server/handle.ts` |
+| `toLinear` | function | `src/server/handle.ts` |
+| `toMarkdown` | function | `src/markdown.ts` |
+| `TOO_LARGE_ERROR` | const | `src/server/handle.ts` |
+| `toResend` | function | `src/server/handle.ts` |
+| `toWebhook` | function | `src/server/handle.ts` |
+| `TrustProxyOptions` | type | `src/server/handle.ts` |
+| `UrlFrom` | type | `src/sinks/chat.ts` |
+| `ValidatedReport` | type | `src/server/handle.ts` |
+| `validateReport` | function | `src/server/handle.ts` |
+| `WebhookFormat` | type | `src/sinks/webhook.ts` |
 
-### `bugbottle./network`
+### `bugbottle/html-to-image`
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `getNetwork` | function | `src/network.ts` | yes | keep |
-| `initNetwork` | function | `src/network.ts` | yes | keep |
-| `isNetworkActive` | function | `src/network.ts` | yes | keep |
-| `NetworkEntry` | type | `src/report-core.ts` | yes | keep |
-| `NetworkOptions` | type | `src/network.ts` | yes | keep |
-| `resetNetwork` | function | `src/network.ts` | yes | keep |
+1 exports.
 
-### `bugbottle./perf`
+| Name | Kind | Source |
+|---|---|---|
+| `htmlToImage` | function | `src/html-to-image.ts` |
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `getPerf` | function | `src/perf.ts` | yes | keep |
-| `getStorageSnapshot` | function | `src/perf.ts` | yes | keep |
-| `initPerf` | function | `src/perf.ts` | yes | keep |
-| `isPerfActive` | function | `src/perf.ts` | yes | keep |
-| `PerfOptions` | type | `src/perf.ts` | yes | keep |
-| `PerfSnapshot` | type | `src/report-core.ts` | yes | keep |
-| `resetPerf` | function | `src/perf.ts` | yes | keep |
-| `StorageKeyRef` | type | `src/report-core.ts` | yes | keep |
-| `StorageSnapshot` | type | `src/report-core.ts` | yes | keep |
+### `bugbottle/annotate`
 
-### `bugbottle./rrweb`
+4 exports.
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `attachRrweb` | function | `src/rrweb.ts` | yes | keep |
-| `DEFAULT_REPLAY_MAX_BYTES` | const | `src/rrweb.ts` | yes | keep |
-| `DEFAULT_REPLAY_SECONDS` | const | `src/rrweb.ts` | yes | keep |
-| `getReplay` | function | `src/rrweb.ts` | yes | keep |
-| `isRrwebAttached` | function | `src/rrweb.ts` | yes | keep |
-| `REPLAY_BLOCK_SELECTOR` | const | `src/rrweb.ts` | yes | keep |
-| `REPLAY_CHECKOUT_MS` | const | `src/rrweb.ts` | yes | keep |
-| `REPLAY_MASK_SELECTOR` | const | `src/rrweb.ts` | yes | keep |
-| `ReplayCapture` | type | `src/report-core.ts` | yes | keep |
-| `ReplayEvent` | type | `src/report-core.ts` | yes | keep |
-| `resetRrweb` | function | `src/rrweb.ts` | yes | keep |
-| `RrwebEvent` | type | `src/rrweb.ts` | yes | keep |
-| `RrwebOptions` | type | `src/rrweb.ts` | yes | keep |
-| `RrwebRecord` | type | `src/rrweb.ts` | yes | keep |
-| `RrwebRecordOptions` | type | `src/rrweb.ts` | yes | keep |
+| Name | Kind | Source |
+|---|---|---|
+| `AnnotateTool` | type | `src/annotate.ts` |
+| `Annotator` | type | `src/annotate.ts` |
+| `AnnotatorOptions` | type | `src/annotate.ts` |
+| `createAnnotator` | function | `src/annotate.ts` |
 
-### `bugbottle./sign`
+### `bugbottle/breadcrumbs`
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `computeSignature` | function | `src/sign.ts` | yes | keep |
-| `createSigner` | function | `src/sign.ts` | yes | keep |
-| `DEFAULT_SIGNATURE_HEADER` | const | `src/sign.ts` | yes | keep |
-| `hmacHex` | function | `src/sign.ts` | yes | keep |
-| `SignerOptions` | type | `src/sign.ts` | yes | keep |
+7 exports.
 
-### `bugbottle./queue`
+| Name | Kind | Source |
+|---|---|---|
+| `Breadcrumb` | type | `src/report-core.ts` |
+| `BreadcrumbKind` | type | `src/report-core.ts` |
+| `BreadcrumbsOptions` | type | `src/breadcrumbs.ts` |
+| `getBreadcrumbs` | function | `src/breadcrumbs.ts` |
+| `initBreadcrumbs` | function | `src/breadcrumbs.ts` |
+| `isBreadcrumbsActive` | function | `src/breadcrumbs.ts` |
+| `resetBreadcrumbs` | function | `src/breadcrumbs.ts` |
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `createQueue` | function | `src/queue.ts` | yes | keep |
-| `Queue` | type | `src/queue.ts` | yes | keep |
-| `QueuedReport` | type | `src/queue.ts` | yes | keep |
-| `QueueOptions` | type | `src/queue.ts` | yes | keep |
+### `bugbottle/network`
 
-### `bugbottle./triggers`
+6 exports.
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `deepActiveElement` | function | `src/triggers.ts` | yes | keep — documented; the shadow-DOM focus chain |
-| `DEFAULT_DEDUPE_MS` | const | `src/triggers.ts` | yes | keep |
-| `DEFAULT_SHORTCUT` | const | `src/triggers.ts` | yes | keep |
-| `describeUncaught` | function | `src/triggers.ts` | yes | keep |
-| `eventSource` | function | `src/triggers.ts` | yes | keep — documented; the composed path of an event |
-| `isApplePlatform` | function | `src/triggers.ts` | yes | keep |
-| `isEditableTarget` | function | `src/triggers.ts` | yes | keep |
-| `ListenerHost` | type | `src/triggers.ts` | yes | keep |
-| `matchesShortcut` | function | `src/triggers.ts` | yes | keep |
-| `onShortcut` | function | `src/triggers.ts` | yes | keep |
-| `onUncaughtError` | function | `src/triggers.ts` | yes | keep |
-| `parseShortcut` | function | `src/triggers.ts` | yes | keep |
-| `Shortcut` | type | `src/triggers.ts` | yes | keep |
-| `ShortcutEvent` | type | `src/triggers.ts` | yes | keep |
-| `ShortcutOptions` | type | `src/triggers.ts` | yes | keep |
-| `UncaughtError` | type | `src/triggers.ts` | yes | keep |
-| `UncaughtErrorOptions` | type | `src/triggers.ts` | yes | keep |
+| Name | Kind | Source |
+|---|---|---|
+| `getNetwork` | function | `src/network.ts` |
+| `initNetwork` | function | `src/network.ts` |
+| `isNetworkActive` | function | `src/network.ts` |
+| `NetworkEntry` | type | `src/report-core.ts` |
+| `NetworkOptions` | type | `src/network.ts` |
+| `resetNetwork` | function | `src/network.ts` |
 
-### `bugbottle./shake`
+### `bugbottle/perf`
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `DEFAULT_SHAKE_COOLDOWN_MS` | const | `src/shake.ts` | yes | keep |
-| `DEFAULT_SHAKE_THRESHOLD` | const | `src/shake.ts` | yes | keep |
-| `DEFAULT_SHAKE_WINDOW_MS` | const | `src/shake.ts` | yes | keep |
-| `onShake` | function | `src/shake.ts` | yes | keep |
-| `requestShakePermission` | function | `src/shake.ts` | yes | keep |
-| `ShakeEvent` | type | `src/shake.ts` | yes | keep |
-| `ShakeOptions` | type | `src/shake.ts` | yes | keep |
+9 exports.
 
-### `bugbottle./locales`
+| Name | Kind | Source |
+|---|---|---|
+| `getPerf` | function | `src/perf.ts` |
+| `getStorageSnapshot` | function | `src/perf.ts` |
+| `initPerf` | function | `src/perf.ts` |
+| `isPerfActive` | function | `src/perf.ts` |
+| `PerfOptions` | type | `src/perf.ts` |
+| `PerfSnapshot` | type | `src/report-core.ts` |
+| `resetPerf` | function | `src/perf.ts` |
+| `StorageKeyRef` | type | `src/report-core.ts` |
+| `StorageSnapshot` | type | `src/report-core.ts` |
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `da` | const | `src/locales.ts` | yes | keep |
-| `de` | const | `src/locales.ts` | yes | keep |
-| `EmailTexts` | type | `src/locales.ts` | yes | keep |
-| `en` | const | `src/locales.ts` | yes | keep |
-| `enMessages` | const | `src/locales.ts` | no | documented in this change |
-| `es` | const | `src/locales.ts` | yes | keep |
-| `fr` | const | `src/locales.ts` | yes | keep |
-| `Locale` | type | `src/locales.ts` | yes | keep |
-| `locales` | const | `src/locales.ts` | yes | keep |
-| `Messages` | type | `src/locales.ts` | yes | keep |
-| `nb` | const | `src/locales.ts` | yes | keep |
-| `nl` | const | `src/locales.ts` | yes | keep |
-| `resolveLocale` | function | `src/locales.ts` | yes | keep |
-| `sv` | const | `src/locales.ts` | yes | keep |
-| `UiTexts` | type | `src/locales.ts` | yes | keep |
+### `bugbottle/rrweb`
 
-### `bugbottle./ui`
+15 exports.
 
-| Name | Kind | Source | Documented | Verdict |
-|---|---|---|---|---|
-| `Brand` | type | `src/ui/index.ts` | yes | keep |
-| `BugbottleWidget` | type | `src/ui/index.ts` | yes | keep |
-| `mountBugbottle` | function | `src/ui/index.ts` | yes | keep |
-| `MountOptions` | type | `src/ui/index.ts` | yes | keep |
-| `Theme` | type | `src/ui/index.ts` | yes | keep |
+| Name | Kind | Source |
+|---|---|---|
+| `attachRrweb` | function | `src/rrweb.ts` |
+| `DEFAULT_REPLAY_MAX_BYTES` | const | `src/rrweb.ts` |
+| `DEFAULT_REPLAY_SECONDS` | const | `src/rrweb.ts` |
+| `getReplay` | function | `src/rrweb.ts` |
+| `isRrwebAttached` | function | `src/rrweb.ts` |
+| `REPLAY_BLOCK_SELECTOR` | const | `src/rrweb.ts` |
+| `REPLAY_CHECKOUT_MS` | const | `src/rrweb.ts` |
+| `REPLAY_MASK_SELECTOR` | const | `src/rrweb.ts` |
+| `ReplayCapture` | type | `src/report-core.ts` |
+| `ReplayEvent` | type | `src/report-core.ts` |
+| `resetRrweb` | function | `src/rrweb.ts` |
+| `RrwebEvent` | type | `src/rrweb.ts` |
+| `RrwebOptions` | type | `src/rrweb.ts` |
+| `RrwebRecord` | type | `src/rrweb.ts` |
+| `RrwebRecordOptions` | type | `src/rrweb.ts` |
+
+### `bugbottle/sign`
+
+5 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `computeSignature` | function | `src/sign.ts` |
+| `createSigner` | function | `src/sign.ts` |
+| `DEFAULT_SIGNATURE_HEADER` | const | `src/sign.ts` |
+| `hmacHex` | function | `src/sign.ts` |
+| `SignerOptions` | type | `src/sign.ts` |
+
+### `bugbottle/queue`
+
+7 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `createQueue` | function | `src/queue.ts` |
+| `MaybePromise` | type | `src/queue.ts` |
+| `Queue` | type | `src/queue.ts` |
+| `QueuedReport` | type | `src/queue.ts` |
+| `QueueOptions` | type | `src/queue.ts` |
+| `QueueStorage` | type | `src/queue.ts` |
+| `SCREENSHOT_NOTE` | const | `src/queue.ts` |
+
+### `bugbottle/queue-idb`
+
+2 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `createIdbStorage` | function | `src/queue-idb.ts` |
+| `IdbStorageOptions` | type | `src/queue-idb.ts` |
+
+### `bugbottle/triggers`
+
+17 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `deepActiveElement` | function | `src/triggers.ts` |
+| `DEFAULT_DEDUPE_MS` | const | `src/triggers.ts` |
+| `DEFAULT_SHORTCUT` | const | `src/triggers.ts` |
+| `describeUncaught` | function | `src/triggers.ts` |
+| `eventSource` | function | `src/triggers.ts` |
+| `isApplePlatform` | function | `src/triggers.ts` |
+| `isEditableTarget` | function | `src/triggers.ts` |
+| `ListenerHost` | type | `src/triggers.ts` |
+| `matchesShortcut` | function | `src/triggers.ts` |
+| `onShortcut` | function | `src/triggers.ts` |
+| `onUncaughtError` | function | `src/triggers.ts` |
+| `parseShortcut` | function | `src/triggers.ts` |
+| `Shortcut` | type | `src/triggers.ts` |
+| `ShortcutEvent` | type | `src/triggers.ts` |
+| `ShortcutOptions` | type | `src/triggers.ts` |
+| `UncaughtError` | type | `src/triggers.ts` |
+| `UncaughtErrorOptions` | type | `src/triggers.ts` |
+
+### `bugbottle/shake`
+
+7 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `DEFAULT_SHAKE_COOLDOWN_MS` | const | `src/shake.ts` |
+| `DEFAULT_SHAKE_THRESHOLD` | const | `src/shake.ts` |
+| `DEFAULT_SHAKE_WINDOW_MS` | const | `src/shake.ts` |
+| `onShake` | function | `src/shake.ts` |
+| `requestShakePermission` | function | `src/shake.ts` |
+| `ShakeEvent` | type | `src/shake.ts` |
+| `ShakeOptions` | type | `src/shake.ts` |
+
+### `bugbottle/locales`
+
+15 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `da` | const | `src/locales.ts` |
+| `de` | const | `src/locales.ts` |
+| `EmailTexts` | type | `src/locales.ts` |
+| `en` | const | `src/locales.ts` |
+| `enMessages` | const | `src/locales.ts` |
+| `es` | const | `src/locales.ts` |
+| `fr` | const | `src/locales.ts` |
+| `Locale` | type | `src/locales.ts` |
+| `locales` | const | `src/locales.ts` |
+| `Messages` | type | `src/locales.ts` |
+| `nb` | const | `src/locales.ts` |
+| `nl` | const | `src/locales.ts` |
+| `resolveLocale` | function | `src/locales.ts` |
+| `sv` | const | `src/locales.ts` |
+| `UiTexts` | type | `src/locales.ts` |
+
+### `bugbottle/locales-extra`
+
+6 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `fi` | const | `src/locales-extra.ts` |
+| `it` | const | `src/locales-extra.ts` |
+| `localesExtra` | const | `src/locales-extra.ts` |
+| `pl` | const | `src/locales-extra.ts` |
+| `pt` | const | `src/locales-extra.ts` |
+| `uk` | const | `src/locales-extra.ts` |
+
+### `bugbottle/ui`
+
+5 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `Brand` | type | `src/ui/index.ts` |
+| `BugbottleWidget` | type | `src/ui/index.ts` |
+| `mountBugbottle` | function | `src/ui/index.ts` |
+| `MountOptions` | type | `src/ui/index.ts` |
+| `Theme` | type | `src/ui/index.ts` |
+

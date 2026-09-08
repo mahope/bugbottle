@@ -46,7 +46,7 @@ was not.
   of valid signatures is free to produce. A flood can only displace digests
   dated the same second it floods, so a captured honest body cannot be replayed
   by filling the cache with unrelated traffic. It is still one instance's
-  memory: give `signature.replayStore` a shared store (Redis, a table with a
+  memory: give `signature.store` a shared store (Redis, a table with a
   TTL) when several instances answer the same endpoint.
 - The rate limit counts against the connection address only, unless
   `trustProxy` says a forwarding header may name the caller instead. It
@@ -56,7 +56,7 @@ was not.
   every visitor in one bucket — so set it deliberately, and to the number of
   hops you actually control.
 - The rate limit and the dedupe have the same seam —
-  `rateLimit.rateLimitStore` and `dedupe.dedupeStore` — and the opposite
+  `rateLimit.store` and `dedupe.store` — and the opposite
   failure mode on purpose: a replay store that throws answers 500, because an
   unchecked signature is the replay it exists to stop, while those two fail
   open, because an honest report must not be refused when a shared store

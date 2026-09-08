@@ -426,21 +426,22 @@ bites. No SDK dependency.
   call and the CSS to copy (#76). The rrweb adapter shipped early too, in 0.8,
   as `bugbottle/rrweb`; both are under "Already shipped".)
 - Freeze the report schema and the `beforeSend` contract.
-- **The API audit is done** (#62): the whole public surface is read and written
-  up in `docs/api-audit-1.0.md`, and the naming rules it settled are in
-  CLAUDE.md's Conventions. What it landed — the `init*` stops, `onError`,
-  `maxEntries`, `MAX_SLACK_*`/`MAX_DISCORD_*`, `store`, `endpoint` — is in
-  0.9 with the old names deprecated beside them. What is left is the removals
-  and two structural changes, one issue each, all labelled `1.0`:
-  - #63 `SendOptions.onFailure`, #64 `QueueOptions.maxItems`, #65 the
+- ~~**The API audit and the freeze** (#62, #97).~~ Done, unreleased. The whole
+  public surface is read and written up in `docs/api-audit-1.0.md` — the export
+  table half of it now generated from the build by `node scripts/api-table.mjs`
+  — and the naming rules it settled are in CLAUDE.md's Conventions, where they
+  are the API contract rather than a style preference from 1.0 on. 0.9 added
+  the settled names beside the old ones; 1.0 removed the old ones:
+  - #63 `SendOptions.onFailure`, #64 `QueueOptions.maxItems`, #65 the thirteen
     vendor-first Slack and Discord limits, #66 `rateLimitStore`/`dedupeStore`/
     `replayStore`, #67 `SendReportWebhookOptions.url`.
   - #68 the server validators and `toMarkdown` off the `.` entry.
-  - #69 one shape for `screenshotUrl`/`screenshotUrlFrom` across the sinks.
+  - #69 one shape for `screenshotUrl`/`screenshotUrlFrom` across all eleven
+    sinks.
   - ~~#70 `network` and `perf` as mount options, the last `data-*` attributes
-    with no option of the same name.~~ Shipped, unreleased: `MountOptions`
-    takes both on the hand-it-in seam, started on mount and stopped in
-    `destroy()`, and `src/global.ts` passes them through.
+    with no option of the same name.~~ Shipped in 0.14: `MountOptions` takes
+    both on the hand-it-in seam, started on mount and stopped in `destroy()`,
+    and `src/global.ts` passes them through.
 
 ## Explicitly not planned
 

@@ -193,7 +193,7 @@ test("markdown characters in the message are escaped into plain text", () => {
 test("a screenshot url becomes an Image and a data url is ignored", () => {
   const withUrl = buildTeamsMessage(report, {
     webhookUrl: TEAMS_URL,
-    screenshotUrl: () => "https://files.example.com/a.png",
+    screenshotUrlFrom: () => "https://files.example.com/a.png",
   });
   assert.deepEqual(elementOfType(withUrl, "Image"), {
     type: "Image",
@@ -204,11 +204,11 @@ test("a screenshot url becomes an Image and a data url is ignored", () => {
 
   const dataUrl = buildTeamsMessage(report, {
     webhookUrl: TEAMS_URL,
-    screenshotUrl: () => "data:image/png;base64,AAAA",
+    screenshotUrlFrom: () => "data:image/png;base64,AAAA",
   });
   assert.equal(elementOfType(dataUrl, "Image"), undefined, "teams cannot fetch a data url");
 
-  const none = buildTeamsMessage(report, { webhookUrl: TEAMS_URL, screenshotUrl: () => undefined });
+  const none = buildTeamsMessage(report, { webhookUrl: TEAMS_URL, screenshotUrlFrom: () => undefined });
   assert.equal(elementOfType(none, "Image"), undefined);
 });
 
@@ -328,7 +328,7 @@ test("a card past the 28 kB cap drops the console first", () => {
     webhookUrl: TEAMS_URL,
     // A stored screenshot lives wherever you put it, and its address can be
     // any length. This one leaves room for everything but the console.
-    screenshotUrl: () => `https://files.example.com/${"a".repeat(4000)}.png`,
+    screenshotUrlFrom: () => `https://files.example.com/${"a".repeat(4000)}.png`,
   });
 
   assert.ok(
@@ -349,7 +349,7 @@ test("a card past the 28 kB cap drops the console first", () => {
 test("a card still over the cap loses its facts from the back, and then the message", () => {
   const payload = buildTeamsMessage(maxedOut, {
     webhookUrl: TEAMS_URL,
-    screenshotUrl: () => `https://files.example.com/${"a".repeat(16000)}.png`,
+    screenshotUrlFrom: () => `https://files.example.com/${"a".repeat(16000)}.png`,
   });
 
   assert.ok(jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES);
@@ -371,7 +371,7 @@ test("an address too long to fit is dropped rather than sent over the cap", () =
   // refuses one over 28 kB outright rather than truncating it.
   const payload = buildTeamsMessage(maxedOut, {
     webhookUrl: TEAMS_URL,
-    screenshotUrl: () => `https://files.example.com/${"a".repeat(40000)}.png`,
+    screenshotUrlFrom: () => `https://files.example.com/${"a".repeat(40000)}.png`,
     reportUrl: () => `https://inbox.example.com/${"b".repeat(40000)}`,
   });
 
@@ -386,7 +386,7 @@ test("an address too long to fit is dropped rather than sent over the cap", () =
 test("the message survives an address the card had to drop", () => {
   const payload = buildTeamsMessage(maxedOut, {
     webhookUrl: TEAMS_URL,
-    screenshotUrl: () => `https://files.example.com/${"a".repeat(40000)}.png`,
+    screenshotUrlFrom: () => `https://files.example.com/${"a".repeat(40000)}.png`,
   });
 
   assert.ok(jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES);
@@ -479,14 +479,14 @@ test("a card of astral characters is clipped to the cap without looping", () => 
   const message = "\u{1F41B}".repeat(2000);
   const url = (padding: number) => `https://files.example.com/${"a".repeat(padding)}.png`;
   const base = jsonByteLength(
-    buildTeamsMessage({ type: "bug", message }, { webhookUrl: TEAMS_URL, screenshotUrl: () => url(0) }),
+    buildTeamsMessage({ type: "bug", message }, { webhookUrl: TEAMS_URL, screenshotUrlFrom: () => url(0) }),
   );
   const padding = MAX_TEAMS_MESSAGE_BYTES - base + 500;
   assert.ok(padding > 0, "the address is what puts the card over the cap");
 
   const payload = buildTeamsMessage(
     { type: "bug", message },
-    { webhookUrl: TEAMS_URL, screenshotUrl: () => url(padding) },
+    { webhookUrl: TEAMS_URL, screenshotUrlFrom: () => url(padding) },
   );
 
   assert.ok(jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES, "the card fits");

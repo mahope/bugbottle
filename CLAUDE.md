@@ -78,6 +78,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time), chrome |
 | `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate`, and the last step of CI's `browser` job | dist (at run time), chrome |
 | `scripts/measure-sinks.mjs` | The "Server bundle" column of the README's sinks table: packs the package, installs the tarball in a scratch project with the pinned esbuild, bundles one entry per sink with the recipe from `ci.yml` (`--bundle --minify --format=esm --platform=node`) and gzips each. Prints the rows and the date. Dev-only and deliberately outside `npm run check` — it wants the network and about a minute; run it after `npm run build` when a sink changes | dist (packed at run time) |
+| `scripts/api-table.mjs` | The "Every export" half of `docs/api-audit-1.0.md`, generated from the build: `package.json#exports` names the entry points, the TypeScript checker names what each exports, and the declaration each name resolves to says which `src/` file it came from. `node scripts/api-table.mjs` after a build; it rewrites everything under that heading and leaves the prose above it alone. From 1.0 that table is the API contract, so regenerate it in the same change that moves an export | dist (at run time) |
 | `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts`. `tests/fuzz.test.ts` is "the server trusts nothing" as a test: a seeded, hand-rolled generator (no dependency) pushes thousands of hostile reports through every `normalise*`, `validateReport`, `collectExtra`, `scrubReport`, `toMarkdown` and `handleReport`, asserting that nothing throws, every output is inside its `MAX_*`, no output carries a null byte or a prototype the sender chose, and `handleReport` answers 400/413 rather than 500. `FUZZ_ITERATIONS` (2000) and `FUZZ_SEED` are the two knobs; a failure prints both, and the case it found is written up beside it as a named regression test | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
@@ -184,6 +185,7 @@ npm run shot:panel  # re-capture the hero pictures from the current panel
 npm run shot:og     # re-render site/og.png from site/og.svg
 npm run smoke:annotate  # the blur really pixelates, in a real Chrome; needs a build first
 node scripts/measure-sinks.mjs  # the README's sink sizes; needs a build and the network
+node scripts/api-table.mjs      # the frozen export table in docs/api-audit-1.0.md; needs a build
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
 
@@ -226,7 +228,8 @@ run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
 script tag nothing at all — the IIFE does not export it, because a page with no
 bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1600 bytes and measures
-1545: it imports only a type, so that number is the module itself. It was
+1539 (1545 until 1.0 removed the `maxItems` alias): it imports only a type, so
+that number is the module itself. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is
 delivered — which is a read-modify-write, a claim and a release where there
@@ -370,6 +373,17 @@ both together 5613. `smtpSink` alone weighs 8037 with `node:net` and `node:tls`
 external: the client itself is a small part of that, and the rest is
 `toMarkdown` and the locale it reads the subject and the intro out of.
 
+1.0 (#97) moved every number by single digits and no budget with them: the
+seven aliases and the fourteen names #68 took off the core entry were all
+either tree-shaken already or a line of `??`. Against 0.15.0:
+`bugbottle/react` −4, `bugbottle/vue` −5, `bugbottle/svelte` −6,
+`bugbottle/solid` −5, `bugbottle/ui` −6, `bugbottle/queue` −6,
+`bugbottle/server` −2, `dist/bugbottle.js` −14, `dist/bugbottle.slim.js` −12,
+and the core +3, which is the compressor rather than the code. Measure the core
+and `bugbottle/network` on Linux before writing either down: Git Bash's `gzip`
+reads both about 130 bytes higher than CI's on files this small, while every
+larger bundle agrees to the byte.
+
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 `puppeteer-core` and Chrome, and check the posted body.
@@ -422,7 +436,14 @@ read locally — and know that forgetting is caught.
 - Tests describe behaviour in plain language: `test("a very long message is clipped")`.
 - Every exported function that touches browser input gets a test for the
   malformed case, not just the happy path.
-- **Naming, settled by the pre-1.0 audit** (`docs/api-audit-1.0.md`, #62):
+- **Naming, settled by the pre-1.0 audit** (`docs/api-audit-1.0.md`, #62).
+  **From 1.0 these seven rules are the API contract, not a style preference.**
+  A name that breaks one of them cannot be fixed in a minor version any more,
+  so it is cheaper to argue about the name than to ship it: removing or
+  renaming an export, an option or a `data-*` attribute needs a **major**
+  version, adding an entry point needs a **minor** one, and the export table in
+  `docs/api-audit-1.0.md` is regenerated (`node scripts/api-table.mjs`) in the
+  same change so the diff shows what moved.
   - A function is a verb (`captureScreenshot`, `buildReport`, `resolveLocale`);
     a value is a noun (`locales`, `DISCORD_COLOURS`).
   - Every `init*` returns its `stop()` — the matching `reset*` — and so does
@@ -441,9 +462,15 @@ read locally — and know that forgetting is caught.
   - Every `data-*` attribute is a mount option of the same name.
   - Nothing is exported without being named in the README's API section; a
     group line ("the `MAX_*` limits") covers a family.
-  - A rename never removes: add the new name, keep the old one working with an
-    `@deprecated` JSDoc naming the version and the removal issue, test both,
-    and let the new name win where both are given.
+  - A rename never removes inside a major version: add the new name, keep the
+    old one working with an `@deprecated` JSDoc naming the version and the
+    removal issue, test both, and let the new name win where both are given.
+    The alias goes at the next major and nowhere else — 1.0 removed the seven
+    that 0.9 added, and that is the whole shape of a rename now.
+  - One shape for one idea across the sinks: `screenshotUrl` is the address you
+    have and `screenshotUrlFrom` reads one out of the report, in all eleven of
+    them. A key that means a string in one sink and a function in the next is
+    the mistake #69 existed to undo.
 
 ## Releasing
 

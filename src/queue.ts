@@ -108,12 +108,6 @@ export type QueueOptions = {
   storageKey?: string;
   /** How many reports to keep. The oldest is evicted first. Default 5. */
   maxEntries?: number;
-  /**
-   * @deprecated Renamed to `maxEntries` in 0.9, which is what the console
-   * buffer, the breadcrumbs and the network log call the same idea. Removed in
-   * 1.0 (#64). Given both, `maxEntries` is the one that counts.
-   */
-  maxItems?: number;
   /** How long a report may wait before it is dropped. Default 7 days. */
   maxAgeMs?: number;
   /** Extra request headers — an auth token, a CSRF header. */
@@ -242,7 +236,7 @@ function localStorageQueue(key: string): QueueStorage | null {
  */
 export function createQueue(options: QueueOptions): Queue {
   const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
-  const maxEntries = options.maxEntries ?? options.maxItems ?? DEFAULT_MAX_ENTRIES;
+  const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const storage = options.storage ?? localStorageQueue(storageKey);
 

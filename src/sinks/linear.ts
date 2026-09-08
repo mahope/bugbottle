@@ -20,6 +20,7 @@
 
 import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { messageFromBody, readBody, SinkError, type FetchLike } from "./error.ts";
+import { resolveUrl, type UrlFrom } from "./chat.ts";
 
 const LINEAR_API = "https://api.linear.app/graphql";
 
@@ -54,6 +55,8 @@ export type CreateLinearIssueOptions = {
    * mutation cannot carry the picture itself.
    */
   screenshotUrl?: string;
+  /** Picks the screenshot address out of the report, when it travels there. */
+  screenshotUrlFrom?: UrlFrom;
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
   /** Passed through to `toMarkdown` — extra facts, a heading level. */
@@ -124,10 +127,12 @@ export async function createLinearIssue(
   options: CreateLinearIssueOptions,
 ): Promise<CreateLinearIssueResult> {
   // An explicit screenshotUrl wins over one already sitting in the markdown
-  // options, so the call site nearest the storage decision is the one heard.
+  // options, so the call site nearest the storage decision is the one heard,
+  // and `screenshotUrlFrom` wins over both because it reads the report itself.
+  const screenshotUrl = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl);
   const markdownOptions: MarkdownOptions = {
     ...options.markdown,
-    ...(options.screenshotUrl ? { screenshotUrl: options.screenshotUrl } : {}),
+    ...(screenshotUrl ? { screenshotUrl } : {}),
   };
 
   const input: Record<string, unknown> = {

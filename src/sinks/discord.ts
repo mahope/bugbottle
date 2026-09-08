@@ -58,7 +58,9 @@ export type DiscordSinkOptions = {
    * data URL is ignored; store the picture first and return its address. Read
    * the privacy note in the README before that address becomes a public one.
    */
-  screenshotUrl?: UrlFrom;
+  screenshotUrl?: string;
+  /** Picks the screenshot address out of the report, when it travels there. */
+  screenshotUrlFrom?: UrlFrom;
   /** A link to the full report, which becomes the embed's title link. */
   reportUrl?: UrlFrom;
   /** Injected `fetch`, for tests or a runtime with its own client. */
@@ -85,7 +87,11 @@ export function buildDiscordMessage(
   ctx: ChatSinkContext = {},
 ): Record<string, unknown> {
   const r = readReport(report);
-  const screenshot = resolveUrl(options.screenshotUrl, report, ctx.screenshotUrl);
+  const screenshot = resolveUrl(
+    options.screenshotUrlFrom,
+    report,
+    options.screenshotUrl ?? ctx.screenshotUrl,
+  );
   const link = resolveUrl(options.reportUrl, report);
 
   const title = clip(r.title, MAX_DISCORD_EMBED_TITLE);
@@ -158,39 +164,3 @@ export function discordSink(options: DiscordSinkOptions): ChatSink {
     }
   };
 }
-
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_TITLE` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_EMBED_TITLE = MAX_DISCORD_EMBED_TITLE;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_DESCRIPTION` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_EMBED_DESCRIPTION = MAX_DISCORD_EMBED_DESCRIPTION;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_FIELDS` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_EMBED_FIELDS = MAX_DISCORD_EMBED_FIELDS;
-/**
- * @deprecated Renamed to `MAX_DISCORD_FIELD_NAME` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_FIELD_NAME = MAX_DISCORD_FIELD_NAME;
-/**
- * @deprecated Renamed to `MAX_DISCORD_FIELD_VALUE` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_FIELD_VALUE = MAX_DISCORD_FIELD_VALUE;
-/**
- * @deprecated Renamed to `MAX_DISCORD_FOOTER_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_FOOTER_TEXT = MAX_DISCORD_FOOTER_TEXT;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_TOTAL` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const DISCORD_MAX_EMBED_TOTAL = MAX_DISCORD_EMBED_TOTAL;

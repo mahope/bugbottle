@@ -215,12 +215,6 @@ export type RateLimitOptions = {
      * table with a TTL.
      */
     store?: RateLimitStore;
-    /**
-     * @deprecated Renamed to `store` in 0.9 — inside `rateLimit` the prefix said
-     * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
-     * one that counts.
-     */
-    rateLimitStore?: RateLimitStore;
 };
 /**
  * The seam between `handleReport` and wherever the counting happens. One
@@ -278,12 +272,6 @@ export type DedupeOptions = {
      * wants one answer across all of them hands in its own store.
      */
     store?: DedupeStore;
-    /**
-     * @deprecated Renamed to `store` in 0.9 — inside `dedupe` the prefix said
-     * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
-     * one that is asked.
-     */
-    dedupeStore?: DedupeStore;
 };
 /** What a dedupe store keeps: the id the first copy was stored under, if any. */
 export type DedupeEntry = {
@@ -364,12 +352,6 @@ export type SignatureOptions = {
      * the skew window anyway, which is exactly how long the entry has to live.
      */
     store?: ReplayStore;
-    /**
-     * @deprecated Renamed to `store` in 0.9 — inside `signature` the prefix said
-     * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
-     * one that is asked.
-     */
-    replayStore?: ReplayStore;
 };
 /**
  * The seam between `handleReport` and wherever accepted signatures are

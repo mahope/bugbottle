@@ -189,7 +189,7 @@ test("slack markup characters in the message are escaped", () => {
 test("a screenshot url becomes an image block and a data url is ignored", () => {
   const withUrl = buildSlackMessage(report, {
     webhookUrl: SLACK_URL,
-    screenshotUrl: () => "https://files.example.com/a.png",
+    screenshotUrlFrom: () => "https://files.example.com/a.png",
   });
   const image = blockOfType(withUrl, "image");
   assert.equal(image?.image_url, "https://files.example.com/a.png");
@@ -197,12 +197,49 @@ test("a screenshot url becomes an image block and a data url is ignored", () => 
 
   const dataUrl = buildSlackMessage(report, {
     webhookUrl: SLACK_URL,
-    screenshotUrl: () => "data:image/png;base64,AAAA",
+    screenshotUrlFrom: () => "data:image/png;base64,AAAA",
   });
   assert.equal(blockOfType(dataUrl, "image"), undefined, "slack cannot fetch a data url");
 
-  const none = buildSlackMessage(report, { webhookUrl: SLACK_URL, screenshotUrl: () => undefined });
+  const none = buildSlackMessage(report, { webhookUrl: SLACK_URL, screenshotUrlFrom: () => undefined });
   assert.equal(blockOfType(none, "image"), undefined);
+});
+
+/**
+ * Since 1.0 every sink takes the same two keys: `screenshotUrl` for an address
+ * you already have and `screenshotUrlFrom` for one that has to be read out of
+ * the report. Slack and Discord took the function under the first name until
+ * then, which was the one place a key meant two things depending on the
+ * import.
+ */
+test("a screenshot url may be a plain string, and the function wins over it", () => {
+  const asString = buildSlackMessage(report, {
+    webhookUrl: SLACK_URL,
+    screenshotUrl: "https://files.example.com/plain.png",
+  });
+  assert.equal(blockOfType(asString, "image")?.image_url, "https://files.example.com/plain.png");
+
+  const both = buildSlackMessage(report, {
+    webhookUrl: SLACK_URL,
+    screenshotUrl: "https://files.example.com/plain.png",
+    screenshotUrlFrom: () => "https://files.example.com/read.png",
+  });
+  assert.equal(blockOfType(both, "image")?.image_url, "https://files.example.com/read.png");
+
+  const discord = buildDiscordMessage(report, {
+    webhookUrl: DISCORD_URL,
+    screenshotUrl: "https://files.example.com/plain.png",
+  });
+  assert.deepEqual(embedOf(discord).image, { url: "https://files.example.com/plain.png" });
+});
+
+test("an option address wins over the one the handler stored", () => {
+  const payload = buildSlackMessage(
+    report,
+    { webhookUrl: SLACK_URL, screenshotUrl: "https://files.example.com/mine.png" },
+    { screenshotUrl: "https://files.example.com/stored.png" },
+  );
+  assert.equal(blockOfType(payload, "image")?.image_url, "https://files.example.com/mine.png");
 });
 
 test("the stored screenshot url from the handler is used when no function is given", () => {
@@ -364,7 +401,7 @@ test("the colour follows the report type", () => {
 test("a screenshot url becomes the embed image and a report url its link", () => {
   const payload = buildDiscordMessage(report, {
     webhookUrl: DISCORD_URL,
-    screenshotUrl: () => "https://files.example.com/a.png",
+    screenshotUrlFrom: () => "https://files.example.com/a.png",
     reportUrl: () => "https://app.example.com/reports/7",
   });
   const embed = embedOf(payload);
@@ -373,7 +410,7 @@ test("a screenshot url becomes the embed image and a report url its link", () =>
 
   const bare = buildDiscordMessage(report, {
     webhookUrl: DISCORD_URL,
-    screenshotUrl: () => undefined,
+    screenshotUrlFrom: () => undefined,
     reportUrl: () => undefined,
   });
   assert.equal("image" in embedOf(bare), false);
@@ -381,7 +418,7 @@ test("a screenshot url becomes the embed image and a report url its link", () =>
 
   const dataUrl = buildDiscordMessage(report, {
     webhookUrl: DISCORD_URL,
-    screenshotUrl: () => "data:image/png;base64,AAAA",
+    screenshotUrlFrom: () => "data:image/png;base64,AAAA",
   });
   assert.equal("image" in embedOf(dataUrl), false, "discord cannot fetch a data url");
 });
@@ -494,25 +531,6 @@ test("the discord sink hands its abort signal to fetch", async () => {
   const controller = new AbortController();
   await discordSink({ webhookUrl: DISCORD_URL, fetch })(report, { signal: controller.signal });
   assert.equal(calls[0]?.init.signal, controller.signal);
-});
-
-test("the vendor-first limit names are the same numbers as the MAX_ ones", async () => {
-  const slack = await import("../src/sinks/slack.ts");
-  const discord = await import("../src/sinks/discord.ts");
-  const webhook = await import("../src/sinks/webhook.ts");
-  assert.equal(slack.SLACK_MAX_BLOCKS, slack.MAX_SLACK_BLOCKS);
-  assert.equal(slack.SLACK_MAX_TEXT, slack.MAX_SLACK_TEXT);
-  assert.equal(slack.SLACK_MAX_HEADER_TEXT, slack.MAX_SLACK_HEADER_TEXT);
-  assert.equal(slack.SLACK_MAX_FIELDS, slack.MAX_SLACK_FIELDS);
-  assert.equal(slack.SLACK_MAX_FIELD_TEXT, slack.MAX_SLACK_FIELD_TEXT);
-  assert.equal(discord.DISCORD_MAX_EMBED_TITLE, discord.MAX_DISCORD_EMBED_TITLE);
-  assert.equal(discord.DISCORD_MAX_EMBED_DESCRIPTION, discord.MAX_DISCORD_EMBED_DESCRIPTION);
-  assert.equal(discord.DISCORD_MAX_EMBED_FIELDS, discord.MAX_DISCORD_EMBED_FIELDS);
-  assert.equal(discord.DISCORD_MAX_FIELD_NAME, discord.MAX_DISCORD_FIELD_NAME);
-  assert.equal(discord.DISCORD_MAX_FIELD_VALUE, discord.MAX_DISCORD_FIELD_VALUE);
-  assert.equal(discord.DISCORD_MAX_FOOTER_TEXT, discord.MAX_DISCORD_FOOTER_TEXT);
-  assert.equal(discord.DISCORD_MAX_EMBED_TOTAL, discord.MAX_DISCORD_EMBED_TOTAL);
-  assert.equal(webhook.DISCORD_MAX_CONTENT, webhook.MAX_DISCORD_CONTENT);
 });
 
 test("clip counts code points, so it never leaves half a character behind", () => {

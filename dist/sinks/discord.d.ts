@@ -43,7 +43,9 @@ export type DiscordSinkOptions = {
      * data URL is ignored; store the picture first and return its address. Read
      * the privacy note in the README before that address becomes a public one.
      */
-    screenshotUrl?: UrlFrom;
+    screenshotUrl?: string;
+    /** Picks the screenshot address out of the report, when it travels there. */
+    screenshotUrlFrom?: UrlFrom;
     /** A link to the full report, which becomes the embed's title link. */
     reportUrl?: UrlFrom;
     /** Injected `fetch`, for tests or a runtime with its own client. */
@@ -66,39 +68,4 @@ export declare function buildDiscordMessage(report: unknown, options: DiscordSin
  * ```
  */
 export declare function discordSink(options: DiscordSinkOptions): ChatSink;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_TITLE` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_EMBED_TITLE = 256;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_DESCRIPTION` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_EMBED_DESCRIPTION = 4096;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_FIELDS` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_EMBED_FIELDS = 25;
-/**
- * @deprecated Renamed to `MAX_DISCORD_FIELD_NAME` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_FIELD_NAME = 256;
-/**
- * @deprecated Renamed to `MAX_DISCORD_FIELD_VALUE` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_FIELD_VALUE = 1024;
-/**
- * @deprecated Renamed to `MAX_DISCORD_FOOTER_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_FOOTER_TEXT = 2048;
-/**
- * @deprecated Renamed to `MAX_DISCORD_EMBED_TOTAL` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_EMBED_TOTAL = 6000;
 //# sourceMappingURL=discord.d.ts.map

@@ -249,36 +249,3 @@ test("a contact line is trimmed onto the report, and an empty one is left out", 
     assert.equal("contact" in report, false, `${JSON.stringify(contact)} adds no key`);
   }
 });
-
-test("the deprecated onFailure still runs when it is the only one given", async () => {
-  const seen: unknown[] = [];
-  const failing = async () => {
-    throw new TypeError("Failed to fetch");
-  };
-  const report = buildReport({ type: "bug", message: "offline", includeConsole: false });
-  await assert.rejects(
-    sendReport("/api/feedback", report, {
-      fetch: failing as typeof globalThis.fetch,
-      onFailure: (r) => void seen.push(r.message),
-    }),
-    /Failed to fetch/,
-  );
-  assert.deepEqual(seen, ["offline"]);
-});
-
-test("given both names, onError runs and onFailure does not", async () => {
-  const seen: string[] = [];
-  const failing = async () => {
-    throw new TypeError("Failed to fetch");
-  };
-  const report = buildReport({ type: "bug", message: "offline", includeConsole: false });
-  await assert.rejects(
-    sendReport("/api/feedback", report, {
-      fetch: failing as typeof globalThis.fetch,
-      onError: () => void seen.push("onError"),
-      onFailure: () => void seen.push("onFailure"),
-    }),
-    /Failed to fetch/,
-  );
-  assert.deepEqual(seen, ["onError"], "one handler runs, never both");
-});

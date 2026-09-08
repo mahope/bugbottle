@@ -49,8 +49,6 @@ export {
   type SendResult,
 } from "./send.ts";
 
-export { toMarkdown, type MarkdownOptions } from "./markdown.ts";
-
 // Imported by nothing else here, like the scrubber, so a bundler drops it whole
 // when nobody deduplicates. `bugbottle/server` re-exports the same function, so
 // both sides of a deduplicated report agree on what "the same report" means.
@@ -70,20 +68,15 @@ export {
 
 export { type Locale, type Messages, type UiTexts, type EmailTexts } from "./locales.ts";
 
+// The validators that turn an arrived report into a trusted one are on
+// `bugbottle/server` alone (#68): they are what a receiving server does, and
+// this entry is what a reader opens to learn what the browser half is.
+// `REPORT_TYPES` and `isReportType` stay, because the panel and the adapters
+// build the type radiogroup out of them and `ReportType` would otherwise be a
+// type with no values behind it.
 export {
   REPORT_TYPES,
   isReportType,
-  normaliseMessage,
-  normaliseContact,
-  normaliseContext,
-  normaliseConsole,
-  normaliseElements,
-  normaliseBreadcrumbs,
-  normaliseNetwork,
-  normalisePerf,
-  normaliseNotes,
-  normaliseReplay,
-  normaliseStorage,
   MAX_MESSAGE_LENGTH,
   MAX_CONTACT_LENGTH,
   MAX_NOTES,

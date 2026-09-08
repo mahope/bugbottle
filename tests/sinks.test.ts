@@ -219,7 +219,7 @@ test("slack gets text and discord gets content", async () => {
 
   const discord = fakeFetch(204, "");
   const result = await sendReportWebhook(report, {
-    url: "https://discord.com/api/webhooks/x",
+    endpoint: "https://discord.com/api/webhooks/x",
     format: "discord",
     fetch: discord.fetch,
   });
@@ -234,7 +234,7 @@ test("a long report is clipped to the discord limit", async () => {
     message: `Overflowing\n${"x".repeat(5000)}`,
   };
   await sendReportWebhook(long, {
-    url: "https://discord.com/api/webhooks/x",
+    endpoint: "https://discord.com/api/webhooks/x",
     format: "discord",
     fetch,
   });
@@ -247,7 +247,7 @@ test("a long report is clipped to the discord limit", async () => {
 test("a refused webhook becomes a SinkError", async () => {
   const { fetch } = fakeFetch(404, "no_service");
   await assert.rejects(
-    () => sendReportWebhook(report, { url: "https://hooks.slack.com/gone", fetch }),
+    () => sendReportWebhook(report, { endpoint: "https://hooks.slack.com/gone", fetch }),
     (err: unknown) => {
       assert.ok(err instanceof SinkError);
       assert.equal(err.name, "SinkError");
@@ -499,12 +499,56 @@ test("a malformed report is still filed in linear, with a fallback title", async
   assert.equal(linearInput(calls).title, "Feedback: Feedback");
 });
 
-test("the deprecated url still says where the webhook is", async () => {
-  const { fetch, calls } = fakeFetch(200, { ok: true });
-  const result = await sendReportWebhook(report, {
-    url: "https://hook.example.com/old-name",
+/**
+ * Since 1.0 all seven sinks take the same two keys with the same two meanings:
+ * `screenshotUrl` for an address you already have, `screenshotUrlFrom` for one
+ * that has to be read out of the report. Before that, three of them had no
+ * function form at all and two of them had no string form.
+ */
+test("screenshotUrlFrom reads the address out of the report, and wins over the string", async () => {
+  const carried = { ...report, screenshotUrl: "https://files.example.com/carried.png" };
+  const fromReport = (r: unknown): string | undefined =>
+    (r as { screenshotUrl?: string }).screenshotUrl;
+
+  const github = fakeFetch(201, { number: 9, html_url: "https://example.com/9" });
+  await createGithubIssue(carried, {
+    token: "t",
+    owner: "acme",
+    repo: "app",
+    screenshotUrl: "https://files.example.com/option.png",
+    screenshotUrlFrom: fromReport,
+    fetch: github.fetch,
+  });
+  assert.match(String(sentBody(github.calls).body), /carried\.png/);
+
+  const linear = fakeFetch(200, linearOk);
+  await createLinearIssue(carried, {
+    apiKey: "k",
+    teamId: "team-uuid",
+    screenshotUrlFrom: fromReport,
+    fetch: linear.fetch,
+  });
+  assert.match(String(linearInput(linear.calls).description), /carried\.png/);
+
+  const resend = fakeFetch(200, { id: "msg_1" });
+  await sendReportEmail(carried, {
+    apiKey: "k",
+    from: "bugs@example.com",
+    to: "team@example.com",
+    screenshotUrlFrom: fromReport,
+    fetch: resend.fetch,
+  });
+  assert.match(String(sentBody(resend.calls).text), /carried\.png/);
+});
+
+test("a plain screenshotUrl reaches the resend mail too", async () => {
+  const { fetch, calls } = fakeFetch(200, { id: "msg_2" });
+  await sendReportEmail(report, {
+    apiKey: "k",
+    from: "bugs@example.com",
+    to: "team@example.com",
+    screenshotUrl: "https://files.example.com/shots/abc.png",
     fetch,
   });
-  assert.equal(result.status, 200);
-  assert.equal(calls[0]?.url, "https://hook.example.com/old-name");
+  assert.match(String(sentBody(calls).text), /https:\/\/files\.example\.com\/shots\/abc\.png/);
 });

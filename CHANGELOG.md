@@ -2,10 +2,56 @@
 
 All notable changes are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/). Until 1.0, minor versions may
-change the API; the changelog says so when they do.
+[Semantic Versioning](https://semver.org/). Since 1.0 that is a promise rather
+than an intention: removing or renaming an export, an option or a `data-*`
+attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
+
+The freeze. 1.0 says what the next version number will mean: **removing or
+renaming an export, an option or a `data-*` attribute needs a major version, a
+new entry point needs a minor one**, and a patch changes behaviour only where
+the behaviour was a bug. Nothing new is added here. What lands is the other
+half of the September audit (#62): the seven aliases 0.9 introduced beside the
+names it settled on are removed, the server validators and `toMarkdown` leave
+the browser entry, and the eleven sinks agree on one shape for the picture
+address.
+
+The whole public surface — every export of all twenty entry points — is
+generated from the build into `docs/api-audit-1.0.md` by
+`node scripts/api-table.mjs`, so a rename is a diff rather than a surprise;
+`tests/exports.test.ts` writes the exports map out in full and fails when it,
+the README's API section and `CLAUDE.md` stop agreeing; and the seven naming
+rules in `CLAUDE.md` are the contract the next name is chosen by rather than a
+style preference.
+
+Every migration in one table. All seven are mechanical, and nobody has to read
+a value to make one:
+
+| Was | Is | Where |
+|---|---|---|
+| `SendOptions.onFailure` | `SendOptions.onError` | `sendReport` |
+| `QueueOptions.maxItems` | `QueueOptions.maxEntries` | `createQueue` |
+| `SLACK_MAX_*`, `DISCORD_MAX_*` (13) | `MAX_SLACK_*`, `MAX_DISCORD_*` | `bugbottle/server` |
+| `rateLimit.rateLimitStore` | `rateLimit.store` | `handleReport` |
+| `dedupe.dedupeStore` | `dedupe.store` | `handleReport` |
+| `signature.replayStore` | `signature.store` | `handleReport` |
+| `SendReportWebhookOptions.url` | `SendReportWebhookOptions.endpoint` | `sendReportWebhook`, `toWebhook` |
+| `import { normalise*, toMarkdown } from "bugbottle"` | `… from "bugbottle/server"` | the core entry |
+| `slackSink({ screenshotUrl: (r) => … })` | `slackSink({ screenshotUrlFrom: (r) => … })` | Slack, Discord, Teams |
+
+The wire format is unchanged: a 0.15 browser and a 1.0 server understand each
+other in both directions, and so do the schema, the OpenAPI document and the
+GitHub Action.
+
+Sizes moved by single-digit bytes and no budget moved with them. Measured
+against 0.15.0 with the same recipe: `bugbottle/react` −4, `bugbottle/vue` −5,
+`bugbottle/svelte` −6, `bugbottle/solid` −5, `bugbottle/ui` −6,
+`bugbottle/queue` 1545 → 1539, `bugbottle/server` −2, `dist/bugbottle.js` −14
+and `dist/bugbottle.slim.js` −12. The core rose three bytes, which is the
+compressor rather than the code: everything #68 took off the entry was already
+tree-shaken out of a bundle that never called it, which is why that issue was
+about what the entry says it is and not about bytes.
 
 ### Changed
 
@@ -22,6 +68,61 @@ change the API; the changelog says so when they do.
   includes the same `security-headers.conf` as the one that serves. Nothing in
   the package changed; the canonical links, the Open Graph URLs and the sitemap
   have said bugbottle.dev since 0.5.0.
+- **One shape for the screenshot address across all eleven sinks** (#69).
+  `screenshotUrl` is a `string` everywhere — the address you already have — and
+  `screenshotUrlFrom` is the function that reads one out of the report, which
+  wins where both are given. `slackSink`, `discordSink` and `teamsSink` took
+  the function under the first name until now, which was the one place in the
+  package where a key meant two different things depending on the import:
+
+  ```diff
+   slackSink({
+     webhookUrl: process.env.SLACK_WEBHOOK,
+  -  screenshotUrl: (report) => report.screenshotUrl,
+  +  screenshotUrlFrom: (report) => report.screenshotUrl,
+   });
+  ```
+
+  A sink already passing a string keeps working unchanged.
+  `createGithubIssue`, `createLinearIssue` and `sendReportEmail` gained the
+  function form, and `sendReportEmail` gained `screenshotUrl` beside the
+  `screenshot` bytes it already took, so the address no longer has to be posted
+  through `markdown.screenshotUrl`. All eleven now drop a `data:` address the
+  same way, since no service will fetch one, and all eleven now let an option
+  set on the sink win over the address `handleReport` stored — `toGithub` and
+  `toLinear` had it the other way round.
+
+### Removed
+
+- **`SendOptions.onFailure`** (#63). Rename it to `onError`: same signature,
+  same contract, awaited before the error reaches the caller.
+- **`QueueOptions.maxItems`** (#64). Rename it to `maxEntries`, which is what
+  the console buffer, the breadcrumbs and the network log call the same cap:
+  same meaning, same default of five, oldest evicted first.
+- **The thirteen vendor-first `SLACK_MAX_*` and `DISCORD_MAX_*` limits** (#65).
+  The rename is mechanical, and nobody has to read a value to make it:
+  `<VENDOR>_MAX_<REST>` becomes `MAX_<VENDOR>_<REST>`, so `SLACK_MAX_TEXT` is
+  `MAX_SLACK_TEXT` and `DISCORD_MAX_EMBED_TITLE` is `MAX_DISCORD_EMBED_TITLE`.
+- **`rateLimit.rateLimitStore`, `dedupe.dedupeStore` and
+  `signature.replayStore`** (#66). All three are `store` now — inside the
+  option object the vendor prefix said nothing the key did not. The store
+  contracts are unchanged, and `HandleReportOptions.store`, the top-level one
+  that persists a report, is a different option and was never touched.
+- **`SendReportWebhookOptions.url`** (#67). Rename it to `endpoint`, the word
+  everything else in the package uses for somewhere it POSTs a report.
+  `toWebhook` takes the same options object and migrates the same way; a
+  vendor's own address keeps the vendor's own word, so `webhookUrl`, `host`,
+  `site` and `dsn` are unchanged.
+- **The server validators and `toMarkdown` are off the `bugbottle` entry**
+  (#68). Import them from `bugbottle/server`, which has re-exported every one
+  of them all along — the functions are identical and only the path changes.
+  They are what a receiving server does with a report that has arrived, and the
+  core entry is what a reader opens to learn what the browser half is; fourteen
+  server names in that list said the opposite. `REPORT_TYPES` and
+  `isReportType` stay on `bugbottle`, because the panel and the adapters build
+  the type radiogroup out of them. They were tree-shaken before, so no bundle
+  gets smaller: the core measured 1540 bytes gzipped before the change and
+  1543 after, which is the compressor, not the code.
 
 ## 0.15.0 — 2026-09-08
 

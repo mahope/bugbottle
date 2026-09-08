@@ -39,7 +39,7 @@ function mrkdwn(text, max = MAX_SLACK_TEXT) {
  */
 export function buildSlackMessage(report, options, ctx = {}) {
     const r = readReport(report);
-    const screenshot = resolveUrl(options.screenshotUrl, report, ctx.screenshotUrl);
+    const screenshot = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl ?? ctx.screenshotUrl);
     const link = resolveUrl(options.reportUrl, report);
     const blocks = [
         {
@@ -137,29 +137,4 @@ export function slackSink(options) {
         }
     };
 }
-/**
- * @deprecated Renamed to `MAX_SLACK_BLOCKS` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const SLACK_MAX_BLOCKS = MAX_SLACK_BLOCKS;
-/**
- * @deprecated Renamed to `MAX_SLACK_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const SLACK_MAX_TEXT = MAX_SLACK_TEXT;
-/**
- * @deprecated Renamed to `MAX_SLACK_HEADER_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const SLACK_MAX_HEADER_TEXT = MAX_SLACK_HEADER_TEXT;
-/**
- * @deprecated Renamed to `MAX_SLACK_FIELDS` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const SLACK_MAX_FIELDS = MAX_SLACK_FIELDS;
-/**
- * @deprecated Renamed to `MAX_SLACK_FIELD_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export const SLACK_MAX_FIELD_TEXT = MAX_SLACK_FIELD_TEXT;
 //# sourceMappingURL=slack.js.map
