@@ -8,6 +8,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+## 1.0.0 — 2026-09-08
+
 The freeze. 1.0 says what the next version number will mean: **removing or
 renaming an export, an option or a `data-*` attribute needs a major version, a
 new entry point needs a minor one**, and a patch changes behaviour only where

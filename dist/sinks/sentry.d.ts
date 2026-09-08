@@ -58,9 +58,9 @@ export declare const SENTRY_CLIENT_NAME = "bugbottle";
  * compares this with `package.json` and fails when the two drift, so a release
  * that forgets this line does not ship.
  */
-export declare const SENTRY_CLIENT_VERSION = "0.15.0";
+export declare const SENTRY_CLIENT_VERSION = "1.0.0";
 /** `bugbottle/0.6.0`, the `sentry_client` format the documentation asks for. */
-export declare const SENTRY_CLIENT = "bugbottle/0.15.0";
+export declare const SENTRY_CLIENT = "bugbottle/1.0.0";
 /** The only protocol version Sentry has shipped. */
 export declare const SENTRY_VERSION = 7;
 /** Sentry keeps the newest hundred breadcrumbs on an event and drops the rest. */

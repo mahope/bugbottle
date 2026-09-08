@@ -1,6 +1,6 @@
 {
   "name": "bugbottle",
-  "version": "0.15.0",
+  "version": "1.0.0",
   "description": "Headless in-app bug reports that arrive with the evidence attached: console errors, page context and an optional screenshot. Your UI, your endpoint.",
   "keywords": [
     "bug-report",
