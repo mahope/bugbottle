@@ -7,6 +7,28 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The visible release: the browser audits — axe over the panel and every site
+page with the security headers served, and the pixel proof that the blur
+destroys what it covers — now run in CI on every push, so what the two
+reviewers ran by hand this week runs by itself. The changelog is a page on the
+site, the version line on both landing pages points at it, and the inbox
+example ships as a container with a compose file and a Dokploy walk-through.
+`bugbottle/locales-extra` adds Italian, Polish, Portuguese, Finnish and
+Ukrainian as an entry you import on purpose, so the script tags do not grow;
+and the panel takes the network log and the timings snapshot as options, the
+same way it takes the annotator and the shake gesture. One contrast fix on the
+site, found by the audit on its first run.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`bugbottle/shake` 0.7 kB, `bugbottle/sign` 0.4 kB, `bugbottle/rrweb` 0.7 kB,
+`bugbottle/locales-extra` 4.7 kB for all five (about 1.1 kB for one),
+`dist/bugbottle.js` 24.2 kB, `dist/bugbottle.slim.js` 20.6 kB,
+`bugbottle/server` validators 0.6 kB.
+
 ### Added
 
 - Five more languages, in their own entry point: `bugbottle/locales-extra`
