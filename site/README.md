@@ -36,7 +36,7 @@ from this host and the favicon is an inline SVG.
 | `panel-da.png`, `panel-da-narrow.png` | The same pair from `/da/`, where the panel is in Danish |
 | `og.svg` | Source of the OpenGraph picture. Not served |
 | `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
-| `nginx.conf` | Replaces `conf.d/default.conf`: `/health`, caching, gzip |
+| `nginx.conf` | Replaces `conf.d/default.conf`: `/health`, caching, gzip, and the `301` from the alias host; see "The two hosts" below |
 | `security-headers.conf` | The security headers, in one file because nginx does not merge them. Copied to `/etc/nginx/snippets/` and included by every block in `nginx.conf`; see "The security headers" below |
 | `Dockerfile` | A `node:22-alpine` stage that generates `docs/`, then `nginx:alpine` plus these files and `dist/` |
 
@@ -710,6 +710,17 @@ curl -si localhost:8089/panel-narrow.png | head -1
 `/health` returns `ok` as `text/plain` and is not logged — it is what the
 container platform polls.
 
+And that the alias host redirects while the canonical one serves. nginx reads
+the `Host` header, so both can be checked against the same container:
+
+```bash
+curl -sI -H "Host: bugbottle.mahoje.dk" localhost:8089/docs/ | head -2
+curl -sI -H "Host: bugbottle.mahoje.dk" localhost:8089/health | head -1
+curl -sI -H "Host: bugbottle.dev" localhost:8089/docs/ | head -1
+```
+
+`301` with `Location: https://bugbottle.dev/docs/`, then `200`, then `200`.
+
 And that every one of them carries the same three security headers, which is
 the thing an `add_header` in a `location` quietly takes away:
 
@@ -723,13 +734,35 @@ done
 Three lines under every path — the 404 included, which is why `/nope` is in the
 list — or something in `nginx.conf` has stopped including the snippet.
 
+## The two hosts
+
+`bugbottle.dev` is the canonical host: it is what the `<link rel="canonical">`
+and `og:url` on every page say, what `sitemap.xml` and `robots.txt` are written
+with, and what the README and the npm `homepage` point at.
+
+`bugbottle.mahoje.dk` is the alias, the address the site had first. It is
+attached to the same Dokploy application, and the second `server` block in
+`nginx.conf` answers every request for it with
+`301 https://bugbottle.dev$request_uri` — the same path and query on the
+canonical host — so bookmarks and whatever a crawler still remembers converge
+on one origin. Nothing is served under the alias except `/health`, which
+answers 200 there as it does on the canonical host, because Dokploy polls it
+and a redirect would read as a failure.
+
+Traefik terminates TLS for both and forwards the request with its original
+`Host`, which is what lets an exact `server_name` catch the alias before the
+catch-all block. `www.bugbottle.dev` never reaches nginx: a Cloudflare rule
+redirects it to the apex.
+
 ## Deploying
 
 Dokploy application, Dockerfile build, `site/Dockerfile` with the repository
-root as the context, port 80, health check path `/health`, domain
-`bugbottle.dev` with TLS from Traefik. Because `dist/` is baked into the
-image, a release that rebuilds `dist/` needs a redeploy for the demo to run the
-new version.
+root as the context, port 80, health check path `/health`, domains
+`bugbottle.dev` and `bugbottle.mahoje.dk` with TLS from Traefik — both are
+attached to the application, and the alias is redirected in nginx rather than
+detached, so an old link answers rather than failing to resolve. Because
+`dist/` is baked into the image, a release that rebuilds `dist/` needs a
+redeploy for the demo to run the new version.
 
 ## What this must not do
 

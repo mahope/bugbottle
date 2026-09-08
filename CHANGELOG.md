@@ -7,6 +7,22 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- **The site has one canonical host.** `bugbottle.dev` resolves to the Dokploy
+  application, so `bugbottle.mahoje.dk` — the address the site had first, and
+  still a domain on the same application — no longer serves a second copy of
+  every page. A second `server` block in `site/nginx.conf` answers it with
+  `301 https://bugbottle.dev$request_uri`: the same path and query on the
+  canonical host, so bookmarks and whatever a crawler still remembers converge
+  on one origin. Traefik forwards the original `Host`, which is what lets an
+  exact `server_name` catch the alias before the catch-all. `/health` still
+  answers 200 on both hosts, because Dokploy polls it and a redirect there
+  would read as a failure and flap the application, and the alias block
+  includes the same `security-headers.conf` as the one that serves. Nothing in
+  the package changed; the canonical links, the Open Graph URLs and the sitemap
+  have said bugbottle.dev since 0.5.0.
+
 ## 0.15.0 — 2026-09-08
 
 The observable release. `handleReport` says what it decided: `onDecision`
