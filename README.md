@@ -956,6 +956,10 @@ editor. The script tag is the build that carries everything, so it wires the
 annotator up for you and `data-annotate="off"` is how you switch it off there.
 Sending with the editor still open keeps the marks: the picture is folded back
 into the report either way, so a blur cannot be lost by skipping "Done".
+Escape in the editor leaves the editor rather than the panel — it is the way
+out that drops the marks nobody confirmed, puts the preview back and returns
+focus to "Edit picture"; while a mark is being drawn it still abandons that
+mark, and with the editor closed it still closes the panel.
 
 With your own form, use the annotator directly. It is its own entry point,
 about 1.4 kB gzipped, and it draws on a canvas you supply:
@@ -986,7 +990,8 @@ to the computed `--bb-primary`), `lineWidth`, `blockSize` and an `onChange`
 called with the number of marks. It returns `ready`, `setTool`, `getTool`,
 `undo`, `clear`, `count`, `toDataUrl` and `destroy`. Drawing is by pointer, so
 a mouse, a pen and a finger all work; Backspace or Delete undoes and Escape
-abandons the mark being drawn. Nothing in it is a string the reporter reads,
+abandons the mark being drawn — with nothing being drawn the key is left to
+travel, so the form around the canvas can decide what it means. Nothing in it is a string the reporter reads,
 so it needs no locale of its own — the panel supplies the labels around it.
 
 ## Receiving a report

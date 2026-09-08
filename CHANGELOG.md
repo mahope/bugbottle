@@ -115,6 +115,16 @@ that tag was cut.
 
 ### Fixed
 
+- The ready-made panel closed altogether when Escape was pressed in the picture
+  editor with no mark in progress, and left the editor on screen with a live
+  annotator behind it, so "Edit picture" did nothing at the next attempt.
+  Escape in the editor is now the editor's own way out — the unconfirmed marks
+  are dropped, the preview comes back and focus returns to "Edit picture" —
+  while a mark being drawn still swallows the key and a closed editor still
+  lets it close the panel. Closing the editor now puts the canvas away on every
+  path, whether or not an annotator was live, so the dead-button state cannot
+  be reached at all. The `annotateArea` sentence the canvas reads to a screen
+  reader says so, in all eight languages.
 - The ready-made panel posted the picture as it was captured when Send was
   pressed with the editor still open, because the marks were only folded in by
   "Done". A blur the reporter had just drawn over a customer name never reached
@@ -875,4 +885,4 @@ First cut. Extracted from the feedback bubble in two production apps.
   error type.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
-  picker included), `bugbottle/server` 0.8 kB.
+  picker included), `bugbottle/server` 0.8 kB.

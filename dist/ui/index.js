@@ -412,17 +412,23 @@ export function mountBugbottle(options) {
      */
     function closeEditor(keep) {
         const open = annotator;
-        if (!open)
-            return;
         annotator = null;
-        if (keep) {
-            screenshot = open.toDataUrl();
-            preview.src = screenshot;
+        try {
+            if (open && keep) {
+                screenshot = open.toDataUrl();
+                preview.src = screenshot;
+            }
         }
-        open.destroy();
-        editor.hidden = true;
-        preview.hidden = !screenshot;
-        editBtn.hidden = !screenshot || !makeAnnotator;
+        finally {
+            // Every exit path ends here, and it ends here whether or not there was a
+            // live annotator: an editor left on screen with no annotator behind it
+            // is the state where "Edit picture" does nothing at all (#48), so the
+            // canvas is put away in a `finally` rather than after an early return.
+            open?.destroy();
+            editor.hidden = true;
+            preview.hidden = !screenshot;
+            editBtn.hidden = !screenshot || !makeAnnotator;
+        }
     }
     async function capture() {
         const render = options.screenshot;
@@ -638,6 +644,17 @@ export function mountBugbottle(options) {
         if (!isOpen || pickController)
             return;
         if (e.key === "Escape") {
+            // With the editor open the key belongs to the editor: Escape there is
+            // cancel — the marks nobody confirmed are dropped, the preview comes
+            // back and focus returns to the button that opened it. The annotator
+            // stops the key while a shape is being drawn, so what reaches this
+            // handler is an editor with nothing in progress.
+            if (annotator) {
+                e.preventDefault();
+                closeEditor(false);
+                editBtn.focus();
+                return;
+            }
             close();
             return;
         }

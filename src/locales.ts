@@ -131,7 +131,7 @@ export const en: Locale = {
     screenshotNote: "The picture shows this page as you see it now.",
     annotate: "Edit picture",
     annotateArea:
-      "Drawing area. Drag to mark the picture with the chosen tool. Backspace undoes, Escape cancels the mark you are drawing.",
+      "Drawing area. Drag to mark the picture with the chosen tool. Backspace undoes, Escape cancels the mark you are drawing and, with nothing being drawn, leaves the editor without keeping the marks.",
     toolLabel: "Drawing tool",
     toolRect: "Rectangle",
     toolArrow: "Arrow",
@@ -181,7 +181,7 @@ export const da: Locale = {
     screenshotNote: "Billedet viser siden som du ser den nu.",
     annotate: "Rediger billedet",
     annotateArea:
-      "Tegneområde. Træk for at markere billedet med det valgte værktøj. Backspace fortryder, Esc annullerer den markering, du er i gang med.",
+      "Tegneområde. Træk for at markere billedet med det valgte værktøj. Backspace fortryder, Esc annullerer den markering, du er i gang med, og forlader editoren uden at beholde markeringerne, når du ikke er ved at tegne.",
     toolLabel: "Tegneværktøj",
     toolRect: "Rektangel",
     toolArrow: "Pil",
@@ -231,7 +231,7 @@ export const sv: Locale = {
     screenshotNote: "Bilden visar sidan som du ser den nu.",
     annotate: "Redigera bilden",
     annotateArea:
-      "Ritområde. Dra för att markera bilden med det valda verktyget. Backsteg ångrar, Esc avbryter markeringen du håller på med.",
+      "Ritområde. Dra för att markera bilden med det valda verktyget. Backsteg ångrar, Esc avbryter markeringen du håller på med och lämnar redigeraren utan att behålla markeringarna när inget ritas.",
     toolLabel: "Ritverktyg",
     toolRect: "Rektangel",
     toolArrow: "Pil",
@@ -281,7 +281,7 @@ export const nb: Locale = {
     screenshotNote: "Bildet viser siden slik du ser den nå.",
     annotate: "Rediger bildet",
     annotateArea:
-      "Tegneområde. Dra for å markere bildet med det valgte verktøyet. Rettetast angrer, Esc avbryter markeringen du holder på med.",
+      "Tegneområde. Dra for å markere bildet med det valgte verktøyet. Rettetast angrer, Esc avbryter markeringen du holder på med og forlater redigeringen uten å beholde markeringene når ingenting tegnes.",
     toolLabel: "Tegneverktøy",
     toolRect: "Rektangel",
     toolArrow: "Pil",
@@ -331,7 +331,7 @@ export const de: Locale = {
     screenshotNote: "Das Bild zeigt diese Seite so, wie Sie sie jetzt sehen.",
     annotate: "Bild bearbeiten",
     annotateArea:
-      "Zeichenfläche. Ziehen Sie, um das Bild mit dem gewählten Werkzeug zu markieren. Die Rücktaste macht rückgängig, Esc bricht die begonnene Markierung ab.",
+      "Zeichenfläche. Ziehen Sie, um das Bild mit dem gewählten Werkzeug zu markieren. Die Rücktaste macht rückgängig, Esc bricht die begonnene Markierung ab und verlässt den Editor, ohne die Markierungen zu behalten, wenn gerade nichts gezeichnet wird.",
     toolLabel: "Zeichenwerkzeug",
     toolRect: "Rechteck",
     toolArrow: "Pfeil",
@@ -382,7 +382,7 @@ export const nl: Locale = {
     screenshotNote: "De afbeelding toont deze pagina zoals je die nu ziet.",
     annotate: "Afbeelding bewerken",
     annotateArea:
-      "Tekengebied. Sleep om de afbeelding te markeren met het gekozen gereedschap. Backspace maakt ongedaan, Esc annuleert de markering waar je mee bezig bent.",
+      "Tekengebied. Sleep om de afbeelding te markeren met het gekozen gereedschap. Backspace maakt ongedaan, Esc annuleert de markering waar je mee bezig bent en verlaat de editor zonder de markeringen te bewaren als er niets wordt getekend.",
     toolLabel: "Tekengereedschap",
     toolRect: "Rechthoek",
     toolArrow: "Pijl",
@@ -432,7 +432,7 @@ export const fr: Locale = {
     screenshotNote: "L'image montre cette page telle que vous la voyez.",
     annotate: "Modifier l'image",
     annotateArea:
-      "Zone de dessin. Faites glisser pour marquer l'image avec l'outil choisi. La touche Retour arrière annule, Échap abandonne la marque en cours.",
+      "Zone de dessin. Faites glisser pour marquer l'image avec l'outil choisi. La touche Retour arrière annule, Échap abandonne la marque en cours et, quand rien n'est en cours, quitte l'éditeur sans conserver les marques.",
     toolLabel: "Outil de dessin",
     toolRect: "Rectangle",
     toolArrow: "Flèche",
@@ -483,7 +483,7 @@ export const es: Locale = {
     screenshotNote: "La imagen muestra esta página tal como la ves ahora.",
     annotate: "Editar la imagen",
     annotateArea:
-      "Área de dibujo. Arrastra para marcar la imagen con la herramienta elegida. Retroceso deshace, Esc cancela la marca que estás haciendo.",
+      "Área de dibujo. Arrastra para marcar la imagen con la herramienta elegida. Retroceso deshace, Esc cancela la marca que estás haciendo y, cuando no estás dibujando, sale del editor sin conservar las marcas.",
     toolLabel: "Herramienta de dibujo",
     toolRect: "Rectángulo",
     toolArrow: "Flecha",

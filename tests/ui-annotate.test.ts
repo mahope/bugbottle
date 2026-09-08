@@ -304,8 +304,8 @@ test("closing the panel keeps the marks; clearing the picture drops the editor",
   fire(p.canvas, "pointermove", 40, 30);
   fire(p.canvas, "pointerup", 40, 30);
 
-  press(p.canvas, "Escape");
-  assert.equal(p.panel.hidden, true, "with no mark in progress Escape still closes the panel");
+  (p.root.querySelector(".close") as HTMLButtonElement).click();
+  assert.equal(p.panel.hidden, true, "the close button closes the panel from the editor too");
   assert.equal(p.editor.hidden, true, "and the editor closes with it");
   assert.equal(p.preview.getAttribute("src"), MARKED, "the marks are part of the draft");
 
@@ -392,6 +392,101 @@ test("a locale swap renames every control of the editor", async () => {
   );
   assert.equal(p.undoBtn.textContent, da.ui.undo);
   assert.equal(p.doneBtn.textContent, da.ui.done);
+
+  widget.destroy();
+});
+
+test("Escape in the editor leaves the editor rather than closing the panel", async () => {
+  const widget = mount();
+  const p = await withPicture(widget);
+  p.editBtn.click();
+  await settle();
+  fire(p.canvas, "pointerdown", 5, 5);
+  fire(p.canvas, "pointermove", 40, 30);
+  fire(p.canvas, "pointerup", 40, 30);
+
+  press(p.canvas, "Escape");
+
+  assert.equal(p.panel.hidden, false, "the panel is where the reporter still is");
+  assert.equal(p.editor.hidden, true, "the editor is the thing Escape left");
+  assert.equal(p.preview.hidden, false, "the preview is back");
+  assert.equal(
+    p.preview.getAttribute("src"),
+    SHOT,
+    "Escape is cancel: the marks that were not confirmed are dropped",
+  );
+  assert.equal(p.editBtn.hidden, false);
+  assert.equal(p.root.activeElement, p.editBtn, "focus goes back to the button that opened it");
+
+  // The state #48 described as a dead button: opening the editor again works.
+  p.editBtn.click();
+  await settle();
+  assert.equal(p.editor.hidden, false, "the editor opens again after Escape");
+  assert.equal(p.canvas.getAttribute("aria-label"), en.ui.annotateArea);
+
+  widget.destroy();
+});
+
+test("Escape with a mark in progress abandons the mark and stays in the editor", async () => {
+  const widget = mount();
+  const p = await withPicture(widget);
+  p.editBtn.click();
+  await settle();
+  fire(p.canvas, "pointerdown", 5, 5);
+  fire(p.canvas, "pointermove", 40, 30);
+
+  press(p.canvas, "Escape");
+
+  assert.equal(p.editor.hidden, false, "the editor is still open");
+  assert.equal(p.panel.hidden, false, "and so is the panel");
+  assert.equal(p.undoBtn.disabled, true, "the abandoned mark was never a mark");
+
+  // A second Escape, with nothing being drawn, is the one that leaves.
+  press(p.canvas, "Escape");
+  assert.equal(p.editor.hidden, true);
+  assert.equal(p.panel.hidden, false);
+
+  widget.destroy();
+});
+
+test("Escape with the editor closed still closes the panel", async () => {
+  const widget = mount();
+  const p = await withPicture(widget);
+  const textarea = p.root.querySelector("textarea") as HTMLTextAreaElement;
+
+  press(textarea, "Escape");
+  assert.equal(p.panel.hidden, true, "nothing is open inside the panel, so the panel goes");
+
+  widget.destroy();
+});
+
+test("the editor opens again after every way out of it", async () => {
+  const widget = mount();
+  const p = await withPicture(widget);
+
+  const openAgain = async (why: string) => {
+    p.editBtn.click();
+    await settle();
+    assert.equal(p.editor.hidden, false, why);
+  };
+
+  // Done.
+  await openAgain("the first time");
+  p.doneBtn.click();
+  assert.equal(p.editor.hidden, true);
+
+  // Escape.
+  await openAgain("after Done");
+  press(p.canvas, "Escape");
+  assert.equal(p.editor.hidden, true);
+
+  // The panel closed and opened again with the editor open.
+  await openAgain("after Escape");
+  (p.root.querySelector(".close") as HTMLButtonElement).click();
+  assert.equal(p.editor.hidden, true, "closing the panel closes the editor with it");
+  p.trigger.click();
+  await settle();
+  await openAgain("after the panel was closed on an open editor");
 
   widget.destroy();
 });
