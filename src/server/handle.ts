@@ -28,6 +28,7 @@ import {
   normaliseElements,
   normaliseMessage,
   normaliseNetwork,
+  normaliseNotes,
   normalisePerf,
   normaliseReplay,
   normaliseStorage,
@@ -85,6 +86,7 @@ const KNOWN_KEYS = new Set([
   "perf",
   "storage",
   "replay",
+  "notes",
   "screenshotDataUrl",
 ]);
 
@@ -120,6 +122,12 @@ export type ValidatedReport = {
    * one that did not survive validation, or the handler was told to drop it.
    */
   replay: ReplayCapture | null;
+  /**
+   * What the library said about this report on the way out — the offline queue
+   * dropping a screenshot it could not store, so far. Empty when it had
+   * nothing to say, and clipped like every other field: the browser sent it.
+   */
+  notes: string[];
   extra: Record<string, unknown>;
   /** ISO 8601 timestamp of when the server accepted it. */
   receivedAt: string;
@@ -899,6 +907,7 @@ export function validateReport(payload: unknown): ValidatedReport | null {
     perf: normalisePerf(body.perf),
     storage: normaliseStorage(body.storage),
     replay: normaliseReplay(body.replay),
+    notes: normaliseNotes(body.notes),
     extra: collectExtra(body),
     receivedAt: new Date().toISOString(),
   };

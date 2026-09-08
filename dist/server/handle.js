@@ -17,7 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
-import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseReplay, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
+import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normaliseNotes, normalisePerf, normaliseReplay, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
 import { fingerprint } from "../fingerprint.js";
 import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 import { toMarkdown } from "../markdown.js";
@@ -53,6 +53,7 @@ const KNOWN_KEYS = new Set([
     "perf",
     "storage",
     "replay",
+    "notes",
     "screenshotDataUrl",
 ]);
 /** Longest key kept for a bucket: a header is not allowed to size the map. */
@@ -524,6 +525,7 @@ export function validateReport(payload) {
         perf: normalisePerf(body.perf),
         storage: normaliseStorage(body.storage),
         replay: normaliseReplay(body.replay),
+        notes: normaliseNotes(body.notes),
         extra: collectExtra(body),
         receivedAt: new Date().toISOString(),
     };

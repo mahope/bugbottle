@@ -89,6 +89,15 @@
           "maxItems": 30,
           "type": "array"
         },
+        "notes": {
+          "description": "What the library had to do to this report on the way out, in its own words: the offline queue dropping a screenshot it could not store is the first and so far only one. It is written by the library, not by the reporter, and it exists so that a reader who sees no picture can tell \"none was taken\" from \"one was taken and would not fit\".",
+          "items": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "maxItems": 5,
+          "type": "array"
+        },
         "perf": {
           "$ref": "#/$defs/PerfSnapshot",
           "description": "What the page cost, when `bugbottle/perf` was measuring."

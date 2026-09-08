@@ -18,6 +18,7 @@ import {
   normaliseElements,
   normaliseMessage,
   normaliseNetwork,
+  normaliseNotes,
   normalisePerf,
   normaliseReplay,
   normaliseStorage,
@@ -170,6 +171,7 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   const perf = normalisePerf(r.perf);
   const storage = normaliseStorage(r.storage);
   const replay = normaliseReplay(r.replay);
+  const notes = normaliseNotes(r.notes);
   const consoleEntries = normaliseConsole(r.console, {
     maxEntries: options.maxConsoleEntries,
   });
@@ -218,6 +220,14 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   out.push("| | |", "|---|---|");
   for (const [k, v] of facts) out.push(`| ${cell(k)} | ${cell(v)} |`);
   out.push("");
+
+  // Above the evidence rather than below it, because a note is about what is
+  // missing from the evidence, and a reader who sees no picture should be told
+  // why before they go looking for one.
+  if (notes.length > 0) {
+    for (const note of notes) out.push(`> ${note}`);
+    out.push("");
+  }
 
   if (elements.length > 0) {
     out.push(`### Element${elements.length > 1 ? "s" : ""} pointed at`, "");

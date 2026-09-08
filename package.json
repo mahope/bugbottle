@@ -88,6 +88,10 @@
       "types": "./dist/queue.d.ts",
       "default": "./dist/queue.js"
     },
+    "./queue-idb": {
+      "types": "./dist/queue-idb.d.ts",
+      "default": "./dist/queue-idb.js"
+    },
     "./triggers": {
       "types": "./dist/triggers.d.ts",
       "default": "./dist/triggers.js"

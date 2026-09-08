@@ -36,6 +36,8 @@ import {
   MAX_ELEMENT_TEXT_LENGTH,
   MAX_MESSAGE_LENGTH,
   MAX_NETWORK_ENTRIES,
+  MAX_NOTE_LENGTH,
+  MAX_NOTES,
   MAX_REPLAY_EVENTS,
   MAX_SCREENSHOT_DATA_URL_LENGTH,
   MAX_STACK_FRAMES,
@@ -123,6 +125,8 @@ export function buildReportSchema(): Json {
   at(report, ["elements"]).maxItems = MAX_ELEMENTS;
   at(report, ["breadcrumbs"]).maxItems = MAX_BREADCRUMBS;
   at(report, ["network"]).maxItems = MAX_NETWORK_ENTRIES;
+  at(report, ["notes"]).maxItems = MAX_NOTES;
+  at(report, ["notes", "items"]).maxLength = MAX_NOTE_LENGTH;
 
   // The replay's real bound is its serialised size, which no JSON Schema
   // keyword can express; the event count is the half that can be written down.

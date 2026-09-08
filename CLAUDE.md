@@ -24,7 +24,8 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |
 | `src/perf.ts` | `initPerf()` — the Web Vitals from buffered `PerformanceObserver` entries (LCP last candidate, CLS without recent input, INP as the worst interaction), the navigation milestones, long tasks, the JS heap where it exists, plus the storage snapshot: key names and value lengths, cookie names, values only for an opt-in allow-list. Own entry point. Never a cookie value, on any setting | registry, report-core |
 | `src/rrweb.ts` | `attachRrweb(record, options?)` — an adapter over the application's own rrweb `record`, typed structurally so nothing is imported and rrweb is not a dependency. A rolling buffer of whole checkout groups (`checkoutEveryNms` 10 s, because a replay can only be cut at a full snapshot), trimmed at the window and again at `maxBytes`, oldest group first; `maskAllInputs: true` unless overridden, `data-bugbottle-mask` mapped to rrweb's `maskTextSelector` and `data-bugbottle-block`/`data-bugbottle` to its `blockSelector`. Own entry point. The report gains `replay: { events, seconds }` | registry, report-core (types) |
-| `src/queue.ts` | `createQueue()` — a `localStorage` queue in front of the endpoint, flushed on init, `online` and visibility, with backoff. Own entry point. Imports `send.ts` nowhere: one `fetch` of its own | report-core (types) |
+| `src/queue.ts` | `createQueue()` — a durable queue in front of the endpoint, flushed on init, `online` and visibility, with backoff. Own entry point. Imports `send.ts` nowhere: one `fetch` of its own. The storage is a seam (`QueueStorage`: `read`, and an `update` that reads, changes and writes back as one step and throws when refused), `localStorage` its default, and either function may answer with a promise — `later()` is the one bridge between the two, and commits are chained so two of them cannot read the same stale array. A refused write is answered rather than surrendered to: the reports are written again without their screenshots, each carrying `SCREENSHOT_NOTE` in `notes` | report-core (types) |
+| `src/queue-idb.ts` | `createIdbStorage()` — the queue's reports in IndexedDB, handed to `createQueue` as `storage`. Own entry point, imported by nothing: a share of the disk rather than five megabytes for the origin, so a 2 MB report keeps its picture, and one `readwrite` transaction per `update`, which the browser orders across tabs — the multi-tab claim is a lock there rather than a lease. No library; a browser without IndexedDB makes the queue memory-only and the reports are still sent | queue (types only) |
 | `src/triggers.ts` | `onShortcut(combo, handler)` and `onUncaughtError(handler, options)` — the two ways into the panel that need no button. Own entry point. Listeners only: never renders, never sends | fingerprint |
 | `src/shake.ts` | `onShake(handler, options?)` — a `devicemotion` listener with gravity filtered out, three alternating threshold crossings in a second, a cool-down, and nothing measured while the page is hidden. Plus `requestShakePermission()`, the only thing that prompts, and only when the application calls it from a gesture. Own entry point. Listener only: never renders, never sends | triggers (the `ListenerHost` type alone, so nothing at run time) |
 | `src/fingerprint.ts` | `fingerprint(report)` + `stableHash(text)` — one identity for a report, computed the same way in the browser and on the server. Imported by nothing in the core entry, so it is tree-shaken when unused | nothing |
@@ -82,11 +83,12 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `examples/inbox/Dockerfile`, `compose.yml`, `.env.example`, `Caddyfile` | The example on a VPS: `node:22-alpine`, non-root, reports on a named volume at `/data`, the password from an env file and compose refusing to start without it, the published port on loopback because basic auth over plain HTTP sends the password every time. The build context is the repository **root** and the image is `package.json` + `dist/` + the two files of the example — the layout the self-reference resolves against — so nothing is installed at image build time; `npm pack` would carry the same `dist/` twice. The README's "Deploy it" walks through Dokploy | package.json, dist, examples/inbox (at image build) |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Nineteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Twenty entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./solid`, `./server`,
 `./html-to-image`, `./locales`, `./locales-extra`, `./ui`, `./breadcrumbs`,
 `./network`,
-`./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign`,
+`./perf`, `./annotate`, `./queue`, `./queue-idb`, `./triggers`, `./shake`,
+`./sign`,
 `./rrweb` — plus `./report.schema.json` and `./openapi.json`, which are data
 rather than code.
 `tests/exports.test.ts` pins that count: an entry added here without the
@@ -211,12 +213,20 @@ buffer, the checkout trim and the byte cap, importing two types and nothing at
 run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
 script tag nothing at all — the IIFE does not export it, because a page with no
-bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1330 bytes and measures
-about 1290: it imports only a type, so that number is the module itself. It was
+bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1600 bytes and measures
+1553: it imports only a type, so that number is the module itself. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is
 delivered — which is a read-modify-write, a claim and a release where there
-used to be one `setItem`. `bugbottle/vue`, `bugbottle/svelte` and
+used to be one `setItem` — and 1313 until #85 made the storage a seam and gave
+a refused write an answer. That last 240 bytes is what the issue hoped would be
+a hundred: `later()` bridging a synchronous storage and an asynchronous one in
+one code path, the commit chain that keeps two of them off the same stale
+array, the second write with the pictures dropped, and the note that says so.
+`bugbottle/queue-idb` is budgeted at 1024 bytes and measures 654: one open, one
+transaction helper and two methods, importing two types and nothing at run
+time. It is a second entry rather than an option on the first because the
+default must not carry a storage it will never use. `bugbottle/vue`, `bugbottle/svelte` and
 `bugbottle/solid` are budgeted
 at 1536 bytes each, but *marginally*: a bundle of any of them weighs about
 5.4 kB,
@@ -270,6 +280,12 @@ its hint and the required check (about 256 bytes) plus three locale strings,
 which the script tag carries in eight languages. It is off by default and its
 markup is static, so every panel pays those bytes; a second entry point for one
 input would cost more than it saved.
+
+#85 then cost the two script-tag builds 186 and 236 bytes — 24 238 → 24 424
+and 20 650 → 20 886 — for the queue's storage seam and its quota fallback,
+which both builds carry like every other module, and took their budgets to
+25088 and 21504. The slim build pays slightly more for the same code, because
+it has less around it to share a dictionary with.
 
 #58 then added the second IIFE. `dist/bugbottle.slim.js` leaves out the
 annotator, `bugbottle/perf`, `bugbottle/shake` and `bugbottle/network` and

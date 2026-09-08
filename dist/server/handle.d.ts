@@ -70,6 +70,12 @@ export type ValidatedReport = {
      * one that did not survive validation, or the handler was told to drop it.
      */
     replay: ReplayCapture | null;
+    /**
+     * What the library said about this report on the way out — the offline queue
+     * dropping a screenshot it could not store, so far. Empty when it had
+     * nothing to say, and clipped like every other field: the browser sent it.
+     */
+    notes: string[];
     extra: Record<string, unknown>;
     /** ISO 8601 timestamp of when the server accepted it. */
     receivedAt: string;

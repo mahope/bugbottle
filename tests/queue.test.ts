@@ -1,6 +1,12 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { createQueue, type QueueOptions } from "../src/queue.ts";
+import {
+  createQueue,
+  SCREENSHOT_NOTE,
+  type QueuedReport,
+  type QueueOptions,
+  type QueueStorage,
+} from "../src/queue.ts";
 import type { BugReport } from "../src/report-core.ts";
 
 /**
@@ -12,13 +18,13 @@ import type { BugReport } from "../src/report-core.ts";
 const globals = globalThis as unknown as Record<string, unknown>;
 
 /** A `localStorage` that is a plain map, with an optional quota that throws. */
-function fakeStorage(initial: Record<string, string> = {}) {
+function fakeStorage(initial: Record<string, string> = {}, quota = Infinity) {
   const map = new Map(Object.entries(initial));
   let broken = false;
   const storage = {
     getItem: (key: string) => map.get(key) ?? null,
     setItem: (key: string, value: string) => {
-      if (broken) throw new Error("QuotaExceededError");
+      if (broken || value.length > quota) throw new Error("QuotaExceededError");
       map.set(key, value);
     },
     removeItem: (key: string) => void map.delete(key),
@@ -60,6 +66,18 @@ function report(message: string): BugReport & Record<string, unknown> {
 }
 
 const KEY = "bugbottle:queue";
+
+/**
+ * Waits for a condition rather than for a number of milliseconds: a storage
+ * that answers later answers when it answers, and a fixed sleep is a test that
+ * fails on a loaded machine.
+ */
+async function until(done: () => boolean, ms = 2_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!done() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
 
 /** Builds a queue and remembers it, so the listeners never outlive the test. */
 const made: { destroy(): void }[] = [];
@@ -174,7 +192,7 @@ test("a report older than maxAgeMs is dropped rather than sent", async () => {
   assert.equal(calls.length, 0, "nothing was sent");
 });
 
-test("an oversized report loses its screenshot and keeps everything else", () => {
+test("a report whose picture fits keeps it", () => {
   const { storage, map } = fakeStorage();
   globals["localStorage"] = storage;
   const queue = makeQueue({ endpoint: "/api/feedback", fetch: fakeFetch(503).fetch });
@@ -182,9 +200,11 @@ test("an oversized report loses its screenshot and keeps everything else", () =>
   big.screenshotDataUrl = `data:image/png;base64,${"A".repeat(1_100_000)}`;
   queue.enqueue(big);
   assert.equal(queue.size(), 1);
+  // Nothing is dropped on a guess about where the quota is. Only the storage
+  // knows, and this one had the room.
   const stored = JSON.parse(map.get(KEY) ?? "[]") as { body: BugReport }[];
-  assert.equal(stored[0]?.body.screenshotDataUrl, undefined, "the picture is gone");
-  assert.equal(stored[0]?.body.message, "the page went white", "the message is not");
+  assert.equal(stored[0]?.body.screenshotDataUrl, big.screenshotDataUrl, "the picture is there");
+  assert.equal(stored[0]?.body.notes, undefined, "and there is nothing to explain");
 });
 
 test("a storage that refuses to be written degrades to memory-only", async () => {
@@ -327,6 +347,9 @@ test("destroying the queue during a flush stops it retrying for ever", async () 
   const queue = makeQueue({ endpoint: "/api/feedback", fetch });
   queue.enqueue(report("in flight"));
   const flushing = queue.flush();
+  // The storage seam may be asynchronous, so a flush reads before it posts and
+  // the first request is one turn away rather than in this one.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
   // The tab is torn down while the POST is still open. The failure that comes
   // back used to schedule a retry, which failed and scheduled the next one.
@@ -363,6 +386,7 @@ test("a report delivered while the queue shifted under it is removed by identity
   queue.enqueue(report("one"));
   queue.enqueue(report("two"));
   const flushing = queue.flush();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(sent, ["one"]);
 
   // A third report while the first is still in flight. At maxEntries that evicts
@@ -437,4 +461,121 @@ test("the deprecated maxItems still caps the queue, and maxEntries wins over it"
   both.enqueue(report("one"));
   both.enqueue(report("two"));
   assert.equal(both.size(), 1, "the new name is the one that counts");
+});
+
+/**
+ * What a full quota costs. Until 0.13 a refused `setItem` turned the queue
+ * memory-only and that was the whole of it: the report reached `localStorage`
+ * nowhere, so the next page load found nothing — and the outage a report is
+ * written during is exactly the kind of thing that ends in a reload.
+ */
+test("a report refused for its size is stored without the picture, not lost", async () => {
+  // A quota one report with a picture fits inside and two do not.
+  const { storage, map } = fakeStorage({}, 600_000);
+  globals["localStorage"] = storage;
+  const queue = makeQueue({ endpoint: "/api/feedback", fetch: fakeFetch(503).fetch });
+  const big = report("the page went white");
+  big.screenshotDataUrl = `data:image/png;base64,${"A".repeat(400_000)}`;
+  queue.enqueue(big);
+  assert.ok(map.get(KEY)?.includes("screenshotDataUrl"), "it fitted, picture and all");
+
+  const second = report("and again");
+  second.screenshotDataUrl = `data:image/png;base64,${"B".repeat(400_000)}`;
+  queue.enqueue(second);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const stored = JSON.parse(map.get(KEY) ?? "[]") as { body: BugReport }[];
+  assert.deepEqual(
+    stored.map((item) => item.body.message),
+    ["the page went white", "and again"],
+    "both reports survived the refusal",
+  );
+  assert.equal(stored[1]?.body.screenshotDataUrl, undefined, "the picture is gone");
+  assert.deepEqual(stored[1]?.body.notes, [SCREENSHOT_NOTE], "and it says so");
+});
+
+/**
+ * The storage is a seam, and `localStorage` is only its default. Everything
+ * above is the default; these two are the seam itself, synchronous and not.
+ */
+test("a storage handed in is used instead of localStorage", () => {
+  const { storage: unused, map } = fakeStorage();
+  globals["localStorage"] = unused;
+  let stored: QueuedReport[] = [];
+  const custom: QueueStorage = {
+    read: () => stored,
+    update(change) {
+      stored = change(stored);
+      return stored;
+    },
+  };
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    storage: custom,
+    fetch: fakeFetch(503).fetch,
+  });
+  queue.enqueue(report("through the seam"));
+  assert.equal(queue.size(), 1);
+  assert.equal(stored[0]?.body.message, "through the seam");
+  assert.equal(map.size, 0, "localStorage was never touched");
+});
+
+test("a storage that answers with promises queues, merges and delivers", async () => {
+  let stored: QueuedReport[] = [];
+  const slow: QueueStorage = {
+    read: async () => stored,
+    async update(change) {
+      // A real asynchronous storage does not answer in the same turn, and a
+      // read-modify-write that spans one is where two commits would collide.
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      stored = change(stored);
+      return stored;
+    },
+  };
+  const { fetch, calls } = fakeFetch(200);
+  const queue = makeQueue({ endpoint: "/api/feedback", storage: slow, fetch });
+  queue.enqueue(report("one"));
+  queue.enqueue(report("two"));
+  await until(() => stored.length === 2);
+  assert.deepEqual(
+    stored.map((item) => item.body.message),
+    ["one", "two"],
+    "the second commit did not overwrite the first",
+  );
+
+  await queue.flush();
+  assert.deepEqual(
+    calls.map((c) => (c.body as BugReport).message),
+    ["one", "two"],
+  );
+  assert.equal(queue.size(), 0);
+  assert.deepEqual(stored, []);
+});
+
+test("an asynchronous storage that refuses a write drops the picture too", async () => {
+  let stored: QueuedReport[] = [];
+  const refusing: QueueStorage = {
+    read: async () => stored,
+    async update(change) {
+      const next = change(stored);
+      if (JSON.stringify(next).length > 200_000) {
+        throw new Error("QuotaExceededError");
+      }
+      stored = next;
+      return next;
+    },
+  };
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    storage: refusing,
+    fetch: fakeFetch(503).fetch,
+  });
+  const big = report("the page went white");
+  big.screenshotDataUrl = `data:image/png;base64,${"A".repeat(300_000)}`;
+  queue.enqueue(big);
+  await until(() => stored.length === 1);
+
+  assert.equal(stored.length, 1, "the report was kept");
+  assert.equal(stored[0]?.body.screenshotDataUrl, undefined, "without the picture");
+  assert.deepEqual(stored[0]?.body.notes, [SCREENSHOT_NOTE]);
 });
