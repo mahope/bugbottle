@@ -8,6 +8,12 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+A patch on the day of 1.0: the offline queue could silently skip its retry
+when the backoff timer fired a millisecond ahead of the clock — found by the
+1.0.0 release run itself — and the documentation pages' tables and code slabs
+became focusable scroll regions, which the browser audit demanded on the
+changelog page. No API change.
+
 ### Fixed
 
 - The offline queue could skip a retry. The backoff timer called `flush`, and
