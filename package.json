@@ -48,6 +48,10 @@
       "types": "./dist/svelte/index.d.ts",
       "default": "./dist/svelte/index.js"
     },
+    "./solid": {
+      "types": "./dist/solid/index.d.ts",
+      "default": "./dist/solid/index.js"
+    },
     "./server": {
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
@@ -109,6 +113,7 @@
   "peerDependencies": {
     "html-to-image": "^1.11.0",
     "react": ">=18",
+    "solid-js": ">=1.8",
     "svelte": ">=4",
     "vue": ">=3"
   },
@@ -117,6 +122,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "solid-js": {
       "optional": true
     },
     "svelte": {
@@ -138,6 +146,7 @@
     "marked": "18.0.12",
     "react": "^19.2.8",
     "react-dom": "19.2.8",
+    "solid-js": "1.9.15",
     "svelte": "5.57.0",
     "ts-json-schema-generator": "2.9.0",
     "typescript": "^5.7.0",
