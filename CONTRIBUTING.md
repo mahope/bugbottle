@@ -108,7 +108,9 @@ need Node 18.
   bundled language. The locale test fails on a missing key. A new control in
   `src/ui/` also has an accessible name, and that name is a locale string too.
 - A change to `src/ui/` keeps `node scripts/a11y-audit.mjs` at zero axe
-  violations, over all seven states, and a change to `site/` keeps
+  violations, over all nine states — two of which force the Windows High
+  Contrast palette and then measure the picture, since axe cannot see a
+  colour the browser threw away — and a change to `site/` keeps
   `node scripts/a11y-site.mjs` at zero over its twenty-two page-and-scheme runs —
   a console message counts there too. A change to `src/annotate.ts` also keeps
   `node scripts/annotate-smoke.mjs` green, which is the only place the blur is
@@ -142,7 +144,7 @@ need Node 18.
   esbuild and weighs each against its budget, and greps the server bundle for
   DOM globals.
 - **Browser audits** — builds, generates the site, then runs `npm run a11y`
-  (axe over the panel's seven states and the site's sixteen page-and-scheme
+  (axe over the panel's nine states and the site's sixteen page-and-scheme
   runs, with the real security headers served) and `npm run smoke:annotate`
   (the blur destroyed the pixels it covered) in the Chrome the runner image
   ships. `puppeteer-core` is installed globally there and downloads no browser;

@@ -7,6 +7,40 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Fixed
+
+- The panel survives Windows High Contrast (#91). Under `forced-colors:
+  active` the browser replaces every used colour with one from the reporter's
+  palette, so `--bb-*` stops being read and anything that was only a colour
+  disappeared: the trigger and the send button lost the background that was
+  their whole shape, and the selected report type, the active drawing tool and
+  the armed element picker lost the accent that said which one they were. The
+  stylesheet now ends with a `@media (forced-colors: active)` block that says
+  those things in system colours instead — `ButtonText` for the two missing
+  edges, `Highlight` and `HighlightText` for the three selected states,
+  `Highlight` for the focus ring, `GrayText` for a disabled action, since
+  forced colours do not dim an opacity. It is last in the sheet because every
+  rule in it has the same weight as the one it replaces. `forced-color-adjust:
+  none` appears three times: on the attached picture and on the annotator
+  canvas, where a mark's colour is the mark, and on the selected state, because
+  Chrome paints a `Canvas`-coloured backplate behind text in forced colours and
+  a `HighlightText` label on a `Highlight` fill came out white on white — the
+  word vanished while axe reported the button as passing. Nothing about the
+  reporter's palette is overridden: every colour in that rule is a system
+  colour.
+- `scripts/a11y-audit.mjs` audits nine states rather than seven: the panel and
+  the picture editor again with `forced-colors` emulated through CDP, which is
+  used directly because `page.emulateMediaFeatures` keeps an allowlist that
+  refuses the feature Chrome has emulated for years. The forced run then ends
+  where axe cannot go — a screenshot, and four measurements taken from its
+  pixels: the trigger has an edge against the page, the selected type differs
+  from the two beside it, its label crosses nineteen colour edges rather than
+  the two a blank backplate would, and the focus ring differs from the panel
+  behind it. `npm run a11y` fails on any of them.
+- `bugbottle/ui` 11 486 → 11 595 bytes gzipped, `dist/bugbottle.js` 24 441 →
+  24 556 and `dist/bugbottle.slim.js` 20 896 → 21 003. No budget moved: the
+  block is about 110 bytes gzipped in each of them.
+
 ## 0.13.0 — 2026-09-08
 
 The reviewed release. A fresh-context review read everything since 0.9.0 and

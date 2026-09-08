@@ -253,3 +253,48 @@ test("a remove button is named after the element it removes", async () => {
   target.remove();
   widget.destroy();
 });
+
+test("the forced-colours block is last in the sheet and covers every state", async () => {
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fakeFetch });
+  const root = widget.host.shadowRoot;
+  assert.ok(root);
+  const sheet = root.querySelector("style")?.textContent ?? "";
+
+  const at = sheet.indexOf("@media (forced-colors:active)");
+  assert.ok(at !== -1, "the panel has a forced-colours block");
+  const block = sheet.slice(at);
+  for (const [what, rule] of [
+    ["the trigger", ".trigger"],
+    ["the send button", ".send"],
+    ["the selected type", '.type[aria-checked="true"]'],
+    ["the active tool", '.tool[aria-checked="true"]'],
+    ["the armed picker", '.pick[aria-pressed="true"]'],
+    ["the focus ring", ":focus-visible"],
+    ["the canvas", "canvas"],
+  ] as const) {
+    assert.ok(block.includes(rule), `${what} is redrawn in forced colours`);
+  }
+  // Every rule in the block has the same weight as the one it replaces, so it
+  // only wins by coming later. That is the failure this test exists for: with
+  // the block near the top of the sheet the selected type kept its accent
+  // colour, which axe then read against a Highlight background.
+  for (const base of [
+    ".trigger{",
+    '.type[aria-checked="true"]{',
+    '.tool[aria-checked="true"]{',
+    '.pick[aria-pressed="true"]{',
+  ]) {
+    const first = sheet.indexOf(base);
+    assert.ok(first !== -1 && first < at, `${base} is declared before the forced block`);
+  }
+  // Chrome paints a Canvas-coloured backplate behind text in forced colours,
+  // so a HighlightText label on a Highlight fill is white on white unless the
+  // adjustment is off for that one rule.
+  assert.match(
+    block,
+    /\.type\[aria-checked="true"\][^}]*forced-color-adjust:none/,
+    "the selected label suppresses the text backplate",
+  );
+
+  widget.destroy();
+});

@@ -324,6 +324,20 @@ the picture as addresses under `PUBLIC_URL`, both behind the password. Nothing
 is sent when neither variable is set, a failed delivery is a line on stderr and
 still a 201, and the example's tests went from fourteen to eighteen.
 
+**Unreleased** — the panel is legible in Windows High Contrast (#91). Under
+`forced-colors: active` the browser substitutes the reporter's own palette for
+every colour, so `--bb-*` stops being read and anything that was only a colour
+went missing: the trigger and the send action lost the background that was
+their whole shape, and the selected report type, the active drawing tool and
+the armed picker lost the accent that said which one they were. The stylesheet
+now ends with a `@media (forced-colors: active)` block saying those things in
+system colours — and `forced-color-adjust: none` in the three places a colour
+is content rather than chrome: the attached picture, the annotator canvas, and
+the selected label, where Chrome's text backplate turned `HighlightText` on
+`Highlight` into white on white. `scripts/a11y-audit.mjs` audits nine states
+rather than seven and reads pixels out of the forced one, because that last
+failure is invisible to axe.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in

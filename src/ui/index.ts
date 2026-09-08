@@ -238,6 +238,33 @@ const POSITIONS: Record<NonNullable<Theme["position"]>, string> = {
  * The `canvas` rule sets a width and leaves the height automatic so the box
  * keeps the picture's own shape: the annotator maps a pointer position onto a
  * pixel through that box, and a letterboxed canvas would map it wrongly.
+ *
+ * The `forced-colors` block is the third. Windows High Contrast replaces every
+ * used colour with one from a system palette, so `--bb-*` stops being read and
+ * anything that was only a colour disappears: the trigger and the send button
+ * lose the background that was their whole shape, and the selected type, the
+ * active annotator tool and the armed picker lose the accent that said which
+ * one they were. System colour keywords are the exception — they resolve to
+ * the forced palette rather than being overridden — so the block redraws those
+ * states with `ButtonText`, `Highlight` and `HighlightText`, keeps the focus
+ * ring on `Highlight`, and says "disabled" with `GrayText` rather than with the
+ * opacity that forced colours do not dim.
+ *
+ * `forced-color-adjust:none` appears three times and nowhere else. Twice it is
+ * because the colour is the content rather than the chrome: the attached
+ * picture and the annotator canvas drawn over it, where a mark's colour is the
+ * mark. Their borders are then named explicitly, because turning the
+ * adjustment off would otherwise leave them the light grey of `--bb-border`.
+ * The third time is the selected state, and it is there for a subtler reason:
+ * Chrome paints a `Canvas`-coloured backplate behind text in forced colours,
+ * so a `HighlightText` label on a `Highlight` fill comes out white on white and
+ * the word vanishes. Turning the adjustment off suppresses the backplate, and
+ * costs the reporter's palette nothing, because every colour in that rule is a
+ * system colour and still resolves to their theme. `scripts/a11y-audit.mjs`
+ * photographs this; it is not a thing axe can see.
+ *
+ * The block is last in the sheet on purpose: every rule in it has the same
+ * weight as the one it replaces, so order is the only thing that makes it win.
  */
 const CSS = `
 :host{
@@ -320,6 +347,13 @@ li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .thanks{text-align:center;padding:12px 0 4px}
 .thanks p{margin:0 0 12px}
 [hidden]{display:none!important}
+@media (forced-colors:active){
+.trigger,.send{border:1px solid ButtonText}
+.type[aria-checked="true"],.tool[aria-checked="true"],.pick[aria-pressed="true"]{background:Highlight;color:HighlightText;border-color:Highlight;forced-color-adjust:none}
+*:focus-visible{outline-color:Highlight!important}
+.send:disabled,.act:disabled{color:GrayText;border-color:GrayText;opacity:1}
+canvas,.preview{forced-color-adjust:none;border-color:CanvasText}
+}
 `;
 
 function el<K extends keyof HTMLElementTagNameMap>(

@@ -850,7 +850,11 @@ both colour schemes, the dark scheme lightens the accent and the error red so
 they hold their contrast, and `prefers-reduced-motion` is respected. axe-core
 reports no violations on the panel open in either scheme, closed, with the
 picture editor open in either scheme, or with the contact field on in either
-scheme; run the
+scheme. Windows High Contrast is audited too — the panel and the picture editor
+again under `forced-colors: active`, and then photographed, because axe reads a
+stylesheet the browser has already overridden: the picture proves the trigger
+still has an edge, the selected type still differs from the two beside it, its
+label still reads as a word and the focus ring still shows. Run the
 audit yourself with `npm run build && npm run a11y` (Chrome and
 `puppeteer-core` required). All of the announced text comes from the locale,
 so it is announced in the reporter's language.
@@ -1049,6 +1053,18 @@ The whole list, and nothing else:
 
 The last two are not custom properties: they are the `data-pos` and
 `data-scheme` attributes on the host, which the panel's own stylesheet reads.
+
+None of these survive Windows High Contrast, and they are not meant to. Under
+`forced-colors: active` the browser throws every colour away and substitutes
+one from the reporter's own palette, so the panel stops asking for its brand
+colour and says the same things in system colours instead: `ButtonText` for the
+edge of the trigger and the send button, whose background was their whole
+shape; `Highlight` and `HighlightText` for the selected report type, the active
+drawing tool and the armed element picker; `Highlight` for the focus ring; and
+`GrayText` for a disabled action, since forced colours do not dim an opacity.
+The attached picture and the annotator canvas keep their own pixels — a mark's
+colour is the mark — and so does anything a mark was drawn in. There is nothing
+to configure: it happens when the reporter's system asks for it.
 
 The [theme playground](https://bugbottle.dev/docs/languages-and-branding/#branding-and-theme)
 on the documentation site restyles a real panel as you move these controls and
