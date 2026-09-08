@@ -31,7 +31,7 @@ it was indexed.
 | `GET /r/<id>` | One report as rendered Markdown, with the picture, *Copy as Markdown* and *Delete* |
 | `GET /r/<id>.json` | The stored JSON, exactly as it is on disk |
 | `GET /r/<id>.png` | The screenshot |
-| `POST /r/<id>/delete` | Removes both files |
+| `POST /r/<id>/delete` | Removes both files. Same-origin only: see below |
 | `GET /demo.html` | A page with the ready-made panel mounted against this server |
 
 Everything except the endpoint and the demo page is behind
@@ -113,6 +113,15 @@ Here, (1) means the `reports/` directory must not sit inside a directory your
 web server serves, and its backups are as sensitive as it is. (2) is why
 `/r/<id>.png` is behind the password and why the id is checked against a UUID
 shape before it reaches a path. (3) is your page's job, not this server's.
+
+Delete asks for one thing more than the password. A browser attaches a cached
+`Authorization` header to a form POST from any site, not only from this one —
+`SameSite` governs cookies and says nothing about HTTP auth — so a page the
+operator visits could otherwise delete a report whose id it knows, and a
+reporter learns an id by sending one. `POST /r/<id>/delete` therefore answers
+403 unless `Sec-Fetch-Site` and `Origin` say the request came from the inbox.
+A request carrying neither header is not a browser and is allowed through, so
+`curl` still works.
 
 ## What it is not
 

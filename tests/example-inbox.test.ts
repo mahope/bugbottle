@@ -121,6 +121,49 @@ test("a report is posted, listed, read and deleted", async () => {
   }
 });
 
+test("a delete from another site is refused, password or no password", async () => {
+  // Basic auth is attached by the browser to a cross-site form POST as well as
+  // to a same-site one: `SameSite` governs cookies and has nothing to say about
+  // an `Authorization` header the browser is caching. Without an origin check
+  // any page the operator visits can delete a report whose id it knows — and a
+  // reporter learns an id simply by sending one, because the endpoint answers
+  // with it.
+  const running = await start();
+  try {
+    const posted = await fetch(`${running.origin}/api/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "bug", message: "The save button does nothing" }),
+    });
+    const { id } = (await posted.json()) as { id: string };
+
+    const fromElsewhere: Record<string, string>[] = [
+      { Origin: "https://evil.example" },
+      { "Sec-Fetch-Site": "cross-site" },
+    ];
+    for (const headers of fromElsewhere) {
+      const attempt = await fetch(`${running.origin}/r/${id}/delete`, {
+        method: "POST",
+        headers: { Authorization: auth, ...headers },
+        redirect: "manual",
+      });
+      assert.equal(attempt.status, 403, `${JSON.stringify(headers)} is refused`);
+    }
+    const still = await fetch(`${running.origin}/r/${id}`, { headers: { Authorization: auth } });
+    assert.equal(still.status, 200, "the report is still there");
+
+    // The inbox's own form still works: its Origin is this server.
+    const own = await fetch(`${running.origin}/r/${id}/delete`, {
+      method: "POST",
+      headers: { Authorization: auth, Origin: running.origin, "Sec-Fetch-Site": "same-origin" },
+      redirect: "manual",
+    });
+    assert.equal(own.status, 303);
+  } finally {
+    await stop(running);
+  }
+});
+
 test("nothing is readable without the password", async () => {
   const running = await start();
   try {
