@@ -7,6 +7,26 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The tested release. A seeded fuzzer now throws thousands of hostile bodies at
+the validators, the scrubber, the Markdown and `handleReport` on every test
+run, and it earned its keep on the first day: a replay nested a few thousand
+levels deep overflowed the stack and answered 500, and a `__proto__` key in a
+replay event or a storage snapshot reached the prototype setter. Both are
+fixed with named regressions. Beside it: a Microsoft Teams sink through a
+Workflows webhook (the tenth), a JSON Feed and an Atom feed on the inbox
+example, and three things on the site — the demo draws a picture of itself so
+the annotator can be tried, a theme playground restyles a live panel and
+prints the code, and a Danish getting-started page. No library API changed.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`bugbottle/shake` 0.7 kB, `bugbottle/sign` 0.4 kB, `bugbottle/rrweb` 0.7 kB,
+`bugbottle/locales-extra` 4.7 kB, `dist/bugbottle.js` 24.2 kB,
+`dist/bugbottle.slim.js` 20.6 kB, `bugbottle/server` validators 0.6 kB.
+
 ### Added
 
 - `teamsSink({ webhookUrl, screenshotUrl?, reportUrl?, buttonText?, fetch? })`
