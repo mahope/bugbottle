@@ -117,6 +117,18 @@ change the API; the changelog says so when they do.
   `Access-Control-Allow-Origin` and the browser discarded it. `OPTIONS` is
   handled by `handleReport` now, before the password, and the response's own
   headers are the ones written.
+- `resolveLocale` answered `"__proto__"` with `Object.prototype` and
+  `"constructor"` with a function. The tag is usually `navigator.language`, but
+  it is just as often a `?lang=` off the URL, and a plain bracket read finds
+  every inherited property of the map. Neither answer is a `Locale`, so the
+  panel threw on `locale.ui.title` at mount instead of falling back to English.
+  The lookup is `Object.hasOwn` now.
+- `scripts/build-docs.mjs` lost the theme playground silently when its README
+  heading was renamed. The page script is keyed on the slug and
+  `PAGE_SCRIPTS[slug] ?? []` answers a renamed one with nothing — the build
+  green, the section still on the site, the editor gone, and the theme table's
+  own check silent because that one only runs on the page it is attached to. A
+  hook with no page to hook onto is a build failure, like an ungrouped section.
 
 ## 0.12.0 — 2026-09-08
 
