@@ -196,7 +196,11 @@ export type RateLimitOptions = {
  *
  * A store that throws fails the request *open*: the report is accepted and the
  * error reaches `onError`. An honest report is not refused because a shared
- * store blinked.
+ * store blinked. An answer that is not a finite number is the same case, and
+ * for the same reason the dedupe store's answer is shape-checked: `"3" > 30`
+ * is false and so is `NaN > 30`, so a store answering with a string, a `null`
+ * or nothing at all would switch the limit off and never say so. It is
+ * reported once through `onError` and the request goes through.
  */
 export type RateLimitStore = {
   /**
@@ -701,7 +705,16 @@ async function overRateLimit(
   const store = options.rateLimitStore;
   if (store) {
     try {
-      return (await store.hit(key, options.windowMs)) > options.limit;
+      // The count is checked before it is compared, for the same reason the
+      // dedupe store's answer is: a store that hands back `"3"`, or `null`, or
+      // a promise of nothing, would otherwise be compared with `>` and quietly
+      // decide the limit — `"3" > 30` is false, and so is `NaN > 30`, so every
+      // caller would be under their allowance for ever with nothing said.
+      const count = await store.hit(key, options.windowMs);
+      if (typeof count !== "number" || !Number.isFinite(count)) {
+        throw new TypeError("rateLimitStore.hit did not answer with a number");
+      }
+      return count > options.limit;
     } catch (err) {
       // Fails open, unlike the replay store: a rate limit exists to stop a
       // flood, and answering 429 to an honest reporter because Redis blinked

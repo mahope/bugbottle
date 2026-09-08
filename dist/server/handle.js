@@ -346,7 +346,16 @@ async function overRateLimit(request, options, onError) {
     const store = options.rateLimitStore;
     if (store) {
         try {
-            return (await store.hit(key, options.windowMs)) > options.limit;
+            // The count is checked before it is compared, for the same reason the
+            // dedupe store's answer is: a store that hands back `"3"`, or `null`, or
+            // a promise of nothing, would otherwise be compared with `>` and quietly
+            // decide the limit — `"3" > 30` is false, and so is `NaN > 30`, so every
+            // caller would be under their allowance for ever with nothing said.
+            const count = await store.hit(key, options.windowMs);
+            if (typeof count !== "number" || !Number.isFinite(count)) {
+                throw new TypeError("rateLimitStore.hit did not answer with a number");
+            }
+            return count > options.limit;
         }
         catch (err) {
             // Fails open, unlike the replay store: a rate limit exists to stop a

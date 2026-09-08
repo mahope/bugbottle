@@ -141,7 +141,11 @@ export type RateLimitOptions = {
  *
  * A store that throws fails the request *open*: the report is accepted and the
  * error reaches `onError`. An honest report is not refused because a shared
- * store blinked.
+ * store blinked. An answer that is not a finite number is the same case, and
+ * for the same reason the dedupe store's answer is shape-checked: `"3" > 30`
+ * is false and so is `NaN > 30`, so a store answering with a string, a `null`
+ * or nothing at all would switch the limit off and never say so. It is
+ * reported once through `onError` and the request goes through.
  */
 export type RateLimitStore = {
     /**

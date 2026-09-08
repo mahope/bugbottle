@@ -37,6 +37,12 @@ change the API; the changelog says so when they do.
   disappeared from the site while the README still held both — and the README
   reads perfectly well either way, so the build is the only place that can
   notice.
+- A `rateLimitStore` whose `hit` answers with anything but a finite number is
+  reported once through `onError` and the request goes through, as it already
+  was for a `dedupeStore` answering with something that is not an entry. A
+  store handing back `"3"` was compared with `>` and — since `"3" > 30` is
+  false, and so is `NaN > 30` — switched the rate limit off for every caller
+  with nothing said.
 
 ## 0.8.0 — 2026-09-08
 
