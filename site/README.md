@@ -187,7 +187,7 @@ stays true.
 The sidebar is a `<details>` written **open**, so a reader without JavaScript
 gets the whole list at every width, which is what the page did before there
 was one. On a phone `docs.js` closes it at load and renames its summary after
-the page you are on: twenty-eight links standing between a reader and the
+the page you are on: thirty-odd links standing between a reader and the
 article they asked for are a wall, not a table of contents.
 
 Four things happen in the browser, all in `docs.js`: the copy buttons, the
@@ -370,7 +370,7 @@ Every `<url>` carries a `<lastmod>`, and the date is the date of the commit
 that last touched the file the page is generated from — `git log -1
 --format=%cs -- <file>`, which prints exactly the `YYYY-MM-DD` the element
 wants. The landing pages are dated by their own HTML, the comparison pages by
-their own Markdown, the changelog by `CHANGELOG.md`, and the documentation index and all thirty documentation
+their own Markdown, the changelog by `CHANGELOG.md`, and the documentation index and every documentation
 pages by `README.md`, since that is the only source they have. Never file
 mtimes: a checkout resets every one of them, so mtimes would tell a crawler
 that the whole site changed on the day it was last deployed.
