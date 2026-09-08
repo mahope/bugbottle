@@ -11,25 +11,13 @@
  */
 
 import { readFile, writeFile, stat } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { execSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findChrome, loadPuppeteer } from "./chrome.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const site = join(root, "site");
-const chromePath =
-  process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
-
-function loadPuppeteer() {
-  const here = createRequire(import.meta.url);
-  try {
-    return here("puppeteer-core");
-  } catch {
-    const globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
-    return createRequire(join(globalRoot, "noop.js"))("puppeteer-core");
-  }
-}
+const chromePath = findChrome();
 
 /** The faces as data URLs, so the page needs no server and no network. */
 async function face(file) {

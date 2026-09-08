@@ -60,11 +60,12 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, the optional HMAC `signature` check over the raw text, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers. The replay cache is bucketed by the *signed second* and bounded inside each one (128 digests, 640 seconds), because the signing key is public: a flood of valid signatures must not be able to evict an honest digest dated any other second. `signature.store` (`has`/`add(digest, expiresAt)`) replaces it with a shared one; `t=` is `/^\d{1,16}$/` and the digest is verified over the timestamp as it was sent. The same seam twice more, for the fleet that wants one answer: `rateLimit.store` (`hit(key, windowMs)` → the count) and `dedupe.store` (`get`/`set(key, entry, expiresAt)`, expiry the store's job). Both check what the store answered with before believing it — a finite number from `hit`, an entry shape from `get` — because a raw `"3"` or a bare string compared with `>` or read as an entry would switch the limit off, or make every report a duplicate, without a word. Both fail **open** through `onError` — an honest report is never refused because a shared store blinked — where the replay store fails closed | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express`. A signed route mounted behind `express.json()` cannot be verified at all, so it calls `onError` once per handler naming the parser and answers the same 401 | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
-| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over seven states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
-| `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page and the two comparison pages, in both colour schemes, failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first | site, dist (at run time) |
-| `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time) |
-| `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time) |
-| `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate` | dist (at run time) |
+| `scripts/chrome.mjs` | `findChrome()` and `loadPuppeteer()` — the one answer the five browser scripts share. `CHROME_BIN` then `CHROME_PATH`, then the runner's `/usr/bin/google-chrome`, a distribution Chromium, macOS and Windows, then the same names on PATH; `puppeteer-core` from this repository or from the global root. Nothing downloads a browser | nothing |
+| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over seven states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser, but CI's `browser` job runs it on every push and pull request | dist (at run time), chrome |
+| `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page and the two comparison pages, in both colour schemes, failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first, and runs in CI's `browser` job beside the panel audit | site, dist (at run time), chrome |
+| `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time), chrome |
+| `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time), chrome |
+| `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate`, and the last step of CI's `browser` job | dist (at run time), chrome |
 | `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts` | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
@@ -152,6 +153,7 @@ npm test            # node --test on tests/*.test.ts (needs Node 22+)
 npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → both IIFEs
 npm run build:docs  # site/docs/, /compare/, /da/sammenlign/, sitemap.xml, robots.txt; fails on an ungrouped, a ghost or a duplicated `##` section
 npm run a11y        # axe-core over the panel and over the site pages, in a real Chrome; needs a build and build:docs first
+                    # CI's `browser` job runs this and smoke:annotate on every push and pull request
 npm run shot:panel  # re-capture the hero pictures from the current panel
 npm run shot:og     # re-render site/og.png from site/og.svg
 npm run smoke:annotate  # the blur really pixelates, in a real Chrome; needs a build first
@@ -309,6 +311,16 @@ does and an ungzipped measurement is about six points lower for reasons that
 have nothing to do with the page. `scripts/annotate-smoke.mjs` is the same
 procedure aimed at pixels rather than at the accessibility tree: only a real
 canvas can say whether the blur destroyed what it covered.
+
+None of the three is part of `npm run check`, because each needs a browser and
+`npm run check` must run anywhere. They are not optional for that reason: the
+`browser` job in `.github/workflows/ci.yml` builds, generates the site and runs
+`npm run a11y` and `npm run smoke:annotate` on the Chrome the `ubuntu-latest`
+image ships, on every push and every pull request, uploading the axe reports as
+an artifact when it fails. `scripts/chrome.mjs` is what makes the same command
+work in both places: `CHROME_BIN`, `CHROME_PATH`, then the usual Linux, macOS
+and Windows paths. So run them by hand while working — the failure is easier to
+read locally — and know that forgetting is caught.
 
 ## Conventions
 

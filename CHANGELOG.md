@@ -7,6 +7,28 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- CI runs the browser audits. A third job, `browser`, builds, generates the
+  site and runs `npm run a11y` (axe over the panel's seven states and the
+  site's fourteen page-and-scheme runs, with the real security headers served)
+  and `npm run smoke:annotate` (the blur destroyed the pixels it covered) in
+  the Chrome the `ubuntu-latest` image ships. A violation, a console message or
+  a surviving pixel fails the pull request, and the axe reports are uploaded as
+  an artifact when it does. The checks themselves are unchanged for local use.
+- `scripts/chrome.mjs` — `findChrome()` and `loadPuppeteer()`, the lookup the
+  five browser scripts each used to carry their own copy of. It honours
+  `CHROME_BIN` and `CHROME_PATH`, then looks in the usual Linux, macOS and
+  Windows locations and on PATH, so one command works on a runner and on a
+  desktop. Nothing downloads a browser: `puppeteer-core` never does.
+
+### Fixed
+
+- Contrast on the English landing page: a `code` span inside a muted paragraph
+  inherited the muted grey onto the code background and measured 3.86:1 at
+  0.875em, under the 4.5 that size needs. Code spans keep the page's ink now.
+  This is what the new job would have caught.
+
 ## 0.9.0 — 2026-09-08
 
 The consistency release. The whole public API was read once before 1.0 —

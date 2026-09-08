@@ -390,3 +390,50 @@ jobs:
             echo "bugbottle/solid adds $solid bytes gzipped; the budget is 1536" >&2
             exit 1
           fi
+
+  browser:
+    name: Browser audits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `npm run build:docs` dates every generated page from the last commit
+          # that touched its source, and the sitemap's <lastmod> comes from those
+          # dates. A shallow clone carries one commit, so every page would be
+          # dated from the checkout; the whole history is cheap on this
+          # repository and keeps the generated site identical to a local build.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # The site audit serves the generated pages — /docs/, /compare/ and
+      # /da/sammenlign/ — so they have to exist before Chrome asks for them.
+      - run: npm run build:docs
+      # puppeteer-core is not a dependency of the package: nothing that ships
+      # needs it, and it downloads no browser of its own. The runner image
+      # already has Chrome, which `scripts/chrome.mjs` finds through CHROME_BIN
+      # or /usr/bin/google-chrome.
+      - name: Install puppeteer-core, which downloads no browser
+        run: npm install -g puppeteer-core@25.3.0
+      - name: Say which Chrome the audits will drive
+        run: node -e "import('./scripts/chrome.mjs').then((m) => console.log(m.findChrome()))"
+      # Both audits in one job and in sequence: they share this build, and
+      # Chrome starts once per script either way. Each exits non-zero on an axe
+      # violation, and the site audit also on a console error — a resource
+      # blocked by the Content-Security-Policy it serves is exactly that.
+      - name: axe over the panel and over the site
+        run: npm run a11y
+      # The pixels rather than the accessibility tree: a blur that did not
+      # destroy what it covered fails here.
+      - run: npm run smoke:annotate
+      # Only on failure: a green run's reports say nothing that the log did not.
+      - name: The axe reports, for reading a failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: a11y-reports
+          path: a11y-reports/
+          retention-days: 7
