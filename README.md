@@ -1679,7 +1679,9 @@ handleReport(req, {
 reporter with a `429` because Redis blinked loses the one report that was worth
 having, and the error reaches `onError` so you find out. A `dedupeStore` that
 throws lets it through as well, on both halves — a duplicate costs a row and an
-email, a refusal costs the report. A `replayStore` that throws answers `500`,
+email, a refusal costs the report — and so does one whose `get` answers with
+something that is not an entry, since a raw unparsed value taken at face value
+would make every report a duplicate. A `replayStore` that throws answers `500`,
 because the alternative is accepting a signature nobody managed to check
 against what has already been seen, which is exactly the replay the cache
 exists to stop.

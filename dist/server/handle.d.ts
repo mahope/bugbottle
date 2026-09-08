@@ -196,10 +196,13 @@ export type DedupeEntry = {
  * };
  * ```
  *
- * Expiry is the store's job — that is what `expiresAt` is for — so anything
- * `get` answers with counts as a duplicate. A store that throws fails open on
- * both halves: a duplicate report costs a row, and refusing one costs the
- * report.
+ * Expiry is the store's job — that is what `expiresAt` is for — so any entry
+ * `get` answers with counts as a duplicate. Only an entry, though: an answer
+ * that is not an object with an optional string `id` is treated as "not seen"
+ * and reported through `onError`, because a store handing back a raw string
+ * would otherwise make every report a duplicate. A store that throws fails
+ * open on both halves: a duplicate report costs a row, and refusing one costs
+ * the report.
  */
 export type DedupeStore = {
     /** What was answered for this key before, or nothing when it is new. */

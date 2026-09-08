@@ -254,10 +254,13 @@ export type DedupeEntry = { id?: string };
  * };
  * ```
  *
- * Expiry is the store's job — that is what `expiresAt` is for — so anything
- * `get` answers with counts as a duplicate. A store that throws fails open on
- * both halves: a duplicate report costs a row, and refusing one costs the
- * report.
+ * Expiry is the store's job — that is what `expiresAt` is for — so any entry
+ * `get` answers with counts as a duplicate. Only an entry, though: an answer
+ * that is not an object with an optional string `id` is treated as "not seen"
+ * and reported through `onError`, because a store handing back a raw string
+ * would otherwise make every report a duplicate. A store that throws fails
+ * open on both halves: a duplicate report costs a row, and refusing one costs
+ * the report.
  */
 export type DedupeStore = {
   /** What was answered for this key before, or nothing when it is new. */
@@ -265,6 +268,17 @@ export type DedupeStore = {
   /** Remembers the answer until `expiresAt`, an epoch millisecond. */
   set(key: string, entry: DedupeEntry, expiresAt: number): void | Promise<void>;
 };
+
+/**
+ * Whether what a store answered with is really an entry. `id` is the only
+ * field, and it is optional, so this is a shape check rather than a schema:
+ * what it rejects is a value that was never a dedupe entry at all.
+ */
+function isDedupeEntry(value: unknown): value is DedupeEntry {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const id = (value as { id?: unknown }).id;
+  return id === undefined || typeof id === "string";
+}
 
 /** Hard ceiling on the fingerprint map. */
 export const MAX_DEDUPE_ENTRIES = 10_000;
@@ -996,12 +1010,20 @@ export async function handleReport(
       let seen: DedupeEntry | undefined;
       if (dedupeStore) {
         try {
-          // Whatever a store answers with is a duplicate: expiring the entry
-          // when the window closes is what `expiresAt` asked it to do.
-          seen = await dedupeStore.get(dedupeKey);
+          // Anything shaped like an entry counts as a duplicate: expiring it
+          // when the window closes is what `expiresAt` asked the store to do.
+          // The shape is checked because a store that answers with a raw
+          // string, or with `true` for "present", would otherwise make every
+          // report a duplicate and quietly store nothing ever again.
+          const answer = await dedupeStore.get(dedupeKey);
+          if (answer !== undefined && answer !== null) {
+            if (isDedupeEntry(answer)) seen = answer;
+            else throw new TypeError("dedupeStore.get did not answer with a dedupe entry");
+          }
         } catch (err) {
           // Fails open. A duplicate costs a row and an email; a store that is
-          // down must not cost the report itself.
+          // down, or answering with something else entirely, must not cost the
+          // report itself.
           options.onError?.(err);
         }
       } else {

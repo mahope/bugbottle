@@ -59,6 +59,17 @@ const KNOWN_KEYS = new Set([
 export const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 /** Hard ceiling on the bucket map, whatever the traffic looks like. */
 export const MAX_RATE_LIMIT_BUCKETS = 10_000;
+/**
+ * Whether what a store answered with is really an entry. `id` is the only
+ * field, and it is optional, so this is a shape check rather than a schema:
+ * what it rejects is a value that was never a dedupe entry at all.
+ */
+function isDedupeEntry(value) {
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+        return false;
+    const id = value.id;
+    return id === undefined || typeof id === "string";
+}
 /** Hard ceiling on the fingerprint map. */
 export const MAX_DEDUPE_ENTRIES = 10_000;
 /** The default skew window: five minutes on either side of our clock. */
@@ -630,13 +641,23 @@ export async function handleReport(request, options = {}) {
             let seen;
             if (dedupeStore) {
                 try {
-                    // Whatever a store answers with is a duplicate: expiring the entry
-                    // when the window closes is what `expiresAt` asked it to do.
-                    seen = await dedupeStore.get(dedupeKey);
+                    // Anything shaped like an entry counts as a duplicate: expiring it
+                    // when the window closes is what `expiresAt` asked the store to do.
+                    // The shape is checked because a store that answers with a raw
+                    // string, or with `true` for "present", would otherwise make every
+                    // report a duplicate and quietly store nothing ever again.
+                    const answer = await dedupeStore.get(dedupeKey);
+                    if (answer !== undefined && answer !== null) {
+                        if (isDedupeEntry(answer))
+                            seen = answer;
+                        else
+                            throw new TypeError("dedupeStore.get did not answer with a dedupe entry");
+                    }
                 }
                 catch (err) {
                     // Fails open. A duplicate costs a row and an email; a store that is
-                    // down must not cost the report itself.
+                    // down, or answering with something else entirely, must not cost the
+                    // report itself.
                     options.onError?.(err);
                 }
             }

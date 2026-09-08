@@ -189,6 +189,11 @@ change the API; the changelog says so when they do.
   characters — leaving JSON that would not parse, so the whole replay was
   dropped. It now walks the parsed events and removes real null bytes from the
   string values and keys.
+- An injected `dedupe.dedupeStore` whose `get` answered with something that is
+  not an entry — a raw string, `true`, anything unparsed — made every report a
+  duplicate, silently. Only an object with an optional string `id` is believed
+  now; anything else is "not seen" and reaches `onError`, as a throwing store
+  does.
 
 ### Changed
 
