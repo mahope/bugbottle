@@ -631,14 +631,78 @@ queue.destroy();       // remove the listeners; the reports stay in storage
 The cap was called `maxItems` until 0.9, the one recorder that did not call it
 `maxEntries`. That name still works and is deprecated; it goes in 1.0.
 
-A report is at most a few hundred bytes without its picture and a megabyte or
-two with one, so a queued item that would not fit — over 1 MB serialised —
-loses its screenshot and keeps everything else: the message, the console, the
-breadcrumbs, the requests. If `localStorage` is unavailable at all, as in
-Safari's private mode, the queue stays in memory for the life of the page
-rather than refusing to work. A full quota is not the same thing: what is
-already stored is still read and still delivered, and only the writes go
-memory-only.
+### When the quota runs out
+
+`localStorage` is a few megabytes for the whole origin, shared with whatever
+else the application keeps there, and a screenshot as a data URL is a megabyte
+or two on its own. A write is refused sooner than anyone expects — and until
+0.13 a refused write meant the report reached storage nowhere and was gone on
+the next reload, which is exactly what an outage ends in.
+
+It costs the picture instead. When the storage refuses a write, the queue
+writes the same reports again without their screenshots and leaves a line on
+each one it took a picture from:
+
+```jsonc
+"notes": ["Screenshot dropped: it did not fit in the offline queue."]
+```
+
+`notes` is part of the payload. The server validates it like every other field
+— at most five notes, 200 characters each, `normaliseNotes` — and `toMarkdown`
+prints them above the evidence, so whoever reads the report can tell "no
+screenshot was taken" from "a screenshot was taken and would not fit". It is
+written by the library about the report, never by the reporter.
+
+Nothing is dropped on a guess: a picture that fits is kept whole. Only when the
+second write is refused as well does the queue go memory-only for the life of
+the page. If `localStorage` is unavailable from the start, as in Safari's
+private mode, it starts there rather than refusing to work — and either way,
+what is already stored is still read and still delivered.
+
+### Somewhere else to keep them
+
+`storage` replaces `localStorage` with anything that can read the queue and
+change it. One other implementation ships, in its own entry point:
+
+```ts
+import { createQueue } from "bugbottle/queue";
+import { createIdbStorage } from "bugbottle/queue-idb";
+
+const queue = createQueue({
+  endpoint: "/api/feedback",
+  storage: createIdbStorage(), // databaseName, storeName, storageKey
+});
+```
+
+IndexedDB has room for the pictures — a share of the free disk rather than five
+megabytes for everything on the origin — so a 2 MB report is queued whole. Its
+read-write transactions are ordered per database and across tabs, so the claim
+below is decided by the database rather than by whichever tab wrote last. What
+it costs is timing: every step is asynchronous, so a report queued in the last
+milliseconds before the tab is closed may not reach the disk, where
+`localStorage` always does. Which of the two matters more depends on whether
+your reports carry pictures.
+
+It is a separate entry point because the default must not pay for it:
+`bugbottle/queue` is about 1.5 kB and this is another 650 bytes, only for those
+who ask for it. A browser with no IndexedDB at all makes the queue memory-only,
+and the reports are still sent.
+
+Your own storage is two functions:
+
+```ts
+import type { QueueStorage } from "bugbottle/queue";
+
+const storage: QueueStorage = {
+  read: () => readTheArray(),                            // now or later
+  update: (change) => writeBack(change(readTheArray())), // throws when refused
+};
+```
+
+`update` reads, applies `change` and writes the result back as one step, so a
+storage that can be atomic gets to be, and it answers with what is now stored.
+Either function may return a promise. A refused write throws, or rejects, and
+that is what starts the fallback above.
 
 ### Two tabs, one queue
 
@@ -656,7 +720,9 @@ write within the same few milliseconds can both claim one report and post it
 twice. The window is the length of one read-modify-write, the failure is a
 duplicate rather than a loss, and `fingerprint(report)` is there if duplicates
 matter to your storage. A tab closed mid-delivery leaves its claim behind, and
-the next tab picks the report up 30 seconds later.
+the next tab picks the report up 30 seconds later. `createIdbStorage()` closes
+that window: reading the queue and writing the claim happen inside one
+IndexedDB transaction, and the browser orders those across tabs.
 
 Without a queue, a send can still survive the page closing under it:
 
@@ -2797,6 +2863,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
   "replay": {                          // only while bugbottle/rrweb is recording
     "events": [{ "type": 2, "timestamp": 1757232751004, "data": {} }], "seconds": 31
   },
+  "notes": [                           // the library's own words about the report,
+    "Screenshot dropped: it did not fit in the offline queue."   // max 5, 200 chars
+  ],
   "screenshotDataUrl": "data:image/png;base64,…"   // only when attached
 }
 ```
@@ -2875,8 +2944,13 @@ post type with an admin list, and emails them if you want. One activation.
 `resetPerf`, `isPerfActive`, and the `PerfOptions`, `PerfSnapshot`,
 `StorageSnapshot` and `StorageKeyRef` types. See "Performance and storage".
 
-**`bugbottle/queue`** — `createQueue`, and the `Queue`, `QueueOptions` and
-`QueuedReport` types. See "When the network is down".
+**`bugbottle/queue`** — `createQueue`, `SCREENSHOT_NOTE`, and the `Queue`,
+`QueueOptions`, `QueueStorage`, `QueuedReport` and `MaybePromise` types. See
+"When the network is down".
+
+**`bugbottle/queue-idb`** — `createIdbStorage` and the `IdbStorageOptions`
+type: the queue's reports in IndexedDB rather than `localStorage`, where a
+screenshot fits. See "When the network is down".
 
 **`bugbottle/rrweb`** — `attachRrweb`, `getReplay`, `resetRrweb`,
 `isRrwebAttached`, `DEFAULT_REPLAY_SECONDS`, `DEFAULT_REPLAY_MAX_BYTES`,
@@ -2942,7 +3016,7 @@ imports this entry, so a site that does not ask for it never carries it.
 `looksLikeEmail`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `normalisePerf`,
-`normaliseStorage`, `normaliseReplay`, `isReportType`, `toMarkdown`,
+`normaliseStorage`, `normaliseReplay`, `normaliseNotes`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
 `createLinearIssue`, `smtpSink`, `sendReportSmtp`, `buildMessage`,

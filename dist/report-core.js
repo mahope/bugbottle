@@ -21,6 +21,14 @@ export const MAX_MESSAGE_LENGTH = 4000;
  * a field a reader trusts to be short.
  */
 export const MAX_CONTACT_LENGTH = 200;
+/**
+ * How many notes a report may carry. A note is written by the library about
+ * the report itself — "the picture would not fit" — never by the reporter, so
+ * a handful is already more than anything here has to say.
+ */
+export const MAX_NOTES = 5;
+/** Longest a single note may be. They are one sentence each. */
+export const MAX_NOTE_LENGTH = 200;
 /** How many console entries a report may carry. Oldest are dropped first. */
 export const MAX_CONSOLE_ENTRIES = 50;
 /** Longest a single console message may be before it is clipped. */
@@ -155,6 +163,27 @@ export function normaliseContact(raw, maxLength = MAX_CONTACT_LENGTH) {
     if (text.length === 0)
         return null;
     return text.slice(0, maxLength);
+}
+/**
+ * Clips the library's own notes about the report. Anything that is not a
+ * non-empty string is dropped, the rest is trimmed and clipped exactly as a
+ * message is, and at most {@link MAX_NOTES} survive.
+ *
+ * A note arrives from the browser like everything else, so it is not trusted
+ * for being ours: a page can put whatever it likes in this field.
+ */
+export function normaliseNotes(raw, maxNotes = MAX_NOTES) {
+    if (!Array.isArray(raw))
+        return [];
+    const notes = [];
+    for (const value of raw) {
+        const note = normaliseMessage(value, MAX_NOTE_LENGTH);
+        if (note)
+            notes.push(note);
+        if (notes.length >= maxNotes)
+            break;
+    }
+    return notes;
 }
 /**
  * Whether a contact line can be used as an email address.

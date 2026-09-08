@@ -22,6 +22,14 @@ export declare const MAX_MESSAGE_LENGTH = 4000;
  * a field a reader trusts to be short.
  */
 export declare const MAX_CONTACT_LENGTH = 200;
+/**
+ * How many notes a report may carry. A note is written by the library about
+ * the report itself — "the picture would not fit" — never by the reporter, so
+ * a handful is already more than anything here has to say.
+ */
+export declare const MAX_NOTES = 5;
+/** Longest a single note may be. They are one sentence each. */
+export declare const MAX_NOTE_LENGTH = 200;
 /** How many console entries a report may carry. Oldest are dropped first. */
 export declare const MAX_CONSOLE_ENTRIES = 50;
 /** Longest a single console message may be before it is clipped. */
@@ -320,6 +328,14 @@ export type BugReport = {
     storage?: StorageSnapshot;
     /** The last seconds before the report, when `bugbottle/rrweb` was recording. */
     replay?: ReplayCapture;
+    /**
+     * What the library had to do to this report on the way out, in its own
+     * words: the offline queue dropping a screenshot it could not store is the
+     * first and so far only one. It is written by the library, not by the
+     * reporter, and it exists so that a reader who sees no picture can tell
+     * "none was taken" from "one was taken and would not fit".
+     */
+    notes?: string[];
     screenshotDataUrl?: string;
 };
 export declare function isReportType(value: unknown): value is ReportType;
@@ -338,6 +354,15 @@ export declare function normaliseMessage(raw: unknown, maxLength?: number): stri
  * `contact_email` — ask whether it looks like one, with {@link looksLikeEmail}.
  */
 export declare function normaliseContact(raw: unknown, maxLength?: number): string | null;
+/**
+ * Clips the library's own notes about the report. Anything that is not a
+ * non-empty string is dropped, the rest is trimmed and clipped exactly as a
+ * message is, and at most {@link MAX_NOTES} survive.
+ *
+ * A note arrives from the browser like everything else, so it is not trusted
+ * for being ours: a page can put whatever it likes in this field.
+ */
+export declare function normaliseNotes(raw: unknown, maxNotes?: number): string[];
 /**
  * Whether a contact line can be used as an email address.
  *

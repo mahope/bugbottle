@@ -7,12 +7,13 @@ Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1.5 kB gzipped, `bugbottle/react` under 6 kB, `bugbottle/ui`
 under 11.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/breadcrumbs` under
-1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1.3 kB,
+1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1600 bytes,
+`bugbottle/queue-idb` under 1024 bytes,
 `bugbottle/perf` under 1.25 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
 over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` under
-768 bytes, `bugbottle/rrweb` under 1024 bytes, the script-tag build under 24 kB and
-its slim twin under 20.5 kB. The core budget was 1 kB until 0.6, when stack
+768 bytes, `bugbottle/rrweb` under 1024 bytes, the script-tag build under
+25088 bytes and its slim twin under 21504. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -290,6 +291,18 @@ and tree-shaken out of every bundle that does not name it — the validator-only
 bundle is unchanged at 583 bytes. The example now routes, authorises and
 renders, and does no filesystem work of its own; its fourteen tests did not
 move.
+
+**Unreleased** — the offline queue survives a full `localStorage` (#85). A
+refused write used to leave the report in memory alone, which is a report lost
+on the next reload — and a reload is how an outage usually ends. It now costs
+the picture: the queue writes the reports again without their screenshots and
+leaves a line in the report's new `notes` field saying one existed, validated
+by `normaliseNotes` and printed by `toMarkdown`. The storage became a seam with
+`localStorage` as its default, and `bugbottle/queue-idb` is the other
+implementation — IndexedDB has room for a 2 MB report with its picture, and its
+transactions are ordered across tabs, so the multi-tab claim is a lock there
+rather than a lease. The 1 MB guess that used to strip the picture off a large
+report before it was ever stored is gone: what fits is kept.
 
 **Unreleased** — `examples/inbox` is told about a new report rather than
 polled for one (#84): `NOTIFY_WEBHOOK` posts through the Slack, Discord, Teams

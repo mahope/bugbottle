@@ -90,8 +90,14 @@ jobs:
           # `src/global-shared.ts` so the slim build could share it: 52 bytes
           # for a module boundary and the one optional call the shared boot
           # takes. The budget did not move.
-          if [ "$iife" -gt 24576 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 24576" >&2
+          # #85 then added 186 bytes (24238 -> 24424) for the offline queue's
+          # storage seam and its quota fallback, which this build carries like
+          # every other module, and the budget goes to 25088. A hundred and
+          # fifty bytes of headroom is not headroom, and this file has been
+          # within a hundred of its budget twice; the seam itself is described
+          # beside the `bugbottle/queue` budget below.
+          if [ "$iife" -gt 25088 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 25088" >&2
             exit 1
           fi
       - name: The slim script-tag bundle stays under its budget
@@ -112,8 +118,12 @@ jobs:
           # stay behind on purpose — the annotator's eight locale strings in
           # eight languages, which are data, and the panel's own annotator
           # toolbar, which is a static import.
-          if [ "$slim" -gt 20992 ]; then
-            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 20992" >&2
+          # #85's queue seam costs this build 236 bytes (20650 -> 20886) —
+          # slightly more than the full build pays for the same code, because
+          # there is less around it to share a dictionary with — so the budget
+          # goes to 21504.
+          if [ "$slim" -gt 21504 ]; then
+            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 21504" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -135,6 +145,7 @@ jobs:
           echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
           echo 'import { initPerf } from "bugbottle/perf"; initPerf();' > perf.js
           echo 'import { createQueue } from "bugbottle/queue"; export { createQueue };' > queue.js
+          echo 'import { createIdbStorage } from "bugbottle/queue-idb"; export { createIdbStorage };' > queue-idb.js
           echo 'import { onShortcut, onUncaughtError } from "bugbottle/triggers"; export { onShortcut, onUncaughtError };' > triggers.js
           echo 'import { onShake, requestShakePermission } from "bugbottle/shake"; export { onShake, requestShakePermission };' > shake.js
           echo 'import { createSigner } from "bugbottle/sign"; export { createSigner };' > sign.js
@@ -157,6 +168,7 @@ jobs:
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
           npx esbuild perf.js --bundle --minify --format=esm --outfile=out-perf.js
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
+          npx esbuild queue-idb.js --bundle --minify --format=esm --outfile=out-queue-idb.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
           npx esbuild shake.js --bundle --minify --format=esm --outfile=out-shake.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
@@ -167,7 +179,7 @@ jobs:
           # What the budgets above guard is that none of it reaches a bundle
           # that did not ask for it, which is why nothing imports this entry.
           npx esbuild locales-extra.js --bundle --minify --format=esm --outfile=out-locales-extra.js
-          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-shake out-sign out-rrweb out-locales-extra; do
+          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-queue-idb out-triggers out-shake out-sign out-rrweb out-locales-extra; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -297,9 +309,29 @@ jobs:
           # read-modify-write, a claim and a release where there used to be one
           # setItem, and it is what stops a second tab losing, duplicating or
           # resurrecting reports.
+          # #85 then took it 1313 -> 1553, and the budget 1330 -> 1600. The
+          # issue hoped for a hundred bytes and it cost two hundred and forty,
+          # which is worth writing down rather than rounding away: the storage
+          # became a seam with two implementations behind it (`later` bridges a
+          # synchronous `localStorage` and an asynchronous IndexedDB in one
+          # code path, and commits are chained so two of them cannot read the
+          # same stale array), and a refused write is now answered rather than
+          # surrendered to — a second write with the screenshots dropped, the
+          # note that says so, and the merged array kept in memory when even
+          # that is refused. The alternative was losing the report, which is
+          # what the queue exists to prevent.
           queue=$(gzip -c out-queue.js | wc -c)
-          if [ "$queue" -gt 1330 ]; then
-            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1330" >&2
+          if [ "$queue" -gt 1600 ]; then
+            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1600" >&2
+            exit 1
+          fi
+          # The IndexedDB storage is its own entry so that the default pays
+          # nothing for it: one open, one transaction helper and two methods,
+          # importing two types and nothing at run time. It measures 654
+          # against the 1024 the issue set.
+          queueidb=$(gzip -c out-queue-idb.js | wc -c)
+          if [ "$queueidb" -gt 1024 ]; then
+            echo "bugbottle/queue-idb is $queueidb bytes gzipped; the budget is 1024" >&2
             exit 1
           fi
           # Two listeners, a shortcut parser and the shared fingerprint hash.

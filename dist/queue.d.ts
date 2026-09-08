@@ -29,6 +29,21 @@
  * releases the claim; a successful one removes the item by id from a freshly
  * read array.
  *
+ * ## Where the reports are kept
+ *
+ * `localStorage` is the default and is a few megabytes for the whole origin,
+ * shared with whatever else the application keeps there. A screenshot is by
+ * far the largest field in a report, so a write is refused sooner than anyone
+ * expects — and a refused write used to mean the report never reached storage
+ * at all, which is a report lost on the next reload. It now costs the picture
+ * instead: the queue writes the reports again without their screenshots and
+ * leaves a note on each one saying a picture existed, so the receiver can tell
+ * "none was taken" from "one was taken and would not fit".
+ *
+ * `storage` replaces `localStorage` with anything that can read an array and
+ * change it — `createIdbStorage()` from `bugbottle/queue-idb` is the one that
+ * ships, and IndexedDB has room for the pictures.
+ *
  * That is a lease, not a lock, and it is worth being honest about the window it
  * leaves: two tabs that read, decide and write in the same few milliseconds can
  * both claim the same report and deliver it twice. The window is the length of
@@ -54,6 +69,32 @@ export type QueuedReport = {
      */
     claimedAt?: number;
 };
+/** A value that may already be here, or may arrive. */
+export type MaybePromise<T> = T | Promise<T>;
+/**
+ * Where a queue keeps its reports. `localStorage` unless told otherwise; hand
+ * in `createIdbStorage()` from `bugbottle/queue-idb` for the megabytes a
+ * screenshot wants.
+ */
+export type QueueStorage = {
+    /**
+     * Everything stored. The queue checks what comes back rather than trusting
+     * it, so a storage may hand over whatever it read.
+     */
+    read(): MaybePromise<QueuedReport[]>;
+    /**
+     * Reads, applies `change` to what was stored, writes the result back, and
+     * answers with what is now stored.
+     *
+     * It is one call rather than a read and a write so that a storage which
+     * *can* be atomic gets to be: IndexedDB orders read-write transactions per
+     * database, across tabs as well, where `localStorage` can only hope.
+     *
+     * Throws, or rejects, when the write was refused. A full quota is the
+     * ordinary reason, and the queue answers it by dropping the screenshots.
+     */
+    update(change: (stored: QueuedReport[]) => QueuedReport[]): MaybePromise<QueuedReport[]>;
+};
 export type QueueOptions = {
     /** Endpoint that receives the queued reports. The same one you send to. */
     endpoint: string;
@@ -75,6 +116,12 @@ export type QueueOptions = {
     credentials?: RequestCredentials;
     /** Replace the global `fetch`, mostly for tests. */
     fetch?: typeof globalThis.fetch;
+    /**
+     * Where the reports are kept. `localStorage` by default, and
+     * `createIdbStorage()` from `bugbottle/queue-idb` when a screenshot has to
+     * survive the outage with the report.
+     */
+    storage?: QueueStorage;
 };
 export type Queue = {
     /** Keeps a report for later. Nothing is sent; call `flush` for that. */
@@ -88,6 +135,12 @@ export type Queue = {
     /** Removes the listeners and the pending retry. The reports stay in storage. */
     destroy(): void;
 };
+/**
+ * The line left on a report whose picture had to go. It is a note about the
+ * report rather than part of it, so it travels in `notes`, which the server
+ * validates like every other field and `toMarkdown` prints above the evidence.
+ */
+export declare const SCREENSHOT_NOTE = "Screenshot dropped: it did not fit in the offline queue.";
 /**
  * A queue in front of `endpoint`. Reads whatever an earlier visit left behind,
  * then tries to deliver it — on load, when the browser comes online, and when

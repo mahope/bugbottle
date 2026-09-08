@@ -7,6 +7,42 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- The offline queue survives a full `localStorage` (#85). A refused write used
+  to turn the queue memory-only and that was all: the report reached storage
+  nowhere and was gone on the next reload, which is what an outage ends in. It
+  now costs the picture instead — the queue writes the reports again without
+  their screenshots, and leaves a line in the new `notes` field of each one it
+  took a picture from, so the receiver can tell "no screenshot was taken" from
+  "a screenshot was taken and would not fit". `notes` is validated server-side
+  by `normaliseNotes` (at most five, 200 characters each, `MAX_NOTES` and
+  `MAX_NOTE_LENGTH`), carried in `ValidatedReport` and the JSON Schema, and
+  printed above the evidence by `toMarkdown`.
+- `createQueue({ storage })`: the storage is a seam now, `localStorage` its
+  default, and `QueueStorage` is two functions — `read`, and an `update` that
+  reads, changes and writes back as one step and throws when the write was
+  refused. Either may answer with a promise.
+- `bugbottle/queue-idb`, the twentieth entry point: `createIdbStorage()` keeps
+  the queue in IndexedDB, which has room for a 2 MB report with its picture,
+  and whose read-write transactions are ordered across tabs — so the claim that
+  keeps two tabs from delivering one report twice is decided by the database
+  rather than by whoever wrote last. 654 bytes gzipped, and only in the bundles
+  that ask for it.
+
+### Changed
+
+- Nothing is dropped from a queued report on a guess about the quota any more.
+  The 1 MB ceiling that took the screenshot off every large report before it
+  was ever stored is gone; a picture that fits is kept whole, and the storage
+  is what says whether it fits.
+- Sizes: `bugbottle/queue` 1313 → 1553 bytes gzipped (budget 1330 → 1600),
+  `dist/bugbottle.js` 24 238 → 24 424 (budget 24576 → 25088) and
+  `dist/bugbottle.slim.js` 20 650 → 20 886 (budget 20992 → 21504). The seam
+  bridges a synchronous storage and an asynchronous one in one code path and
+  chains its commits, and the refusal is answered rather than surrendered to;
+  the issue hoped for a hundred bytes and it cost two hundred and forty.
+
 ### Documentation
 
 - A table at the top of the README's "Sending it somewhere" answers, for all
