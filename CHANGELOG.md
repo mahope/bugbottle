@@ -13,6 +13,37 @@ that tag was cut.
 
 ### Added
 
+- `bugbottle/server`: `sentrySink({ dsn })`, which posts one envelope per report
+  to a Sentry-compatible ingest endpoint — Sentry, GlitchTip or Bugsink — so a
+  team that already runs one does not need a second place to look. No SDK
+  dependency: the DSN is taken apart into `https://<host>/api/<project>/envelope/`
+  and one `fetch` sends the envelope with `X-Sentry-Auth`. The report becomes an
+  event with the message, a level of `error` for a bug and `info` otherwise,
+  tags for the type, the page and the viewport, and a `contexts.feedback` — the
+  shape Sentry ≥ 24.x reads as User Feedback. The console buffer, the
+  breadcrumbs and the recorded requests become Sentry breadcrumbs in one
+  timeline sorted oldest first (`console`, `ui.click`, `ui.submit`,
+  `navigation`, and `http` with `url`, `method`, `status_code` and `duration`);
+  the pointed-at elements and the optional context facts become `extra`; and the
+  screenshot rides in the same envelope as an attachment item, which makes this
+  the one sink that carries the picture rather than a link to it.
+- Every Sentry limit is a clip rather than a failure: a hundred breadcrumbs,
+  8 kB of message (4096 characters in the feedback context, which is that
+  spec's own cap) and a megabyte of envelope, where the attachment is dropped
+  first and the breadcrumbs second and the loss is named on the event as a
+  `bugbottle_truncated` tag. `SentrySinkError` is a `SinkError` that also
+  carries `retryAfter` — sixty seconds when a 429 came with no usable header,
+  as the transport specification says to assume — and the raw
+  `X-Sentry-Rate-Limits`, so a caller can back off with a number. A DSN with a
+  typo throws when the sink is built rather than on the first report.
+  `buildSentryEvent` and `buildSentryEnvelope` are exported for anyone who
+  would rather send it themselves. Written against the developer documentation
+  of 2026-09-08, including the attachments spec 1.6.0 and the feedback spec
+  1.3.0; the two knowing departures from it — an `event` item by default rather
+  than a `feedback` one, because GlitchTip and Bugsink do not know the newer
+  type, and a legacy `message` beside `logentry` for the same reason — are
+  argued in a comment at the top of `src/sinks/sentry.ts`. `itemType:
+  "feedback"` opts into the feedback item on a real Sentry.
 - `bugbottle/server`: `slackSink` and `discordSink`, two incoming-webhook sinks
   that post one structured message per report rather than a wall of Markdown.
   Slack gets a Block Kit message — a header, the message as escaped `mrkdwn`, a

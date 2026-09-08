@@ -1267,7 +1267,7 @@ failed response has an `error` or `message` field, it is shown to the reporter.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Six sinks live in
+Storing the report is one thing; seeing it is another. Seven sinks live in
 `bugbottle/server`, each a formatter over one `fetch` call, none with a
 dependency of its own. None of them reads your environment: the key, the URL
 and the token are arguments, so it is visible at the call site where the secret
@@ -1378,6 +1378,75 @@ really does end the request. If you would rather post the message yourself —
 through a bot token, into a thread — `buildSlackMessage(report, options)` and
 `buildDiscordMessage(report, options)` return the body without sending it.
 
+### Sentry, GlitchTip and Bugsink
+
+If your team already runs Sentry, bugbottle can be the feedback layer over it
+rather than a second place to look. `sentrySink` posts one envelope per report
+to the DSN's ingest endpoint — the same protocol GlitchTip and Bugsink speak,
+so a self-hosted install works with nothing changed but the DSN. There is no
+Sentry SDK behind it: one `fetch` and a formatter, like every other sink.
+
+```ts
+import { handleReport, sentrySink } from "bugbottle/server";
+
+export const POST = (req: Request) =>
+  handleReport(req, {
+    // The bytes are handed to the sink, so the picture travels in the envelope
+    // rather than as a link to storage you had to arrange first.
+    screenshot: "keep",
+    store: async (report) => await db.reports.insert(report),
+    sinks: [
+      sentrySink({
+        dsn: process.env.SENTRY_DSN!,
+        release: process.env.BUILD_SHA,
+        environment: "production",
+        // Optional, and functions of the report, so they come from whatever
+        // your application knew about the person who reported.
+        contactEmail: (r) => emailOf(r),
+        contactName: (r) => nameOf(r),
+      }),
+    ],
+  });
+```
+
+What arrives is an event with the report's message, `level` `error` for a bug
+and `info` for an idea or anything else, `tags` for the type, the page and the
+viewport, and a `contexts.feedback` carrying the message, the page and the
+contact details — which is what Sentry ≥ 24.x shows as User Feedback. The
+evidence travels as breadcrumbs, in one timeline sorted oldest first: the
+console buffer as `console` breadcrumbs with `warn` respelt as Sentry's
+`warning`, the recorded clicks, submits, navigations and visibility changes as
+`ui.*` and `navigation`, and the failed and slow requests as `http` breadcrumbs
+with `url`, `method`, `status_code` and `duration`. The pointed-at elements and
+the optional context facts go in `extra`. The screenshot is an attachment item
+in the same envelope, `screenshot.png`, which is the one delivery in this
+library that carries the picture itself.
+
+Everything is capped, and every cap is a clip rather than a failure: a hundred
+breadcrumbs, 8 kB of message (4096 characters in the feedback context, which is
+that spec's own limit) and a megabyte of envelope. When the envelope is over,
+the attachment goes first and the breadcrumbs second, and what went is written
+on the event as a `bugbottle_truncated` tag so the reader knows the event is
+not the whole report.
+
+Two things are worth knowing before you wire it up. The first is that the sink
+sends an `event` item by default rather than the `feedback` item Sentry's
+feedback specification describes: the feedback item is what puts a report in
+Sentry's own User Feedback list, but GlitchTip and Bugsink do not know the type
+and drop what they cannot parse. Pass `itemType: "feedback"` on a real Sentry
+to opt into it — where it is also a separate rate-limit category from your
+errors. The second is that a 429 is answered honestly: `SentrySinkError`
+carries `retryAfter` in seconds (sixty when the server sent no usable header,
+which is what Sentry's transport specification says to assume) and the raw
+`X-Sentry-Rate-Limits`, so a caller can back off with a number rather than a
+guess. It is still a `SinkError`, so a handler that catches those catches this.
+
+A DSN with a typo in it throws when the sink is built rather than on the first
+report, so a mistake fails where it was written down. And if you would rather
+send the envelope yourself — through a proxy, or with a Sentry SDK already on
+the server — `buildSentryEvent(report, options)` returns the event for
+`captureEvent` and `buildSentryEnvelope(report, options)` returns the bytes.
+
 `createGithubIssue` files the report as an issue, which for a small team is
 the whole backend: the report lands in the same list as everything else that is
 broken, with the same labels and the same search. A fine-grained token with
@@ -1431,7 +1500,7 @@ mutation still comes back with a `200` and puts the reason in an `errors`
 array. The sink reads it and throws `SinkError` anyway, so a mistyped team id
 is a failure you can see rather than an issue that was never created.
 
-All six throw `SinkError`, carrying the HTTP status and the response body,
+All seven throw `SinkError`, carrying the HTTP status and the response body,
 when the service answers with anything but success. Catch it around the sink
 rather than around the whole handler: a report you have already stored should
 not be lost to a chat webhook that was revoked last week.
@@ -1737,6 +1806,12 @@ Requires `html-to-image`.
 `buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `SLACK_MAX_*`
 and `DISCORD_MAX_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `DiscordSinkOptions`, `ChatSink`, `ChatSinkContext` and `UrlFrom` types,
+`sentrySink`, `buildSentryEvent`, `buildSentryEnvelope`, `parseSentryDsn`,
+`sentryAuthHeader`, `clipBytes`, `SentrySinkError`, `SENTRY_CLIENT`,
+`SENTRY_CLIENT_NAME`, `SENTRY_CLIENT_VERSION`, `SENTRY_VERSION`,
+`DEFAULT_SENTRY_RETRY_AFTER`, the `MAX_SENTRY_*` limits, and the
+`SentrySinkOptions`, `SentrySinkContext`, `SentryDsn`, `SentryEnvelope`,
+`SentryItemType` and `SentryTruncation` types,
 `InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,

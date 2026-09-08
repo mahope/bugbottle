@@ -31,6 +31,9 @@ export { createLinearIssue, } from "../sinks/linear.js";
 // site of the delivery itself.
 export { MAX_CHAT_CONSOLE_ENTRIES, } from "../sinks/chat.js";
 export { slackSink, buildSlackMessage, escapeSlack, SLACK_MAX_BLOCKS, SLACK_MAX_TEXT, SLACK_MAX_HEADER_TEXT, SLACK_MAX_FIELDS, SLACK_MAX_FIELD_TEXT, } from "../sinks/slack.js";
+// The Sentry-compatible sink is the only one that can carry the picture
+// itself: an attachment item rides in the same envelope as the event.
+export { sentrySink, buildSentryEvent, buildSentryEnvelope, parseSentryDsn, sentryAuthHeader, clipBytes, SentrySinkError, SENTRY_CLIENT, SENTRY_CLIENT_NAME, SENTRY_CLIENT_VERSION, SENTRY_VERSION, MAX_SENTRY_BREADCRUMBS, MAX_SENTRY_MESSAGE_BYTES, MAX_SENTRY_FEEDBACK_MESSAGE, MAX_SENTRY_EVENT_BYTES, MAX_SENTRY_ENVELOPE_BYTES, DEFAULT_SENTRY_RETRY_AFTER, } from "../sinks/sentry.js";
 export { discordSink, buildDiscordMessage, DISCORD_COLOURS, DISCORD_MAX_EMBED_TITLE, DISCORD_MAX_EMBED_DESCRIPTION, DISCORD_MAX_EMBED_FIELDS, DISCORD_MAX_FIELD_NAME, DISCORD_MAX_FIELD_VALUE, DISCORD_MAX_FOOTER_TEXT, DISCORD_MAX_EMBED_TOTAL, } from "../sinks/discord.js";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.

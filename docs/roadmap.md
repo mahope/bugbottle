@@ -125,6 +125,16 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 - `report.schema.json` generated from the types, so a receiver can be built
   without the library.
 
+**0.6** — `sentrySink` in `bugbottle/server`: one envelope per report on the
+DSN's ingest endpoint, so a team already running Sentry — or GlitchTip, or
+Bugsink — can make bugbottle the feedback layer over it. The event carries a
+`contexts.feedback`, the console buffer, the breadcrumbs and the recorded
+requests as one sorted breadcrumb timeline, the pointed-at elements as `extra`,
+and the screenshot as an attachment item in the same envelope, which no other
+sink can do. A hundred breadcrumbs, 8 kB of message and a megabyte of envelope,
+all of them clips rather than failures and each named on the event when it
+bites. No SDK dependency.
+
 ## 0.6 — adapters and triggers
 
 - Solid adapter. (Vue and Svelte shipped; see "Already shipped".)
@@ -135,9 +145,8 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 - Optional HMAC signature (WebCrypto) verified by the server helper. Documented
   honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
   see "Already shipped".)
-- More sinks: Jira, GitLab. Sentry envelope. (Slack and Discord shipped as
-  structured sinks; see "Already shipped". Microsoft Teams is noted there as a
-  later job.)
+- More sinks: Jira, GitLab. (Slack, Discord and the Sentry envelope shipped;
+  see "Already shipped". Microsoft Teams is noted there as a later job.)
 
 ## 1.0 — adoptable
 
