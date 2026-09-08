@@ -100,6 +100,10 @@
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"
     },
+    "./locales-extra": {
+      "types": "./dist/locales-extra.d.ts",
+      "default": "./dist/locales-extra.js"
+    },
     "./ui": {
       "types": "./dist/ui/index.d.ts",
       "default": "./dist/ui/index.js"

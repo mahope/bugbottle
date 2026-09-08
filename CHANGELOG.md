@@ -9,6 +9,21 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- Five more languages, in their own entry point: `bugbottle/locales-extra`
+  ships Italian, Polish, Portuguese, Finnish and Ukrainian in the same `Locale`
+  shape as the eight bundled ones, with every key present and reviewed line by
+  line against the English source. A locale is data and data is carried whole,
+  so putting them beside the other eight would have made every site that shows
+  a panel carry them; here they are imported on purpose. All five weigh about
+  4.7 kB gzipped, one of them about 1.1 kB, and nothing in the library imports
+  the entry. `resolveLocale` now takes the map to look in as a third argument,
+  so `resolveLocale(navigator.language, en, { ...locales, ...localesExtra })`
+  reaches them and the default map is unchanged. `pt` is European Portuguese
+  and `pt-BR` resolves to it, the way `da-DK` resolves to `da`. Neither script
+  tag carries a word of it: `dist/bugbottle.js` moved 65 292 → 65 295 bytes
+  minified and `dist/bugbottle.slim.js` 56 251 → 56 254, which is the three
+  bytes of the new parameter and nothing else.
+  Closes #74.
 - The inbox example deploys: `examples/inbox/Dockerfile`, `compose.yml`,
   `.env.example` and `Caddyfile`, plus a "Deploy it" section in its README with
   an eight-line Dokploy walk-through. The image is `node:22-alpine`, runs as

@@ -32,7 +32,8 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/registry.ts` | Five slots: `initBreadcrumbs`, `initNetwork`, `initPerf` (twice, for the timings and the storage snapshot) and `attachRrweb` register getters, `send.ts` reads them. Keeps the core free of the recorders | report-core (types) |
 | `src/send.ts` | `buildReport`, `sendReport` — framework-agnostic | capture, console-buffer, report-core |
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
-| `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in | nothing |
+| `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in. `resolveLocale` takes the map to look in as its third argument, so a merged map reaches the optional languages without the default one growing | nothing |
+| `src/locales-extra.ts` | it/pl/pt/fi/uk and `localesExtra`, in the same `Locale` shape. Own entry point, imported by nothing — a locale is data and data is carried whole, so the five would otherwise be in every bundle that shows a panel. `pt` is European Portuguese and `pt-BR` resolves to it through the region-dropping `resolveLocale` already does. Neither script-tag build carries it | locales (the types alone, so nothing at run time) |
 | `src/report-state.ts` | `createReportState(options)` — the form as a state machine with no framework in it: `getState`, `subscribe`, `actions`, `setOptions`, `destroy`, plus `statusText`. The four adapters are bindings over it | capture, element-picker, send, queue (types), locales, report-core |
 | `src/react/` | `useBugReport` hook — `useSyncExternalStore` over report-state | report-state, report-core |
 | `src/vue/` | `useBugReport` composable — refs and computeds over report-state, `vue` an optional peer (>=3). Own entry point | report-state, report-core |
@@ -74,9 +75,10 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `examples/inbox/Dockerfile`, `compose.yml`, `.env.example`, `Caddyfile` | The example on a VPS: `node:22-alpine`, non-root, reports on a named volume at `/data`, the password from an env file and compose refusing to start without it, the published port on loopback because basic auth over plain HTTP sends the password every time. The build context is the repository **root** and the image is `package.json` + `dist/` + the two files of the example — the layout the self-reference resolves against — so nothing is installed at image build time; `npm pack` would carry the same `dist/` twice. The README's "Deploy it" walks through Dokploy | package.json, dist, examples/inbox (at image build) |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Eighteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Nineteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./solid`, `./server`,
-`./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
+`./html-to-image`, `./locales`, `./locales-extra`, `./ui`, `./breadcrumbs`,
+`./network`,
 `./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign`,
 `./rrweb` — plus `./report.schema.json`, which is data rather than code.
 `tests/exports.test.ts` pins that count: an entry added here without the
@@ -287,6 +289,15 @@ options of the same name. Types only: `src/ui/` imports neither recorder, and
 the wiring is two ternaries and two calls — `bugbottle/ui` 11 431 → 11 485,
 the full IIFE 24 128 → 24 174, the slim one 20 575 → 20 638. The slim build
 pays too, because it carries the same panel; no budget moves.
+
+#74 added `bugbottle/locales-extra`, which CI prints and never budgets: it is
+data, and its weight is the five languages in it — 4721 bytes gzipped for all
+five, 1138 for one of them on its own, since a bundler drops the rest. The
+number that mattered is what it cost everything else, and that is three bytes
+of minified JavaScript: `resolveLocale` gained the map to look in as a third
+argument, so `dist/bugbottle.js` went 65 292 → 65 295 and
+`dist/bugbottle.slim.js` 56 251 → 56 254. Nothing imports the entry, which is
+the whole point — eight languages in every panel is already generous.
 
 `bugbottle/server` is budgeted at 1024 bytes gzipped, and CI greps the same
 minified bundle for `document`, `window.`, `navigator` and `localStorage`,

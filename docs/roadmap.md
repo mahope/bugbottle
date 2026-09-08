@@ -220,6 +220,14 @@ reading; 18 kB was the target and was not reachable with the locales kept —
 they and the panel are two thirds of the file, and neither shrinks by dropping
 a recorder.
 
+**Alongside** — `bugbottle/locales-extra`: Italian, Polish, Portuguese,
+Finnish and Ukrainian in the same `Locale` shape, in an entry point nothing
+imports. A locale is data, so the eight bundled ones are already carried whole
+by everything that shows a panel; these five are imported on purpose instead —
+about 4.7 kB gzipped together, 1.1 kB for one of them. `resolveLocale` takes
+the map to look in as a third argument, `pt-BR` resolves to `pt`, and the two
+script-tag builds grew by the three bytes of that parameter.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
