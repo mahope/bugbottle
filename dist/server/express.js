@@ -18,8 +18,16 @@
  * chooses, and that is a different string with a different HMAC. Mount the
  * signed route without a body parser — `app.post(path, expressHandler(...))`
  * — and the raw stream is read here and verified as it arrived.
+ *
+ * That caveat used to be documented and otherwise silent: every report turned
+ * into the same 401 the wire gives a forged signature, with nothing in the log
+ * to tell the two apart. It now says so once, through `onError`, the first
+ * time such a request arrives. Once per handler rather than once per request,
+ * because it is a mounting mistake and not an event: the second copy of the
+ * line tells nobody anything the first did not.
  */
-import { handleReport, DEFAULT_MAX_BODY_BYTES, TOO_LARGE_ERROR, } from "./handle.js";
+import { handleReport, BAD_SIGNATURE_ERROR, DEFAULT_MAX_BODY_BYTES, TOO_LARGE_ERROR, } from "./handle.js";
+import { DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 /** One header value: Node gives arrays for the repeatable ones. */
 function headerValue(value) {
     if (Array.isArray(value))
@@ -83,6 +91,37 @@ async function bodyText(req, maxBytes) {
     }
     return JSON.stringify(body);
 }
+/** Writes one JSON answer this adapter built itself, CORS header and all. */
+function writeJson(res, status, body, cors) {
+    res.status(status);
+    if (cors) {
+        const origin = cors === true ? "*" : cors;
+        if (res.setHeader)
+            res.setHeader("Access-Control-Allow-Origin", origin);
+        else
+            res.set?.("Access-Control-Allow-Origin", origin);
+    }
+    if (res.setHeader)
+        res.setHeader("Content-Type", "application/json");
+    else
+        res.set?.("Content-Type", "application/json");
+    res.send(JSON.stringify(body));
+}
+/**
+ * True when a body parser has already turned this request into an object, and
+ * a signature over the text it arrived as could therefore never be checked.
+ *
+ * A `Buffer` is not that — `express.raw()` keeps the bytes, which verify — and
+ * neither is the empty object `express.json()` leaves behind when there was no
+ * body at all, which the reader below falls back to the stream for.
+ */
+function alreadyParsed(body) {
+    if (typeof body !== "object" || body === null)
+        return false;
+    if (body instanceof Uint8Array)
+        return false;
+    return Object.keys(body).length > 0;
+}
 /**
  * Turns `handleReport` into an Express handler.
  *
@@ -92,6 +131,8 @@ async function bodyText(req, maxBytes) {
  * ```
  */
 export function expressHandler(options = {}) {
+    // One diagnostic per handler, latched here rather than in the closure below.
+    let warnedAboutParsedBody = false;
     return (req, res) => {
         void (async () => {
             const method = (req.method ?? "POST").toUpperCase();
@@ -110,6 +151,35 @@ export function expressHandler(options = {}) {
                     continue;
                 headers.set(name, single);
             }
+            const signature = options.signature;
+            if (signature &&
+                method !== "GET" &&
+                method !== "HEAD" &&
+                method !== "OPTIONS" &&
+                alreadyParsed(req.body)) {
+                // A request carrying no signature at all is the one case `require:
+                // false` lets through, and it is the documented way to roll signing
+                // out, so it is left to `handleReport` and is not a misconfiguration
+                // worth a line. Everything else is about to be refused for a reason
+                // that has nothing to do with the sender.
+                const name = (signature.header ?? DEFAULT_SIGNATURE_HEADER).toLowerCase();
+                const signed = headerValue(req.headers[name]) !== undefined;
+                if (signed || signature.require !== false) {
+                    if (!warnedAboutParsedBody) {
+                        warnedAboutParsedBody = true;
+                        options.onError?.(new Error("bugbottle: expressHandler cannot verify a signature on a body that " +
+                            "express.json() (or another parser) already turned into an object — " +
+                            "re-serialising it gives different bytes and a different HMAC. Mount " +
+                            "the signed route without a body parser: " +
+                            "app.post(path, expressHandler(...)). Every signed report is answered " +
+                            "401 until then."));
+                    }
+                    // The same 401 as a forged signature, on purpose: the reply says no
+                    // more than it did before, and the explanation goes to the log.
+                    writeJson(res, 401, { error: BAD_SIGNATURE_ERROR }, options.cors);
+                    return;
+                }
+            }
             let body;
             if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
                 try {
@@ -119,19 +189,7 @@ export function expressHandler(options = {}) {
                     if (!(err instanceof RawBodyTooLargeError))
                         throw err;
                     // `handleReport` never sees this body, so the 413 is written here.
-                    res.status(413);
-                    if (options.cors) {
-                        const origin = options.cors === true ? "*" : options.cors;
-                        if (res.setHeader)
-                            res.setHeader("Access-Control-Allow-Origin", origin);
-                        else
-                            res.set?.("Access-Control-Allow-Origin", origin);
-                    }
-                    if (res.setHeader)
-                        res.setHeader("Content-Type", "application/json");
-                    else
-                        res.set?.("Content-Type", "application/json");
-                    res.send(JSON.stringify({ error: TOO_LARGE_ERROR }));
+                    writeJson(res, 413, { error: TOO_LARGE_ERROR }, options.cors);
                     return;
                 }
                 if (body !== undefined) {

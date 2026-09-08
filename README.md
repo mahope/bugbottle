@@ -1265,18 +1265,56 @@ signature: {
   header: "X-Sig",         // default X-Bugbottle-Signature
   maxSkewMs: 5 * 60_000,   // default; the clock may be wrong in either direction
   require: true,           // default whenever `signature` is set
+  replayStore,             // optional; the default is in memory, per instance
 }
 ```
+
+`t` is digits and nothing else — `t=0x1`, `t= 1` and `t=1e12` are bad
+signatures, not clever spellings of a timestamp — and the digest is checked
+over the characters that arrived rather than over our idea of the same number.
 
 Missing when required, wrong, outside the skew window, or already seen: all
 four answer `401 { error: "Bad signature" }`, and they answer it identically,
 because telling a caller *which* part they got wrong is telling them how to get
-it right. Every accepted signature is remembered until the timestamp it signed
-ages out of the skew window — which is later than its arrival, because the
-window runs in both directions — the last 10 000 of them, in memory, per
-instance, with the same
-honesty as the rate limit: it stops a captured body being replayed at the
-instance that saw it, not across a fleet behind a load balancer.
+it right.
+
+**What the replay cache actually promises.** Every accepted signature is
+remembered until the timestamp it signed ages out of the skew window — which is
+later than its arrival, because the window runs in both directions. By default
+that memory is a `Map` in the process, bounded at 128 digests per *signed
+second* and 640 seconds at a time. The per-second bound is the part worth
+understanding: the key is public, so anybody can mint valid signatures as fast
+as they can compute HMACs, and against one global ceiling that was a way to
+push your reporter's digest out of the cache and post their captured body
+again. Making room inside one second means a flood can only displace digests
+dated the same second it floods. So the guarantee is: a body captured from an
+honest report cannot be replayed at the instance that accepted it, unless the
+attacker also floods the exact second that report was signed in — and even then
+only within the window, and only at that one instance. Two instances behind a
+load balancer do not share the cache, and a serverless isolate that has just
+started has an empty one.
+
+Hand in a `replayStore` when that is not enough — several instances, or a
+window wider than 640 seconds:
+
+```ts
+// Any store with these two methods. Nothing is bundled; this is your client.
+signature: {
+  key: process.env.BUGBOTTLE_SIGN_KEY!,
+  replayStore: {
+    has: async (digest) => (await redis.exists(`bb:sig:${digest}`)) === 1,
+    // `expiresAt` is the epoch millisecond the signature stops being
+    // acceptable anyway, so it is exactly how long the row needs to live.
+    add: async (digest, expiresAt) =>
+      void (await redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt)),
+  },
+}
+```
+
+`has` and `add` may be synchronous or return promises. Only a signature that
+already verified is ever written, so nobody can fill your store with digests of
+their own choosing — and a store that throws fails the request closed: 500,
+rather than a signature nobody managed to check.
 
 Two things will surprise you if nobody says them:
 
@@ -1302,6 +1340,12 @@ the adapter an object, which it has to re-serialise, and
 `JSON.stringify(JSON.parse(x))` is not `x` — key order, spacing and number
 formatting all move, and the HMAC moves with them. Without a parser the adapter
 reads the raw stream itself and verifies what actually arrived.
+
+Mount it the other way and every signed report is a 401 that looks exactly like
+a forged one. So the adapter says so: the first such request calls `onError`
+with a line naming `express.json()`, once per handler, and still answers the
+same 401. Give `expressHandler` an `onError` — it is where the explanation
+goes.
 
 ### The manual path
 
@@ -1921,7 +1965,9 @@ the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
 `HandleReportOptions`, `HandleReportResult`, `DedupeOptions`,
 `SignatureOptions`, `ReportSink` and
-`SinkContext` types, `DEFAULT_SIGNATURE_SKEW_MS`, `MAX_SIGNATURE_ENTRIES`,
+`SinkContext` and `ReplayStore` types, `DEFAULT_SIGNATURE_SKEW_MS`,
+`MAX_SIGNATURE_ENTRIES`, `MAX_SIGNATURE_ENTRIES_PER_SECOND`,
+`MAX_SIGNATURE_SECONDS`,
 `BAD_SIGNATURE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
 `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 

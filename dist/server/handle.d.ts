@@ -156,11 +156,63 @@ export type SignatureOptions = {
      * way, because a wrong one is a claim rather than an omission.
      */
     require?: boolean;
+    /**
+     * Where accepted signatures are remembered, so a captured body cannot be
+     * posted twice. The default is the in-memory store described above: per
+     * instance, bounded per signed second. Two instances behind a load balancer
+     * do not share it, and neither does a serverless isolate that has just been
+     * started, so a deployment that wants one answer across all of them hands in
+     * its own — Redis, Memcached, a table with a TTL. `expiresAt` is the epoch
+     * millisecond after which the signature would be refused for being outside
+     * the skew window anyway, which is exactly how long the entry has to live.
+     */
+    replayStore?: ReplayStore;
+};
+/**
+ * The seam between `handleReport` and wherever accepted signatures are
+ * remembered. Both halves may be synchronous — the in-memory default is — so a
+ * store that needs no network costs no promise.
+ *
+ * ```ts
+ * const replayStore = {
+ *   has: (digest) => redis.exists(`bb:sig:${digest}`).then(Boolean),
+ *   add: (digest, expiresAt) =>
+ *     redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt),
+ * };
+ * ```
+ *
+ * A store that throws fails the request closed: `handleReport` answers 500
+ * rather than accepting a signature it could not check.
+ */
+export type ReplayStore = {
+    /** True when this digest has already been accepted. */
+    has(digest: string): boolean | Promise<boolean>;
+    /** Remembers a digest until `expiresAt`, an epoch millisecond. */
+    add(digest: string, expiresAt: number): void | Promise<void>;
 };
 /** The default skew window: five minutes on either side of our clock. */
 export declare const DEFAULT_SIGNATURE_SKEW_MS: number;
-/** Hard ceiling on the replay cache. */
-export declare const MAX_SIGNATURE_ENTRIES = 10000;
+/**
+ * Digests remembered for one *signed* second.
+ *
+ * The bound is per second rather than over the whole cache because the signing
+ * key ships to the browser and is therefore public: anybody can mint valid,
+ * distinct signatures as fast as they can compute HMACs. Against one global
+ * ceiling that is a way to push an honest digest out of the cache and replay
+ * the body it stood for. Against a per-second ceiling the flood only evicts
+ * digests dated the same second it floods, so a report signed at any other
+ * second is still remembered for as long as it could be replayed.
+ */
+export declare const MAX_SIGNATURE_ENTRIES_PER_SECOND = 128;
+/**
+ * How many signed seconds are remembered at once. The default window spans 601
+ * of them — five minutes on either side of our clock — so honest traffic never
+ * reaches this. A `maxSkewMs` wider than this many seconds cannot be held in
+ * memory in full; give such a deployment a `replayStore` instead.
+ */
+export declare const MAX_SIGNATURE_SECONDS = 640;
+/** Hard ceiling on the replay cache: the two bounds above, multiplied. */
+export declare const MAX_SIGNATURE_ENTRIES: number;
 /** The one answer to every bad signature. Missing, wrong, late and replayed all read the same. */
 export declare const BAD_SIGNATURE_ERROR = "Bad signature";
 export type HandleReportOptions = {

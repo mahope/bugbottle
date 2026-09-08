@@ -95,9 +95,9 @@ that tag was cut.
 - `handleReport`: a `signature` option — `{ key, header?, maxSkewMs?, require? }`
   — verifying that HMAC over the raw text before anything parses it. Several
   keys may be given for a rotation, the comparison is constant-time, the skew
-  window is five minutes on either side by default, and the last 10 000
-  accepted signatures are remembered so a captured body cannot be replayed
-  (in memory, per instance, evicted like the rate-limit buckets). Missing when
+  window is five minutes on either side by default, and accepted signatures are
+  remembered so a captured body cannot be replayed (in memory, per instance,
+  bounded per signed second; see Changed below). Missing when
   required, invalid, expired and replayed all answer
   `401 { error: "Bad signature" }`, deliberately indistinguishable. `require`
   defaults to true whenever `signature` is set; a signature that is present is
@@ -148,6 +148,20 @@ that tag was cut.
 
 ### Changed
 
+- `handleReport`: the replay cache is bounded per *signed second* — 128 digests
+  each, `MAX_SIGNATURE_ENTRIES_PER_SECOND`, across at most 640 seconds,
+  `MAX_SIGNATURE_SECONDS` — rather than by one global ceiling of 10 000
+  entries. `MAX_SIGNATURE_ENTRIES` is still exported and is now the product of
+  the two, the true ceiling on the cache. See Fixed: a global ceiling was
+  something the key holder could exhaust, and the key holder is anybody.
+- `signature` takes a `replayStore` — `{ has(digest), add(digest, expiresAt) }`,
+  either half synchronous or a promise — so several instances behind a load
+  balancer can share one answer about what has already been accepted. Nothing
+  is bundled and nothing is required: the README shows the four lines of Redis.
+  `expiresAt` is the millisecond the signature stops being acceptable anyway,
+  which is exactly how long the entry needs to live. Only a signature that
+  verified is ever written to it, and a store that throws fails the request
+  closed.
 - **Breaking, for the panel:** `mountBugbottle`'s `annotate` option is now the
   `createAnnotator` function itself rather than a boolean. This corrects the
   annotator entry above: the panel imported `src/annotate.ts` unconditionally,
@@ -166,6 +180,24 @@ that tag was cut.
 
 ### Fixed
 
+- `handleReport`: the replay cache could be emptied by whoever held the key,
+  which is everybody — it ships to the browser. Ten thousand valid, distinct
+  signatures inside the window evicted an honest digest, and the body it stood
+  for could then be posted again. The cache now makes room inside the second a
+  signature was dated in, so a flood can only displace digests from the second
+  it floods.
+- `handleReport`: `t=` is matched against `/^\d{1,16}$/` rather than handed to
+  `Number()`, which also accepted `0x1`, `1e12` and a leading space and then
+  canonicalised them into the message being verified. The digest is now checked
+  over the timestamp exactly as it was sent. Nothing was exploitable; a format
+  with one spelling is a format a second implementation can get right.
+- `expressHandler`: a signed route mounted behind `express.json()` answered
+  every report with the same 401 a forged signature gets, and said nothing
+  about why. It now calls `onError` once per handler with a line naming
+  `express.json()` and pointing at the fix, and still answers that same 401 —
+  the reply says no more than it did, and the explanation goes to the log. A
+  report that carries no signature at all under `require: false` is untouched:
+  that is how signing is rolled out.
 - The ready-made panel closed altogether when Escape was pressed in the picture
   editor with no mark in progress, and left the editor on screen with a live
   annotator behind it, so "Edit picture" did nothing at the next attempt.
