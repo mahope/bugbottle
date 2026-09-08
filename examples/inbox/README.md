@@ -241,6 +241,20 @@ Reports go to `/data`, and `/data` is the volume. Everything else in the
 container is replaceable; that directory is not, and it is as sensitive as the
 screenshots in it.
 
+Behind a proxy, set `TRUST_PROXY`. The rate limit — 30 reports a minute —
+counts against the address the request came from, and behind Caddy, Traefik or
+nginx every request comes from the proxy, so without this setting the whole
+site shares one bucket of 30. Caddy and Traefik both append the caller to
+`X-Forwarded-For` and are the only hop in front of this process, so
+`TRUST_PROXY=true` is the setting for both; nginx does it too when the site
+carries `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, which
+is what `proxy_params` contains. Behind a CDN in front of your own proxy set
+the number of hops you control instead — `TRUST_PROXY=2` — and on a platform
+that writes its own header, name it: `TRUST_PROXY=CF-Connecting-IP`. Only the
+named header is read, and only when this is set; leave it unset and a caller
+inventing the header changes nothing. Set it too generously and the opposite
+is true: any caller can then pick their own bucket and never meet the limit.
+
 | | |
 |---|---|
 | `INBOX_PASSWORD` | Required. No password, no inbox |
@@ -248,6 +262,7 @@ screenshots in it.
 | `PORT` | 8788 |
 | `HOST` | `127.0.0.1` by default; the image sets `0.0.0.0`, because in a container the proxy is on the other side of the boundary |
 | `PUBLIC_URL` | The address the feeds and the notifications link to, when the request's own host is not it |
+| `TRUST_PROXY` | Unset by default: the socket, which behind a proxy is the proxy. `true` for the last `X-Forwarded-For` entry, a number for that many hops in from the right, or a header name. As above |
 | `ALLOWED_ORIGIN`, `MAX_REPORTS` | As above |
 | `NOTIFY_WEBHOOK`, `NOTIFY_KIND`, `NOTIFY_SMTP_*` | Who is told about a new report, and how. *Be told about new reports* above |
 

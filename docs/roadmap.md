@@ -48,7 +48,9 @@ body ceiling, every validator, optional scrubbing, a screenshot policy,
 in-memory rate limit — with `expressHandler` for Express. Hardened after a
 review: a body deadline as well as a body ceiling, a per-sink deadline, a
 capped and clipped rate-limit map, 405 for anything that is not a POST, and a
-screenshot store that may fail without taking the report with it.
+screenshot store that may fail without taking the report with it. Since #90
+that limit counts the connection address handed in as `remoteAddress`, and a
+forwarding header names the caller only when `trustProxy` says it may.
 
 **0.6** — stack frames on uncaught errors and unhandled rejections
 (`ConsoleEntry.stack`, at most ten `{ file, line, col, fn? }`, one parser for

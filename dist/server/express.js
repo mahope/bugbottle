@@ -196,7 +196,16 @@ export function expressHandler(options = {}) {
                     headers.set("content-length", String(new TextEncoder().encode(body).byteLength));
                 }
             }
-            const response = await handleReport(new Request(url, { method, headers, body }), options);
+            // The socket first and `req.ip` only after it: `req.ip` is already a
+            // forwarded address when the application set `trust proxy`, and reading
+            // it here would trust a header `trustProxy` was never asked about. An
+            // explicit `remoteAddress` in the options wins over both, because a
+            // caller who passes one knows something this adapter does not.
+            const remoteAddress = options.remoteAddress ?? req.socket?.remoteAddress ?? req.ip;
+            const response = await handleReport(new Request(url, { method, headers, body }), {
+                ...options,
+                ...(remoteAddress === undefined ? {} : { remoteAddress }),
+            });
             res.status(response.status);
             response.headers.forEach((value, name) => {
                 if (res.setHeader)

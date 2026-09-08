@@ -56,6 +56,35 @@ const KNOWN_KEYS = new Set([
     "notes",
     "screenshotDataUrl",
 ]);
+/** The key given to a caller whose address nothing could establish. */
+const UNKNOWN_ADDRESS = "unknown";
+/**
+ * The address to count this request against, given what the runtime knew and
+ * what the deployment said it trusts.
+ *
+ * A chain shorter than `hops` falls back to the connection address rather than
+ * reaching further left: a request that skipped a proxy is either forged or a
+ * misconfiguration, and both are better answered with a shared bucket than
+ * with a key the caller chose.
+ */
+export function clientAddress(request, remoteAddress, trustProxy) {
+    const connection = remoteAddress?.trim() || UNKNOWN_ADDRESS;
+    if (!trustProxy)
+        return connection;
+    const config = trustProxy === true ? {} : trustProxy;
+    const header = config.header ?? "x-forwarded-for";
+    const hops = Math.max(1, Math.floor(config.hops ?? 1));
+    const raw = request.headers.get(header);
+    if (!raw)
+        return connection;
+    const entries = raw
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    if (entries.length < hops)
+        return connection;
+    return entries[entries.length - hops] ?? connection;
+}
 /** Longest key kept for a bucket: a header is not allowed to size the map. */
 export const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 /** Hard ceiling on the bucket map, whatever the traffic looks like. */
@@ -317,12 +346,6 @@ async function verifySignature(request, body, options) {
     rememberSignature(parsed.timestamp, parsed.digest, now, maxSkewMs);
     return true;
 }
-function defaultRateLimitKey(request) {
-    const forwarded = request.headers.get("x-forwarded-for");
-    if (forwarded)
-        return forwarded.split(",")[0]?.trim() || "unknown";
-    return request.headers.get("cf-connecting-ip") ?? "unknown";
-}
 /**
  * Makes room for one more bucket: the expired ones first, because they cost
  * nothing to lose, and then the oldest entries. A `Map` iterates in insertion
@@ -340,10 +363,11 @@ function evictBuckets(now) {
     }
 }
 /** True when this caller is over its allowance. Prunes as it goes. */
-async function overRateLimit(request, options, onError) {
-    // The key is attacker-controlled by default: a forwarded address is a header.
-    // Clipping it bounds one entry, and the ceiling below bounds the whole map.
-    const key = (options.key ?? defaultRateLimitKey)(request).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
+async function overRateLimit(request, address, options, onError) {
+    // The key can still be attacker-controlled — a trusted header is a header,
+    // and a `key` of your own may read one. Clipping it bounds one entry, and
+    // the ceiling below bounds the whole map.
+    const key = (options.key ? options.key(request, address) : address).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
     const store = options.store ?? options.rateLimitStore;
     if (store) {
         try {
@@ -612,8 +636,11 @@ export async function handleReport(request, options = {}) {
         if (request.method !== "POST") {
             return json({ error: "Method not allowed" }, 405, cors);
         }
-        if (options.rateLimit && (await overRateLimit(request, options.rateLimit, options.onError))) {
-            return json({ error: "Too many reports" }, 429, cors);
+        if (options.rateLimit) {
+            const address = clientAddress(request, options.remoteAddress, options.trustProxy);
+            if (await overRateLimit(request, address, options.rateLimit, options.onError)) {
+                return json({ error: "Too many reports" }, 429, cors);
+            }
         }
         if (options.authorize && !(await options.authorize(request))) {
             return json({ error: "Not allowed" }, 401, cors);

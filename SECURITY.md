@@ -48,6 +48,13 @@ was not.
   by filling the cache with unrelated traffic. It is still one instance's
   memory: give `signature.replayStore` a shared store (Redis, a table with a
   TTL) when several instances answer the same endpoint.
+- The rate limit counts against the connection address only, unless
+  `trustProxy` says a forwarding header may name the caller instead. It
+  defaults to `false` because a header is a claim: reading `X-Forwarded-For`
+  unconditionally lets any caller pick their own bucket, which is not a limit
+  at all. The cost of the default behind a proxy is the opposite mistake —
+  every visitor in one bucket — so set it deliberately, and to the number of
+  hops you actually control.
 - The rate limit and the dedupe have the same seam —
   `rateLimit.rateLimitStore` and `dedupe.dedupeStore` — and the opposite
   failure mode on purpose: a replay store that throws answers 500, because an

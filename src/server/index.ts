@@ -22,6 +22,7 @@ export { fingerprint, stableHash, type FingerprintInput } from "../fingerprint.t
 // validators does not bundle the sinks it reaches for.
 export {
   handleReport,
+  clientAddress,
   validateReport,
   collectExtra,
   resetRateLimits,
@@ -56,6 +57,7 @@ export {
   type RateLimitStore,
   type ReplayStore,
   type SignatureOptions,
+  type TrustProxyOptions,
   type ReportSink,
   type SinkContext,
   type ValidatedReport,

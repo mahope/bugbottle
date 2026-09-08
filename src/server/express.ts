@@ -45,6 +45,20 @@ export type ExpressRequestLike = {
   headers: Record<string, string | string[] | undefined>;
   /** Whatever a body parser left, if one ran. */
   body?: unknown;
+  /**
+   * The connection, whose `remoteAddress` is the one address on an Express
+   * request nobody could have written from outside. It is handed to
+   * `handleReport` as `remoteAddress`, where `trustProxy` decides whether a
+   * forwarding header is allowed to name somebody else instead.
+   */
+  socket?: { remoteAddress?: string | undefined } | undefined;
+  /**
+   * Express's own answer, which already honours `app.set("trust proxy")`. It
+   * is the fallback, never the first choice: two settings deciding the same
+   * thing is how one of them ends up wrong, and `trustProxy` is the one this
+   * package documents.
+   */
+  ip?: string | undefined;
   /** The raw stream, read when nothing parsed the body. */
   [Symbol.asyncIterator]?: () => AsyncIterator<unknown>;
   /** Node closes the socket with this; called when the body is over the cap. */
@@ -235,7 +249,16 @@ export function expressHandler(
         }
       }
 
-      const response = await handleReport(new Request(url, { method, headers, body }), options);
+      // The socket first and `req.ip` only after it: `req.ip` is already a
+      // forwarded address when the application set `trust proxy`, and reading
+      // it here would trust a header `trustProxy` was never asked about. An
+      // explicit `remoteAddress` in the options wins over both, because a
+      // caller who passes one knows something this adapter does not.
+      const remoteAddress = options.remoteAddress ?? req.socket?.remoteAddress ?? req.ip;
+      const response = await handleReport(new Request(url, { method, headers, body }), {
+        ...options,
+        ...(remoteAddress === undefined ? {} : { remoteAddress }),
+      });
 
       res.status(response.status);
       response.headers.forEach((value, name) => {

@@ -109,16 +109,60 @@ export type HandleReportResult = {
     /** One entry per sink that threw, in the order the sinks were listed. */
     sinkErrors: unknown[];
 };
+/**
+ * Which address the rate limit counts against.
+ *
+ * A web `Request` carries no peer address, so the connection address is handed
+ * in as `remoteAddress` by whoever has one — the Express adapter reads
+ * `req.socket.remoteAddress`, a Node server has the same socket — and every
+ * other address on a request is a header, which is to say a claim by the
+ * caller.
+ *
+ * `false`, the default, is the connection address and nothing else. Behind a
+ * reverse proxy that is the proxy, so every visitor shares one bucket: a
+ * limit of 20 a minute for the whole site rather than per client. `true` is
+ * the **last** entry of `X-Forwarded-For`, which is the hop the nearest proxy
+ * appended and therefore the only one it wrote itself; the entries to the left
+ * of it were written by whoever was further out, up to and including the
+ * caller. `{ hops: n }` counts n entries in from the right, for a chain with
+ * more than one proxy you control — a CDN in front of your own load balancer
+ * is `{ hops: 2 }`. `{ header: "CF-Connecting-IP" }` reads a different header
+ * instead, for the platforms that write one address of their own.
+ *
+ * Getting it wrong costs one of two things, and it is worth knowing which:
+ * too little trust shares one bucket between every visitor behind the proxy,
+ * and too much lets any caller pick their own key with one header and never
+ * meet the limit at all. Count the hops your own infrastructure adds; if you
+ * cannot, `false` is the setting that fails towards refusing traffic rather
+ * than towards accepting all of it.
+ */
+export type TrustProxyOptions = boolean | {
+    hops?: number;
+    header?: string;
+};
+/**
+ * The address to count this request against, given what the runtime knew and
+ * what the deployment said it trusts.
+ *
+ * A chain shorter than `hops` falls back to the connection address rather than
+ * reaching further left: a request that skipped a proxy is either forged or a
+ * misconfiguration, and both are better answered with a shared bucket than
+ * with a key the caller chose.
+ */
+export declare function clientAddress(request: Request, remoteAddress: string | undefined, trustProxy: TrustProxyOptions | undefined): string;
 /** How much traffic one key may send. In memory by default, so per instance. */
 export type RateLimitOptions = {
     limit: number;
     windowMs: number;
     /**
-     * What counts as one caller. Default: the forwarded client address, which is
-     * a header and therefore a claim — see the README. Clipped to 64 characters,
-     * because the key is a map entry an attacker would otherwise size.
+     * What counts as one caller. Default: the client address `trustProxy`
+     * resolved, which is the connection address unless a proxy is trusted for a
+     * header — see the README. Clipped to 64 characters, because the key is a
+     * map entry an attacker would otherwise size. The resolved address is passed
+     * as the second argument, so a key of your own can mix it with something you
+     * issued.
      */
-    key?: (request: Request) => string;
+    key?: (request: Request, address: string) => string;
     /**
      * Where the counting happens. The default is the in-memory buckets described
      * above: per instance, capped at 10 000 keys. Two instances behind a load
@@ -381,6 +425,21 @@ export type HandleReportOptions = {
     respond?: (result: HandleReportResult) => Response;
     /** `true` for `*`, or the one origin you allow. Also answers `OPTIONS`. */
     cors?: string | boolean;
+    /**
+     * The address the request arrived from, as the runtime saw it — Node's
+     * `req.socket.remoteAddress`. A web `Request` has no peer address of its
+     * own, so a handler that has one hands it in; `expressHandler` and the inbox
+     * example do. Without it, and without `trustProxy`, every caller shares one
+     * rate-limit bucket.
+     */
+    remoteAddress?: string;
+    /**
+     * Whether a forwarding header may name the caller, and which one. `false`
+     * by default: the connection address alone. Read `TrustProxyOptions` before
+     * changing it — a wrong setting is either one shared bucket for the whole
+     * site or no limit at all.
+     */
+    trustProxy?: TrustProxyOptions;
     /**
      * In memory and per instance by default: fine per serverless isolate, not
      * shared. `rateLimit.store` is the seam for a shared count.
