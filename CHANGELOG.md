@@ -109,6 +109,14 @@ change the API; the changelog says so when they do.
 - The README said "ten server-side sinks" in its opening summary where the
   table below it lists eleven, and `docs/roadmap.md` still gave
   `bugbottle/perf` a 1.25 kB budget where CI enforces 1536 bytes.
+- The inbox example's `ALLOWED_ORIGIN` did nothing a browser could use. The
+  preflight fell past the report route into the password check and came back a
+  401, so the report was never sent; and the answer to the POST was written
+  with a hard-coded `Content-Type` and none of the headers `handleReport` had
+  put on it, so even a request that got through arrived without
+  `Access-Control-Allow-Origin` and the browser discarded it. `OPTIONS` is
+  handled by `handleReport` now, before the password, and the response's own
+  headers are the ones written.
 
 ## 0.12.0 — 2026-09-08
 

@@ -760,6 +760,38 @@ test("a webhook that is not there does not cost the reporter their report", asyn
   }
 });
 
+test("ALLOWED_ORIGIN really lets that origin's browser post a report", async () => {
+  const running = await start({ ALLOWED_ORIGIN: "https://app.example.test" });
+  try {
+    // The preflight comes first, and a browser that never gets an answer to it
+    // never sends the report at all.
+    const preflight = await fetch(`${running.origin}/api/feedback`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://app.example.test",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type",
+      },
+    });
+    assert.ok(preflight.status < 300, `the preflight answered ${preflight.status}`);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "https://app.example.test");
+
+    const posted = await fetch(`${running.origin}/api/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://app.example.test" },
+      body: JSON.stringify({ type: "bug", message: "posted from another origin" }),
+    });
+    assert.equal(posted.status, 201);
+    assert.equal(
+      posted.headers.get("access-control-allow-origin"),
+      "https://app.example.test",
+      "the answer carries the header, or the browser throws the response away",
+    );
+  } finally {
+    await stop(running);
+  }
+});
+
 test("without the notify variables nobody is told", async () => {
   const hook = await fakeWebhook();
   const running = await start({ PUBLIC_URL: "https://bugs.example.test" });

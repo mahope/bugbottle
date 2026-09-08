@@ -642,14 +642,24 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && path === "/api/feedback") {
-      const raw = await readBody(req, res);
-      if (raw === null) return;
+    // The preflight belongs to `handleReport` too, and it has to be answered
+    // before the password check below: a browser on another origin sends this
+    // first and never sends the report at all if it comes back a 401. Only
+    // `ALLOWED_ORIGIN` makes it a yes; without it `handleReport` answers 405,
+    // which is the honest reply to a cross-origin request nobody allowed.
+    if ((req.method === "POST" || req.method === "OPTIONS") && path === "/api/feedback") {
+      const raw = req.method === "POST" ? await readBody(req, res) : null;
+      if (raw === null && req.method === "POST") return;
+      const headers = { "Content-Type": "application/json" };
+      if (req.headers.origin) headers.Origin = req.headers.origin;
+      if (req.headers["access-control-request-method"]) {
+        headers["Access-Control-Request-Method"] = req.headers["access-control-request-method"];
+      }
       const response = await handleReport(
         new Request("http://localhost/api/feedback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: raw,
+          method: req.method,
+          headers,
+          ...(raw === null ? {} : { body: raw }),
         }),
         {
           maxBodyBytes: MAX_BODY_BYTES,
@@ -669,7 +679,11 @@ const server = createServer(async (req, res) => {
           },
         },
       );
-      res.writeHead(response.status, { "Content-Type": "application/json" });
+      // Its own headers, not ours: the CORS headers `handleReport` worked out
+      // are on that response, and a hard-coded `Content-Type` used to be all
+      // that reached the browser — which is a report the browser then threw
+      // away for having no `Access-Control-Allow-Origin` on it.
+      res.writeHead(response.status, Object.fromEntries(response.headers));
       res.end(Buffer.from(await response.arrayBuffer()));
       return;
     }
