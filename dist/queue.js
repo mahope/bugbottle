@@ -11,6 +11,12 @@
  *     const queue = createQueue({ endpoint: "/api/feedback" });
  *     useBugReport({ endpoint: "/api/feedback", queue });
  *
+ * A signed endpoint is signed here too: hand `createQueue` the same `sign`
+ * function you hand `sendReport`, and every delivery attempt signs the bytes
+ * it is about to send with a timestamp made at that moment. Signing when the
+ * report was written instead would put the report outside the server's skew
+ * window by the time the network came back.
+ *
  * It is its own entry point, and it does not import `send.ts`: that module
  * reaches for the console buffer and the page context, which a queue that only
  * re-POSTs a finished body has no use for. The one `fetch` below is the whole
@@ -307,11 +313,17 @@ export function createQueue(options) {
             let done = false;
             try {
                 const doFetch = options.fetch ?? globalThis.fetch;
-                const init = {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", ...options.headers },
-                    body: JSON.stringify(item.body),
+                // Serialised once and signed as it is: the bytes that are signed have
+                // to be the bytes that are sent, and a second `JSON.stringify` of the
+                // same object is not guaranteed to be the same string.
+                const body = JSON.stringify(item.body);
+                const headers = {
+                    "Content-Type": "application/json",
+                    ...options.headers,
                 };
+                if (options.sign)
+                    Object.assign(headers, await options.sign(body));
+                const init = { method: "POST", headers, body };
                 if (options.credentials)
                     init.credentials = options.credentials;
                 const response = await doFetch(options.endpoint, init);

@@ -349,6 +349,20 @@ transactions are ordered across tabs, so the multi-tab claim is a lock there
 rather than a lease. The 1 MB guess that used to strip the picture off a large
 report before it was ever stored is gone: what fits is kept.
 
+**Unreleased** — the offline queue signs what it delivers (#98).
+`createQueue({ endpoint, headers, sign })` takes the same signer `sendReport`
+takes and signs the serialised body at delivery time, so every attempt — the
+first and every retry after a backoff — carries a timestamp made at that
+moment rather than one minted while the network was down and long outside the
+server's skew window. The script tag wires it from `data-sign-key` beside
+`data-queue`; `mountBugbottle` is handed a queue that is already built, so
+there the caller passes `sign` to both. The README used to call the gap a
+design decision — "signing and queueing do not go together" — and it was not
+one: a signed endpoint with `require` on refused exactly the reports the queue
+existed to save, and the WordPress plugin worked around it with a `fetch`
+wrapper it can now drop. `bugbottle/queue` 1544 → 1570 bytes gzipped against a
+1600 budget.
+
 **Unreleased** — `examples/inbox` is told about a new report rather than
 polled for one (#84): `NOTIFY_WEBHOOK` posts through the Slack, Discord, Teams
 or plain-JSON sink — the URL's own host chooses, `NOTIFY_KIND` overrides — and
