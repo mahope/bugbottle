@@ -305,6 +305,16 @@ bundle is unchanged at 583 bytes. The example now routes, authorises and
 renders, and does no filesystem work of its own; its fourteen tests did not
 move.
 
+**Unreleased** — `onDecision`, one hook per request (#94). `handleReport` now
+says what it decided and why: `{ id?, status, reason, address, fingerprint?,
+at }` once per request, with the reason one of eleven closed words, so an
+operator can write an audit line or count a metric without parsing responses.
+Every answer goes through one function, which is what stops a status added
+later from skipping the hook. It carries the identity of a report and nothing
+out of it — no message, no contact line, no picture — because a log is a second
+place data ends up. `examples/inbox` prints one JSON line per decision behind
+`AUDIT_LOG=1`.
+
 **Unreleased** — retention on `fileStore` (#89). `maxAgeDays` says how long a
 report is kept and `prune()` applies it: everything older goes, then everything
 over `maxReports`, JSON and picture together, and the count comes back. Off by

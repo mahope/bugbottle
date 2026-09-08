@@ -82,6 +82,22 @@ function readTrustProxy() {
 const trustProxy = readTrustProxy();
 
 /**
+ * One JSON line per decision on stdout, behind `AUDIT_LOG=1`.
+ *
+ * Docker keeps stdout, so this is the audit trail an inbox on a VPS gets for
+ * free: what was decided, why, for whom and when. It is deliberately the
+ * decision and nothing else — no message, no contact line, no picture — so
+ * that a log shipper is not a second copy of somebody's bug report. The
+ * fingerprint is how two lines about the same report are tied together.
+ */
+const auditLog = (process.env.AUDIT_LOG ?? "").trim() === "1";
+const onDecision = auditLog
+  ? (decision) => {
+      console.log(JSON.stringify({ event: "bugbottle.decision", ...decision }));
+    }
+  : undefined;
+
+/**
  * The header the trusted setting reads, or null when nothing is trusted. The
  * request handed to `handleReport` is built here rather than forwarded whole,
  * so a header nobody copies across is a header `trustProxy` never sees.
@@ -762,6 +778,10 @@ const server = createServer(async (req, res) => {
           remoteAddress: req.socket?.remoteAddress,
           trustProxy,
           rateLimit: { limit: 30, windowMs: 60_000 },
+          // One line per answer when AUDIT_LOG is on, and nothing at all when
+          // it is not: an option that is undefined is an option handleReport
+          // never calls.
+          ...(onDecision ? { onDecision } : {}),
           dedupe: { windowMs: 60_000 },
           // One named origin or nothing. A wildcard would let any page on the
           // internet fill this disk, and the disk is where the pictures are.

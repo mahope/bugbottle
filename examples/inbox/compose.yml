@@ -28,6 +28,9 @@ services:
       # lasts, which is a decision about somebody's screenshots: see
       # "What is deleted, and when" in the README.
       RETENTION_DAYS: ${RETENTION_DAYS:-}
+      # `1` prints one JSON line per decision to stdout — the status, the
+      # reason, the address and the fingerprint, never the report itself.
+      AUDIT_LOG: ${AUDIT_LOG:-}
       # The address the feeds and the notifications link to, when the request's
       # own host is not it. A notification has no request to ask.
       PUBLIC_URL: ${PUBLIC_URL:-}

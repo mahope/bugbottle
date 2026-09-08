@@ -110,6 +110,49 @@ export type HandleReportResult = {
     sinkErrors: unknown[];
 };
 /**
+ * Why the handler answered the way it did — one word per answer it can give.
+ *
+ * The list is closed on purpose, and it is the handler's real set rather than
+ * a catalogue of HTTP: every `respond` inside `handleReport` names one of
+ * these, so an operator can count them without parsing bodies or guessing
+ * what a 401 meant.
+ *
+ * - `stored` — 201, a report the `store` gave an id to.
+ * - `accepted` — 202, a report that went through with no `store` to name it.
+ * - `duplicate` — 200, a fingerprint seen inside the dedupe window.
+ * - `not-post` — 405, something that was never a report.
+ * - `rate-limited` — 429, the caller over its limit.
+ * - `unauthorised` — 401 from `authorize`.
+ * - `too-large` — 413, a body over `maxBodyBytes`.
+ * - `timeout` — 408, a body that stopped arriving.
+ * - `bad-signature` — 401 from the `signature` check.
+ * - `invalid` — 400, malformed JSON or a report with no message.
+ * - `error` — 500, something unexpected, already passed to `onError`.
+ */
+export type DecisionReason = "stored" | "accepted" | "duplicate" | "not-post" | "rate-limited" | "unauthorised" | "too-large" | "timeout" | "bad-signature" | "invalid" | "error";
+/**
+ * What the handler decided about one request, and nothing else about it.
+ *
+ * Deliberately not the report: an audit line is written where logs are kept,
+ * and a message, a contact address or a picture written there is a copy of
+ * somebody's data in a second place nobody is watching. The fingerprint is
+ * the identity that lets two decisions be tied together without either.
+ */
+export type ReportDecision = {
+    /** The id `store` returned, when the report got that far and got one. */
+    id?: string;
+    /** The HTTP status that went back, including a custom `respond`'s own. */
+    status: number;
+    /** Which of the handler's answers this was. */
+    reason: DecisionReason;
+    /** The caller, resolved exactly as the rate limit resolves it: `trustProxy`. */
+    address: string;
+    /** The report's fingerprint, once there is a valid report to fingerprint. */
+    fingerprint?: string;
+    /** When the answer was decided, `Date.now()`. */
+    at: number;
+};
+/**
  * Which address the rate limit counts against.
  *
  * A web `Request` carries no peer address, so the connection address is handed
@@ -421,6 +464,17 @@ export type HandleReportOptions = {
     onSinkError?: (error: unknown, index: number) => void;
     /** Called for anything unexpected, before the 500 goes out. */
     onError?: (error: unknown) => void;
+    /**
+     * Called once per request with what was decided and why — an audit line or
+     * a metric without parsing responses.
+     *
+     * Every answer goes through it, including a custom `respond`'s. The one
+     * request it says nothing about is the CORS preflight, which decides
+     * nothing about a report. A hook that throws is reported through `onError`
+     * and changes no answer: an audit sink being down is not the reporter
+     * losing their report.
+     */
+    onDecision?: (decision: ReportDecision) => void;
     /** Replaces the default reply — 201 `{ id }`, or 202 `{}` without one. */
     respond?: (result: HandleReportResult) => Response;
     /** `true` for `*`, or the one origin you allow. Also answers `OPTIONS`. */
