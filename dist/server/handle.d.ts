@@ -121,6 +121,12 @@ export type RateLimitOptions = {
      * limit across all of them hands in its own store — Redis, Memcached, a
      * table with a TTL.
      */
+    store?: RateLimitStore;
+    /**
+     * @deprecated Renamed to `store` in 0.9 — inside `rateLimit` the prefix said
+     * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
+     * one that counts.
+     */
     rateLimitStore?: RateLimitStore;
 };
 /**
@@ -130,7 +136,7 @@ export type RateLimitOptions = {
  * needs no network costs no promise.
  *
  * ```ts
- * const rateLimitStore = {
+ * const store = {
  *   hit: async (key, windowMs) => {
  *     const count = await redis.incr(`bb:rl:${key}`);
  *     if (count === 1) await redis.pexpire(`bb:rl:${key}`, windowMs);
@@ -178,6 +184,12 @@ export type DedupeOptions = {
      * behind a load balancer store the same crash twice, so a deployment that
      * wants one answer across all of them hands in its own store.
      */
+    store?: DedupeStore;
+    /**
+     * @deprecated Renamed to `store` in 0.9 — inside `dedupe` the prefix said
+     * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
+     * one that is asked.
+     */
     dedupeStore?: DedupeStore;
 };
 /** What a dedupe store keeps: the id the first copy was stored under, if any. */
@@ -190,7 +202,7 @@ export type DedupeEntry = {
  * synchronous.
  *
  * ```ts
- * const dedupeStore = {
+ * const store = {
  *   get: async (key) => {
  *     const value = await redis.get(`bb:dup:${key}`);
  *     return value === null ? undefined : (JSON.parse(value) as { id?: string });
@@ -258,6 +270,12 @@ export type SignatureOptions = {
      * millisecond after which the signature would be refused for being outside
      * the skew window anyway, which is exactly how long the entry has to live.
      */
+    store?: ReplayStore;
+    /**
+     * @deprecated Renamed to `store` in 0.9 — inside `signature` the prefix said
+     * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
+     * one that is asked.
+     */
     replayStore?: ReplayStore;
 };
 /**
@@ -266,7 +284,7 @@ export type SignatureOptions = {
  * store that needs no network costs no promise.
  *
  * ```ts
- * const replayStore = {
+ * const store = {
  *   has: (digest) => redis.exists(`bb:sig:${digest}`).then(Boolean),
  *   add: (digest, expiresAt) =>
  *     redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt),
@@ -300,7 +318,7 @@ export declare const MAX_SIGNATURE_ENTRIES_PER_SECOND = 128;
  * How many signed seconds are remembered at once. The default window spans 601
  * of them — five minutes on either side of our clock — so honest traffic never
  * reaches this. A `maxSkewMs` wider than this many seconds cannot be held in
- * memory in full; give such a deployment a `replayStore` instead.
+ * memory in full; give such a deployment a `signature.store` instead.
  */
 export declare const MAX_SIGNATURE_SECONDS = 640;
 /** Hard ceiling on the replay cache: the two bounds above, multiplied. */
@@ -359,13 +377,13 @@ export type HandleReportOptions = {
     cors?: string | boolean;
     /**
      * In memory and per instance by default: fine per serverless isolate, not
-     * shared. `rateLimit.rateLimitStore` is the seam for a shared count.
+     * shared. `rateLimit.store` is the seam for a shared count.
      */
     rateLimit?: RateLimitOptions;
     /**
      * Answer a repeat of the same report with 200 `{ id, duplicate: true }`
      * instead of storing and delivering it again. In memory and per instance by
-     * default; `dedupe.dedupeStore` is the seam for one answer across a fleet.
+     * default; `dedupe.store` is the seam for one answer across a fleet.
      */
     dedupe?: DedupeOptions;
     /** Passed through to `toMarkdown` — extra facts, a heading level. */

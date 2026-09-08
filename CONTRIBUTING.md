@@ -79,7 +79,11 @@ need Node 18.
   (1316 → 1335): one registry read, and none of the adapter, because rrweb's
   `record` is handed in by the application rather than imported here. The
   script tag does not carry it at all — without a bundler there is no `record`
-  to hand in.
+  to hand in. The pre-1.0 API audit (#62) then cost every client bundle a few
+  dozen bytes: `initConsoleBuffer`, `initBreadcrumbs` and `initNetwork` return
+  their `reset*`, so a bundler can no longer drop the stop from a page that
+  only starts a recorder. The core went 1335 → 1384, breadcrumbs to 1321,
+  the network log to 1250, and the two script tags to 24 128 and 20 576.
   The slim script tag is the one budget
   that was written down after the measurement rather than before it: #58 aimed
   at 18432 bytes and the file measures 20477, so the budget is 20992. Leaving

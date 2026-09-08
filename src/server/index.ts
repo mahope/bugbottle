@@ -82,6 +82,7 @@ export {
   MAX_DISCORD_CONTENT,
   DISCORD_MAX_CONTENT,
   type SendReportWebhookOptions,
+  type SendReportWebhookTarget,
   type SendReportWebhookResult,
   type WebhookFormat,
 } from "../sinks/webhook.ts";

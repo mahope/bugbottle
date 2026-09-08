@@ -63,10 +63,14 @@ function push(level, args, stack) {
  * Safe to call more than once; only the first call patches the console. In a
  * server-rendered app, call it from client-only code: it patches whichever
  * `console` it finds, and on the server that is the server's.
+ *
+ * Returns the stop, `resetConsoleBuffer`, so a caller can put the console back
+ * without importing a second name. Every `init*` in the package returns its
+ * own, and a second call returns it as well.
  */
 export function initConsoleBuffer(options = {}) {
     if (initialised)
-        return;
+        return resetConsoleBuffer;
     initialised = true;
     limits = {
         maxEntries: options.maxEntries ?? DEFAULTS.maxEntries,
@@ -96,6 +100,7 @@ export function initConsoleBuffer(options = {}) {
         window.addEventListener("error", onError);
         window.addEventListener("unhandledrejection", onRejection);
     }
+    return resetConsoleBuffer;
 }
 /** A copy of what has been recorded so far. */
 export function getConsoleBuffer() {

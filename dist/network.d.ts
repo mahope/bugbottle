@@ -53,8 +53,13 @@ export type NetworkOptions = {
  * there is simply nothing to patch. `maxEntries: 0` records nothing and
  * patches nothing at all, since a buffer that throws every entry away is pure
  * cost.
+ *
+ * Returns the stop, `resetNetwork`, so a caller can unpatch what it patched
+ * without importing a second name. Every `init*` in the package returns its
+ * own; the call that patched nothing returns it too, and calling it is
+ * harmless.
  */
-export declare function initNetwork(options?: NetworkOptions): void;
+export declare function initNetwork(options?: NetworkOptions): () => void;
 /** A copy of what has been recorded so far, oldest first. */
 export declare function getNetwork(): NetworkEntry[];
 /** Whether `initNetwork` has run and not been reset since. */

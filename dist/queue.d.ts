@@ -60,6 +60,12 @@ export type QueueOptions = {
     /** `localStorage` key. Default `"bugbottle:queue"`. */
     storageKey?: string;
     /** How many reports to keep. The oldest is evicted first. Default 5. */
+    maxEntries?: number;
+    /**
+     * @deprecated Renamed to `maxEntries` in 0.9, which is what the console
+     * buffer, the breadcrumbs and the network log call the same idea. Removed in
+     * 1.0 (#64). Given both, `maxEntries` is the one that counts.
+     */
     maxItems?: number;
     /** How long a report may wait before it is dropped. Default 7 days. */
     maxAgeMs?: number;

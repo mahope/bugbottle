@@ -17,19 +17,19 @@
 import { messageFromBody, readBody, SinkError } from "./error.js";
 import { clip, readReport, resolveUrl, } from "./chat.js";
 /** Slack refuses a message with more blocks than this. */
-export const SLACK_MAX_BLOCKS = 50;
+export const MAX_SLACK_BLOCKS = 50;
 /** The longest any one text object may be. */
-export const SLACK_MAX_TEXT = 3000;
+export const MAX_SLACK_TEXT = 3000;
 /** A `plain_text` header is shorter still. */
-export const SLACK_MAX_HEADER_TEXT = 150;
+export const MAX_SLACK_HEADER_TEXT = 150;
 /** A section's `fields` are capped both in number and in length. */
-export const SLACK_MAX_FIELDS = 10;
-export const SLACK_MAX_FIELD_TEXT = 2000;
+export const MAX_SLACK_FIELDS = 10;
+export const MAX_SLACK_FIELD_TEXT = 2000;
 /** Slack reads `&`, `<` and `>` as markup, so they are escaped, `&` first. */
 export function escapeSlack(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-function mrkdwn(text, max = SLACK_MAX_TEXT) {
+function mrkdwn(text, max = MAX_SLACK_TEXT) {
     return { type: "mrkdwn", text: clip(text, max) };
 }
 /**
@@ -44,7 +44,7 @@ export function buildSlackMessage(report, options, ctx = {}) {
     const blocks = [
         {
             type: "header",
-            text: { type: "plain_text", text: clip(r.title, SLACK_MAX_HEADER_TEXT), emoji: true },
+            text: { type: "plain_text", text: clip(r.title, MAX_SLACK_HEADER_TEXT), emoji: true },
         },
     ];
     if (r.message) {
@@ -54,22 +54,22 @@ export function buildSlackMessage(report, options, ctx = {}) {
         blocks.push({
             type: "section",
             fields: r.facts
-                .slice(0, SLACK_MAX_FIELDS)
-                .map(([label, value]) => mrkdwn(`*${escapeSlack(label)}*\n${escapeSlack(value)}`, SLACK_MAX_FIELD_TEXT)),
+                .slice(0, MAX_SLACK_FIELDS)
+                .map(([label, value]) => mrkdwn(`*${escapeSlack(label)}*\n${escapeSlack(value)}`, MAX_SLACK_FIELD_TEXT)),
         });
     }
     if (r.consoleText) {
         // The fence is counted inside the limit, so the text is clipped to what is
         // left of it rather than to the whole 3000.
         const fence = "```";
-        const body = clip(escapeSlack(r.consoleText), SLACK_MAX_TEXT - 2 * fence.length - 2);
+        const body = clip(escapeSlack(r.consoleText), MAX_SLACK_TEXT - 2 * fence.length - 2);
         blocks.push({ type: "section", text: mrkdwn(`${fence}\n${body}\n${fence}`) });
     }
     if (screenshot) {
         blocks.push({
             type: "image",
             image_url: screenshot,
-            alt_text: clip(r.title, SLACK_MAX_HEADER_TEXT),
+            alt_text: clip(r.title, MAX_SLACK_HEADER_TEXT),
         });
     }
     const context = [];
@@ -99,8 +99,8 @@ export function buildSlackMessage(report, options, ctx = {}) {
     const body = {
         // The fallback text is what a notification and a screen reader get, so it
         // says the title rather than "This message has no text".
-        text: clip(escapeSlack(r.title), SLACK_MAX_TEXT),
-        blocks: blocks.slice(0, SLACK_MAX_BLOCKS),
+        text: clip(escapeSlack(r.title), MAX_SLACK_TEXT),
+        blocks: blocks.slice(0, MAX_SLACK_BLOCKS),
     };
     if (options.channel)
         body.channel = options.channel;
@@ -137,4 +137,29 @@ export function slackSink(options) {
         }
     };
 }
+/**
+ * @deprecated Renamed to `MAX_SLACK_BLOCKS` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const SLACK_MAX_BLOCKS = MAX_SLACK_BLOCKS;
+/**
+ * @deprecated Renamed to `MAX_SLACK_TEXT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const SLACK_MAX_TEXT = MAX_SLACK_TEXT;
+/**
+ * @deprecated Renamed to `MAX_SLACK_HEADER_TEXT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const SLACK_MAX_HEADER_TEXT = MAX_SLACK_HEADER_TEXT;
+/**
+ * @deprecated Renamed to `MAX_SLACK_FIELDS` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const SLACK_MAX_FIELDS = MAX_SLACK_FIELDS;
+/**
+ * @deprecated Renamed to `MAX_SLACK_FIELD_TEXT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const SLACK_MAX_FIELD_TEXT = MAX_SLACK_FIELD_TEXT;
 //# sourceMappingURL=slack.js.map

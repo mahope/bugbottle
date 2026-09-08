@@ -2558,10 +2558,22 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `collectContext`, `pickElement`, `describeElement`, `buildSelector`,
 `buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
 `fingerprint`, `stableHash`,
-`ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
+`ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`,
+`toMarkdown` (with `MarkdownOptions`; it and the validators live in
+`bugbottle/server` as well, which is where they belong — see
+`docs/api-audit-1.0.md`), the server
 validators below, and the shared types and limits — including the `StackFrame`
 type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
 `MAX_CONTEXT_LENGTHS`.
+
+The option and payload types come with them: `BugReport`, `ReportContext`,
+`ReportType`, `ConsoleEntry`, `ConsoleLevel`, `ElementRef`, `Breadcrumb`,
+`BreadcrumbKind`, `NetworkEntry`, `PerfSnapshot`, `StorageSnapshot`,
+`StorageKeyRef`, `ReplayCapture`, `ReplayEvent`, `BuildReportInput`,
+`SendOptions`, `SendResult`, `CaptureOptions`, `ConsoleBufferOptions`,
+`PickOptions`, `ScrubOptions`, `Scrubber`, `ScrubberName`, `FingerprintInput`,
+and the two defaults `DEFAULT_SEND_TIMEOUT_MS` (15 s) and `DEFAULT_REPLACEMENT`
+(what a scrubber writes in place of what it found).
 
 **`dist/bugbottle.js`** — the everything script-tag build: `window.bugbottle` with
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
@@ -2645,8 +2657,9 @@ Requires `html-to-image`.
 `Theme`, `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
-`locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,
-`EmailTexts` types.
+`locales`, `resolveLocale`, `enMessages` (the English `messages` on their own,
+so the hook can default without dragging eight languages in), and the `Locale`,
+`Messages`, `UiTexts`, `EmailTexts` types.
 
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
@@ -2685,8 +2698,20 @@ the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `SinkContext` and `ReplayStore` types, `DEFAULT_SIGNATURE_SKEW_MS`,
 `MAX_SIGNATURE_ENTRIES`, `MAX_SIGNATURE_ENTRIES_PER_SECOND`,
 `MAX_SIGNATURE_SECONDS`,
-`BAD_SIGNATURE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
-`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+`BAD_SIGNATURE_ERROR`, the two refusal messages `EMPTY_MESSAGE_ERROR` and
+`TOO_LARGE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
+`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTEXT_LENGTHS`,
+`MAX_EXTRA_KEYS`, `MAX_EXTRA_STRING_LENGTH`, `MAX_DEDUPE_ENTRIES`,
+`MAX_RATE_LIMIT_BUCKETS` and `MAX_RATE_LIMIT_KEY_LENGTH`.
+
+Each sink's options and result travel with it: `SendReportEmailOptions` and
+`SendReportEmailResult`, `SendReportWebhookOptions` (and its
+`SendReportWebhookTarget` and `WebhookFormat`) with `SendReportWebhookResult`,
+`CreateGithubIssueOptions` with `CreateGithubIssueResult`,
+`CreateLinearIssueOptions` with `CreateLinearIssueResult`, and the `FetchLike`
+every one of them takes as `fetch`. `expressHandler` brings the two structural
+types it reads an Express request and response through, `ExpressRequestLike`
+and `ExpressResponseLike`.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
 served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).

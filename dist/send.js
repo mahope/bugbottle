@@ -148,9 +148,12 @@ export async function sendReport(endpoint, report, options = {}) {
     }
     catch (err) {
         const failure = err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
-        if (options.onFailure) {
+        // One handler runs, never both: two spellings of one option are a mistake
+        // to make loudly rather than a thing to guess about.
+        const onError = options.onError ?? options.onFailure;
+        if (onError) {
             try {
-                await options.onFailure(payload, failure);
+                await onError(payload, failure);
             }
             catch {
                 // A queue that cannot write must not replace the error that says the

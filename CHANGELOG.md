@@ -7,6 +7,20 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `docs/api-audit-1.0.md`: the whole public API read once before 1.0 freezes it
+  — 412 exported bindings under 315 names across the eighteen entry points,
+  with a verdict each, the naming rules it settled (now in CLAUDE.md's
+  Conventions) and the eight issues it opened. Nothing was removed; every
+  rename below kept the old name working.
+- `tests/exports.test.ts` pins `package.json#exports` to the documentation: an
+  entry point added or dropped without the README's API section and CLAUDE.md's
+  count following it fails the suite.
+- The thirty-five exports the README never named are named — the payload and
+  option types on `bugbottle`, each sink's options and result on
+  `bugbottle/server`, and `enMessages` on `bugbottle/locales`.
+
 ### Changed
 
 - `sendReportWebhook` and `toWebhook` take `endpoint`, the word the rest of the
