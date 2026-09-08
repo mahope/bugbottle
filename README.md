@@ -44,12 +44,12 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 1.5 kB gzipped; with the element picker and the React, Vue, Svelte
-  or Solid adapter, 5.6 kB; the optional ready-made panel, 11.3 kB; the picture
+  or Solid adapter, 5.7 kB; the optional ready-made panel, 11.4 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
   1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.3 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 23.9 kB, and the slim one 20.5 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 24.0 kB, and the slim one 20.5 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain

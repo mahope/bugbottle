@@ -7,6 +7,29 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The reachable release: the report can carry how to answer the person who
+wrote it, and it can land in Jira, GitLab, or your own inbox. A contact field,
+off by default everywhere and reply-to on the email; Jira Cloud and GitLab
+sinks beside the seven that existed; the rate limit and the dedupe as store
+seams like the replay cache, so several instances answer as one; the last
+thirty seconds from the app's own rrweb recorder as an attachment; a slim
+script-tag build without the optional recorders; `examples/inbox`, a
+zero-dependency place for reports to land behind one password; on the site,
+a search over the documentation, a recipes page with one verified route
+handler per framework, security headers on every path and dated sitemap
+entries. One change for an existing panel: the contact input is new markup,
+off unless asked for. A fresh-context review went in before this tag; its
+fixes are under Fixed.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.5 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.4 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`bugbottle/shake` 0.6 kB, `bugbottle/sign` 0.4 kB, `bugbottle/rrweb` 0.7 kB,
+`dist/bugbottle.js` 24.0 kB, `dist/bugbottle.slim.js` 20.5 kB,
+`bugbottle/server` validators 0.6 kB.
+
 ### Added
 
 - `dist/bugbottle.slim.js`, a second script-tag build. The full one is the
