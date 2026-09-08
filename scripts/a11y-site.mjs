@@ -11,7 +11,12 @@
  * without breaking a test.
  *
  * It also fails on a console error, because a page that logs one is a page
- * that is half-working, and there is no other check that would notice.
+ * that is half-working, and there is no other check that would notice. A
+ * blocked resource is exactly that kind of message: the server below answers
+ * with the same headers `site/security-headers.conf` gives nginx — the
+ * Content-Security-Policy included — parsed out of that file rather than
+ * copied from it, so a policy that breaks a page breaks this audit and cannot
+ * reach a deploy quietly.
  *
  *     npm run build        # the demo on the landing page runs the real dist/
  *     npm run build:docs   # /docs/, /compare/ and /da/sammenlign/ are generated
@@ -70,6 +75,22 @@ try {
   process.exit(1);
 }
 
+/* The security headers, read from the file nginx is given rather than
+   restated here: `add_header Name "value" always;` or `add_header Name value
+   always;`, one per line, comments ignored. The whole point is that the audit
+   sees the policy that will be served, so there is no second copy to drift. */
+const SECURITY_HEADERS = Object.fromEntries(
+  (await readFile(join(site, "security-headers.conf"), "utf8"))
+    .split("\n")
+    .map((line) => /^\s*add_header\s+(\S+)\s+(?:"([^"]*)"|(\S+))\s*(?:always\s*)?;/.exec(line))
+    .filter(Boolean)
+    .map((m) => [m[1], m[2] ?? m[3]]),
+);
+if (!SECURITY_HEADERS["Content-Security-Policy"]) {
+  console.error("site/security-headers.conf has no Content-Security-Policy — nothing to audit");
+  process.exit(1);
+}
+
 /* site/ at the root and dist/ under /dist/, which is the pair site/nginx.conf
    serves in the image. Directories resolve to index.html, as `try_files
    $uri $uri/` does there. */
@@ -78,14 +99,17 @@ const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(url.pathname)).replace(/^[\\/]+/, "");
   const base = path === "dist" || path.startsWith("dist/") || path.startsWith("dist\\") ? root : site;
   let file = join(base, path);
-  if (!file.startsWith(base)) return void res.writeHead(403).end();
+  if (!file.startsWith(base)) return void res.writeHead(403, SECURITY_HEADERS).end();
   if (path === "" || !extname(file)) file = join(file, "index.html");
   try {
     const body = await readFile(file);
-    res.writeHead(200, { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream" });
+    res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      "Content-Type": TYPES[extname(file)] ?? "application/octet-stream",
+    });
     res.end(body);
   } catch {
-    res.writeHead(404).end();
+    res.writeHead(404, SECURITY_HEADERS).end();
   }
 });
 
@@ -125,6 +149,16 @@ async function audit(name, path, scheme, state) {
   });
   tab.on("pageerror", (error) => noise.push(`pageerror: ${error.message}`));
   tab.on("requestfailed", (request) => noise.push(`request failed: ${request.url()}`));
+
+  /* Chrome logs a blocked resource as a console error, so the listener above
+     would already catch one, but a violation names the directive it broke and
+     that is the line worth reading. Installed before the document runs so the
+     stylesheet the panel writes into its shadow root is covered too. */
+  await tab.evaluateOnNewDocument(() => {
+    document.addEventListener("securitypolicyviolation", (e) => {
+      console.error(`CSP: ${e.violatedDirective} blocked ${e.blockedURI || "an inline resource"}`);
+    });
+  });
 
   const response = await tab.goto(origin + path, { waitUntil: "networkidle0" });
   if (!response || response.status() !== 200) {

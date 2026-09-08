@@ -7,6 +7,23 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- The site answers with a `Content-Security-Policy`: `default-src 'self'`, so
+  the footer's promise that the page makes no external request is now something
+  the browser refuses to break rather than a claim, plus `object-src 'none'`,
+  `frame-ancestors 'none'`, `base-uri 'self'` and `form-action 'self'`. It sits
+  in `site/security-headers.conf` beside the two headers that were there, so
+  every location in `nginx.conf` serves it, the 404 included. Two directives
+  are wider than `'self'` and both are the panel: `img-src 'self' data:` for
+  the screenshot preview, and `style-src 'self' 'unsafe-inline'` because
+  `bugbottle/ui` puts its stylesheet into its shadow root as a `<style>`
+  element, which CSP judges as inline style — without it the panel is served
+  unstyled, measured. Nothing in the site's own HTML or scripts is inline.
+  `scripts/a11y-site.mjs` now parses that file and serves the same headers, so
+  the audit sees the policy that will be deployed and a blocked resource fails
+  it.
+
 ### Fixed
 
 - `jiraSink` splits a multi-line message into `text` nodes with `hardBreak`
