@@ -839,3 +839,72 @@ test("without the notify variables nobody is told", async () => {
     await hook.close();
   }
 });
+
+/**
+ * A report of the given age, written into `dir` the way the store names one,
+ * so a run that starts on that directory finds it in its first walk.
+ */
+async function fixture(dir: string, days: number): Promise<string> {
+  const id = randomUUID();
+  const receivedAt = new Date(Date.now() - days * 86_400_000).toISOString();
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, `${receivedAt.replace(/[^0-9A-Za-z]/g, "-")}-${id}.json`),
+    JSON.stringify({ type: "bug", message: `Stored ${days} days ago`, receivedAt }),
+  );
+  return id;
+}
+
+/** Waits for the condition, because retention runs on its own after start. */
+async function until(what: () => Promise<boolean>, why: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (await what()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail(why);
+}
+
+test("RETENTION_DAYS deletes what is older than it, at start", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "bugbottle-inbox-"));
+  const old = await fixture(dir, 40);
+  const recent = await fixture(dir, 2);
+
+  // A month of retention on a directory the run before it left behind: the
+  // prune at start is the only thing that can empty an inbox nobody posts to.
+  const running = await start({ RETENTION_DAYS: "30" }, dir);
+  try {
+    await until(
+      async () => !(await readdir(dir)).some((name) => name.includes(old)),
+      "the report from forty days ago is still on disk",
+    );
+    assert.ok(
+      (await readdir(dir)).some((name) => name.includes(recent)),
+      "the report from two days ago went with it",
+    );
+    const html = await (
+      await fetch(`${running.origin}/`, { headers: { Authorization: auth } })
+    ).text();
+    assert.ok(html.includes("Inbox (1)"), `the listing still counts both: ${html.slice(0, 400)}`);
+  } finally {
+    await stop(running);
+  }
+});
+
+test("without RETENTION_DAYS an old report is kept", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "bugbottle-inbox-"));
+  const old = await fixture(dir, 400);
+
+  const running = await start({}, dir);
+  try {
+    // One round trip is long enough for the prune at start to have run: the
+    // inbox answers requests from the same loop it schedules retention on.
+    await post(running.origin, "Something new");
+    assert.ok(
+      (await readdir(dir)).some((name) => name.includes(old)),
+      "retention is off by default, and off means nothing is deleted",
+    );
+  } finally {
+    await stop(running);
+  }
+});

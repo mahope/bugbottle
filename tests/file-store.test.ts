@@ -427,3 +427,143 @@ test("an arrival time cannot walk out of the directory it names a file in", asyn
   );
   assert.equal((await store.list()).length, 1);
 });
+
+/** An arrival time this many days ago, as a report carries it. */
+const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+
+test("prune deletes what is older than maxAgeDays and keeps what is not", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxAgeDays: 7 });
+  const old = await store.store(report("Eight days old", daysAgo(8)));
+  // Either side of the boundary. The one stamped exactly seven days ago is a
+  // few milliseconds over seven days by the time `prune` reads the clock,
+  // which is the sense in which the limit is "older than".
+  const boundary = await store.store(report("Seven days old", daysAgo(7)));
+  const fresh = await store.store(report("An hour old", daysAgo(1 / 24)));
+
+  assert.equal(await store.prune(), 2);
+  assert.deepEqual(
+    (await store.list()).map((entry) => entry.title),
+    ["An hour old"],
+  );
+  assert.equal(await store.read(old.id), null);
+  assert.equal(await store.read(boundary.id), null);
+  assert.ok(await store.read(fresh.id));
+  assert.equal(
+    (await readdir(dir)).filter((name) => name.endsWith(".json")).length,
+    1,
+    "the files went with the entries",
+  );
+  assert.equal(await store.prune(), 0, "a second run finds nothing left to do");
+});
+
+test("prune deletes the picture with the report it ages out", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxAgeDays: 1 });
+  const { id } = await store.store(report("With a picture", daysAgo(3)), PNG);
+  assert.ok((await readdir(dir)).includes(`${id}.png`));
+
+  assert.equal(await store.prune(), 1);
+  assert.equal((await readdir(dir)).includes(`${id}.png`), false, "the picture went too");
+});
+
+test("without maxAgeDays prune deletes nothing the cap would not", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxReports: 0 });
+  await store.store(report("Ancient", "2019-01-01T00:00:00.000Z"));
+  assert.equal(await store.prune(), 0, "age is off, and so is the cap");
+  assert.equal((await store.list()).length, 1);
+});
+
+test("prune applies the age limit and the cap together", async () => {
+  const dir = await scratch();
+  // Four reports: one well over the age limit, three inside it, and one more
+  // than a cap of two allows. Both rules have to run for the right two to be
+  // the ones left.
+  const store = fileStore({ dir, maxReports: 2, maxAgeDays: 10 });
+  await store.store(report("Ancient", daysAgo(40)));
+  await store.store(report("Oldest inside the window", daysAgo(9)));
+  await store.store(report("Middle", daysAgo(2)));
+  await store.store(report("Newest", daysAgo(1)));
+  // The cap runs on every write too, so by now it has already taken the two
+  // oldest; what is asked of `prune` here is that it leaves the rest alone.
+  assert.equal(await store.prune(), 0);
+  assert.deepEqual(
+    (await store.list()).map((entry) => entry.title),
+    ["Newest", "Middle"],
+    "the newest two, and neither of them over the age limit",
+  );
+
+  // Now the other order: a directory whose newest report is also too old.
+  const second = await scratch();
+  const aged = fileStore({ dir: second, maxReports: 2, maxAgeDays: 10 });
+  await aged.store(report("Old one", daysAgo(30)));
+  await aged.store(report("Old two", daysAgo(20)));
+  await aged.store(report("Old three", daysAgo(15)));
+  assert.equal(await aged.prune(), 2, "the cap took one on the way in, age takes both that are left");
+  assert.deepEqual(await aged.list(), []);
+});
+
+test("prune deletes an old report an earlier run left behind", async () => {
+  const dir = await scratch();
+  // Nothing has been stored in this process, so there is no index yet: a
+  // prune at start has to walk the directory before it can delete anything.
+  await mkdir(dir, { recursive: true });
+  const id = "3f1b8c2e-0a4d-4c9e-9b1a-2f6d5e4c3b2a";
+  await writeFile(
+    join(dir, `2019-01-01T00-00-00-000Z-${id}.json`),
+    JSON.stringify({
+      type: "bug",
+      message: "From last year",
+      receivedAt: "2019-01-01T00:00:00.000Z",
+    }),
+  );
+
+  const store = fileStore({ dir, maxAgeDays: 30 });
+  assert.equal(await store.prune(), 1);
+  assert.deepEqual(await store.list(), []);
+  assert.deepEqual(await readdir(dir), []);
+});
+
+test("prune never touches a file this store did not name", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxAgeDays: 1 });
+  await store.store(report("Mine, and old", daysAgo(5)));
+
+  // Everything else somebody might keep in the same directory: a note, an
+  // export, a picture with no report beside it, half a file from a crash, and
+  // a report whose name carries no id at all.
+  const foreign: Record<string, string> = {
+    "notes.txt": "the volume is shared with the backup script",
+    "export-2026-09.json": JSON.stringify({ type: "bug", message: "Exported by hand" }),
+    "0f0f0f0f-0a4d-4c9e-9b1a-2f6d5e4c3b2a.png": "not a picture of ours",
+    "2019-01-01T00-00-00-000Z-9c8b7a6d-1e2f-4a3b-8c9d-0e1f2a3b4c5d.json.tmp": "half a report",
+  };
+  for (const [name, body] of Object.entries(foreign)) await writeFile(join(dir, name), body);
+
+  assert.equal(await store.prune(), 1, "its own report, and only that");
+  assert.deepEqual(
+    (await readdir(dir)).sort(),
+    Object.keys(foreign).sort(),
+    "every foreign file is still there",
+  );
+});
+
+test("a report stored while prune is deleting another is still listed", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxAgeDays: 1 });
+  await store.store(report("Old enough to go", daysAgo(4)));
+  // The deletion and the write are interleaved on purpose: `prune` splices the
+  // one index a `store` is holding across its own awaits, so neither may lose
+  // what the other is in the middle of.
+  const [deleted, stored] = await Promise.all([
+    store.prune(),
+    store.store(report("Arriving while it runs", daysAgo(0))),
+  ]);
+  assert.equal(deleted, 1);
+  assert.deepEqual(
+    (await store.list()).map((entry) => entry.title),
+    ["Arriving while it runs"],
+  );
+  assert.ok(await store.read(stored.id), "the report stored during the prune is readable");
+});

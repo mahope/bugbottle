@@ -277,7 +277,37 @@ const reports = fileStore({
   dir: reportsDir,
   /** How many reports the directory holds before the oldest are deleted. */
   maxReports: Number(process.env.MAX_REPORTS ?? 2000),
+  /**
+   * How long a report is kept, in days. Off by default: how long you may hold
+   * somebody's screenshot is your obligation to work out, not this example's
+   * to guess. Set it and the schedule below deletes what is older.
+   */
+  maxAgeDays: Number(process.env.RETENTION_DAYS ?? 0),
 });
+
+/** How often retention runs after the pass at start. */
+const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Retention: everything past `RETENTION_DAYS`, then everything past
+ * `MAX_REPORTS`, JSON and picture together.
+ *
+ * The cap already runs on every write, so what the schedule adds is the age:
+ * an inbox nobody has posted to for a month must still be empty at the end of
+ * it, and that only happens if something runs with no request to trigger it.
+ * Once at start, because a process that keeps restarting would otherwise never
+ * reach the first hour, and hourly after that — retention measured in days
+ * does not need a tighter clock than that.
+ */
+async function prune() {
+  try {
+    const deleted = await reports.prune();
+    if (deleted) console.log(`Retention deleted ${deleted} report(s)`);
+  } catch (error) {
+    // A directory that cannot be pruned is not a reason to stop serving.
+    console.error(error);
+  }
+}
 
 /**
  * What the inbox filed a report as, remembered until the request is over.
@@ -836,4 +866,10 @@ server.listen(port, host, () => {
   // The kinds, never the addresses: a webhook URL is the credential, and this
   // line ends up in a platform's log where a password does not belong.
   if (sinks.length) console.log(`Announcing every report through ${sinks.length} sink(s)`);
+  const days = Number(process.env.RETENTION_DAYS ?? 0);
+  if (days > 0) console.log(`Keeping reports for ${days} day(s)`);
+  void prune();
+  // `unref`, so the interval is never the reason this process stays up: the
+  // server is what holds it open, and when that closes the inbox should end.
+  setInterval(() => void prune(), PRUNE_INTERVAL_MS).unref();
 });

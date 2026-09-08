@@ -303,6 +303,18 @@ bundle is unchanged at 583 bytes. The example now routes, authorises and
 renders, and does no filesystem work of its own; its fourteen tests did not
 move.
 
+**Unreleased** — retention on `fileStore` (#89). `maxAgeDays` says how long a
+report is kept and `prune()` applies it: everything older goes, then everything
+over `maxReports`, JSON and picture together, and the count comes back. Off by
+default, and scheduled by nobody — a library owning a timer is a library that
+keeps a process alive — so `examples/inbox` runs it at start and hourly behind
+`RETENTION_DAYS`, which is what empties an inbox nobody is posting to. It is
+safe beside a concurrent `store`, it walks the directory on its first call so
+an earlier run's reports are pruned too, it leaves an unparseable arrival time
+for the cap rather than guessing at its age, and it never touches a file this
+store did not name. Storing personal data needs a way to stop storing it; this
+is that way, with the day named by whoever made the promise.
+
 **Unreleased** — the offline queue survives a full `localStorage` (#85). A
 refused write used to leave the report in memory alone, which is a report lost
 on the next reload — and a reload is how an outage usually ends. It now costs

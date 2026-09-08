@@ -24,6 +24,10 @@ services:
       # endpoint is same-origin only.
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-}
       MAX_REPORTS: ${MAX_REPORTS:-2000}
+      # How many days a report is kept. Empty means for as long as the volume
+      # lasts, which is a decision about somebody's screenshots: see
+      # "What is deleted, and when" in the README.
+      RETENTION_DAYS: ${RETENTION_DAYS:-}
       # The address the feeds and the notifications link to, when the request's
       # own host is not it. A notification has no request to ask.
       PUBLIC_URL: ${PUBLIC_URL:-}

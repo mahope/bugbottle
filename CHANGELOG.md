@@ -7,6 +7,25 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- Retention on `fileStore` (#89). `maxAgeDays` is how long a report is kept and
+  `prune()` is what applies it: everything that arrived longer ago than that is
+  deleted first, then everything over `maxReports`, JSON and picture together,
+  and the number it answers with is how many reports went. Off by default —
+  how long you may keep somebody's screenshot is a question about the promise
+  you made them, not one a library can answer — and scheduled by nobody, since
+  a library owning a timer is a library that keeps a process alive. It is safe
+  beside a concurrent `store`, its first call walks the directory so what an
+  earlier run left behind is pruned too, a report whose arrival time cannot be
+  parsed is left for the cap rather than deleted on a guess, and a file this
+  store did not name is never touched: a directory that also holds a note, a
+  backup or an export keeps all three.
+- `examples/inbox` runs `prune()` at start and once an hour, behind
+  `RETENTION_DAYS` (unset, so off). The cap runs on every write, but only a
+  schedule empties an inbox nobody is posting to. Its README says what is
+  deleted when, `.env.example` and `compose.yml` carry the variable.
+
 ## 0.13.0 — 2026-09-08
 
 The reviewed release. A fresh-context review read everything since 0.9.0 and

@@ -3,9 +3,10 @@
  * want a database.
  *
  * One JSON file per report with the decoded picture beside it, an in-memory
- * index of the few strings a list shows, and a ceiling on how many reports the
- * directory holds. It is the `store` function `handleReport` takes, plus the
- * three calls whoever builds a page over it needs: `list`, `read`, `remove`.
+ * index of the few strings a list shows, a ceiling on how many reports the
+ * directory holds and, when it is asked for, a limit on how long they are
+ * kept. It is the `store` function `handleReport` takes, plus the calls
+ * whoever builds a page over it needs: `list`, `read`, `remove`, `prune`.
  *
  * This is the one module under `src/server/` that reaches for Node — `node:fs`,
  * `node:path`, `node:crypto`. It is re-exported from `bugbottle/server` like
@@ -28,6 +29,8 @@ import { randomUUID } from "node:crypto";
 import { decodeScreenshotDataUrl, InvalidScreenshotError, MAX_SCREENSHOT_BYTES, } from "../report-core.js";
 /** How many reports the directory holds before the oldest are deleted. */
 export const DEFAULT_MAX_REPORTS = 2000;
+/** One day in milliseconds, because `maxAgeDays` is given in days. */
+const DAY_MS = 86_400_000;
 /**
  * The shape `crypto.randomUUID()` writes, and the only thing that is ever
  * allowed to become part of a path.
@@ -55,6 +58,7 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 export function fileStore(options) {
     const dir = options.dir;
     const maxReports = options.maxReports ?? DEFAULT_MAX_REPORTS;
+    const maxAgeDays = options.maxAgeDays ?? 0;
     const screenshots = options.screenshots ?? true;
     /**
      * `null` until the first walk. It is not a cache to be invalidated: dropping
@@ -118,15 +122,48 @@ export function fileStore(options) {
      * and an endpoint that has stopped accepting anything. Oldest first, because
      * the newest report is the one somebody is about to read.
      */
-    async function prune() {
+    async function pruneToCap() {
         if (!index || !Number.isFinite(maxReports) || maxReports <= 0)
-            return;
+            return 0;
+        let deleted = 0;
         while (index.length > maxReports) {
             const oldest = index[index.length - 1];
             if (!oldest)
                 break;
             await forget(oldest);
+            deleted++;
         }
+        return deleted;
+    }
+    /**
+     * Deletes every report that arrived longer than `maxAgeDays` ago.
+     *
+     * The walk is over a copy of the index, because `forget` splices the live
+     * array and a loop over that array would step past a neighbour every time it
+     * deleted something. Each entry is checked for still being in the index
+     * before it is deleted, so an entry a concurrent `store`, `remove` or second
+     * `prune` already took is not deleted twice.
+     *
+     * An arrival time nothing can parse is left where it is: age is the only
+     * thing that would justify deleting it, we do not know it, and the cap will
+     * take the report eventually. A retention policy that deleted on a guess
+     * would be worse than one that keeps a file too long.
+     */
+    async function pruneToAge() {
+        if (!index || !Number.isFinite(maxAgeDays) || maxAgeDays <= 0)
+            return 0;
+        const cutoff = Date.now() - maxAgeDays * DAY_MS;
+        let deleted = 0;
+        for (const entry of [...index]) {
+            const arrived = Date.parse(entry.receivedAt);
+            if (!Number.isFinite(arrived) || arrived > cutoff)
+                continue;
+            if (!index.includes(entry))
+                continue;
+            await forget(entry);
+            deleted++;
+        }
+        return deleted;
     }
     /**
      * Forgets one entry and deletes both of its files.
@@ -148,8 +185,28 @@ export function fileStore(options) {
         if (index && at !== -1)
             index.splice(at, 1);
     }
+    /**
+     * Whether an entry names files this store could have written.
+     *
+     * Deleting is the one thing here that cannot be taken back, and the index is
+     * not built from our own writes alone: `refresh` walks a directory something
+     * else may have written to, and an entry carries the name it found there. So
+     * a name is checked against the shape this store writes — the id, a hyphen
+     * before it and `.json` after it, and no path separator anywhere — before
+     * anything is deleted. A directory that also holds notes, a backup or a
+     * colleague's export keeps every one of them, whatever retention says.
+     */
+    function ownFile(entry) {
+        if (!UUID.test(entry.id))
+            return false;
+        if (entry.file.includes("/") || entry.file.includes("\\"))
+            return false;
+        return UUID_IN_NAME.exec(entry.file)?.[1] === entry.id;
+    }
     async function forget(entry) {
         drop(entry.id);
+        if (!ownFile(entry))
+            return;
         await rm(join(dir, entry.file), { force: true });
         await rm(join(dir, `${entry.id}.png`), { force: true });
     }
@@ -170,7 +227,9 @@ export function fileStore(options) {
         // same array unless the walk was replaced under us, and the index is the
         // one a listing reads.
         (index ?? entries).unshift(summarise(id, file, report, Boolean(picture)));
-        await prune();
+        // The cap only: age is what `prune()` is for, and a write is not the
+        // moment to walk every entry's timestamp.
+        await pruneToCap();
         return { id };
     };
     return {
@@ -211,6 +270,13 @@ export function fileStore(options) {
                 }
             }
             return found;
+        },
+        async prune() {
+            // The index first: what a fresh process most wants to prune is what the
+            // run before it left on the disk, and nothing has walked the directory
+            // yet if this is the first call of the run.
+            await ensureIndex();
+            return (await pruneToAge()) + (await pruneToCap());
         },
         async refresh() {
             const fresh = await readDirectory();

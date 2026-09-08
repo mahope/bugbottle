@@ -3,9 +3,10 @@
  * want a database.
  *
  * One JSON file per report with the decoded picture beside it, an in-memory
- * index of the few strings a list shows, and a ceiling on how many reports the
- * directory holds. It is the `store` function `handleReport` takes, plus the
- * three calls whoever builds a page over it needs: `list`, `read`, `remove`.
+ * index of the few strings a list shows, a ceiling on how many reports the
+ * directory holds and, when it is asked for, a limit on how long they are
+ * kept. It is the `store` function `handleReport` takes, plus the calls
+ * whoever builds a page over it needs: `list`, `read`, `remove`, `prune`.
  *
  * This is the one module under `src/server/` that reaches for Node — `node:fs`,
  * `node:path`, `node:crypto`. It is re-exported from `bugbottle/server` like
@@ -64,6 +65,14 @@ export type FileStoreOptions = {
      * disk rather than about a default.
      */
     maxReports?: number;
+    /**
+     * How long a report is kept, in days. Off by default, because how long you
+     * may keep somebody's screenshot is a decision about your obligations rather
+     * than one this library should make for you. Set it and `prune()` deletes
+     * every report that arrived longer ago than this; nothing else applies it,
+     * so a process that never calls `prune()` keeps whatever the cap leaves.
+     */
+    maxAgeDays?: number;
     /** Whether to write the picture at all. `false` keeps the JSON only. */
     screenshots?: boolean;
 };
@@ -85,6 +94,20 @@ export type FileStore = {
     }) => Promise<StoredReportFile | null>;
     /** Deletes a report and its picture. True when there was one. */
     remove: (id: string) => Promise<boolean>;
+    /**
+     * Applies retention, and answers with how many reports it deleted.
+     *
+     * Everything that arrived longer than `maxAgeDays` ago goes first, then
+     * everything over `maxReports`, JSON and picture together. It is safe
+     * beside a `store` that is halfway through a write: both work on the one
+     * index in place, and a report stored while this runs is simply a report it
+     * did not consider.
+     *
+     * Nothing calls it on a schedule, because a library has no business owning a
+     * timer. Call it when the process starts and on whatever interval suits the
+     * directory; `examples/inbox` does it hourly.
+     */
+    prune: () => Promise<number>;
     /**
      * Walks the directory again and answers with what is there now.
      *
