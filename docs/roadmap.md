@@ -372,6 +372,15 @@ the selected label, where Chrome's text backplate turned `HighlightText` on
 rather than seven and reads pixels out of the forced one, because that last
 failure is invisible to axe.
 
+**Unreleased** — one canonical host for the site (#46). `bugbottle.dev` now
+resolves to the Dokploy application, so `bugbottle.mahoje.dk` — the address the
+site had first, still attached to the same application — answers every request
+with a `301` to the same path on the canonical host. A second `server` block in
+`site/nginx.conf` does it, keeping `/health` at 200 on both so Dokploy's check
+does not flap, and carrying the same security headers as the block that serves.
+The canonical links, the Open Graph URLs and the sitemap already named
+bugbottle.dev; this is the last address that did not.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
