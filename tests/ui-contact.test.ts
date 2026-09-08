@@ -85,7 +85,11 @@ test("the field carries a label, a hint and the right input type when asked for"
   const { input, label, note } = parts(widget.host);
 
   assert.equal(input.hidden, false);
-  assert.equal(input.getAttribute("type"), "email");
+  // `text` rather than `email`, on purpose: `required` plus `type="email"`
+  // makes a phone number `:invalid`, and a screen reader announces that as an
+  // error although "call me on 12345678" is an answer the panel accepts.
+  assert.equal(input.getAttribute("type"), "text");
+  assert.equal(input.getAttribute("inputmode"), "email");
   assert.equal(input.getAttribute("autocomplete"), "email");
   assert.equal(label.textContent, en.ui.contactLabel);
   assert.equal(label.getAttribute("for"), input.id, "the label names the input");

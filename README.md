@@ -704,9 +704,11 @@ gzipped, no framework.
 reporter. It is off by default, because asking for an address is a promise to
 answer and that promise is yours to make. `contact: "required"` refuses to
 send without it, through the same inline error an empty message gets. The
-field is an `<input type="email">` for the keyboard it brings up on a phone,
-but nothing validates what is typed — "call me on 12345678" is a perfectly
-good answer, and it arrives as `contact` on the report either way. It is
+field is an ordinary text input with `inputmode="email"`, for the keyboard it
+brings up on a phone; the type is deliberately not `email`, because that plus
+`required` would mark a phone number invalid and a screen reader would announce
+it as an error. Nothing validates what is typed — "call me on 12345678" is a
+perfectly good answer, and it arrives as `contact` on the report either way. It is
 personal data once it is on: see [Please read this part](#please-read-this-part).
 
 "Edit picture" over the attached screenshot is the one thing the panel does

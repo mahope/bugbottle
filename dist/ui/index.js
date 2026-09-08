@@ -86,7 +86,7 @@ h2{font-size:16px;font-weight:600;margin:0;flex:1}
 .type{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px}
 .type[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
 label.field{display:block;font-weight:600;margin:8px 0 4px}
-textarea,input[type="email"]{width:100%;padding:8px 10px;border:1px solid var(--bb-border);border-radius:calc(var(--bb-radius) - 4px);background:transparent}
+textarea,#bb-contact{width:100%;padding:8px 10px;border:1px solid var(--bb-border);border-radius:calc(var(--bb-radius) - 4px);background:transparent}
 textarea{min-height:88px;resize:vertical}
 .hint{margin-left:0}
 .check{display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;min-height:24px}
@@ -254,11 +254,13 @@ export function mountBugbottle(options) {
     const messageLabel = el("label", { class: "field", for: "bb-message" });
     const textarea = el("textarea", { id: "bb-message", rows: "4" });
     const contactLabel = el("label", { class: "field", for: "bb-contact", hidden: "" });
-    // `type="email"` for the keyboard it brings up on a phone; the browser's own
-    // validation never runs, because the panel is not a form and submits
-    // nothing. A phone number typed here is still sent, exactly as typed.
+    // `inputmode="email"` for the keyboard it brings up on a phone, but
+    // `type="text"`, because `type="email"` and `required` together make a phone
+    // number match `:invalid`, and assistive technology announces that as an
+    // error — while "call me on 12345678" is an answer this panel accepts.
+    // Nothing validates what is typed; it is sent exactly as typed.
     const contactInput = el("input", {
-        id: "bb-contact", type: "email", autocomplete: "email",
+        id: "bb-contact", type: "text", inputmode: "email", autocomplete: "email",
         "aria-describedby": "bb-contact-note", hidden: "",
     });
     const contactNote = el("p", { class: "note hint", id: "bb-contact-note", hidden: "" });

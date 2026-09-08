@@ -194,6 +194,10 @@ change the API; the changelog says so when they do.
   duplicate, silently. Only an object with an optional string `id` is believed
   now; anything else is "not seen" and reaches `onError`, as a throwing store
   does.
+- The panel's contact input was `type="email"`, so with `contact: "required"`
+  a phone number matched `:invalid` and assistive technology announced an error
+  on an answer the panel accepts. It is a text input with `inputmode="email"`
+  now, which brings up the same keyboard on a phone.
 
 ### Changed
 
