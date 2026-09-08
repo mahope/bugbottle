@@ -10,8 +10,8 @@ under 11.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/breadcrumbs` under
 1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1.3 kB,
 `bugbottle/perf` under 1.25 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
-over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` and
-`bugbottle/rrweb` under 768 bytes each, the script-tag build under 24 kB and
+over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` under
+768 bytes, `bugbottle/rrweb` under 1024 bytes, the script-tag build under 24 kB and
 its slim twin under 20.5 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 

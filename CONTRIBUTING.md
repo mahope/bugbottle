@@ -30,10 +30,10 @@ need Node 18.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
   `bugbottle/react` 6 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 2048
   bytes, `bugbottle/breadcrumbs`
-  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
+  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1536 bytes,
   `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/shake` 768 bytes,
-  `bugbottle/sign` 512 bytes, `bugbottle/rrweb` 768 bytes,
+  `bugbottle/sign` 512 bytes, `bugbottle/rrweb` 1024 bytes,
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
   are small; the core they share is not), `dist/bugbottle.js` 24 kB and

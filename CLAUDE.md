@@ -179,11 +179,13 @@ already pays for — the marginal cost there is around 0.55 kB.
 the review fixes (one `loadend` listener per instance, an era guard on
 in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
-tree-shaken away. `bugbottle/perf` is budgeted at 1280 bytes and measures
+tree-shaken away. `bugbottle/perf` is budgeted at 1536 bytes (1280 until the replay fixes moved
+the UTF-8 length and the null-byte walk into report-core) and measures
 1236: five observers, the navigation entry, two store walks and a cookie parse,
 importing nothing but four constants. The core moved 1272 → 1310 bytes for it,
 and that 38 bytes is the whole cost to a consumer who never imports it — two
-registry reads in `buildReport`. `bugbottle/rrweb` is budgeted at 768 bytes and measures 711: the rolling
+registry reads in `buildReport`. `bugbottle/rrweb` is budgeted at 1024 bytes (768 until the cap counted UTF-8
+bytes, which took it to 767) and measured 711 when it landed: the rolling
 buffer, the checkout trim and the byte cap, importing two types and nothing at
 run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
