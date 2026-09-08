@@ -57,6 +57,42 @@ if (!password) {
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 /**
+ * Which address the rate limit counts against, read from `TRUST_PROXY`.
+ *
+ * Unset is the honest default: the socket, which behind a proxy is the proxy,
+ * so every visitor shares one bucket of 30 a minute. `true` trusts the last
+ * entry of `X-Forwarded-For`, which is what Caddy, Traefik and nginx append
+ * when they are the only hop in front of this process. A number is that many
+ * hops in from the right, for a CDN in front of your own proxy. Anything else
+ * is read as a header name, for a platform that writes one of its own —
+ * `TRUST_PROXY=CF-Connecting-IP`.
+ *
+ * Set it wrong in one direction and the limit is shared by the whole site; set
+ * it wrong in the other and any caller can pick their own key with one header.
+ */
+function readTrustProxy() {
+  const raw = (process.env.TRUST_PROXY ?? "").trim();
+  if (!raw || raw === "false" || raw === "0") return false;
+  if (raw === "true" || raw === "1") return true;
+  const hops = Number(raw);
+  if (Number.isInteger(hops) && hops > 0) return { hops };
+  return { header: raw };
+}
+
+const trustProxy = readTrustProxy();
+
+/**
+ * The header the trusted setting reads, or null when nothing is trusted. The
+ * request handed to `handleReport` is built here rather than forwarded whole,
+ * so a header nobody copies across is a header `trustProxy` never sees.
+ */
+const trustedHeader =
+  trustProxy === false
+    ? null
+    : (typeof trustProxy === "object" && trustProxy.header ? trustProxy.header : "x-forwarded-for")
+        .toLowerCase();
+
+/**
  * Compares two secrets in constant time. The digests are the same length
  * whatever the passwords are, so the comparison cannot be timed to learn how
  * long the real one is — which a bare `!==`, or `timingSafeEqual` on the raw
@@ -673,6 +709,12 @@ const server = createServer(async (req, res) => {
       if (raw === null && req.method === "POST") return;
       const headers = { "Content-Type": "application/json" };
       if (req.headers.origin) headers.Origin = req.headers.origin;
+      // Only the one header the setting names, and only when something is
+      // trusted: copying every forwarding header across would hand
+      // `handleReport` claims nobody asked for.
+      if (trustedHeader && req.headers[trustedHeader]) {
+        headers[trustedHeader] = String(req.headers[trustedHeader]);
+      }
       if (req.headers["access-control-request-method"]) {
         headers["Access-Control-Request-Method"] = req.headers["access-control-request-method"];
       }
@@ -684,6 +726,11 @@ const server = createServer(async (req, res) => {
         }),
         {
           maxBodyBytes: MAX_BODY_BYTES,
+          // The socket is the one address nobody outside could have written.
+          // `trustProxy` is what decides whether the header above may name
+          // somebody else instead.
+          remoteAddress: req.socket?.remoteAddress,
+          trustProxy,
           rateLimit: { limit: 30, windowMs: 60_000 },
           dedupe: { windowMs: 60_000 },
           // One named origin or nothing. A wildcard would let any page on the

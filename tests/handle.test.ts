@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  clientAddress,
   handleReport,
   resetDedupe,
   resetRateLimits,
@@ -341,6 +342,158 @@ test("the rate limit counts callers separately", async () => {
   assert.equal((await handleReport(post(body), options)).status, 429);
   caller = "b";
   assert.equal((await handleReport(post(body), options)).status, 202);
+  resetRateLimits();
+});
+
+/** A POST with a forwarding header on it, the way a proxy sends one. */
+function forwarded(header: string, value: string): Request {
+  return post(body, { headers: { "Content-Type": "application/json", [header]: value } });
+}
+
+/** Counts to `limit + 1` against the same options and answers what the last one got. */
+async function overrun(options: Parameters<typeof handleReport>[1], request: () => Request) {
+  let status = 0;
+  for (let i = 0; i < 3; i += 1) status = (await handleReport(request(), options)).status;
+  return status;
+}
+
+test("without trustProxy the key is the connection address, header or no header", async () => {
+  resetRateLimits();
+  const options = {
+    remoteAddress: "203.0.113.7",
+    rateLimit: { limit: 2, windowMs: 60_000 },
+  };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "a, b, c"), options)).status, 202);
+  // The third request is over the limit whatever the header says: a caller
+  // that varies it is still the same connection.
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "1.2.3.4"), options)).status, 429);
+  resetRateLimits();
+});
+
+test("a forged header does not split the bucket when nothing is trusted", async () => {
+  resetRateLimits();
+  const options = { remoteAddress: "203.0.113.7", rateLimit: { limit: 1, windowMs: 60_000 } };
+  let n = 0;
+
+  const status = await overrun(options, () => forwarded("x-forwarded-for", `10.0.0.${(n += 1)}`));
+
+  assert.equal(status, 429, "a fresh forged address every time buys nothing");
+  resetRateLimits();
+});
+
+test("trustProxy true keys on the last hop of x-forwarded-for", async () => {
+  resetRateLimits();
+  const options = {
+    remoteAddress: "10.0.0.1",
+    trustProxy: true,
+    rateLimit: { limit: 1, windowMs: 60_000 },
+  };
+
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "a, b, c"), options)).status, 202);
+  // `c` again, whatever is written to the left of it.
+  assert.equal(
+    (await handleReport(forwarded("x-forwarded-for", "x, y, c"), options)).status,
+    429,
+    "the last entry is the key",
+  );
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "a, b, z"), options)).status, 202);
+  resetRateLimits();
+});
+
+test("trustProxy hops counts in from the right", async () => {
+  resetRateLimits();
+  const options = {
+    remoteAddress: "10.0.0.1",
+    trustProxy: { hops: 2 },
+    rateLimit: { limit: 1, windowMs: 60_000 },
+  };
+
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "a, b, c"), options)).status, 202);
+  assert.equal(
+    (await handleReport(forwarded("x-forwarded-for", "a, b, zz"), options)).status,
+    429,
+    "b is the key, and the hop after it is not",
+  );
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "a, q, c"), options)).status, 202);
+  resetRateLimits();
+});
+
+test("trustProxy header reads the platform's own header instead", async () => {
+  resetRateLimits();
+  const options = {
+    remoteAddress: "10.0.0.1",
+    trustProxy: { header: "CF-Connecting-IP" },
+    rateLimit: { limit: 1, windowMs: 60_000 },
+  };
+
+  assert.equal((await handleReport(forwarded("cf-connecting-ip", "198.51.100.4"), options)).status, 202);
+  assert.equal((await handleReport(forwarded("cf-connecting-ip", "198.51.100.4"), options)).status, 429);
+  // And `x-forwarded-for` is not read at all once another header is named.
+  assert.equal((await handleReport(forwarded("x-forwarded-for", "198.51.100.9"), options)).status, 202);
+  resetRateLimits();
+});
+
+test("a chain shorter than hops falls back to the connection address", () => {
+  const request = forwarded("x-forwarded-for", "1.1.1.1");
+
+  assert.equal(clientAddress(request, "10.0.0.1", { hops: 2 }), "10.0.0.1");
+  assert.equal(clientAddress(request, undefined, { hops: 2 }), "unknown");
+});
+
+test("clientAddress answers unknown when nothing knows the address", () => {
+  assert.equal(clientAddress(post(body), undefined, false), "unknown");
+  assert.equal(clientAddress(post(body), "  ", true), "unknown");
+  // A trusted header that is not there is not a reason to invent one.
+  assert.equal(clientAddress(post(body), "10.0.0.1", true), "10.0.0.1");
+  // Blank entries are not hops: a header of commas names nobody.
+  assert.equal(clientAddress(forwarded("x-forwarded-for", " , , "), "10.0.0.1", true), "10.0.0.1");
+});
+
+test("a key of your own is handed the resolved address", async () => {
+  resetRateLimits();
+  const seen: string[] = [];
+  await handleReport(forwarded("x-forwarded-for", "a, b, c"), {
+    remoteAddress: "10.0.0.1",
+    trustProxy: true,
+    rateLimit: {
+      limit: 5,
+      windowMs: 60_000,
+      key: (_request, address) => {
+        seen.push(address);
+        return address;
+      },
+    },
+  });
+
+  assert.deepEqual(seen, ["c"]);
+  resetRateLimits();
+});
+
+test("the Express adapter counts the socket address", async () => {
+  resetRateLimits();
+  const options = { rateLimit: { limit: 1, windowMs: 60_000 } };
+  const send = async (remoteAddress: string) => {
+    const { state, res, finished } = fakeRes();
+    expressHandler(options)(
+      {
+        method: "POST",
+        url: "/api/bug-report",
+        headers: { host: "app.example.com", "x-forwarded-for": "1.2.3.4" },
+        socket: { remoteAddress },
+        body,
+      },
+      res,
+    );
+    await finished;
+    return state.status;
+  };
+
+  assert.equal(await send("203.0.113.10"), 202);
+  // The same socket again, forged header and all.
+  assert.equal(await send("203.0.113.10"), 429);
+  assert.equal(await send("203.0.113.11"), 202);
   resetRateLimits();
 });
 

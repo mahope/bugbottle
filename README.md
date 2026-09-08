@@ -1603,22 +1603,55 @@ storage bucket that is down: a `screenshot` function that throws reaches
 `rateLimit` counts in memory by default, so it is per instance: fine per
 serverless isolate against one looping browser, and not a shared limit across a
 fleet — see *Running more than one instance* below when it has to be.
-The default key is the first entry of `x-forwarded-for`, falling back to
-`cf-connecting-ip` — **both are headers, which means both are things the
-caller can write**. It is only a limit if a proxy you control overwrites
-`x-forwarded-for` on the way in; behind anything else, one client varies the
-header and gets a fresh allowance every request. The key is clipped to 64
-characters and the bucket map is capped at 10 000 entries (expired buckets
-evicted first, then the oldest) so that a forged header cannot grow the map,
-but the honest fix is to count something you issued:
+
+The key is the caller's address, and which address that is is a decision you
+have to make. A web `Request` carries no peer address, so hand in the one your
+runtime knows as `remoteAddress` — `expressHandler` reads
+`req.socket.remoteAddress` for you, and the inbox example passes the same
+socket — and then say with `trustProxy` whether a forwarding header may name
+somebody else instead:
+
+```ts
+handleReport(request, {
+  remoteAddress: req.socket.remoteAddress,
+  // false (the default) — the connection address alone
+  // true               — the last entry of X-Forwarded-For
+  // { hops: 2 }        — two entries in from the right
+  // { header: "CF-Connecting-IP" } — a header the platform writes itself
+  trustProxy: true,
+  rateLimit: { limit: 20, windowMs: 60_000 },
+});
+```
+
+`true` reads the **last** entry of `X-Forwarded-For`, because that is the hop
+the nearest proxy appended and so the only one it wrote itself; everything to
+the left of it was written further out, up to and including the caller. Count
+the proxies you actually control and set `hops` to that number — a CDN in front
+of your own load balancer is `{ hops: 2 }`. A chain shorter than `hops` falls
+back to the connection address rather than reaching further left.
+
+**Be honest with yourself about which way you would rather be wrong.** Too
+little trust puts every visitor behind the proxy in one bucket, so the limit is
+20 a minute for the whole site instead of per client; too much trust lets any
+caller pick their own key with one header and never meet the limit at all. The
+default is the first of those, because a shared bucket is a limit that is too
+strict and a trusted header nobody sets is no limit whatsoever.
+
+The key is clipped to 64 characters and the bucket map is capped at 10 000
+entries (expired buckets evicted first, then the oldest) so that a forged
+header cannot grow the map. Better still, count something you issued — your own
+`key` is handed the resolved address as its second argument:
 
 ```ts
 rateLimit: {
   limit: 20,
   windowMs: 60_000,
-  key: (req) => sessionIdFrom(req.headers.get("cookie")) ?? "anonymous",
+  key: (req, address) => sessionIdFrom(req.headers.get("cookie")) ?? address,
 }
 ```
+
+`dedupe` does not use the address at all: it keys on the report, not on who
+sent it. `trustProxy` changes the rate limit and nothing else.
 
 `dedupe` answers a repeat of the same report with `200 { id, duplicate: true }`
 — the id of the first one — without running `store` or the sinks again. What
@@ -2028,6 +2061,13 @@ recipe: they hand you a web `Request` and take a `Response`, so the first
 example in [Receiving a report](#receiving-a-report) is already the whole
 handler.
 
+One option differs per framework, and it is the one under each recipe below:
+where the caller's address comes from. A web `Request` has none, so if you use
+`rateLimit` you either hand in `remoteAddress` from whatever the runtime knows
+or set `trustProxy` and let a forwarding header name the caller — and the
+sentence about being wrong in *Receiving a report* is worth reading before you
+pick.
+
 ### Next.js (App Router)
 
 `app/api/feedback/route.ts`:
@@ -2057,6 +2097,8 @@ since nothing in `bugbottle/server` needs a Node built-in. A route handler is
 handed the body unparsed, so the Pages Router's `api.bodyParser.sizeLimit` has
 nothing to do with it and `maxBodyBytes` is the only ceiling — and the bytes
 reach `handleReport` exactly as they were sent, so `signature` verifies.
+There is no peer address to hand in — Next removed `request.ip` in 15 — so
+behind Vercel or your own proxy the address is `trustProxy: true` or nothing.
 The client goes in a `"use client"` component rendered from the root layout.
 
 ### SvelteKit
@@ -2077,7 +2119,9 @@ export const POST: RequestHandler = ({ request }) =>
 The export is named after the method and typed `RequestHandler`; `./$types`
 gives the same type once `svelte-kit sync` has run, and `$env/dynamic/private`
 is the SvelteKit way to read the same variable as `process.env`. `event.request`
-is the untouched web `Request`, so signing works.
+is the untouched web `Request`, so signing works. `event.getClientAddress()`
+is the address, so pass it as `remoteAddress` and leave `trustProxy` alone —
+the adapter's own proxy configuration has already been applied to it.
 The client goes in `+layout.svelte`, inside `onMount`.
 
 ### Nuxt
@@ -2108,7 +2152,9 @@ rather than a `Request`, and that turns one into the other. `.post.ts` in the
 filename is the method, so there is no `if` to write. Nuxt auto-imports both
 functions — the import line is for the type-checker and for whoever reads the
 file. The raw body survives as long as nothing called `readBody(event)` first,
-which consumes the stream signing needs.
+which consumes the stream signing needs. On the Node preset
+`event.node.req.socket.remoteAddress` is the connection, which is what
+`remoteAddress` wants; on an edge preset there is none, so use `trustProxy`.
 The client goes in a `.client.ts` plugin under `plugins/`.
 
 ### Astro
@@ -2133,7 +2179,9 @@ export const POST: APIRoute = ({ request }) =>
 `export const prerender = false` is the line to remember: in a static build an
 endpoint without it is run once at build time and there is nothing left to POST
 to. It needs an adapter, so the route runs on a server. `context.request` is
-the web `Request` as it arrived, so signing works.
+the web `Request` as it arrived, so signing works, and `context.clientAddress`
+is the address to pass as `remoteAddress` — the adapter decides what it means,
+so do not also set `trustProxy`.
 The client goes in a `<script>` in the layout — one island, no framework.
 
 ### React Router 7 (and Remix)
@@ -2163,7 +2211,9 @@ the same file with the import from `@remix-run/node`, and React Router's
 framework mode generates the same shape as `Route.ActionArgs` in
 `./+types/api.feedback` if you prefer the typed route. Nothing has read the
 body when `action` runs, so signing works — leave `request.formData()` and
-`request.json()` alone here.
+`request.json()` alone here. There is no address on `ActionFunctionArgs`: on
+`@react-router/express` reach for `req.socket.remoteAddress` in the server
+file, and otherwise set `trustProxy`.
 The client goes in the root route's component, or in `entry.client.tsx`.
 
 ### Hono
@@ -2190,7 +2240,9 @@ export default app;
 which is what `handleReport` wants. `Bindings` types `c.env` — on Workers those
 are the bindings, on Node and Bun read `process.env` instead. The raw body is
 untouched, so signing works, provided no middleware in front of this route has
-already read it.
+already read it. `getConnInfo` — imported from the adapter for your runtime —
+gives `remote.address` for `remoteAddress`; on Workers there is no socket, so
+`{ header: "CF-Connecting-IP" }` is the setting instead.
 The client mounts wherever your HTML is served from; Hono only serves it.
 
 ### WordPress
@@ -3091,7 +3143,8 @@ so the hook can default without dragging eight languages in), and the `Locale`,
 `localesExtra`, the five optional languages in the same `Locale` shape. Nothing
 imports this entry, so a site that does not ask for it never carries it.
 
-**`bugbottle/server`** — `handleReport`, `expressHandler`, `fileStore`
+**`bugbottle/server`** — `handleReport` (with `clientAddress` and the
+`TrustProxyOptions` type), `expressHandler`, `fileStore`
 (with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `StoredReport` and `StoredReportFile` types), `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,

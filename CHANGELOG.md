@@ -7,6 +7,35 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- **`handleReport` no longer reads `X-Forwarded-For` or `CF-Connecting-IP` by
+  default.** The rate-limit key was the first entry of `X-Forwarded-For` —
+  the entry furthest from the proxy and so the one the caller writes — which
+  meant a client varying one header got a fresh allowance every request. The
+  key is now the connection address, handed in as `remoteAddress`, and a
+  forwarding header names the caller only when `trustProxy` says it may (#90).
+  Deployments behind a proxy that relied on the old behaviour should set
+  `trustProxy: true`; the honest sentence about which way to be wrong is in
+  the README.
+
+### Added
+
+- `trustProxy` on `handleReport`: `false` (the default) counts the connection
+  address, `true` the last entry of `X-Forwarded-For`, `{ hops: n }` n entries
+  in from the right, and `{ header: "CF-Connecting-IP" }` a header the
+  platform writes itself. A chain shorter than `hops` falls back to the
+  connection rather than reaching further left (#90).
+- `remoteAddress` on `handleReport`, the address the runtime saw. A web
+  `Request` has none; `expressHandler` now passes `req.socket.remoteAddress`
+  and the inbox example passes the same socket (#90).
+- `clientAddress(request, remoteAddress, trustProxy)` exported from
+  `bugbottle/server`, so a handler that keys on something else can resolve the
+  address the same way. A `rateLimit.key` of your own is handed it as a second
+  argument (#90).
+- `TRUST_PROXY` in the inbox example, which also forwards the one header the
+  setting names and nothing else (#90).
+
 ## 0.13.0 — 2026-09-08
 
 The reviewed release. A fresh-context review read everything since 0.9.0 and
