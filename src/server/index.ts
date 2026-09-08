@@ -113,6 +113,34 @@ export {
   type SlackSinkOptions,
 } from "../sinks/slack.ts";
 
+// The Sentry-compatible sink is the only one that can carry the picture
+// itself: an attachment item rides in the same envelope as the event.
+export {
+  sentrySink,
+  buildSentryEvent,
+  buildSentryEnvelope,
+  parseSentryDsn,
+  sentryAuthHeader,
+  clipBytes,
+  SentrySinkError,
+  SENTRY_CLIENT,
+  SENTRY_CLIENT_NAME,
+  SENTRY_CLIENT_VERSION,
+  SENTRY_VERSION,
+  MAX_SENTRY_BREADCRUMBS,
+  MAX_SENTRY_MESSAGE_BYTES,
+  MAX_SENTRY_FEEDBACK_MESSAGE,
+  MAX_SENTRY_EVENT_BYTES,
+  MAX_SENTRY_ENVELOPE_BYTES,
+  DEFAULT_SENTRY_RETRY_AFTER,
+  type SentrySinkOptions,
+  type SentryDsn,
+  type SentryEnvelope,
+  type SentrySinkContext,
+  type SentryItemType,
+  type SentryTruncation,
+} from "../sinks/sentry.ts";
+
 export {
   discordSink,
   buildDiscordMessage,
