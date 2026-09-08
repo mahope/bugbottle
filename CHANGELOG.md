@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.8.0 — 2026-09-08
+
 The reachable release: the report can carry how to answer the person who
 wrote it, and it can land in Jira, GitLab, or your own inbox. A contact field,
 off by default everywhere and reply-to on the email; Jira Cloud and GitLab
