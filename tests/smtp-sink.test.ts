@@ -657,6 +657,36 @@ test("a header value cannot smuggle a second header in", () => {
   assert.match(folded, /^Reply-To: evil@example\.com Bcc: everyone@example\.com$/);
 });
 
+test("a non-ASCII display name is encoded without swallowing the address", () => {
+  const folded = foldHeader("From", "Bjørn Hansen <bugs@example.com>");
+  // The address has to survive as an address: an encoded word around the whole
+  // value leaves a From header no MTA can route or reply to.
+  assert.match(folded, /<bugs@example\.com>$/);
+  assert.match(folded, /=\?UTF-8\?B\?/);
+  assert.ok(!folded.includes("Bjørn"), "the name itself is not left raw on the wire");
+});
+
+test("every address in a non-ASCII To keeps its angle brackets", () => {
+  const folded = foldHeader("To", "Bjørn <a@b.c>, Ana <d@e.f>");
+  const unfolded = folded.replace(/\r\n[ \t]/g, " ");
+  assert.match(unfolded, /<a@b\.c>/);
+  assert.match(unfolded, /<d@e\.f>/);
+});
+
+test("an encoded word stays inside the seventy-five characters RFC 2047 allows", () => {
+  const folded = foldHeader(
+    "Subject",
+    "Fejl på siden når jeg trykker på knappen med en meget lang overskrift " +
+      "der fylder mere end otteoghalvfjerds tegn",
+  );
+  for (const word of folded.match(/=\?UTF-8\?B\?[^?]*\?=/g) ?? []) {
+    assert.ok(word.length <= 75, `an encoded word of ${word.length} characters is too long`);
+  }
+  // Each folded line still fits, and every continuation begins with the space
+  // that unfolding turns back into the separator it was.
+  for (const line of folded.split("\r\n")) assert.ok(line.length <= 78, `over-long: ${line}`);
+});
+
 test("dot-stuffing covers the first line as well as the rest", () => {
   assert.equal(dotStuff(".first\r\nsecond"), "..first\r\nsecond");
   assert.equal(dotStuff("first\r\n.second"), "first\r\n..second");

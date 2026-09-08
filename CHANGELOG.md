@@ -68,6 +68,20 @@ change the API; the changelog says so when they do.
   chains its commits, and the refusal is answered rather than surrendered to;
   the issue hoped for a hundred bytes and it cost two hundred and forty.
 
+### Fixed
+
+- `smtpSink` sent an unroutable `From` when the address carried a non-ASCII
+  display name. `foldHeader` encoded the whole value as one RFC 2047 word, so
+  `Bjørn Hansen <bugs@example.com>` reached the wire as `=?UTF-8?B?…?=` and
+  nothing after it: an encoded word is a phrase, never an address, and a mail
+  server has nothing left to route or reply to. Only the display name is
+  encoded now, and the `<local@domain>` half travels as it arrived — for every
+  address in a list, split on the commas that separate addresses and not on the
+  ones inside a quoted name. The same fix bounds an encoded word at the
+  seventy-five characters RFC 2047 §2 allows: a Danish subject used to become
+  one word of a hundred and sixty, which a decoder is entitled to ignore, and
+  is now several that fold onto lines that fit.
+
 ## 0.12.0 — 2026-09-08
 
 The self-hosted release. Two things that used to need a service now need
