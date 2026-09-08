@@ -24,6 +24,13 @@ change the API; the changelog says so when they do.
   called against a real Jira Cloud site to find out which. A blank line is its
   breaks and no empty text node, which ADF also rejects. The console code block
   keeps its newlines, where they are preformatted and belong.
+- `examples/inbox` reads one file for the detail page instead of parsing every
+  stored report on every request, and keeps the list as a small in-memory index
+  refreshed by each write and delete. The directory now has a ceiling as well:
+  `MAX_REPORTS`, 2000 by default, deletes the oldest reports — JSON and picture
+  together — once a new one takes the count past it. Thirty reports a minute at
+  four megabytes each is a full disk soon enough, and a full disk is an inbox
+  that has stopped accepting anything.
 
 ## 0.8.0 — 2026-09-08
 

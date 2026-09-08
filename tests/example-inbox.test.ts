@@ -30,11 +30,14 @@ type Inbox = ChildProcessByStdio<null, Readable, Readable>;
 type Started = { child: Inbox; origin: string; reports: string };
 
 /** Starts the example on a port the operating system picks, in a temp dir. */
-async function start(): Promise<Started> {
-  const reports = await mkdtemp(join(tmpdir(), "bugbottle-inbox-"));
+async function start(
+  extra: Record<string, string> = {},
+  reportsDir?: string,
+): Promise<Started> {
+  const reports = reportsDir ?? (await mkdtemp(join(tmpdir(), "bugbottle-inbox-")));
   const child = spawn(process.execPath, [server], {
     cwd: root,
-    env: { ...process.env, INBOX_PASSWORD: PASSWORD, PORT: "0", REPORTS_DIR: reports },
+    env: { ...process.env, INBOX_PASSWORD: PASSWORD, PORT: "0", REPORTS_DIR: reports, ...extra },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -59,11 +62,22 @@ async function start(): Promise<Started> {
   return { child, origin, reports };
 }
 
-async function stop({ child, reports }: Started): Promise<void> {
+async function stop({ child, reports }: Started, keepDirectory = false): Promise<void> {
   const ended = new Promise((resolve) => child.once("exit", resolve));
   child.kill();
   await ended;
-  await rm(reports, { recursive: true, force: true });
+  if (!keepDirectory) await rm(reports, { recursive: true, force: true });
+}
+
+/** Posts one report and answers with the id the inbox stored it under. */
+async function post(origin: string, message: string): Promise<string> {
+  const response = await fetch(`${origin}/api/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "bug", message }),
+  });
+  assert.equal(response.status, 201);
+  return ((await response.json()) as { id: string }).id;
 }
 
 test("a report is posted, listed, read and deleted", async () => {
@@ -209,6 +223,78 @@ test("the report text is escaped rather than injected", async () => {
     }
   } finally {
     await stop(running);
+  }
+});
+
+test("the directory is capped at MAX_REPORTS, oldest deleted first", async () => {
+  // Without a ceiling the disk is the ceiling: thirty reports a minute are
+  // allowed and each may carry four megabytes of picture, so an inbox left
+  // running is a full volume and an endpoint that has stopped accepting
+  // anything. Three reports into a cap of two: the first one goes.
+  const running = await start({ MAX_REPORTS: "2" });
+  try {
+    const first = await post(running.origin, "The first report");
+    const second = await post(running.origin, "The second report");
+    const third = await post(running.origin, "The third report");
+
+    const files = await readdir(running.reports);
+    assert.equal(files.filter((f) => f.endsWith(".json")).length, 2);
+
+    const gone = await fetch(`${running.origin}/r/${first}`, { headers: { Authorization: auth } });
+    assert.equal(gone.status, 404, "the oldest report was deleted");
+
+    const html = await (
+      await fetch(`${running.origin}/`, { headers: { Authorization: auth } })
+    ).text();
+    assert.ok(html.includes("Inbox (2)"));
+    assert.ok(!html.includes(first), "the oldest is off the list too");
+    assert.ok(html.includes(second) && html.includes(third));
+  } finally {
+    await stop(running);
+  }
+});
+
+test("the picture goes with the report the cap deletes", async () => {
+  const running = await start({ MAX_REPORTS: "1" });
+  try {
+    const posted = await fetch(`${running.origin}/api/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...reportBody, screenshotDataUrl: PNG_DATA_URL }),
+    });
+    const { id } = (await posted.json()) as { id: string };
+    assert.ok((await readdir(running.reports)).includes(`${id}.png`));
+
+    await post(running.origin, "The report that pushes the first one out");
+    assert.ok(!(await readdir(running.reports)).includes(`${id}.png`), "the picture went too");
+  } finally {
+    await stop(running);
+  }
+});
+
+test("reports written by an earlier run are listed by the next one", async () => {
+  // The list is held in memory, so the one thing that could go wrong is a
+  // process that only ever knows about what it wrote itself.
+  const first = await start();
+  let id = "";
+  try {
+    id = await post(first.origin, "Written before the restart");
+  } finally {
+    await stop(first, true);
+  }
+
+  const second = await start({}, first.reports);
+  try {
+    const html = await (
+      await fetch(`${second.origin}/`, { headers: { Authorization: auth } })
+    ).text();
+    assert.ok(html.includes(id), "the list was built from the directory");
+    assert.ok(html.includes("Written before the restart"));
+
+    const detail = await fetch(`${second.origin}/r/${id}`, { headers: { Authorization: auth } });
+    assert.equal(detail.status, 200);
+  } finally {
+    await stop(second);
   }
 });
 
