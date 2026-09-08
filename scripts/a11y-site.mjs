@@ -6,7 +6,8 @@
  * documentation index, one deep documentation page, the English landing page
  * again with the demo's panel open and the picture editor over it, the index
  * again with the search field open on results, the theme playground with a
- * control moved, the two comparison pages, the Danish getting-started page and the
+ * control moved, the two comparison pages, the Danish getting-started page,
+ * both halves of the privacy checklist and the
  * changelog, in both colour schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
@@ -129,6 +130,11 @@ const PAGES = [
   ["compare-en", "/compare/"],
   ["compare-da", "/da/sammenlign/"],
   ["kom-i-gang", "/da/kom-i-gang/"],
+  /* Both halves of the privacy checklist: the widest table on the site, in a
+     language each, and the page most likely to be read by somebody who is not
+     a developer. */
+  ["privacy-checklist", "/docs/privacy-checklist/"],
+  ["privatliv", "/da/privatliv/"],
   ["changelog", "/docs/changelog/"],
 ];
 

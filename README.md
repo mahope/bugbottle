@@ -2869,6 +2869,11 @@ about the person than the user agent already does, and nothing is collected
 beyond that list: no canvas, no fonts, no device enumeration, no identifier of
 any kind. The origin and the fragment of the URL are still left out.
 
+[A privacy checklist](#a-privacy-checklist) is the field-by-field version of
+this section: what each field of a report can carry, what turns it off, how long
+it is kept, and a paragraph to adapt for your privacy policy. It is on the site
+in Danish too, as [Privatliv i bugbottle](https://bugbottle.dev/da/privatliv/).
+
 ### Masking
 
 Screenshots are masked before they are taken. Every `input` and `textarea`
@@ -3007,6 +3012,131 @@ useBugReport({
 The reporter sees the ordinary thank-you either way. They wrote the report in
 good faith, and a message telling them it was discarded helps nobody. If you
 want to know, count it yourself inside the hook.
+
+## A privacy checklist
+
+Installing bugbottle raises three questions before a lawyer asks them: what does
+it collect, where does it go, and how long is it kept. This section answers them
+field by field, against the code rather than against a promise, so that the
+inventory you hand to whoever writes your policy is one you can check. It is not
+legal advice; it is the list of facts a piece of legal advice would need.
+
+The second question has the shortest answer, so it goes first: **a report goes
+to the endpoint you wrote, and nowhere else.** There is no bugbottle server, no
+account and no key to register. The library is one `fetch` to a URL you own, and
+from there the report ends up wherever your `store` and your sinks put it — your
+database, your directory, your Slack, your issue tracker. Nothing in this
+package speaks to a host you did not name.
+
+### What a report can carry
+
+Every row below is a top-level field of [the payload](#the-payload). "On by
+default" means: with the panel or the hook mounted and no further option set.
+The switches are the ones that keep a field out of the report in the first
+place; [scrubbing](#scrubbing), [`beforeSend`](#beforesend) and the receiver's
+own settings come after it, and are listed here only where they are the main
+control.
+
+| Field | On by default | Can hold personal data | The switch that turns it off | Where it ends up |
+|---|---|---|---|---|
+| `type` | Always | No — one of `bug`, `idea`, `other` | None; it is the reporter's choice between three words | Your endpoint, and the title line of every sink |
+| `message` | Always | **Yes** — the reporter writes freely, and pastes | None: it is the report. `scrubReport` redacts the shapes it knows, and `beforeSend` can drop the report whole | Your endpoint, then your `store` and your sinks |
+| `contact` | No — off in the hook, the panel and the script tag until you ask for it | **Yes**, by definition: you asked how to reach a person | Leave `contact` unset, and `data-contact` off the tag. `scrubReport(report, { contact: true })` redacts the line whole | Your endpoint; the Resend sink uses it as the reply-to when it looks like an address |
+| `context` | Always | Sometimes — the path and query of the page, so it is personal exactly when your own URLs are (`/patients/1234`) | None for the object. The `query` scrubber redacts values under `token`, `key`, `secret`, `password` and `auth`, and the origin and the fragment are never collected at all | Your endpoint, then your `store` and your sinks |
+| `console` | Only while `initConsoleBuffer()` is recording — the script tag starts it for you | **Yes** — an error message carries whatever was interpolated into it. `console.log` and `console.debug` are never recorded, which is where stray values usually end up | Do not call `initConsoleBuffer()`; `includeConsole: false` leaves it out of one report | Your endpoint, then your `store` and your sinks |
+| `elements` | No — until the reporter points at one | **Yes** — the selector, the element's visible text and its `data-*` attributes | `elementPicker: false` on the panel; nothing attaches an element on its own | Your endpoint, then your `store` and your sinks |
+| `screenshotDataUrl` | No — until you hand in a renderer. With one it is armed for bug reports, and the reporter can clear the checkbox | **Yes**, more than anything else here except a replay: it is whatever was on screen. Field values are [masked](#masking) first | No renderer; `screenshotFor`; the reporter's own checkbox; `handleReport({ screenshot: "drop" })` on the server | Your endpoint; `fileStore` decodes it beside the JSON as `<id>.png`. Read ["Please read this part"](#please-read-this-part) before you store it anywhere |
+| `breadcrumbs` | Only while `initBreadcrumbs()` is recording — the script tag starts it | **Yes** — a click carries the element's text, a navigation carries the path | Do not call `initBreadcrumbs()`; `includeBreadcrumbs: false` for one report | Your endpoint, then your `store` and your sinks |
+| `network` | No — `initNetwork()`, or `data-network` on the script tag | **Yes** — method, URL, status and duration. Never a request body and never a header, but a URL can carry an id or a token; `scrubUrl` runs over it | Leave it off; `includeNetwork: false` for one report | Your endpoint, then your `store` and your sinks |
+| `perf` | No — `initPerf()`, or `data-perf` | No — LCP, INP, CLS, TTFB and two load timings, all of them numbers | Leave it off; `includePerf: false` for one report | Your endpoint, then your `store` and your sinks |
+| `storage` | No — the same switch as `perf` | Only if you ask for it: key names and value lengths, and cookie *names*. A value travels only for a key you listed in `allowValues`, and a cookie value never travels on any setting | Leave `initPerf` off, or leave `allowValues` empty; `includePerf: false` covers both | Your endpoint, then your `store` and your sinks |
+| `replay` | No — `attachRrweb(record)` with your own copy of rrweb | **Yes**, and more than anything else: it is a film of a person using your software | Do not call `attachRrweb`; rrweb's own masking, which the adapter sets to `maskAllInputs: true`; `includeReplay: false`; `handleReport({ replay: "drop" })` on the server | Your endpoint and your `store`. No sink uploads a replay anywhere |
+| `notes` | When there is one | No — the library's own note about the report, such as a screenshot the offline queue could not store | None | Your endpoint, then your `store` and your sinks |
+
+Whatever you add yourself with `extra` is not in this table, because only you
+know what is in it. It is merged into the top level of the same JSON and travels
+the same way.
+
+### How long it is kept
+
+bugbottle keeps nothing. In the browser a report lives in memory until it is
+sent; the [offline queue](#when-the-network-is-down) holds a failed one in
+`localStorage` until it goes out, and deletes it when it does. After the POST,
+retention is the receiver's job, and the receiver is you. There is no maximum
+age anywhere in this package and no cleanup that runs on its own.
+
+`fileStore` has both a ceiling and an age: `maxReports` (2000 by default)
+deletes the oldest files once the directory is over it, `maxAgeDays` (off by
+default) deletes what is older than that, and `reports.prune()` applies both —
+the inbox example runs it at start and once an hour, from `RETENTION_DAYS`. If
+your answer is "delete after 90 days", that is `maxAgeDays: 90` and a call to
+`prune()` on a schedule; `reports.list()` gives you `receivedAt` and
+`reports.remove(id)` deletes the JSON and the picture together when the rule
+is something else. A database `store` is the same job with a `DELETE`.
+
+Two decisions belong in the same sitting. How long a screenshot lives is worth
+answering separately from how long the text lives: the picture is the part that
+ages badly, and deleting it early costs little. And a report that has already
+gone to Slack or to an issue tracker has been copied — deleting your row does
+not delete the copy, and from the moment a sink posts it, it lives by that
+system's retention rather than by yours.
+
+### No cookies, no fingerprinting, no third party
+
+- **No cookies.** The library sets none and reads none. The one place a cookie
+  is touched at all is `initPerf`, which lists cookie *names* so you can see
+  what the page was carrying; a cookie value is never included, on any setting.
+- **No fingerprinting.** The context is the page path and query, the viewport,
+  the user agent, and — when the browser offers them — the language, the time
+  zone, the screen size and pixel ratio, the colour scheme, whether the browser
+  thought it was online, and the effective connection type. That is the whole
+  list. No canvas, no fonts, no device enumeration, no identifier of any kind,
+  and nothing stored anywhere to recognise the same browser twice.
+- **No third party.** The package has no runtime dependency, and the client
+  makes one request: the POST to your endpoint. `html-to-image` and `rrweb` are
+  optional, are handed in by you, and run inside your page. The sinks run on
+  your server and speak to the services you configured, with the keys you passed
+  as arguments — never read from the environment behind your back.
+
+The site at [bugbottle.dev](https://bugbottle.dev) makes the same promise about
+itself, and there it is enforced rather than asserted.
+`site/security-headers.conf` puts this on every response:
+
+```
+Content-Security-Policy: default-src 'self'; img-src 'self' data:;
+  style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none';
+  base-uri 'self'; form-action 'self'
+```
+
+`default-src 'self'` means no script, style, font, image or connection may come
+from anywhere but that host: the two typefaces are served from it, there is no
+analytics to block, and a browser refuses the first request that would break the
+claim. The two directives that are wider are the demo panel rather than the
+page — `data:` images because a screenshot arrives as a data URL, and inline
+style because the panel puts its stylesheet inside a shadow root. This is the
+site's policy and not the library's: your own application writes its own, and
+bugbottle needs nothing in it beyond a `connect-src` that allows your endpoint.
+
+### What to write in your privacy policy
+
+Adapt this, then walk the table above and strike the sentences about the fields
+you left off:
+
+> **Problem reports.** When you report a problem in [Application], we receive
+> the message you write and, if you fill it in, the way to reach you that you
+> give us. With it we receive technical details about the page you were on: its
+> address within [Application], the size of your window, your browser's user
+> agent, and the error messages the page had already logged. If you attach a
+> screenshot, we receive a picture of the page as you saw it, with the contents
+> of form fields hidden. We use this only to find and fix the problem you
+> reported. It is stored on our own systems, [is shared with [issue tracker],
+> which we use to track fixes,] and is deleted after [90] days.
+
+Three habits are worth more than the paragraph itself. Say it where the reporter
+is, next to the button, rather than only in a policy nobody opens. Describe what
+you turned on rather than what the library can do. And when the answer
+changes — turning screenshots or a replay on is a change of answer — change the
+paragraph in the same release.
 
 ## The payload
 

@@ -34,7 +34,7 @@ COPY CHANGELOG.md ./
 # Markdown, not README sections, and the same run writes sitemap.xml and
 # robots.txt.
 COPY site/compare.md ./site/
-COPY site/da/sammenlign.md site/da/kom-i-gang.md ./site/da/
+COPY site/da/sammenlign.md site/da/kom-i-gang.md site/da/privatliv.md ./site/da/
 # The history, for the sitemap's dates. Last, because it changes with every
 # commit and would otherwise invalidate everything below it.
 #
@@ -73,6 +73,7 @@ COPY --from=docs /build/site/docs/ /usr/share/nginx/html/docs/
 COPY --from=docs /build/site/compare/ /usr/share/nginx/html/compare/
 COPY --from=docs /build/site/da/sammenlign/ /usr/share/nginx/html/da/sammenlign/
 COPY --from=docs /build/site/da/kom-i-gang/ /usr/share/nginx/html/da/kom-i-gang/
+COPY --from=docs /build/site/da/privatliv/ /usr/share/nginx/html/da/privatliv/
 COPY --from=docs /build/site/sitemap.xml /build/site/robots.txt /usr/share/nginx/html/
 COPY dist/ /usr/share/nginx/html/dist/
 
