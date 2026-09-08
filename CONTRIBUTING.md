@@ -36,7 +36,8 @@ need Node 18.
   `bugbottle/sign` 512 bytes, `bugbottle/rrweb` 768 bytes,
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 24 kB. The
+  are small; the core they share is not), `dist/bugbottle.js` 24 kB and
+  `dist/bugbottle.slim.js` 20992 bytes. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
@@ -76,6 +77,17 @@ need Node 18.
   `record` is handed in by the application rather than imported here. The
   script tag does not carry it at all — without a bundler there is no `record`
   to hand in.
+  The slim script tag is the one budget
+  that was written down after the measurement rather than before it: #58 aimed
+  at 18432 bytes and the file measures 20477, so the budget is 20992. Leaving
+  the annotator, the timings snapshot, the shake gesture and the network log
+  out took 3512 bytes off the 23 989 the full build weighs — less than the
+  4.5 kB the four modules weigh separately, because in one bundle they share
+  gzip's dictionary — and 18 kB was never reachable with the eight locales
+  kept: of 55 kB minified, `src/locales.ts` is 16.5 kB and `src/ui/index.ts`
+  15.9 kB, and neither shrinks by dropping a recorder. Both files are built by
+  the same `scripts/build-iife.mjs` from the same settings, so anything that
+  makes one smaller makes the other smaller too.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a
   file is added.

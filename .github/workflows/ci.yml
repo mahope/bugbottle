@@ -86,9 +86,34 @@ jobs:
           # languages, which this build carries all of. The rest is the panel's
           # own half of the field and the `data-contact` reading, which is the
           # only way a page with no bundler can ask for it. The file measures
-          # 23839.
+          # 23839, and 23989 since #58 moved the `data-*` reading into
+          # `src/global-shared.ts` so the slim build could share it: 52 bytes
+          # for a module boundary and the one optional call the shared boot
+          # takes. The budget did not move.
           if [ "$iife" -gt 24576 ]; then
             echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 24576" >&2
+            exit 1
+          fi
+      - name: The slim script-tag bundle stays under its budget
+        run: |
+          set -e
+          slim=$(gzip -c dist/bugbottle.slim.js | wc -c)
+          echo "dist/bugbottle.slim.js: $slim bytes gzipped"
+          # The same panel without the annotator, the timings snapshot, the
+          # shake gesture and the network log. #58 aimed at 18432 and the file
+          # measures 20477, so the budget is 20992 — measure before writing a
+          # budget down, as the full build's history above says twice.
+          # 18 kB was never reachable while keeping the eight locales: of the
+          # 55 kB minified, `src/locales.ts` is 16.5 kB and `src/ui/index.ts`
+          # is 15.9 kB, and neither shrinks by dropping a recorder. What the
+          # four modules cost the full build is what came off: 23989 - 20477 =
+          # 3512 bytes, rather less than their 4.5 kB standalone sum, because
+          # inside one bundle they share gzip's dictionary. Two of their costs
+          # stay behind on purpose — the annotator's eight locale strings in
+          # eight languages, which are data, and the panel's own annotator
+          # toolbar, which is a static import.
+          if [ "$slim" -gt 20992 ]; then
+            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 20992" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp

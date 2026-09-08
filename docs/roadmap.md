@@ -200,6 +200,16 @@ list that collapses on a phone, and a language switch in the footer. Audited
 with `scripts/a11y-site.mjs` — six pages, two colour schemes, zero violations
 and no console message — and Lighthouse mobile at 97 with no layout shift.
 
+**Alongside** — `dist/bugbottle.slim.js`, a second script-tag build: the same
+panel and all eight locales without the annotator, the timings snapshot, the
+shake gesture and the network log. 20.5 kB gzipped against the full build's
+23.9. `data-annotate`, `data-perf`, `data-shake` and `data-network` are read,
+ignored and warned about once on the console in English. Both files come out of
+`scripts/build-iife.mjs` with the same settings and share their `data-*`
+reading; 18 kB was the target and was not reachable with the locales kept —
+they and the panel are two thirds of the file, and neither shrinks by dropping
+a recorder.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.

@@ -189,6 +189,12 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
               kundewebsted som en anden udruller. Det monterer sig selv ud fra
               data-attributterne.
             </p>
+            <p>
+              Der er to filer. <code>bugbottle.js</code> har det hele med;
+              <code>bugbottle.slim.js</code> er det samme panel på alle otte sprog
+              uden tegneværktøjet, målingerne, ryst-for-at-rapportere og
+              netværksloggen — og siger det i konsollen, hvis du beder om en af dem.
+            </p>
           </div>
           <div class="option-code">
             <div class="slab">
@@ -290,7 +296,11 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
           </tr>
           <tr>
             <th scope="row">script-tagget ovenfor</th>
-            <td>23.1 kB</td>
+            <td>23.9 kB</td>
+          </tr>
+          <tr>
+            <th scope="row">samme tag, bugbottle.slim.js</th>
+            <td>20.5 kB</td>
           </tr>
           </tbody>
         </table>

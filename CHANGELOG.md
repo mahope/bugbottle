@@ -9,6 +9,24 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `dist/bugbottle.slim.js`, a second script-tag build. The full one is the
+  "everything" build — a `data-*` attribute has to be able to switch on the
+  annotator, the timings snapshot, the shake gesture and the network log, so
+  every page that loads it carries all four whether it asks for them or not.
+  The slim file is the same panel without those four: the console, the
+  breadcrumbs, the element picker, the offline queue, the scrubber, the signer
+  and all eight locales, 20.5 kB gzipped against 23.9. Locales stayed, because
+  they are data and dropping them would break `data-locale` for everyone not
+  in English. `data-annotate`, `data-perf`, `data-shake` and `data-network` are
+  read and ignored, and the build says so on the console once, in English,
+  naming the attributes it saw — that is a message to whoever wrote the script
+  tag, not to the reporter. `window.bugbottle` is the same namespace without
+  `createAnnotator`, `initPerf`, `onShake`, `requestShakePermission` and
+  `initNetwork`. Both files are built by the same `scripts/build-iife.mjs` with
+  the same settings, from `src/global.ts` and the new `src/global-slim.ts`; the
+  `data-*` reading they share moved to `src/global-shared.ts` rather than being
+  copied, which cost the full build 52 bytes gzipped (23 937 → 23 989) and left
+  its budget where it was.
 - `bugbottle/rrweb`: `attachRrweb(record, { seconds = 30, maxBytes = 512 * 1024 })`,
   the last half-minute before the panel opened, for the applications that
   already run rrweb. An adapter and not a recorder — rrweb is not a dependency

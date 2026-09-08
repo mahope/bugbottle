@@ -43,6 +43,8 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
 | `src/sign.ts` | `createSigner({ key, header? })` — the `sign` function `sendReport` takes, HMAC-SHA-256 over `<timestamp>.<body>` through WebCrypto, sent as `t=<ms>,v1=<hex>`. Plus `computeSignature` and `hmacHex`, which `src/server/handle.ts` verifies with, so both sides compute the digest the same way. Own entry point; imported by nothing in the core | nothing |
 | `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
+| `src/global-slim.ts` | Entry for the second IIFE `dist/bugbottle.slim.js`: the same panel and the same eight locales without the annotator, the timings snapshot, the shake gesture and the network log. Reads the same attributes; `data-annotate`, `data-perf`, `data-shake` and `data-network` are ignored and warned about once on the console, in English, because that is a message to whoever wrote the script tag. Same build script, same settings, same version define; excluded from the tsc emit | global-shared, everything but annotate/perf/shake/network |
+| `src/global-shared.ts` | `readOptions(data, endpoint)` and `bootstrap(autoMount, preflight?)` — the `data-*` reading and the boot the two script-tag entries have in common, written once so the full build does not grow when the slim one changes. `preflight` runs before the console is patched, so a developer message stays out of the ring buffer. Excluded from the tsc emit | breadcrumbs, console-buffer, locales, queue, scrub, sign, ui (types) |
 | `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, `createLinearIssue` (GraphQL, so a rejected mutation arrives as a 200 with `errors` and still throws), `jiraSink`, `gitlabSink`, `sentrySink` (all below), the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
 | `src/sinks/chat.ts` | `readReport(raw)` — the handful of things a chat message shows (title, message, facts, five console entries, selector, timestamp), read once out of an untrusted body — plus `clip`, `resolveUrl` and the `ChatSink`/`ChatSinkContext`/`UrlFrom` types the two chat sinks share. A data URL is never a picture address: neither service will fetch one | report-core |
 | `src/sinks/slack.ts` | `slackSink(options)` — a factory returning a `ReportSink` that posts one Block Kit message per report to an incoming webhook: header, escaped `mrkdwn` message, up to ten fields, fenced console, `image`, `context`, an "Open report" button. `buildSlackMessage` builds the body without sending it, and `escapeSlack` is the `&`/`<`/`>` escape. Every limit clips, none fails | chat, error |
@@ -142,7 +144,7 @@ not closed and a branch is not merged with the docs lagging.
 ```bash
 npm run check       # typecheck → test → build → docs, in that order; run before "done"
 npm test            # node --test on tests/*.test.ts (needs Node 22+)
-npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → IIFE
+npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → both IIFEs
 npm run build:docs  # site/docs/, /compare/, /da/sammenlign/, sitemap.xml, robots.txt; fails on an ungrouped `##` section
 npm run a11y        # axe-core over the panel and over the site pages, in a real Chrome; needs a build and build:docs first
 npm run shot:panel  # re-capture the hero pictures from the current panel
@@ -245,6 +247,19 @@ its hint and the required check (about 256 bytes) plus three locale strings,
 which the script tag carries in eight languages. It is off by default and its
 markup is static, so every panel pays those bytes; a second entry point for one
 input would cost more than it saved.
+
+#58 then added the second IIFE. `dist/bugbottle.slim.js` leaves out the
+annotator, `bugbottle/perf`, `bugbottle/shake` and `bugbottle/network` and
+measures 20477 gzipped against the full build's 23989, so its budget is 20992.
+The issue aimed at 18432 and that was never reachable with the eight locales
+kept: of 55 kB minified, `src/locales.ts` is 16.5 kB and `src/ui/index.ts`
+15.9 kB, and neither shrinks by dropping a recorder. The 3512 bytes that did
+come off are less than the four modules weigh separately, because in one bundle
+they share gzip's dictionary, and two of their costs stay behind on purpose —
+the annotator's eight locale strings in eight languages, which are data, and
+the panel's own annotator toolbar, which is a static import. Moving the shared
+`data-*` reading into `src/global-shared.ts` cost the full build 52 bytes
+(23 937 → 23 989) and left its budget at 24576.
 
 `bugbottle/server` is measured and printed rather than budgeted, because
 everything in it is tree-shaken away from a consumer that imports only the
