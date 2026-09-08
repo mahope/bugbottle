@@ -662,7 +662,7 @@ const TABLE_HOOK = {
   hooks: {
     postprocess(html) {
       return html.replace(
-        /<table>[sS]*?</table>/g,
+        /<table>[\s\S]*?<\/table>/g,
         (table) => `<div class="table-wrap" tabindex="0" role="region" aria-label="Table">${table}</div>`,
       );
     },
