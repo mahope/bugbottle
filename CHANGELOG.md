@@ -7,6 +7,31 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The reviewed release. A fresh-context review read everything since 0.9.0 and
+found six defects, all fixed with tests written first: an SMTP address header
+that encoded the address itself, a file-store index that two early reports
+could race, a Teams card that a long picture address pushed over the cap, an
+inbox preflight that answered 401, a language tag of `__proto__` that threw at
+mount, and a page-script hook that a renamed heading could silently detach.
+Its follow-ups landed too: `requireTls` and a write deadline on the SMTP
+client, the legacy Teams webhook's 200-with-error, clipping on code points, a
+one-function queue storage seam, `versionchange` in the IndexedDB storage,
+`fileStore.refresh()`. The OpenAPI document now passes a real linter, which
+runs in CI, and every CORS answer carries `Vary: Origin`. New since 0.12.0:
+`bugbottle/queue-idb` and the queue's quota fallback — a report that does not
+fit is stored without its picture and says so in `notes`, rather than being
+lost — plus the table of eleven sinks and the inbox's notifications.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.5 kB, `bugbottle/queue-idb` 0.7 kB,
+`bugbottle/triggers` 1.3 kB, `bugbottle/shake` 0.7 kB, `bugbottle/sign` 0.4 kB,
+`bugbottle/rrweb` 0.7 kB, `bugbottle/locales-extra` 4.7 kB,
+`dist/bugbottle.js` 24.4 kB, `dist/bugbottle.slim.js` 20.9 kB,
+`bugbottle/server` validators 0.6 kB.
+
 ### Added
 
 - The offline queue survives a full `localStorage` (#85). A refused write used

@@ -47,9 +47,9 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   or Solid adapter, 5.7 kB; the optional ready-made panel, 11.5 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
-  1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.3 kB;
+  1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.5 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 24.2 kB, and the slim one 20.6 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 24.4 kB, and the slim one 20.9 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
