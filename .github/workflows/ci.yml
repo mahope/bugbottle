@@ -364,9 +364,12 @@ jobs:
             echo "bugbottle/server is $server bytes gzipped; the budget is 1024" >&2
             exit 1
           fi
-          for symbol in 'document' 'window\.' 'navigator' 'localStorage'; do
+          # The Node names are the file store (#82): a consumer that imports only the
+          # validators must not carry node:fs either, so the seam is asserted from
+          # both sides — no DOM in the server entry, no disk in the validator path.
+          for symbol in 'document' 'window.' 'navigator' 'localStorage' 'node:fs' 'node:path' 'readFile' 'randomUUID'; do
             if grep -q "$symbol" out-server.js; then
-              echo "bugbottle/server bundles DOM code: found '$symbol' in out-server.js" >&2
+              echo "bugbottle/server bundles code the validators must not carry: found '$symbol' in out-server.js" >&2
               exit 1
             fi
           done
