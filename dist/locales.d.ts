@@ -127,9 +127,17 @@ export declare const es: Locale;
 /** Every bundled locale, keyed by code. */
 export declare const locales: Record<string, Locale>;
 /**
- * Picks a bundled locale for a language tag — `"da-DK"` gives Danish,
- * `"pt-BR"` falls back to English. Pass `navigator.language` to follow the
- * browser.
+ * Picks a locale for a language tag — `"da-DK"` gives Danish, an unknown tag
+ * gives the fallback. Pass `navigator.language` to follow the browser.
+ *
+ * `from` is the map to look in, the eight bundled ones by default. Merge
+ * `bugbottle/locales-extra` into it to reach the five optional languages
+ * without every site paying for them:
+ *
+ *     resolveLocale(navigator.language, en, { ...locales, ...localesExtra });
+ *
+ * A region is dropped when the full tag is not in the map, so `"pt-BR"` finds
+ * `pt` there and English here.
  */
-export declare function resolveLocale(tag: string | undefined | null, fallback?: Locale): Locale;
+export declare function resolveLocale(tag: string | undefined | null, fallback?: Locale, from?: Record<string, Locale>): Locale;
 //# sourceMappingURL=locales.d.ts.map

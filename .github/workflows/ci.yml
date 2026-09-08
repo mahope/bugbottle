@@ -139,6 +139,7 @@ jobs:
           echo 'import { onShake, requestShakePermission } from "bugbottle/shake"; export { onShake, requestShakePermission };' > shake.js
           echo 'import { createSigner } from "bugbottle/sign"; export { createSigner };' > sign.js
           echo 'import { attachRrweb } from "bugbottle/rrweb"; export { attachRrweb };' > rrweb.js
+          echo 'import { localesExtra } from "bugbottle/locales-extra"; export { localesExtra };' > locales-extra.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
         run: |
@@ -160,7 +161,13 @@ jobs:
           npx esbuild shake.js --bundle --minify --format=esm --outfile=out-shake.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
           npx esbuild rrweb.js --bundle --minify --format=esm --outfile=out-rrweb.js
-          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-shake out-sign out-rrweb; do
+          # Printed, never budgeted: the entry is data, and its weight is the
+          # five languages in it. Importing all five costs about 4.7 kB
+          # gzipped; importing one of them tree-shakes down to about 1.1 kB.
+          # What the budgets above guard is that none of it reaches a bundle
+          # that did not ask for it, which is why nothing imports this entry.
+          npx esbuild locales-extra.js --bundle --minify --format=esm --outfile=out-locales-extra.js
+          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-shake out-sign out-rrweb out-locales-extra; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)

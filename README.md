@@ -902,7 +902,7 @@ changes with every version, so it has to be updated with the version.
 
 ## Languages and branding
 
-Every string a reporter sees lives in a `Locale`: five status `messages` and
+Every string a reporter sees lives in a `Locale`: six status `messages` and
 the widget's `ui` labels. `bugbottle/locales` ships English, Danish, Swedish,
 Norwegian, German, Dutch, French and Spanish, and `resolveLocale(navigator.language)`
 picks one. Override any label, or write a locale of your own — the type tells
@@ -920,6 +920,29 @@ mountBugbottle({
   messages: { sent: "Tak — vi kigger på det i morgen tidlig" },
 });
 ```
+
+### Five more languages, imported on purpose
+
+A locale is data, and data is carried whole: everything that imports
+`bugbottle/locales` pays for all eight languages in it. Italian, Polish,
+Portuguese, Finnish and Ukrainian are in a second entry so that a site in one of
+them can have its own language without every other site growing. Import the
+whole map, or the single language the site is in:
+
+```ts
+import { en, locales, resolveLocale } from "bugbottle/locales";
+import { localesExtra } from "bugbottle/locales-extra";
+
+const all = { ...locales, ...localesExtra };
+mountBugbottle({ endpoint, locale: resolveLocale(navigator.language, en, all) });
+```
+
+`resolveLocale` takes the map to look in as its third argument, so nothing about
+this reaches a bundle that does not ask for it — not the core, and not either
+script-tag build, which still carry the eight. `pt` is European Portuguese and
+`pt-BR` resolves to it, the way `da-DK` resolves to `da`.
+
+### Branding and theme
 
 The panel's look comes from `theme` — `primary`, `onPrimary`, `background`,
 `text`, `muted`, `border`, `radius`, `font`, `shadow`, `zIndex`, `position`,
@@ -2674,6 +2697,10 @@ whose `network` and `perf` take `initNetwork` and `initPerf`),
 `locales`, `resolveLocale`, `enMessages` (the English `messages` on their own,
 so the hook can default without dragging eight languages in), and the `Locale`,
 `Messages`, `UiTexts`, `EmailTexts` types.
+
+**`bugbottle/locales-extra`** — `it`, `pl`, `pt`, `fi`, `uk` and
+`localesExtra`, the five optional languages in the same `Locale` shape. Nothing
+imports this entry, so a site that does not ask for it never carries it.
 
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,

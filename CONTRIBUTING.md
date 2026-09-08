@@ -34,6 +34,9 @@ need Node 18.
   `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/shake` 768 bytes,
   `bugbottle/sign` 512 bytes, `bugbottle/rrweb` 1024 bytes,
+  `bugbottle/locales-extra` printed but never budgeted — it is data, about
+  4.7 kB gzipped for all five languages and about 1.1 kB for one of them, and
+  what matters is that nothing imports it,
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
   are small; the core they share is not), `dist/bugbottle.js` 24 kB and
