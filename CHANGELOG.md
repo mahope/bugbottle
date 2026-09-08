@@ -46,6 +46,18 @@ change the API; the changelog says so when they do.
   four controls moved before axe looks. Nothing in the package changed.
   Closes #76.
 
+### Fixed
+
+- `normaliseReplay` no longer throws on a deeply nested replay event. The walk
+  that takes null bytes out of a parsed event recursed once per level, so an
+  event nested a couple of thousand deep overflowed the stack — out of a
+  validator documented never to throw, and out of `handleReport` as a 500 to a
+  reporter who had done nothing wrong. The walk now has a depth of its own
+  (200, which is deeper than rrweb nests a DOM snapshot), and a replay past it
+  is dropped whole exactly as an oversized one is: the report keeps everything
+  else. Surviving `JSON.stringify` was not the guarantee it looked like, since
+  that walk spends less stack per level than this one does.
+
 ## 0.10.0 — 2026-09-08
 
 The visible release: the browser audits — axe over the panel and every site

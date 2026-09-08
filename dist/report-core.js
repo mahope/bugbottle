@@ -492,21 +492,38 @@ const NUL = String.fromCharCode(0);
  */
 const NUL_ESCAPE = JSON.stringify(NUL).slice(1, -1);
 /**
+ * How deep the null-byte walk follows one replay event. rrweb nests a DOM
+ * snapshot a few dozen levels at most; a body nested deeper than this was
+ * written to reach the recursion rather than to play back, and following it
+ * costs one stack frame per level.
+ */
+const MAX_REPLAY_DEPTH = 200;
+/** Thrown by the walk and caught one frame later. Never leaves this module. */
+class ReplayTooDeepError extends Error {
+}
+/**
  * A copy of `value` with every real null byte gone, out of the strings and out
  * of the keys alike. Postgres refuses a text value containing one, and a
  * replay is nested attacker-controlled JSON on its way into a column. What
  * arrives here has already survived `JSON.stringify`, so there is nothing
- * circular to guard against.
+ * circular to guard against — but surviving `JSON.stringify` is not the same
+ * as surviving this walk, which spends more stack per level, so the depth is
+ * counted here rather than inferred from the serialisation.
  */
-function stripNuls(value) {
+function stripNuls(value, depth) {
+    if (depth > MAX_REPLAY_DEPTH)
+        throw new ReplayTooDeepError();
     if (typeof value === "string")
         return stripNullBytes(value);
+    // An arrow rather than the bare function: `map` passes the index as the
+    // second argument, which would arrive here as the depth.
     if (Array.isArray(value))
-        return value.map(stripNuls);
+        return value.map((item) => stripNuls(item, depth + 1));
     if (typeof value === "object" && value !== null) {
         const out = {};
-        for (const [key, item] of Object.entries(value))
-            out[stripNullBytes(key)] = stripNuls(item);
+        for (const [key, item] of Object.entries(value)) {
+            out[stripNullBytes(key)] = stripNuls(item, depth + 1);
+        }
         return out;
     }
     return value;
@@ -567,7 +584,18 @@ export function normaliseReplay(raw) {
     // replay was dropped for nothing. So the walk is over the parsed values
     // instead, where a real NUL is one character and the six characters are six.
     // The serialised form still decides whether the walk is worth doing at all.
-    const clean = serialised.includes(NUL_ESCAPE) ? stripNuls(events) : events;
+    let clean = events;
+    if (serialised.includes(NUL_ESCAPE)) {
+        try {
+            clean = stripNuls(events, 0);
+        }
+        catch {
+            // Nested deeper than the walk follows. A replay whose null bytes cannot
+            // be taken out is not a replay that can be stored, so it goes the way an
+            // oversized one goes: dropped whole, and the report keeps everything else.
+            return null;
+        }
+    }
     const first = clean[0]?.timestamp ?? 0;
     const last = clean[clean.length - 1]?.timestamp ?? first;
     const span = Math.round((last - first) / 1000);
