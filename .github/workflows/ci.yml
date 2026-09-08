@@ -54,12 +54,14 @@ jobs:
           # the stack frames and the wider context: the script tag carries every
           # default in eight languages.
           # 18432 was not enough for the picture annotator, which is why the
-          # budget is 20992 and the file measures 20450. About 1.4 kB of the
-          # rise is `src/annotate.ts` itself, which the panel imports, and the
-          # remaining kilobyte is its eight locale strings in eight languages —
-          # one of them a sentence, because it is where the annotator's keys
-          # are said to a screen reader. Neither half can be dropped without
-          # dropping the feature or its accessible names.
+          # budget is 20992. About 1.4 kB of the rise is `src/annotate.ts`
+          # itself and the remaining kilobyte is its eight locale strings in
+          # eight languages — one of them a sentence, because it is where the
+          # annotator's keys are said to a screen reader. Neither half can be
+          # dropped without dropping the feature or its accessible names. The
+          # panel takes the annotator as an option now, but this build is the
+          # one that carries everything and hands it in, so the budget cannot
+          # come down: it went up by the twenty-odd bytes of that wiring.
           if [ "$iife" -gt 20992 ]; then
             echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 20992" >&2
             exit 1
@@ -141,17 +143,21 @@ jobs:
           # region, the two-scheme colours and five new strings — which is the
           # difference between a panel a keyboard user can leave and one they
           # cannot, and so is not optional.
-          # The budget then went from 10 kB to 12 kB for the picture annotator:
-          # `src/annotate.ts` is 1441 bytes gzipped on its own and the panel
-          # imports it unconditionally, so an application that mounts the panel
-          # pays for it whether or not it takes pictures — `annotate: false`
-          # hides the button, it does not shrink the bundle. The toolbar, the
-          # editor state and eight English strings are the remaining 300 bytes.
-          # A dynamic import would move the cost rather than remove it and
-          # would make the panel depend on a second network round trip in the
-          # middle of a report, which is worse than 1.7 kB.
-          if [ "$ui" -gt 12288 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12288" >&2
+          # The budget then went from 10 kB to 12 kB for the picture annotator,
+          # which the panel imported unconditionally, and came back to 11 kB
+          # when it stopped: `annotate` is a function you hand in, like
+          # `screenshot`, `scrub` and `sign`, so `src/annotate.ts` — 1441 bytes
+          # gzipped — is in the bundle only for the applications that ask for
+          # it. What stays behind is the panel's own half of the feature: the
+          # toolbar markup, its CSS, the open/close wiring and the eight
+          # English strings, about 720 bytes measured against the 10 229 the
+          # panel weighed before the annotator existed. Those cannot be
+          # tree-shaken — a static import is a static import — so 10 kB is not
+          # reachable again without dropping the feature, and a dynamic import
+          # would only move the cost onto a network round trip in the middle of
+          # a report.
+          if [ "$ui" -gt 11264 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 11264" >&2
             exit 1
           fi
           # The annotator on its own: a canvas, three tools, an undo stack and

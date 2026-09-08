@@ -97,8 +97,12 @@ dependency. The blur pixelates in 12px blocks by reading the region back out
 of the canvas, so the pixels are gone from the export rather than covered up —
 it is the privacy tool as much as the marking one. The panel gained the "Edit
 picture" flow over it: a labelled toolbar, the tools as a `radiogroup`, focus
-back to the button that opened it, eight new strings in eight languages,
-`annotate: false` and `data-annotate="off"` to switch it off.
+back to the button that opened it, eight new strings in eight languages. The
+panel does not carry the annotator, though — it takes `createAnnotator` as an
+option, the same seam as `screenshot`, `scrub` and `sign`, so an application
+that never marks a picture never bundles the canvas editor. The script tag is
+the build that carries everything and hands it in itself, which is why
+`data-annotate="off"` still switches the button off there.
 
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub

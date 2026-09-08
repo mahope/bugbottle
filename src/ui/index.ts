@@ -13,7 +13,7 @@
  * outside without touching JavaScript.
  */
 
-import { createAnnotator, type AnnotateTool, type Annotator } from "../annotate.ts";
+import type { createAnnotator, AnnotateTool, Annotator } from "../annotate.ts";
 import {
   captureScreenshot,
   ScreenshotTooLargeError,
@@ -100,11 +100,13 @@ export type MountOptions = {
   elementPicker?: boolean;
   /**
    * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
-   * arrow and a blur that pixelates what it covers. Default true. `false`
-   * renders no button — the annotator is still in the bundle, since the panel
-   * imports it, but nothing on screen leads to it.
+   * arrow and a blur that pixelates what it covers. Hand in `createAnnotator`
+   * from `bugbottle/annotate` to get the button; leave it out and the panel
+   * never mentions the annotator and never carries it. The same seam as
+   * `screenshot`, `scrub` and `sign`: an optional capability is a function you
+   * pass in, so a bundler can drop what nobody asked for.
    */
-  annotate?: boolean;
+  annotate?: typeof createAnnotator | false;
   /**
    * `false` renders no floating button — call `open()` from your own control.
    * An element or selector makes that element the trigger instead.
@@ -363,7 +365,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   const types = options.types ?? REPORT_TYPES;
   const consoleFor = options.consoleFor ?? bugsOnly;
   const screenshotFor = options.screenshotFor ?? bugsOnly;
-  const annotateOn = options.annotate !== false;
+  // The annotator is a function the application hands in, so leaving it out
+  // keeps the canvas editor out of the bundle entirely.
+  const makeAnnotator = typeof options.annotate === "function" ? options.annotate : null;
   const theme = options.theme ?? {};
   const container = options.container ?? document.body;
 
@@ -561,12 +565,12 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
 
   /** Replaces the preview with the canvas and hands the picture to the annotator. */
   async function openEditor() {
-    if (annotator || !screenshot) return;
+    if (annotator || !screenshot || !makeAnnotator) return;
     editBtn.hidden = true;
     preview.hidden = true;
     editor.hidden = false;
     undoBtn.disabled = true;
-    const open = createAnnotator(canvas, screenshot, {
+    const open = makeAnnotator(canvas, screenshot, {
       tool,
       onChange: (marks) => {
         undoBtn.disabled = marks === 0;
@@ -602,7 +606,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     open.destroy();
     editor.hidden = true;
     preview.hidden = !screenshot;
-    editBtn.hidden = !screenshot || !annotateOn;
+    editBtn.hidden = !screenshot || !makeAnnotator;
   }
 
   async function capture() {
@@ -612,7 +616,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       screenshot = await captureScreenshot(render, { mask: options.mask });
       preview.src = screenshot;
       preview.hidden = false;
-      editBtn.hidden = !annotateOn;
+      editBtn.hidden = !makeAnnotator;
     } catch (err) {
       shotBox.checked = false;
       setStatus(err instanceof ScreenshotTooLargeError ? msg.screenshotTooLarge : msg.screenshotFailed, "error");

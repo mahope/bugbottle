@@ -6,8 +6,10 @@ import { Window } from "happy-dom";
  * The "Edit picture" flow inside the ready-made panel: the button appears with
  * the picture, the toolbar is a radio group the arrows walk through, undo is
  * disabled until there is something to undo, done folds the marked picture
- * back into the report and puts focus back where it started, and
- * `annotate: false` renders none of it.
+ * back into the report and puts focus back where it started, and neither
+ * `annotate: false` nor leaving the option out renders any of it — the
+ * annotator is a function the application hands in, not something the panel
+ * carries.
  *
  * The canvas is the recorder from `tests/annotate.test.ts` in miniature: what
  * is checked here is the panel around the annotator, not the drawing.
@@ -79,6 +81,7 @@ class FakeImage {
 globals.Image = FakeImage;
 
 const { mountBugbottle } = await import("../src/ui/index.ts");
+const { createAnnotator } = await import("../src/annotate.ts");
 const { en } = await import("../src/locales.ts");
 
 const ENDPOINT = "https://example.test/api/bug-reports";
@@ -132,6 +135,9 @@ function mount(extra: Record<string, unknown> = {}) {
     endpoint: ENDPOINT,
     fetch: fakeFetch,
     screenshot: async () => SHOT,
+    // The annotator is handed in, the way `screenshot`, `scrub` and `sign` are.
+    // Everything below the next test therefore asks for it explicitly.
+    annotate: createAnnotator,
     ...extra,
   });
 }
@@ -294,6 +300,37 @@ test("the canvas is inside the focus loop while the editor is open", async () =>
     ),
   ].filter((n) => !n.hidden && !n.closest("[hidden]"));
   assert.ok(focusable.includes(p.canvas), "Tab reaches the drawing area");
+
+  widget.destroy();
+});
+
+test("without the annotate option there is no way in", async () => {
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch: fakeFetch,
+    screenshot: async () => SHOT,
+  });
+  const p = await withPicture(widget);
+
+  assert.equal(p.preview.hidden, false, "the picture is still attached");
+  assert.equal(p.editBtn.hidden, true, "nothing offers an editor the panel does not carry");
+
+  // And pressing it anyway — it is in the shadow root, hidden — opens nothing.
+  p.editBtn.click();
+  await settle();
+  assert.equal(p.editor.hidden, true);
+
+  widget.destroy();
+});
+
+test("passing createAnnotator brings the button back", async () => {
+  const widget = mount({ annotate: createAnnotator });
+  const p = await withPicture(widget);
+
+  assert.equal(p.editBtn.hidden, false, "the application asked for the annotator");
+  p.editBtn.click();
+  await settle();
+  assert.equal(p.editor.hidden, false);
 
   widget.destroy();
 });

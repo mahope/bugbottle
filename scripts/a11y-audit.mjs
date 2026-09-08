@@ -64,6 +64,7 @@ function page(scheme) {
 </main>
 <script type="module">
   import { mountBugbottle } from "/dist/ui/index.js";
+  import { createAnnotator } from "/dist/annotate.js";
   // A picture rather than a photograph of the page: the screenshot row, its
   // note and the annotator all have to be on the page to be audited, and the
   // annotator needs a PNG that really decodes. Nothing here renders the DOM.
@@ -79,6 +80,9 @@ function page(scheme) {
     theme: { scheme: ${JSON.stringify(scheme)} },
     screenshot: async () => picture,
     screenshotFor: () => false,
+    // The panel takes the annotator as a function, so the audit has to ask for
+    // it: without this the editor is not on the page to be audited at all.
+    annotate: createAnnotator,
     fetch: async () => new Response("{}", { status: 201 }),
   });
 </script>

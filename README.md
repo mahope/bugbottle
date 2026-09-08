@@ -44,9 +44,12 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 1.4 kB gzipped; with the element picker and the React, Vue or
-  Svelte adapter, 5.4 kB; the optional ready-made panel, 10 kB; breadcrumbs 1.3 kB; the network log
-  1.3 kB; the offline queue 1 kB; the everything script tag, 17.7 kB. `html-to-image` is only pulled in by the module that
-  imports it, and the scrubber only by the code that calls it.
+  Svelte adapter, 5.4 kB; the optional ready-made panel, 10.7 kB; the picture
+  annotator 1.4 kB on top of it, and only for the applications that ask for it;
+  breadcrumbs 1.3 kB; the network log
+  1.3 kB; the offline queue 1.3 kB; the everything script tag, 20.5 kB. `html-to-image` is only pulled in by the module that
+  imports it, the annotator only by the panel you handed it to, and the
+  scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
   rendering, keys never in the browser.
@@ -538,12 +541,33 @@ const widget = mountBugbottle({
 ```
 
 It offers the three report types, a message, the screenshot checkbox (only
-when a renderer is given), "Edit picture" over the attached screenshot, the
-element picker, and a thank-you state. Pass
+when a renderer is given), the element picker, and a thank-you state. Pass
 `trigger: "#my-feedback-button"` to use your own button instead of the
-floating one, or `trigger: false` and call `open()` yourself, and
-`annotate: false` to leave the marking tools out. About 11.7 kB
+floating one, or `trigger: false` and call `open()` yourself. About 10.7 kB
 gzipped, no framework.
+
+"Edit picture" over the attached screenshot is the one thing the panel does
+not carry by itself: hand in `createAnnotator` and you get the button, leave
+it out and the canvas editor is not in your bundle at all. See
+[Marking the picture](#marking-the-picture).
+
+| Option | Effect |
+|---|---|
+| `endpoint` | Where the report is POSTed. **Required**. |
+| `screenshot` | A `ScreenshotRenderer`. Without it the screenshot row is not rendered. |
+| `annotate` | `createAnnotator` from `bugbottle/annotate` renders "Edit picture"; omitted or `false`, nothing leads to an editor and none of it is bundled. |
+| `elementPicker` | `false` leaves the picker out. Default true. |
+| `locale`, `texts`, `messages` | The language, and per-string overrides of it. |
+| `theme`, `brand` | Colours, radius, position; the name and logo in the header. |
+| `types`, `initialType` | Which report types to offer, and which starts selected. |
+| `consoleFor`, `screenshotFor` | Per type: attach the console, tick the screenshot box. Both default to bugs only. |
+| `mask` | What to hide in the screenshot; `false` photographs the page as it is. See [Masking](#masking). |
+| `trigger` | `false` for no floating button, or an element or selector to use your own. |
+| `shortcut` | The combination that opens the panel. Default `mod+shift+b`; `false` installs no listener. |
+| `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
+| `queue`, `scrub`, `sign`, `beforeSend` | The same seams the plain functions take. |
+| `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. |
+| `container`, `onSent`, `onError` | Where to mount, and what to do afterwards. |
 
 **Accessibility.** The panel is meant to be switched on without an
 accessibility regression, so it behaves like a dialog rather than a floating
@@ -574,7 +598,8 @@ so it is announced in the reporter's language.
 
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
-that mounts the panel from the tag itself. About 20 kB gzipped:
+that mounts the panel from the tag itself, the annotator included. About
+20.5 kB gzipped:
 
 ```html
 <script
@@ -606,7 +631,7 @@ run on your page.
 | `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
-| `data-annotate="off"` | Leaves out "Edit picture" and its rectangle, arrow and blur. Only matters once you give `mount` a renderer; see [Marking the picture](#marking-the-picture). |
+| `data-annotate="off"` | Leaves out "Edit picture" and its rectangle, arrow and blur. This build carries the annotator, so the attribute only switches it off; it does not make the file smaller. Only matters once you give `mount` a renderer; see [Marking the picture](#marking-the-picture). |
 | `data-shortcut` | The combination that opens the panel. `mod+shift+b` unless you say otherwise; `off` installs no listener. |
 | `data-open-on-error` | Present, with any value, opens the panel on an uncaught error. `prefill` also fills the message in. |
 
@@ -913,8 +938,20 @@ picture caught a customer name the masking rules did not know about.
 
 In the ready-made panel it is a button, "Edit picture", that appears once a
 picture is attached; it opens a toolbar and the canvas in place of the
-preview. Pass `annotate: false` to `mountBugbottle` (or `data-annotate="off"`
-on the script tag) to leave it out.
+preview. The panel does not import the annotator — you hand it in, the way you
+hand in a screenshot renderer, a scrubber or a signer, so that a panel nobody
+marks a picture in does not ship a canvas editor:
+
+```ts
+import { mountBugbottle } from "bugbottle/ui";
+import { createAnnotator } from "bugbottle/annotate";
+
+mountBugbottle({ endpoint: "/api/feedback", screenshot: htmlToImage, annotate: createAnnotator });
+```
+
+Leave `annotate` out (or pass `false`) and nothing on screen leads to an
+editor. The script tag is the build that carries everything, so it wires the
+annotator up for you and `data-annotate="off"` is how you switch it off there.
 
 With your own form, use the annotator directly. It is its own entry point,
 about 1.4 kB gzipped, and it draws on a canvas you supply:
@@ -1613,8 +1650,9 @@ Optional peer `svelte` >= 4.
 **`bugbottle/html-to-image`** — `htmlToImage`, a `ScreenshotRenderer`.
 Requires `html-to-image`.
 
-**`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions` (including
-`annotate`), `Theme`, `Brand` and `BugbottleWidget` types.
+**`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions` (whose
+`annotate` takes `createAnnotator` itself), `Theme`, `Brand` and
+`BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
 `locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,

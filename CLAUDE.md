@@ -161,20 +161,27 @@ used to be one `setItem`. `bugbottle/vue` and `bugbottle/svelte` are budgeted
 at 1536 bytes each, but *marginally*: a bundle of either weighs about 5.4 kB,
 nearly all of it the capture, the picker and the send that any form pays for,
 so CI subtracts a bundle of `buildReport`/`sendReport`/`captureScreenshot`/
-`pickElement` and checks the difference. The IIFE budget is 19456 bytes gzipped
-(about 18 kB with the queue, the triggers, the accessibility pass and the 0.6
-evidence); masking, the queue and the triggers each cost it roughly half a
-kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35. `bugbottle/annotate` is budgeted at
+`pickElement` and checks the difference. The IIFE budget was 19456 bytes gzipped
+before the annotator (about 18 kB with the queue, the triggers, the
+accessibility pass and the 0.6 evidence); masking, the queue and the triggers
+each cost it roughly half a kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35. `bugbottle/annotate` is budgeted at
 2048 bytes and measures 1441: a canvas, three tools and an undo stack, with
 nothing imported. #36 then took the panel budget from 10 kB to 12 kB and the
-IIFE from 18432 to 20992 bytes (measured 11971 and 20450). The panel imports
-the annotator unconditionally, so those 1441 bytes are paid by every
-application that mounts the panel — `annotate: false` hides the button, it does
-not shrink the bundle, and a dynamic import would only move the cost onto a
-network round trip in the middle of a report. The toolbar and the editor state
-are about 300 bytes more, and the IIFE carries the eight new locale strings in
-eight languages on top, one of them a sentence because it is where the
-annotator says its keys to a screen reader.
+IIFE from 18432 to 20992 bytes, because the panel imported the annotator
+whether or not anybody marked a picture. #39 undid that half: `annotate` is a
+function the application hands in, like `screenshot`, `scrub` and `sign`, so
+those 1441 bytes are in a bundle only when `createAnnotator` is passed to
+`mountBugbottle`, and the panel budget came back to 11 kB (measures 10 951
+against the 10 229 it weighed before the annotator existed). The 720 bytes in
+between are the panel's own half — the toolbar, its CSS, the open/close wiring
+and eight English strings — and they cannot be tree-shaken out of a static
+import, so 10 kB is not reachable again with the feature in the panel; a
+dynamic import would only move the cost onto a network round trip in the middle
+of a report. The IIFE budget stays at 20992: it is the build that carries
+everything, so it imports the annotator itself, hands it to the panel through
+`mount`, and pays for the eight locale strings in eight languages on top, one
+of them a sentence because it is where the annotator says its keys to a screen
+reader.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

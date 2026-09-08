@@ -34,10 +34,20 @@ import { mountBugbottle, type MountOptions, type Theme } from "./ui/index.ts";
 /** Replaced by esbuild with the version in `package.json`. */
 declare const __BUGBOTTLE_VERSION__: string;
 
+/**
+ * `mountBugbottle` with the annotator already handed in. The panel takes the
+ * annotator as a function now, so nobody pays for a canvas editor they never
+ * open; this build is the one that carries everything, so it wires it up and
+ * `annotate: false` is still the way to leave the button out.
+ */
+function mount(options: MountOptions): ReturnType<typeof mountBugbottle> {
+  return mountBugbottle({ annotate: createAnnotator, ...options });
+}
+
 const api = {
   version: __BUGBOTTLE_VERSION__,
-  mount: mountBugbottle,
-  mountBugbottle,
+  mount,
+  mountBugbottle: mount,
   initConsoleBuffer,
   initBreadcrumbs,
   initNetwork,
@@ -49,8 +59,8 @@ const api = {
   buildReport,
   sendReport,
   pickElement,
-  // The panel already carries the annotator, so exposing it costs nothing and
-  // lets a page with its own form mark a picture the same way.
+  // This build carries the annotator for the panel, so exposing it costs
+  // nothing and lets a page with its own form mark a picture the same way.
   createAnnotator,
   // The panel wires both of these itself; they are exposed for the page that
   // wants a shortcut without the panel, and they cost nothing extra here.
@@ -121,9 +131,10 @@ function autoMount(data: DOMStringMap): void {
   // Masking is on by default, so the attribute only exists to switch it off:
   // a page that wants the screenshot exactly as the reporter sees it says so.
   if (data.mask === "off") options.mask = false;
-  // Marking the picture is on by default wherever there is a picture, so, like
-  // masking, the attribute exists only to switch it off. This build ships no
-  // renderer, so it matters only once a page passes one to `mount` itself.
+  // Marking the picture is on by default wherever there is a picture — `mount`
+  // above hands the annotator in — so, like masking, the attribute exists only
+  // to switch it off. This build ships no renderer, so it matters only once a
+  // page passes one to `mount` itself.
   if (data.annotate === "off") options.annotate = false;
   // Any value enables the scrubber, including the empty string of a bare
   // `data-scrub` attribute — the point is that ticking it is one word.
@@ -143,7 +154,7 @@ function autoMount(data: DOMStringMap): void {
   // Any value turns the offline queue on, the same way `data-scrub` does. The
   // queue also flushes whatever an earlier visit left behind as it is created.
   if (data.queue !== undefined) options.queue = createQueue({ endpoint });
-  mountBugbottle(options);
+  mount(options);
 }
 
 if (script?.dataset.endpoint) {
