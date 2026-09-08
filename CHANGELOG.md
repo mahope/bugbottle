@@ -7,6 +7,14 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- CI now asserts the `bugbottle/server` bundle rather than only printing its
+  size. A bundle of one validator must stay under 1024 bytes gzipped and its
+  minified text must mention none of `document`, `window.`, `navigator` or
+  `localStorage`. "A server bundle must never pull in DOM code" has been a rule
+  since the first release and until now nothing checked it.
+
 ## 0.8.0 — 2026-09-08
 
 The reachable release: the report can carry how to answer the person who

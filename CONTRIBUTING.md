@@ -55,11 +55,14 @@ need Node 18.
   core moved 1272 → 1310 bytes for it, which is the two registry reads in
   `buildReport` and nothing else — the observers, the store walk and the cookie
   parse are only ever bundled by an application that imports `bugbottle/perf`.
-  `bugbottle/server` is measured and printed rather than budgeted: it is a
+  `bugbottle/server` is budgeted at 1024 bytes and measures 582: it is a
   server entry, and everything in it — the sinks included — is tree-shaken away
-  from a consumer that imports only the validators. The number to watch there is
-  that it stays about half a kilobyte, which is the proof that no sink leaked
-  into the shared path. `bugbottle/shake` is its own entry rather than a third
+  from a consumer that imports only the validators, so staying about half a
+  kilobyte is the proof that no sink leaked into the shared path. CI also greps
+  that minified bundle for `document`, `window.`, `navigator` and
+  `localStorage` and fails on any of them, which is the only check the rule "a
+  server bundle must never pull in DOM code" has ever had — one `document` is
+  the rule broken and far too few bytes for a size budget to catch. `bugbottle/shake` is its own entry rather than a third
   function in `bugbottle/triggers`, which measures 1281 bytes against a 1300
   budget: a phone gesture is not something a desktop application should be made
   to carry. It measures 685 bytes, adds 94 to the panel (the wiring, not the

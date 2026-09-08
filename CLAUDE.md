@@ -77,7 +77,10 @@ Eighteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign`,
 `./rrweb` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
-pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
+pay for a module it did not import. CI enforces the first half: it bundles
+`bugbottle/server` down to one validator and fails if that bundle passes 1024
+bytes gzipped or if its minified text mentions `document`, `window.`,
+`navigator` or `localStorage`. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
 
 ## Definition of done
@@ -261,11 +264,14 @@ the panel's own annotator toolbar, which is a static import. Moving the shared
 `data-*` reading into `src/global-shared.ts` cost the full build 52 bytes
 (23 937 → 23 989) and left its budget at 24576.
 
-`bugbottle/server` is measured and printed rather than budgeted, because
-everything in it is tree-shaken away from a consumer that imports only the
-validators: that bundle is 528 bytes gzipped with the Sentry, Jira and GitLab
-sinks in the entry, which is the proof that no sink leaked into the shared
-path. Read that number with one caveat: the *emitted* bundle is byte-for-byte
+`bugbottle/server` is budgeted at 1024 bytes gzipped, and CI greps the same
+minified bundle for `document`, `window.`, `navigator` and `localStorage`,
+failing on any of them. Everything else in the entry is tree-shaken away from a
+consumer that imports only the validators: that bundle is 582 bytes gzipped
+with the Sentry, Jira and GitLab sinks exported, which is the proof that no
+sink leaked into the shared path. The grep is the sharper of the two — one
+`document` is a rule broken and far too few bytes for a size budget to notice.
+Read the size with one caveat: the *emitted* bundle is byte-for-byte
 the same 948 minified bytes whether or not the new sinks are exported, but
 esbuild picks its short identifier letters from the whole module graph, so a
 new module can move the gzipped figure a byte or two without a line of code
