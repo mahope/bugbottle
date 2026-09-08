@@ -293,6 +293,70 @@ function describe(body) {
   return `${cut > 40 ? clipped.slice(0, cut) : clipped}…`;
 }
 
+/* The plain prose of a slice of Markdown, for the search index: fenced code,
+   tables and heading lines dropped, links and emphasis unwrapped. What is left
+   is the sentences a reader would recognise, which is what a substring search
+   has to match against. */
+function prose(lines) {
+  const kept = [];
+  let fence = null;
+  for (const line of lines) {
+    const fenceMatch = /^\s*(```+|~~~+)/.exec(line);
+    if (fenceMatch) {
+      const marker = fenceMatch[1] ?? "";
+      if (fence === null) fence = marker[0];
+      else if (marker[0] === fence) fence = null;
+      continue;
+    }
+    if (fence !== null) continue;
+    if (/^\s*#/.test(line)) continue;
+    if (/^\s*\|/.test(line)) continue;
+    kept.push(line.replace(/^\s*(>|[-*+]|\d+\.)\s+/, ""));
+  }
+  return kept
+    .join(" ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[`*_]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* One search entry per page and one per heading inside it. The text is the
+   whole prose of that slice rather than an opening sentence: a reader
+   searching the documentation is looking for a word they remember, and the
+   words worth remembering are as often in the middle of a section as at the
+   top of it. The file is fetched once, on the first focus of the field, so
+   its size costs nobody anything until somebody searches.
+
+   Headings of any depth are used, so the index follows the article rather
+   than the page: a README `###` is an `<h2>` on the page it became. */
+function searchEntries(page) {
+  const lines = page.body.split("\n");
+  const headings = readHeadings(lines);
+  const first = headings[0];
+  const entries = [
+    {
+      url: page.url,
+      title: page.title,
+      heading: "",
+      text: prose(lines.slice(0, first ? first.line : lines.length)),
+    },
+  ];
+  for (let i = 0; i < headings.length; i += 1) {
+    const heading = headings[i];
+    if (!heading) continue;
+    const next = headings[i + 1];
+    entries.push({
+      url: `${page.url}#${heading.slug}`,
+      title: page.title,
+      heading: heading.text.replace(/`/g, ""),
+      text: prose(lines.slice(heading.line + 1, next ? next.line : lines.length)),
+    });
+  }
+  return entries;
+}
+
 function escapeHtml(text) {
   return text
     .replace(/&/g, "&amp;")
@@ -765,9 +829,23 @@ async function main() {
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   await writeFile(join(outDir, "index.html"), indexHtml(pages), "utf8");
+
+  /* The search index, written beside the pages it points into. One entry per
+     page and one per heading, in the order of the sidebar, so results that
+     tie fall back to the order the documentation is meant to be read in. */
+  const searchIndex = [
+    {
+      url: "/docs/",
+      title: "Documentation",
+      heading: "",
+      text: GROUPS.map((group) => `${group.title}. ${group.blurb}`).join(" "),
+    },
+  ];
+
   for (const page of pages) {
     await mkdir(join(outDir, page.slug), { recursive: true });
     await writeFile(join(outDir, page.slug, "index.html"), pageHtml(page, pages), "utf8");
+    searchIndex.push(...searchEntries(page));
   }
 
   /* The comparison pages. Their Markdown has no headings to slice at and no
@@ -798,14 +876,28 @@ async function main() {
     await rm(dir, { recursive: true, force: true });
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "index.html"), standaloneHtml(page), "utf8");
+    searchIndex.push(...searchEntries({ url: entry.url, title: entry.heading, body }));
   }
+
+  /* A page that is written but not indexed is a page the search cannot find,
+     the same kind of quiet hole as a page with no group. The check is against
+     the pages this run wrote, rather than a trust that the loops above stayed
+     in step with each other. */
+  const indexed = new Set(searchIndex.map((item) => item.url.split("#")[0]));
+  const unindexed = ["/docs/", ...pages.map((page) => page.url), ...STANDALONE.map((s) => s.url)]
+    .filter((url) => !indexed.has(url));
+  if (unindexed.length > 0) {
+    throw new Error(`Pages missing from site/docs/search.json: ${unindexed.join(", ")}`);
+  }
+  await writeFile(join(outDir, "search.json"), JSON.stringify(searchIndex), "utf8");
 
   await writeFile(join(root, "site", "sitemap.xml"), sitemapXml(pages), "utf8");
   await writeFile(join(root, "site", "robots.txt"), ROBOTS, "utf8");
 
   process.stdout.write(
     `site/docs: ${pages.length + 1} pages from README.md; ` +
-      `${STANDALONE.length} comparison pages; sitemap.xml and robots.txt\n`,
+      `${STANDALONE.length} comparison pages; ${searchIndex.length} search entries; ` +
+      `sitemap.xml and robots.txt\n`,
   );
 }
 

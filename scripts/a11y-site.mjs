@@ -3,8 +3,9 @@
  *
  * `scripts/a11y-audit.mjs` mounts `bugbottle/ui` on a scratch page and audits
  * the widget. This one audits the site: the two landing pages, the
- * documentation index, one deep documentation page and the two comparison
- * pages, in both colour schemes, with the pinned `axe-core`. Contrast, heading
+ * documentation index, one deep documentation page, the index again with the
+ * search field open on results, and the two comparison pages, in both colour
+ * schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
  * without breaking a test.
@@ -100,18 +101,22 @@ await mkdir(outDir, { recursive: true });
    links and exercises almost none of the article styles. "The ready-made
    panel" has headings, a table, code blocks and the heading list beside them,
    so it is the page that would break first. */
+/* The third item, where there is one, is a state to put the page into before
+   axe looks at it: a page with a search field is two pages, and the one with
+   results in it is the one nothing else audits. */
 const PAGES = [
   ["landing-en", "/"],
   ["landing-da", "/da/"],
   ["docs-index", "/docs/"],
   ["docs-panel", "/docs/the-ready-made-panel/"],
+  ["docs-search", "/docs/", "search"],
   ["compare-en", "/compare/"],
   ["compare-da", "/da/sammenlign/"],
 ];
 
 let failures = 0;
 
-async function audit(name, path, scheme) {
+async function audit(name, path, scheme, state) {
   const tab = await browser.newPage();
   await tab.emulateMediaFeatures([{ name: "prefers-color-scheme", value: scheme }]);
   const noise = [];
@@ -142,6 +147,18 @@ async function audit(name, path, scheme) {
     await new Promise((r) => setTimeout(r, 200));
   });
 
+  /* The search field is built by docs.js and fetches its index on the first
+     focus, so this is a click, a word typed, and a wait for the list — the
+     state a reader is in when they are reading results. */
+  if (state === "search") {
+    await tab.click(".docs-search-field");
+    await tab.type(".docs-search-field", "screenshot");
+    await tab.waitForFunction(
+      () => document.querySelectorAll(".docs-search-results li a").length > 0,
+      { timeout: 5000 },
+    );
+  }
+
   await tab.evaluate(axeSource);
   const report = await tab.evaluate(async () => await window.axe.run(document));
   const label = `${name}-${scheme}`;
@@ -157,9 +174,9 @@ async function audit(name, path, scheme) {
   await tab.close();
 }
 
-for (const [name, path] of PAGES) {
+for (const [name, path, state] of PAGES) {
   for (const scheme of ["light", "dark"]) {
-    await audit(name, path, scheme);
+    await audit(name, path, scheme, state);
   }
 }
 

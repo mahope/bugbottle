@@ -16,9 +16,10 @@ from this host and the favicon is an inline SVG.
 | `style.css` | Shared by every page. Colour tokens on `:root`, redefined once for dark mode |
 | `docs.css` | The documentation pages only, loaded after `style.css` and leaning on its tokens |
 | `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
-| `docs.js` | The documentation pages only: copy buttons, the topic list closing on a phone, and the current heading in "On this page" |
+| `docs.js` | The documentation pages only: copy buttons, the search field, the topic list closing on a phone, and the current heading in "On this page" |
 | `fonts/` | The four woff2 faces the page is set in, latin only. See "The typefaces" below |
 | `docs/` | **Generated, never committed.** Written by `scripts/build-docs.mjs`; see "The documentation" below |
+| `docs/search.json` | **Generated, never committed.** The search index the field in the sidebar reads; see "The search" below |
 | `compare.md` | The English "Compared with" page, as Markdown. The only prose on the site that is neither the landing page nor the README |
 | `da/sammenlign.md` | The same page in Danish, written for a Danish reader rather than translated |
 | `compare/`, `da/sammenlign/` | **Generated, never committed.** The two pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" below |
@@ -187,8 +188,9 @@ was one. On a phone `docs.js` closes it at load and renames its summary after
 the page you are on: twenty-eight links standing between a reader and the
 article they asked for are a wall, not a table of contents.
 
-Three things happen in the browser, all in `docs.js`: the copy buttons, that
-disclosure, and marking the current heading in "On this page". Which page is
+Four things happen in the browser, all in `docs.js`: the copy buttons, the
+search field, that disclosure, and marking the current heading in "On this
+page". Which page is
 current, the anchors and the pager are written into the HTML, so a reader
 without JavaScript still gets a finished page. The three words the copy button
 says follow `document.documentElement.lang`, because the two comparison pages
@@ -203,13 +205,52 @@ falls back to a selection and `execCommand`, which is the path that check
 actually exercises — and that Windows hands the text back with CRLF line
 endings, so compare normalised.
 
+## The search
+
+The field at the top of the sidebar — under the header on a phone, where the
+sidebar is a box above the article — searches `docs/search.json`, written by
+the same `scripts/build-docs.mjs` run and gitignored like the pages. It is a
+flat `[{ url, title, heading, text }]`: one entry per page, then one per
+heading inside it, in the order of the sidebar. `url` carries the anchor, so a
+result opens the page at the part it matched.
+
+`text` is the whole prose of that slice with the code blocks, tables and
+markup taken out, not an opening sentence. A reader searches for a word they
+remember, and the word worth remembering is as often in the middle of a
+section as at the top of it: "replay" is a paragraph deep inside "Signing
+requests" and finds it. The file is about 70 kB, which is why `docs.js`
+fetches it **on the first focus of the field** and never with the page — a
+reader who does not search pays nothing, and nginx gzips it to a fifth.
+
+Matching is a case-insensitive substring over the three fields, ranked title
+before heading before text; inside a rank the entry that says the word most
+often wins, which is the difference between a page that mentions something and
+the page that is about it; a tie after that keeps the order of the sidebar.
+The top eight are listed as plain links with an `aria-live="polite"` count
+above them. Escape empties the field, Enter opens the first result, and the
+form's submit is cancelled so it never reloads the page.
+
+The field is built by `docs.js` rather than written into the HTML: a page
+whose JavaScript never ran must not offer a box that cannot answer, and what
+that reader has instead is the full list of pages, which is what the page had
+before there was a search at all. The build fails when a page it wrote is
+missing from the index, the same way it fails on a README section with no
+group.
+
+Nothing had to be added to `Dockerfile` for it: the image copies the generated
+`site/docs/` tree as a directory, so a new file written into it ships with the
+pages it belongs to.
+
 ## The accessibility audit
 
 `scripts/a11y-site.mjs` is the check that a stylesheet cannot quietly break.
 It serves `site/` and `dist/` the way nginx does, and runs the pinned
 `axe-core` over both landing pages, the documentation index, one deep
-documentation page and the two comparison pages, in **both colour schemes** —
-twelve runs. It fails on a console message as well as on a violation, because
+documentation page, the documentation index again with the search field
+holding results, and the two comparison pages, in **both colour schemes** —
+fourteen runs. The search state is a click, a word typed and a wait for the
+list: the results are drawn from JavaScript and nothing else on the site would
+notice a link with no accessible name in them. It fails on a console message as well as on a violation, because
 a page that logs one is a page that is half-working and nothing else here
 would notice.
 
@@ -371,6 +412,7 @@ curl -si localhost:8089/health | head -1
 curl -si localhost:8089/dist/ui/index.js | head -1
 curl -si localhost:8089/docs/ | head -1
 curl -si localhost:8089/docs/api/ | head -1
+curl -si localhost:8089/docs/search.json | head -1
 curl -si localhost:8089/compare/ | head -1
 curl -si localhost:8089/da/sammenlign/ | head -1
 curl -si localhost:8089/sitemap.xml | head -3

@@ -7,6 +7,17 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- **Search over the documentation.** `bugbottle.dev/docs` has a field at the
+  top of its sidebar — under the header on a phone — over an index generated
+  beside the pages: one entry per page and per heading, matched
+  case-insensitively over the title, the heading and the prose, ranked in that
+  order, top eight. Escape clears it and Enter opens the first result. The
+  index is fetched on the first focus of the field, never with the page, and
+  the field is built by `site/docs.js`, so a reader without JavaScript gets
+  the page they got before rather than a box that cannot answer.
+
 ### Fixed
 
 - The site served most of its files without `Referrer-Policy`. nginx replaces
