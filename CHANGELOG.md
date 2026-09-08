@@ -9,6 +9,23 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `examples/inbox`: a place for reports to land, in one file and with no
+  dependencies. A Node 22+ server that receives them with `handleReport`,
+  writes each one to disk as `<time>-<id>.json` beside `<id>.png` — the
+  screenshot out of the JSON, so the file stays readable — and serves a
+  read-only inbox behind one password from `INBOX_PASSWORD`, compared in
+  constant time. It refuses to start without that variable, because an inbox
+  that came up without a password would be a public list of screenshots of
+  somebody's application. The list is newest first; the detail page renders
+  `toMarkdown` through a tiny subset (headings, paragraphs, tables, fenced
+  code, lists, `<details>`) where the structure is read from the Markdown and
+  every piece of text is escaped first, so a report whose message is
+  `<img src=x onerror=…>` is shown rather than run. Copy as Markdown, the raw
+  JSON, the picture, delete. `demo.html` mounts the panel against it, so the
+  whole round trip is one `node examples/inbox/server.mjs`. Not part of the npm
+  package, and not a product: no accounts, no search, no assignment, no
+  digests. `tests/example-inbox.test.ts` runs the real program on a random port
+  in a temp directory.
 - `rateLimit.rateLimitStore` and `dedupe.dedupeStore` on `handleReport`, shaped
   like the `replayStore` seam beside them: a fleet behind a load balancer can
   now share one rate limit and one dedupe answer instead of one per instance.

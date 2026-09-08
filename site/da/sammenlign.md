@@ -20,7 +20,13 @@ Marker.io og Jam giver en ikke-teknisk kollega noget, bugbottle ikke kan: hos
 Jam en video af det, de gjorde, og hos dem begge et sted, rapporten lander, med
 en kø, en ansvarlig og en historik. bugbottle kan nu selve tegningen — et
 rektangel, en pil og en sløring oven på skærmbilledet — men den slutter
-stadig ved den JSON, den sender til dit eget endepunkt.
+stadig ved den JSON, den sender til dit eget endepunkt. Det nærmeste, der
+findes på et sted, rapporten lander, er
+[`examples/inbox`](https://github.com/mahope/bugbottle/tree/main/examples/inbox):
+en Node-server uden afhængigheder, som skriver hver rapport til disken og
+viser en skrivebeskyttet liste bag én adgangskode. Det er et eksempel, du
+kopierer og selv ejer — ikke en kø med ansvarlige og en historik — og det er
+med vilje så langt, det her projekt går.
 
 Ingen af dem kræver, at en udvikler installerer noget i applikationen — Jam er en
 browserudvidelse og virker derfor også på et website, du ikke selv ejer, og på

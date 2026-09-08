@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>bugbottle — inbox demo</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.6 system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; }
+  button { font: inherit; padding: .5rem 1rem; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Orders</h1>
+<p>This is the reporting half of the inbox example: an ordinary page with the
+ready-made panel mounted on it. Press <em>Save order</em> to put an error in the
+console buffer, then open the panel and send a report — it lands in
+<a href="/">the inbox</a>, which asks for the password.</p>
+
+<p><button type="button" id="save-order">Save order</button></p>
+
+<script type="module">
+  // Served from this repository's dist/ by server.mjs. With npm it is simply:
+  //   import { mountBugbottle } from "bugbottle/ui";
+  import { mountBugbottle } from "/bugbottle/ui/index.js";
+  import { createAnnotator } from "/bugbottle/annotate.js";
+
+  document.getElementById("save-order").onclick = () =>
+    console.error(new Error("save failed: 500 from /api/orders"));
+
+  mountBugbottle({
+    endpoint: "/api/feedback",
+    annotate: createAnnotator,
+    // The renderer is passed in; here it comes from a CDN. With npm:
+    //   import { htmlToImage } from "bugbottle/html-to-image";
+    screenshot: async (root, options) => {
+      const { toPng } = await import("https://esm.sh/html-to-image@1?bundle");
+      return toPng(root, options);
+    },
+  });
+</script>
+</body>
+</html>

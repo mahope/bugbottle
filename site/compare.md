@@ -20,7 +20,13 @@ Marker.io and Jam both hand a non-technical reporter something bugbottle
 cannot: in Jam's case a video of what they did, and in both cases a place for
 the report to land with a queue, an assignee and a history. bugbottle now has
 the drawing — a rectangle, an arrow and a blur over the screenshot — but it
-still ends at the JSON it posts to your endpoint.
+still ends at the JSON it posts to your endpoint. The nearest thing to a place
+it lands is
+[`examples/inbox`](https://github.com/mahope/bugbottle/tree/main/examples/inbox):
+a dependency-free Node server that writes each report to disk and serves a
+read-only list behind one password. That is an example you copy and own, not a
+queue with owners and a history, and it is deliberately as far as this project
+goes.
 
 Neither needs a developer to install anything in the application at all — Jam
 is a browser extension, which means it works on a site you do not own, and on
