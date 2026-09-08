@@ -56,7 +56,6 @@ change the API; the changelog says so when they do.
   `Replay: 240 events over 32 s (attached)`. In the schema as `ReplayCapture`
   and `ReplayEvent`. The README says plainly what it is: a recording of a
   person using your software, to which the privacy section applies twice.
-  picker included), `bugbottle/server` 0.8 kB.
 - `examples/inbox`: a place for reports to land, in one file and with no
   dependencies. A Node 22+ server that receives them with `handleReport`,
   writes each one to disk as `<time>-<id>.json` beside `<id>.png` — the
@@ -69,7 +68,11 @@ change the API; the changelog says so when they do.
   code, lists, `<details>`) where the structure is read from the Markdown and
   every piece of text is escaped first, so a report whose message is
   `<img src=x onerror=…>` is shown rather than run. Copy as Markdown, the raw
-  JSON, the picture, delete. `demo.html` mounts the panel against it, so the
+  JSON, the picture, delete — and delete asks for more than the password,
+  because a browser attaches a cached `Authorization` header to a form POST
+  from any site: it answers 403 unless `Sec-Fetch-Site` and `Origin` say the
+  request came from the inbox, and lets through a request with neither, which
+  is not a browser. `demo.html` mounts the panel against it, so the
   whole round trip is one `node examples/inbox/server.mjs`. Not part of the npm
   package, and not a product: no accounts, no search, no assignment, no
   digests. `tests/example-inbox.test.ts` runs the real program on a random port
@@ -95,8 +98,10 @@ change the API; the changelog says so when they do.
     one scrubber that is off unless asked: an address typed into a field asking
     for one is not a leak, but a phone number matches no pattern, so when
     reports go somewhere public the line goes whole or not at all.
-  - `toMarkdown` renders a `Contact` fact row under the type, so the GitHub and
-    Linear sinks carry it as well; Slack and Discord put it first in their
+  - `toMarkdown` renders a `Contact` fact row under the type, so the GitHub,
+    GitLab and Linear sinks carry it as well; Jira, which builds its own facts
+    rather than rendering Markdown, puts it in the same place in the bullet
+    list; Slack and Discord put it first in their
     fields; Sentry fills `contexts.feedback.contact_email` from it when it
     looks like an address and keeps the whole line in `extra.contact`.
   - `sendReportEmail` sets `reply_to` from a contact line that looks like an
@@ -156,6 +161,14 @@ change the API; the changelog says so when they do.
   index is fetched on the first focus of the field, never with the page, and
   the field is built by `site/docs.js`, so a reader without JavaScript gets
   the page they got before rather than a box that cannot answer.
+- A "Recipes" section in the README: one route handler per framework — Next.js
+  App Router, SvelteKit, Nuxt, Astro, React Router 7 (and Remix) and Hono —
+  with the file path each expects, the one framework-specific line that
+  matters, whether the raw body survives for signing, and where the client
+  mounts. Every snippet was type-checked against the framework's current
+  release beside a packed `bugbottle`; the versions are named at the top of the
+  section. WordPress points at the plugin, and Deno, Bun and Workers are said
+  to need no recipe at all.
 
 ### Fixed
 
@@ -167,14 +180,6 @@ change the API; the changelog says so when they do.
   two headers now live in `site/security-headers.conf`, copied to
   `/etc/nginx/snippets/` by the Dockerfile and included by the server block and
   by every location inside it, so adding a header reaches all of them.
-- A "Recipes" section in the README: one route handler per framework — Next.js
-  App Router, SvelteKit, Nuxt, Astro, React Router 7 (and Remix) and Hono —
-  with the file path each expects, the one framework-specific line that
-  matters, whether the raw body survives for signing, and where the client
-  mounts. Every snippet was type-checked against the framework's current
-  release beside a packed `bugbottle`; the versions are named at the top of the
-  section. WordPress points at the plugin, and Deno, Bun and Workers are said
-  to need no recipe at all.
 
 ### Changed
 
@@ -238,7 +243,6 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.5 kB,
   1300-byte budget: 685 bytes gzipped against 768, 94 bytes added to
   `bugbottle/ui` and 572 to `dist/bugbottle.js`, whose budget rises to 23552.
   No new locale string — a shake opens the panel the reporter already knows.
-  picker included), `bugbottle/server` 0.8 kB.
 - `bugbottle/solid`: `createBugReport(options)`, the fourth binding over
   `src/report-state.ts` and the last framework the roadmap named. Everything it
   returns is an accessor — `state` through `type`, `message`, `screenshot`,
@@ -461,7 +465,6 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.5 kB,
   path, whether or not an annotator was live, so the dead-button state cannot
   be reached at all. The `annotateArea` sentence the canvas reads to a screen
   reader says so, in all eight languages.
-  picker included), `bugbottle/server` 0.8 kB.
 - The ready-made panel posted the picture as it was captured when Send was
   pressed with the editor still open, because the marks were only folded in by
   "Done". A blur the reporter had just drawn over a customer name never reached
@@ -1222,4 +1225,4 @@ First cut. Extracted from the feedback bubble in two production apps.
   error type.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
-  picker included), `bugbottle/server` 0.8 kB.
+  picker included), `bugbottle/server` 0.8 kB.

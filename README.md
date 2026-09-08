@@ -53,8 +53,9 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
-  webhook, or a GitHub issue — server-side helpers over one Markdown
-  rendering, keys never in the browser.
+  webhook, an issue in GitHub, GitLab, Jira or Linear, or an event in Sentry —
+  nine server-side sinks over one Markdown rendering, keys never in the
+  browser.
 - **Your language, your brand.** Eight bundled locales, every string
   overridable, and a panel themed with a handful of CSS variables.
 - **Server helpers included.** Every field a browser sends is checked before it
@@ -422,7 +423,7 @@ pass `scrub: scrubReport` if a message could carry anything personal.
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
-always wanted. `bugbottle/triggers` is two listeners, under 1.2 kB gzipped
+always wanted. `bugbottle/triggers` is two listeners, under 1.3 kB gzipped
 together and importing nothing but the fingerprint hash:
 
 ```ts
