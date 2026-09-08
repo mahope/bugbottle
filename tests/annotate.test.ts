@@ -356,3 +356,44 @@ test("the canvas gets a tab stop unless it already has one", async () => {
   createAnnotator(own, PICTURE).destroy();
   assert.equal(own.getAttribute("tabindex"), "-1", "the caller's own value is left alone");
 });
+
+test("a blur covers every pixel the drag touched, fractions at the far edge included", async () => {
+  const canvas = freshCanvas();
+  const annotator = createAnnotator(canvas, PICTURE);
+  await annotator.ready;
+  annotator.setTool("blur");
+
+  // A drag that begins and ends between two pixels. Rounding the extent down
+  // rather than the far edge up leaves the last column and row of the region
+  // as they were, and an untouched pixel of a blurred password is exactly what
+  // the tool exists to prevent.
+  drag(canvas, 10.5, 8.5, 30.5, 28.5);
+  const region = calls.filter((c) => c.fn === "getImageData").at(-1);
+  assert.deepEqual(
+    region?.args,
+    [10, 8, 21, 21],
+    "the region read back reaches past both fractional edges",
+  );
+
+  const painted = lastRender().filter((c) => c.fn === "fillRect");
+  const right = Math.max(...painted.map((c) => Number(c.args[0]) + Number(c.args[2])));
+  const bottom = Math.max(...painted.map((c) => Number(c.args[1]) + Number(c.args[3])));
+  assert.ok(right >= 31, `the blur stops at x=${right}; the drag ended at 30.5`);
+  assert.ok(bottom >= 29, `the blur stops at y=${bottom}; the drag ended at 28.5`);
+  annotator.destroy();
+});
+
+test("a blur dragged off the edge of the picture stays inside it", async () => {
+  const canvas = freshCanvas();
+  const annotator = createAnnotator(canvas, PICTURE);
+  await annotator.ready;
+  annotator.setTool("blur");
+
+  // Pointer capture keeps the drag alive outside the canvas, so a region can
+  // start left of zero. Clamping the origin without clamping the extent slides
+  // the blur to the right and leaves the far side of the drag uncovered.
+  drag(canvas, -10, -6, 20, 18);
+  const region = calls.filter((c) => c.fn === "getImageData").at(-1);
+  assert.deepEqual(region?.args, [0, 0, 20, 18], "the part of the drag that is on the picture");
+  annotator.destroy();
+});
