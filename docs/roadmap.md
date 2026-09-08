@@ -88,7 +88,10 @@ on `sendReport` and every adapter, `data-sign-key` on the script tag, and
 `signature` on `handleReport` — key rotation, a five-minute skew window, a
 constant-time compare and a replay cache, all four failures answering one
 `401 { error: "Bad signature" }`. Documented honestly: a key in the browser is
-public, so it is spam deterrence beside a rate limit and never authentication.
+public, so it is spam deterrence beside a rate limit and never authentication —
+which is also why the replay cache is bounded per signed second rather than
+globally, and why `signature.replayStore` exists for the deployments that need
+one answer across several instances.
 
 **0.6** — `bugbottle/annotate`: `createAnnotator(canvas, dataUrl, options)`,
 a rectangle, an arrow and a blur over the attached picture, with undo, pointer

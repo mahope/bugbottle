@@ -18,6 +18,13 @@
  * chooses, and that is a different string with a different HMAC. Mount the
  * signed route without a body parser — `app.post(path, expressHandler(...))`
  * — and the raw stream is read here and verified as it arrived.
+ *
+ * That caveat used to be documented and otherwise silent: every report turned
+ * into the same 401 the wire gives a forged signature, with nothing in the log
+ * to tell the two apart. It now says so once, through `onError`, the first
+ * time such a request arrives. Once per handler rather than once per request,
+ * because it is a mounting mistake and not an event: the second copy of the
+ * line tells nobody anything the first did not.
  */
 import { type HandleReportOptions } from "./handle.ts";
 /** As much of an Express request as the adapter reads. */

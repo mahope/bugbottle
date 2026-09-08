@@ -200,13 +200,68 @@ export type SignatureOptions = {
    * way, because a wrong one is a claim rather than an omission.
    */
   require?: boolean;
+  /**
+   * Where accepted signatures are remembered, so a captured body cannot be
+   * posted twice. The default is the in-memory store described above: per
+   * instance, bounded per signed second. Two instances behind a load balancer
+   * do not share it, and neither does a serverless isolate that has just been
+   * started, so a deployment that wants one answer across all of them hands in
+   * its own — Redis, Memcached, a table with a TTL. `expiresAt` is the epoch
+   * millisecond after which the signature would be refused for being outside
+   * the skew window anyway, which is exactly how long the entry has to live.
+   */
+  replayStore?: ReplayStore;
+};
+
+/**
+ * The seam between `handleReport` and wherever accepted signatures are
+ * remembered. Both halves may be synchronous — the in-memory default is — so a
+ * store that needs no network costs no promise.
+ *
+ * ```ts
+ * const replayStore = {
+ *   has: (digest) => redis.exists(`bb:sig:${digest}`).then(Boolean),
+ *   add: (digest, expiresAt) =>
+ *     redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt),
+ * };
+ * ```
+ *
+ * A store that throws fails the request closed: `handleReport` answers 500
+ * rather than accepting a signature it could not check.
+ */
+export type ReplayStore = {
+  /** True when this digest has already been accepted. */
+  has(digest: string): boolean | Promise<boolean>;
+  /** Remembers a digest until `expiresAt`, an epoch millisecond. */
+  add(digest: string, expiresAt: number): void | Promise<void>;
 };
 
 /** The default skew window: five minutes on either side of our clock. */
 export const DEFAULT_SIGNATURE_SKEW_MS = 5 * 60_000;
 
-/** Hard ceiling on the replay cache. */
-export const MAX_SIGNATURE_ENTRIES = 10_000;
+/**
+ * Digests remembered for one *signed* second.
+ *
+ * The bound is per second rather than over the whole cache because the signing
+ * key ships to the browser and is therefore public: anybody can mint valid,
+ * distinct signatures as fast as they can compute HMACs. Against one global
+ * ceiling that is a way to push an honest digest out of the cache and replay
+ * the body it stood for. Against a per-second ceiling the flood only evicts
+ * digests dated the same second it floods, so a report signed at any other
+ * second is still remembered for as long as it could be replayed.
+ */
+export const MAX_SIGNATURE_ENTRIES_PER_SECOND = 128;
+
+/**
+ * How many signed seconds are remembered at once. The default window spans 601
+ * of them — five minutes on either side of our clock — so honest traffic never
+ * reaches this. A `maxSkewMs` wider than this many seconds cannot be held in
+ * memory in full; give such a deployment a `replayStore` instead.
+ */
+export const MAX_SIGNATURE_SECONDS = 640;
+
+/** Hard ceiling on the replay cache: the two bounds above, multiplied. */
+export const MAX_SIGNATURE_ENTRIES = MAX_SIGNATURE_ENTRIES_PER_SECOND * MAX_SIGNATURE_SECONDS;
 
 /** The one answer to every bad signature. Missing, wrong, late and replayed all read the same. */
 export const BAD_SIGNATURE_ERROR = "Bad signature";
@@ -300,19 +355,37 @@ function evictDedupe(now: number, windowMs: number): void {
 }
 
 /**
- * The signatures accepted so far, against the timestamp each one signed rather
- * than the moment it arrived, so an entry survives exactly as long as the
- * signature it stands for would still be accepted. Module-level with the same honest
- * limit as the buckets and the fingerprints: one instance remembers its own
- * traffic, and two instances behind a load balancer do not share a cache. It
- * stops a captured body being replayed at the instance that saw it, which is
- * where a replay of a browser's own request lands anyway.
+ * The signatures accepted so far, in buckets keyed by the *signed* second
+ * rather than the moment each one arrived. Two things follow from that key.
+ *
+ * An entry survives exactly as long as the signature it stands for would still
+ * be accepted: the window runs in both directions, so a signature dated ahead
+ * of our clock is valid for nearly twice `maxSkewMs` after it first turns up,
+ * and forgetting it any earlier hands back the rest as a replay window.
+ *
+ * And the ceiling is per bucket, so making room is a local act. The key is
+ * public — it ships to the browser — so anybody can mint valid signatures in
+ * bulk; against one global ceiling that is a way to evict an honest digest and
+ * replay the body it stood for. Here a flood can only push out digests dated
+ * the same second it floods.
+ *
+ * Module-level with the same honest limit as the buckets and the fingerprints:
+ * one instance remembers its own traffic, and two instances behind a load
+ * balancer do not share a cache. It stops a captured body being replayed at
+ * the instance that saw it, which is where a replay of a browser's own request
+ * lands anyway; `signature.replayStore` is the seam for the deployments that
+ * need one answer across all of them.
  */
-const seenSignatures = new Map<string, number>();
+const seenSignatures = new Map<number, Set<string>>();
 
 /** Exported for tests, which would otherwise leak signatures into each other. */
 export function resetSignatures(): void {
   seenSignatures.clear();
+}
+
+/** The bucket a signed timestamp belongs to: its second. */
+function signatureBucket(timestamp: number): number {
+  return Math.floor(timestamp / 1000);
 }
 
 /**
@@ -327,42 +400,88 @@ function timingSafeEqual(a: string, b: string): boolean {
   return differences === 0;
 }
 
-/** `t=<unix ms>,v1=<hex>` into its parts, or null when it is not that. */
-function parseSignature(value: string): { timestamp: number; digest: string } | null {
-  let timestamp = Number.NaN;
+/**
+ * `t=<unix ms>,v1=<hex>` into its parts, or null when it is not that.
+ *
+ * `t` is matched against the documented spelling exactly — digits, nothing
+ * else — rather than handed to `Number()`, which would also take `0x1`, `1e12`
+ * and a leading space and then canonicalise them into the message we verify.
+ * None of that was exploitable, but a format with one spelling is a format a
+ * second implementation can get right, and the digest is over the text as it
+ * was sent rather than over our idea of the same number.
+ */
+function parseSignature(value: string): { timestamp: number; sent: string; digest: string } | null {
+  let sent = "";
   let digest = "";
   for (const part of value.split(",")) {
     const eq = part.indexOf("=");
     if (eq < 0) continue;
     const name = part.slice(0, eq).trim();
-    const field = part.slice(eq + 1).trim();
-    if (name === "t") timestamp = Number(field);
-    else if (name === "v1") digest = field;
+    if (name === "t") sent = part.slice(eq + 1);
+    else if (name === "v1") digest = part.slice(eq + 1).trim();
   }
   // The shape is checked before any HMAC is computed, so a header full of
-  // rubbish costs a regular expression rather than a key import.
-  if (!Number.isFinite(timestamp) || !/^[0-9a-f]{64}$/.test(digest)) return null;
-  return { timestamp, digest };
+  // rubbish costs two regular expressions rather than a key import. Sixteen
+  // digits is a quarter of a million years past the epoch and the widest run
+  // that still fits a double.
+  if (!/^\d{1,16}$/.test(sent) || !/^[0-9a-f]{64}$/.test(digest)) return null;
+  return { timestamp: Number(sent), sent, digest };
 }
 
 /**
- * Drops what can no longer be accepted anyway, then the oldest.
+ * Drops the seconds that can no longer be accepted anyway, then the earliest.
  *
- * The value is the *signed* timestamp, not the moment the request arrived, and
- * the difference matters: the window runs in both directions, so a signature
- * dated ahead of our clock stays valid for nearly twice `maxSkewMs` after it
- * first turns up. Forgetting it at arrival + `maxSkewMs` would hand back the
- * rest of that as a replay window for a body somebody captured.
+ * A bucket holds timestamps from `second * 1000` to `second * 1000 + 999`, and
+ * the latest of those is refused once `now` is more than `maxSkewMs` past it,
+ * so the whole bucket is free at `second * 1000 + 1000 + maxSkewMs`. The
+ * earliest bucket is the one dropped when there are too many, because it is
+ * the one closest to expiring on its own — and it is found by comparing the
+ * keys rather than by taking the front of the map, which is insertion order
+ * and so is whatever an attacker signed first.
  */
 function evictSignatures(now: number, maxSkewMs: number): void {
-  for (const [digest, timestamp] of seenSignatures) {
-    if (timestamp + maxSkewMs <= now) seenSignatures.delete(digest);
+  for (const second of seenSignatures.keys()) {
+    if (second * 1000 + 1000 + maxSkewMs <= now) seenSignatures.delete(second);
   }
-  while (seenSignatures.size >= MAX_SIGNATURE_ENTRIES) {
-    const oldest = seenSignatures.keys().next();
+  while (seenSignatures.size >= MAX_SIGNATURE_SECONDS) {
+    let earliest: number | undefined;
+    for (const second of seenSignatures.keys()) {
+      if (earliest === undefined || second < earliest) earliest = second;
+    }
+    if (earliest === undefined) break;
+    seenSignatures.delete(earliest);
+  }
+}
+
+/** True when this digest was accepted before, at the second it signed. */
+function seenSignature(timestamp: number, digest: string): boolean {
+  return seenSignatures.get(signatureBucket(timestamp))?.has(digest) === true;
+}
+
+/**
+ * Remembers one accepted digest under the second it signed.
+ *
+ * Room is made inside that second and nowhere else. The digest binds the
+ * timestamp — the HMAC is over `<t>.<body>` — so a digest belongs to exactly
+ * one bucket and looking it up costs one hash of the second and one of the
+ * digest.
+ */
+function rememberSignature(timestamp: number, digest: string, now: number, maxSkewMs: number): void {
+  evictSignatures(now, maxSkewMs);
+  const second = signatureBucket(timestamp);
+  let bucket = seenSignatures.get(second);
+  if (!bucket) {
+    bucket = new Set<string>();
+    seenSignatures.set(second, bucket);
+  }
+  // A `Set` iterates in insertion order, so the front of it is the digest this
+  // second has held longest.
+  while (bucket.size >= MAX_SIGNATURE_ENTRIES_PER_SECOND) {
+    const oldest = bucket.values().next();
     if (oldest.done) break;
-    seenSignatures.delete(oldest.value);
+    bucket.delete(oldest.value);
   }
+  bucket.add(digest);
 }
 
 /**
@@ -393,7 +512,9 @@ async function verifySignature(
   if (Math.abs(now - parsed.timestamp) > maxSkewMs) return false;
 
   const keys = Array.isArray(options.key) ? options.key : [options.key];
-  const message = `${parsed.timestamp}.${body}`;
+  // The timestamp as it was sent, not as we would spell it: the browser signed
+  // those characters and a re-spelling is a different message.
+  const message = `${parsed.sent}.${body}`;
   let matched = false;
   for (const key of keys) {
     // Every key is tried even after one matches, so the time this takes says
@@ -403,10 +524,19 @@ async function verifySignature(
   if (!matched) return false;
 
   // Only a signature that verified is remembered, so nobody can fill the cache
-  // with digests of their own choosing.
-  if (seenSignatures.has(parsed.digest)) return false;
-  evictSignatures(now, maxSkewMs);
-  seenSignatures.set(parsed.digest, parsed.timestamp);
+  // with digests of their own choosing — though a public key means they can
+  // still mint digests that do verify, which is why the in-memory store bounds
+  // itself per signed second and why `replayStore` exists at all.
+  const store = options.replayStore;
+  if (store) {
+    // A store that throws propagates: `handleReport` answers 500 rather than
+    // accept a signature it could not check against what it has already seen.
+    if (await store.has(parsed.digest)) return false;
+    await store.add(parsed.digest, parsed.timestamp + maxSkewMs);
+    return true;
+  }
+  if (seenSignature(parsed.timestamp, parsed.digest)) return false;
+  rememberSignature(parsed.timestamp, parsed.digest, now, maxSkewMs);
   return true;
 }
 

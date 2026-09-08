@@ -41,6 +41,13 @@ was not.
   therefore public: this raises the cost of posting rubbish to a public
   endpoint, and it authenticates nobody. Keep the rate limit and the
   authorisation.
+- The replay cache is bounded per *signed second* — 128 digests each, 640
+  seconds at a time — rather than globally, because a public key means a flood
+  of valid signatures is free to produce. A flood can only displace digests
+  dated the same second it floods, so a captured honest body cannot be replayed
+  by filling the cache with unrelated traffic. It is still one instance's
+  memory: give `signature.replayStore` a shared store (Redis, a table with a
+  TTL) when several instances answer the same endpoint.
 - No cookies, no identifiers, no third-party calls. A report goes to the
   endpoint you configure and nowhere else.
 - `scrubReport` redacts email addresses, bearer tokens, JWTs, Luhn-valid card
