@@ -3277,6 +3277,23 @@ const valid = new Ajv().compile(schema)(payload);
 
 ## API
 
+### 1.0 — what it promises
+
+From 1.0 this list is a contract rather than a description. Semantic versioning
+applies to every name in it: **removing or renaming an export, an option or a
+`data-*` attribute needs a major version**, **adding an entry point needs a
+minor one**, and a patch changes behaviour only where the behaviour was a bug.
+The seven naming rules in `CLAUDE.md` are what the next name will be chosen by,
+and `docs/api-audit-1.0.md` holds the whole surface — every export of every
+entry point, generated from the build — so a rename is visible as a diff rather
+than as a surprise. `tests/exports.test.ts` fails if the exports map, this
+section or `CLAUDE.md` stop agreeing.
+
+What is *not* frozen: the wire format grows fields rather than changing them (a
+report is validated field by field, so an older server ignores a newer one's
+additions), the bundle sizes are budgets rather than promises, and anything
+under `site/`, `examples/` or `scripts/` is not published at all.
+
 **`bugbottle`** — `initConsoleBuffer`, `getConsoleBuffer`, `resetConsoleBuffer`,
 `captureScreenshot` (with `CaptureInfo`, `DEFAULT_BYTES_PER_PIXEL_ESTIMATE` and
 the `MaskOptions` of its `mask` option, whose defaults are

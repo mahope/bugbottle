@@ -41,6 +41,54 @@ const WORDS = [
   "Twenty",
 ];
 
+/**
+ * The exports map itself, written out. From 1.0 this is the API contract: a
+ * subpath removed from here needs a major version and a subpath added needs a
+ * minor one, so neither can happen without this list being edited on purpose.
+ * The order is `package.json`'s, because a reader compares the two.
+ */
+const SUBPATHS = [
+  ".",
+  "./react",
+  "./vue",
+  "./svelte",
+  "./solid",
+  "./server",
+  "./html-to-image",
+  "./annotate",
+  "./breadcrumbs",
+  "./network",
+  "./perf",
+  "./rrweb",
+  "./sign",
+  "./queue",
+  "./queue-idb",
+  "./triggers",
+  "./shake",
+  "./locales",
+  "./locales-extra",
+  "./ui",
+  "./report.schema.json",
+  "./openapi.json",
+  "./package.json",
+];
+
+test("the exports map is exactly the twenty-three subpaths 1.0 promises", () => {
+  assert.deepEqual(
+    entries.map(([name]) => name),
+    SUBPATHS,
+    "adding or removing a subpath is a version decision: minor to add, major to remove",
+  );
+});
+
+test("the frozen API table names every entry point", () => {
+  const audit = read("docs/api-audit-1.0.md");
+  for (const [name] of code) {
+    const heading = "### `bugbottle" + (name === "." ? "" : name.slice(1)) + "`";
+    assert.ok(audit.includes(heading), `docs/api-audit-1.0.md has no section ${heading}`);
+  }
+});
+
 test("every entry point points at a file that the build emits", () => {
   for (const [name, value] of code) {
     const target = value as { types?: string; default?: string };
