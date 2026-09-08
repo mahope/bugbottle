@@ -9,7 +9,7 @@ bare core under 1.5 kB gzipped, `bugbottle/react` under 6 kB, `bugbottle/ui`
 under 11.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/breadcrumbs` under
 1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1600 bytes,
 `bugbottle/queue-idb` under 1024 bytes,
-`bugbottle/perf` under 1.25 kB, `bugbottle/triggers` under 1.3 kB,
+`bugbottle/perf` under 1.5 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
 over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` under
 768 bytes, `bugbottle/rrweb` under 1024 bytes, the script-tag build under

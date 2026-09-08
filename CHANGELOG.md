@@ -93,6 +93,22 @@ change the API; the changelog says so when they do.
   function anybody can call, and `../..` in it would have written the report
   outside the directory — the same hole the id is checked against the UUID
   shape to close. Only the characters a timestamp is made of survive it now.
+- `teamsSink` could post a card over the 28 kB Teams refuses above. The budget
+  dropped the console, then the facts, then clipped the message — and none of
+  those touches the screenshot address or the button, so a stored picture
+  behind a very long signed URL spent the reporter's whole message and left the
+  card over the cap regardless, which Teams then refused outright. An address
+  cannot be clipped, so it is now measured against the floor — the same card
+  with no console, no facts and no message — and dropped when even that will
+  not fit. A card that arrives without its picture says what went wrong; a card
+  that is refused says nothing.
+- CI's `browser` job has a fifteen-minute ceiling. A Chrome that never answers
+  used to run into GitHub's own six-hour default, which is a wedged runner
+  holding the queue rather than a red tick; a green run takes about three
+  minutes.
+- The README said "ten server-side sinks" in its opening summary where the
+  table below it lists eleven, and `docs/roadmap.md` still gave
+  `bugbottle/perf` a 1.25 kB budget where CI enforces 1536 bytes.
 
 ## 0.12.0 — 2026-09-08
 

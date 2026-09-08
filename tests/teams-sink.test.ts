@@ -364,6 +364,37 @@ test("a card still over the cap loses its facts from the back, and then the mess
   assert.ok(elementOfType(payload, "Image"));
 });
 
+test("an address too long to fit is dropped rather than sent over the cap", () => {
+  // A stored screenshot behind a signed URL is where an address of this size
+  // comes from. Nothing the card can clip makes room for one, so the picture
+  // and the button go: a card that is refused says nothing at all, and Teams
+  // refuses one over 28 kB outright rather than truncating it.
+  const payload = buildTeamsMessage(maxedOut, {
+    webhookUrl: TEAMS_URL,
+    screenshotUrl: () => `https://files.example.com/${"a".repeat(40000)}.png`,
+    reportUrl: () => `https://inbox.example.com/${"b".repeat(40000)}`,
+  });
+
+  assert.ok(
+    jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES,
+    `the card weighs ${jsonByteLength(payload)} bytes`,
+  );
+  assert.equal(elementOfType(payload, "Image"), undefined, "the picture went");
+  assert.ok(String(textBlocks(payload)[1]?.text).length > 0, "the message stayed");
+});
+
+test("the message survives an address the card had to drop", () => {
+  const payload = buildTeamsMessage(maxedOut, {
+    webhookUrl: TEAMS_URL,
+    screenshotUrl: () => `https://files.example.com/${"a".repeat(40000)}.png`,
+  });
+
+  assert.ok(jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES);
+  assert.equal(elementOfType(payload, "Image"), undefined);
+  // The address was the whole overspend, so nothing else needed to give way.
+  assert.equal(String(textBlocks(payload)[1]?.text).length, 8000);
+});
+
 test("a refused teams webhook becomes a SinkError carrying the status and body", async () => {
   const { fetch } = fakeFetch(400, "Invalid workflow request");
   await assert.rejects(teamsSink({ webhookUrl: TEAMS_URL, fetch })(report), (err: unknown) => {
