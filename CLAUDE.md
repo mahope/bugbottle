@@ -162,8 +162,9 @@ Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
 stay under 6144 bytes gzipped and `bugbottle/ui` under 11776 bytes (CI enforces
-both; about 5.6 kB and 11.4 kB with masking, the queued state, the triggers,
-the accessibility pass, the 0.6 evidence and the contact field), and the bare core
+both; about 5.6 kB and 11.5 kB with masking, the queued state, the triggers,
+the accessibility pass, the 0.6 evidence, the contact field and the two recorder
+seams), and the bare core
 under 1536 bytes
 (about 1.4 kB). The core budget was 1 kB and 0.8 kB measured until 0.6: the
 stack parser costs about 250 bytes gzipped and the six optional context facts
@@ -275,6 +276,13 @@ the panel's own annotator toolbar, which is a static import. Moving the shared
 whole rise is one rule: `initConsoleBuffer`, `initBreadcrumbs` and
 `initNetwork` return their `reset*`, so the stop is reachable from the start
 and a bundler can no longer drop it from a page that never calls it.
+
+#70 then gave the panel `network` and `perf` on the same hand-it-in seam as
+`annotate` and `shake`, so that `data-network` and `data-perf` have mount
+options of the same name. Types only: `src/ui/` imports neither recorder, and
+the wiring is two ternaries and two calls — `bugbottle/ui` 11 431 → 11 485,
+the full IIFE 24 128 → 24 174, the slim one 20 575 → 20 638. The slim build
+pays too, because it carries the same panel; no budget moves.
 
 `bugbottle/server` is budgeted at 1024 bytes gzipped, and CI greps the same
 minified bundle for `document`, `window.`, `navigator` and `localStorage`,

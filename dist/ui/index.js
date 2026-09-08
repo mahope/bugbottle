@@ -747,6 +747,16 @@ export function mountBugbottle(options) {
     const shake = typeof options.shake === "function" ? { on: options.shake } : options.shake;
     if (shake)
         unsubscribes.push(shake.on(open, shake));
+    // The two recorders are handed in the same way, and for the same reason: the
+    // panel never imports them, so a page that records neither carries neither.
+    // The network recorder is given this panel's endpoint unless the caller named
+    // one, so the delivery of a report is never itself recorded.
+    const network = typeof options.network === "function" ? { on: options.network } : options.network;
+    if (network)
+        unsubscribes.push(network.on({ endpoint: options.endpoint, ...network }));
+    const perf = typeof options.perf === "function" ? { on: options.perf } : options.perf;
+    if (perf)
+        unsubscribes.push(perf.on(perf));
     if (options.openOnError) {
         const prefill = options.openOnError !== true && options.openOnError.prefill === true;
         unsubscribes.push(onUncaughtError((error) => openForError(error.message, prefill)));

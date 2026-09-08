@@ -7,6 +7,23 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `mountBugbottle` takes `network` and `perf`, the two `data-*` switches that
+  had no mount option: `network: initNetwork` from `bugbottle/network` and
+  `perf: initPerf` from `bugbottle/perf` start the recorders on mount and stop
+  them on `destroy()`, and `{ on: initNetwork, all: true }` tunes them. They are
+  the same hand-it-in seam as `annotate`, `shake`, `scrub` and `sign`: the panel
+  imports neither module, only their types, so a page that records nothing
+  carries nothing. The panel's own `endpoint` is handed to the network recorder
+  unless the caller names one, so a report never describes its own delivery.
+  `src/global.ts` now passes the options through for `data-network` and
+  `data-perf` rather than calling the recorders behind the panel's back, so the
+  script tag behaves exactly as before. Additive; nothing has to change on
+  upgrade. Closes #70. The wiring costs `bugbottle/ui` 54 bytes gzipped
+  (11 431 → 11 485), the script tag 46 (24 128 → 24 174) and the slim build 63
+  (20 575 → 20 638); no budget moves.
+
 ## 0.9.0 — 2026-09-08
 
 The consistency release. The whole public API was read once before 1.0 —

@@ -70,7 +70,9 @@ need Node 18.
   carries everything and must also expose `requestShakePermission`, since a page
   with no bundler has no other way to ask iOS. The optional contact field then
   took the panel from 11 086 to 11 342 bytes and the script tag from 23 072 to
-  23 839, so the budgets are 11776 and 24576: one input, its label, its hint and
+  23 839, and #70's two recorder seams — `network` and `perf` handed in like
+  `annotate`, types only — 54 and 46 bytes more (11 485 and 24 174), so the
+  budgets stay 11776 and 24576: one input, its label, its hint and
   the required check are about 256 bytes, and three locale strings in eight
   languages are most of the rest. The field is off by default and its markup is
   static, so those bytes are paid by every panel — a second entry point for one

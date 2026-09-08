@@ -239,3 +239,84 @@ test("no shake option installs no motion listener", () => {
   assert.equal(parts(widget.host).panel.hidden, true);
   widget.destroy();
 });
+
+/**
+ * The two recorders the panel does not import. `initNetwork` and `initPerf`
+ * are handed in exactly like `onShake`, so a fake of the right shape proves
+ * the wiring without patching `fetch` or listening to the performance
+ * timeline: what matters is that the panel calls what it was given, with the
+ * options it was given, and stops it again on `destroy()`.
+ */
+function fakeRecorder() {
+  const calls: Record<string, unknown>[] = [];
+  let stopped = 0;
+  const on = (options: Record<string, unknown> = {}) => {
+    calls.push(options);
+    return () => {
+      stopped += 1;
+    };
+  };
+  return { on, calls, stops: () => stopped };
+}
+
+test("no network or perf option starts no recorder", () => {
+  const { fn } = fakeFetch();
+  const network = fakeRecorder();
+  const perf = fakeRecorder();
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn });
+  widget.destroy();
+  assert.equal(network.calls.length, 0);
+  assert.equal(perf.calls.length, 0);
+});
+
+test("a network recorder is started with the panel's endpoint and stopped on destroy", () => {
+  const { fn } = fakeFetch();
+  const network = fakeRecorder();
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch: fn,
+    network: network.on as never,
+  });
+  assert.equal(network.calls.length, 1);
+  // The endpoint is passed so the recorder never records the report's own
+  // delivery, which would be a mirror rather than evidence.
+  assert.equal(network.calls[0]?.endpoint, ENDPOINT);
+  assert.equal(network.stops(), 0);
+  widget.destroy();
+  assert.equal(network.stops(), 1);
+});
+
+test("the config object form reaches the recorder, endpoint and all", () => {
+  const { fn } = fakeFetch();
+  const network = fakeRecorder();
+  const perf = fakeRecorder();
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch: fn,
+    network: { on: network.on as never, all: true, maxEntries: 5 },
+    perf: { on: perf.on as never, storage: false },
+  });
+  assert.equal(network.calls[0]?.all, true);
+  assert.equal(network.calls[0]?.maxEntries, 5);
+  assert.equal(network.calls[0]?.endpoint, ENDPOINT);
+  assert.equal(perf.calls[0]?.storage, false);
+  widget.destroy();
+  assert.equal(network.stops(), 1);
+  assert.equal(perf.stops(), 1);
+});
+
+test("a named endpoint wins over the panel's, and perf takes the defaults", () => {
+  const { fn } = fakeFetch();
+  const network = fakeRecorder();
+  const perf = fakeRecorder();
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch: fn,
+    network: { on: network.on as never, endpoint: "https://other.test/ingest" },
+    perf: perf.on as never,
+  });
+  assert.equal(network.calls[0]?.endpoint, "https://other.test/ingest");
+  assert.equal(perf.calls.length, 1);
+  widget.destroy();
+  assert.equal(perf.stops(), 1);
+});

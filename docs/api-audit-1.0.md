@@ -42,11 +42,12 @@ rather than by whichever module it lands in.
    `attach*` listeners already returned theirs. A caller can now undo anything
    it started without importing a second name.
 3. **An optional capability is handed in, never imported.** `screenshot`,
-   `annotate`, `shake`, `scrub`, `sign` and `queue` are all functions or
-   objects the application passes to the panel or the state machine, so the
-   module is in a bundle only when it is used. `network` and `perf` are the two
-   that break the rule — the script tag calls the recorders behind the panel's
-   back — and #70 puts them on the same seam.
+   `annotate`, `shake`, `scrub`, `sign`, `queue` and — since #70 — `network`
+   and `perf` are all functions or objects the application passes to the panel
+   or the state machine, so the module is in a bundle only when it is used.
+   Nothing breaks the rule now: the panel starts and stops both recorders, and
+   the script tag hands them in for `data-network` and `data-perf` rather than
+   calling them behind the panel's back.
 4. **One name per idea across option objects.** `endpoint` for the address this
    library POSTs to; `headers`, `credentials`, `fetch`, `signal`, `timeoutMs`
    for the request; `onError` for "something failed, here it is";
@@ -60,7 +61,8 @@ rather than by whichever module it lands in.
    `MAX_DISCORD_*` spellings now exist beside them.
 6. **Every `data-*` attribute is a mount option of the same name.** Seventeen
    of the nineteen already were, counting `data-primary` and `data-position` as
-   `theme` and `data-brand`/`data-logo` as `brand`. `data-sign-key` is `sign`
+   `theme` and `data-brand`/`data-logo` as `brand`; #70 added the last two,
+   `network` and `perf`, so all nineteen are. `data-sign-key` is `sign`
    deliberately: the attribute takes a key because a script tag cannot pass a
    function, and the option takes the signer that key would have built.
 7. **Nothing is exported without being named in the README.** A group line
@@ -103,9 +105,12 @@ Breaking, so each is its own issue rather than a change here.
   `screenshotUrl` a string, `screenshotUrlFrom` a function. Slack and Discord
   currently take the function under the first name, which is the only place in
   the package where one key has two types depending on the import.
-- **#70** mirrors `data-network` and `data-perf` with `network` and `perf`
-  mount options on the hand-it-in seam. Additive, but it is the one hole in
-  rule 6.
+- ~~**#70** mirrors `data-network` and `data-perf` with `network` and `perf`
+  mount options on the hand-it-in seam.~~ Landed: `MountOptions.network` and
+  `MountOptions.perf` take `initNetwork` and `initPerf`, or `{ on, …options }`,
+  started on mount and stopped in `destroy()`. Typed structurally, so
+  `src/ui/` imports neither module. It was additive, and it was the one hole in
+  rules 3 and 6.
 
 ## Deliberately left alone
 
