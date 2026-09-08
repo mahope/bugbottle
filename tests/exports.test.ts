@@ -67,6 +67,86 @@ test("the README's API section names every entry point", () => {
   assert.ok(api.includes("`bugbottle/report.schema.json`"), "the schema is an entry too");
 });
 
+/**
+ * The other thing that drifts is the sinks table at the top of "Sending it
+ * somewhere" (#83): a twelfth sink lands, the prose gets a subsection, and the
+ * table quietly describes eleven. So the table is read back and matched against
+ * the sink-shaped exports of `src/server/index.ts`, in both directions.
+ */
+
+/** The exports the table is about: a factory, a send function, an issue call. */
+const isSink = (name: string): boolean =>
+  /^[a-z]/.test(name) &&
+  (/Sink$/.test(name) || /^sendReport/.test(name) || /^create[A-Z].*Issue$/.test(name));
+
+/** Every value the server entry re-exports from `src/sinks/`, types dropped. */
+function sinkExports(): string[] {
+  const source = read("src/server/index.ts");
+  const names: string[] = [];
+  for (const block of source.matchAll(/export\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)) {
+    if (!block[2]!.startsWith("../sinks/")) continue;
+    for (const entry of block[1]!.split(",")) {
+      const name = entry.trim().split(/\s+as\s+/)[0]!.trim();
+      if (!name || name.startsWith("type ")) continue;
+      if (isSink(name)) names.push(name);
+    }
+  }
+  return names;
+}
+
+/** The rows of the one table in the "Sending it somewhere" section. */
+function sinkTableRows(): string[][] {
+  const readme = read("README.md");
+  const start = readme.indexOf("\n## Sending it somewhere");
+  const section = readme.slice(start, readme.indexOf("\n## ", start + 4));
+  return section
+    .split("\n")
+    // Trimmed first, because a checkout with CRLF endings leaves a carriage
+    // return where the closing pipe is expected.
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("|") && !/^\|[\s|:-]+\|$/.test(line))
+    .map((line) =>
+      line
+        .slice(1, -1)
+        .split("|")
+        .map((cell) => cell.trim()),
+    );
+}
+
+test("the README's sinks table has a row for every sink and invents none", () => {
+  const rows = sinkTableRows();
+  const header = rows.shift();
+  assert.deepEqual(header, [
+    "Sink",
+    "Export",
+    "What you need",
+    "The picture",
+    "Self-hosted",
+    "One report becomes",
+    "Server bundle",
+  ]);
+
+  const named = new Set<string>();
+  for (const row of rows) {
+    assert.equal(row.length, header!.length, `row "${row[0]}" has ${row.length} cells`);
+    const exported = [...row[1]!.matchAll(/`([^`]+)`/g)].map((match) => match[1]!);
+    assert.ok(exported.length > 0, `row "${row[0]}" names no export`);
+    for (const name of exported) named.add(name);
+    // The measured size is what the row is for; an empty cell would otherwise
+    // still be a well-formed table.
+    assert.match(row[6]!, /^\d+(\.\d+)? kB$/, `row "${row[0]}" has no measured size`);
+  }
+
+  const actual = sinkExports();
+  for (const name of actual) {
+    assert.ok(named.has(name), `the sinks table has no row naming ${name}`);
+  }
+  for (const name of named) {
+    assert.ok(actual.includes(name), `the sinks table names ${name}, which is not exported`);
+  }
+  assert.equal(rows.length, 11, `eleven sinks, ${rows.length} rows`);
+});
+
 test("CLAUDE.md counts the entry points it lists", () => {
   const claude = read("CLAUDE.md");
   const word = WORDS[code.length - 10];

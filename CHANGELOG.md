@@ -7,6 +7,19 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Documentation
+
+- A table at the top of the README's "Sending it somewhere" answers, for all
+  eleven sinks at once, the questions the prose only answers one sink at a
+  time: what you need, whether the picture travels with the report or is linked
+  from storage you arranged, whether a self-hosted instance works, what one
+  report becomes, and what a server bundle importing only that sink weighs.
+  Measured on 8 September 2026 with the recipe CI uses, and reproducible with
+  the new `scripts/measure-sinks.mjs` — dev-only, because it packs the package
+  and installs the tarball. `tests/exports.test.ts` now fails when a sink has
+  no row or a row names an export that `bugbottle/server` does not have, so the
+  twelfth sink cannot land with the table describing eleven (#83).
+
 ## 0.12.0 — 2026-09-08
 
 The self-hosted release. Two things that used to need a service now need

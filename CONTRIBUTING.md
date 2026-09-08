@@ -117,6 +117,17 @@ need Node 18.
   `browser` job runs them on every push and pull request, so a violation is
   caught whether or not anybody remembered. Run them by hand to see a failure
   before CI does.
+- A new or changed sink has a row in the table at the top of the README's
+  "Sending it somewhere" — what you need, whether the picture travels or is
+  linked, whether a self-hosted instance works, what one report becomes, and
+  what a server bundle importing only that sink weighs. `tests/exports.test.ts`
+  fails when a sink has no row or a row names an export that does not exist,
+  but it cannot check that the sizes are still true: run
+  `node scripts/measure-sinks.mjs` after `npm run build` and paste the numbers,
+  moving the date on the line under the table. That script packs the package,
+  installs the tarball and bundles one entry per sink with the pinned esbuild,
+  so it wants the network and about a minute; it is not part of
+  `npm run check` for that reason.
 - `CHANGELOG.md` has a line under *Unreleased*.
 
 ## What CI runs
