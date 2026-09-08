@@ -24,6 +24,20 @@ services:
       # endpoint is same-origin only.
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-}
       MAX_REPORTS: ${MAX_REPORTS:-2000}
+      # The address the feeds and the notifications link to, when the request's
+      # own host is not it. A notification has no request to ask.
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Who is told about a new report, and how. All unset by default: an inbox
+      # that mailed somebody the first time it came up would be worse than one
+      # that is quiet. See "Be told about new reports" in the README.
+      NOTIFY_WEBHOOK: ${NOTIFY_WEBHOOK:-}
+      NOTIFY_KIND: ${NOTIFY_KIND:-}
+      NOTIFY_SMTP_HOST: ${NOTIFY_SMTP_HOST:-}
+      NOTIFY_SMTP_PORT: ${NOTIFY_SMTP_PORT:-}
+      NOTIFY_SMTP_USER: ${NOTIFY_SMTP_USER:-}
+      NOTIFY_SMTP_PASS: ${NOTIFY_SMTP_PASS:-}
+      NOTIFY_SMTP_FROM: ${NOTIFY_SMTP_FROM:-}
+      NOTIFY_SMTP_TO: ${NOTIFY_SMTP_TO:-}
     ports:
       # Bound to loopback on purpose. Basic auth over plain HTTP sends the
       # password in every request, so the only thing that should reach this

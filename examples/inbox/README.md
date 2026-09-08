@@ -135,6 +135,50 @@ Neither feed is cached: `no-store, private`, so a reader shows the reports
 that are there rather than the ones that were, and nothing in between keeps a
 copy of the list.
 
+## Be told about new reports
+
+A feed is something you poll. The other half is being told, and the inbox does
+it through the library's own sinks — no delivery code lives in this example,
+only the environment variables that switch one on:
+
+| | |
+|---|---|
+| `NOTIFY_WEBHOOK` | The webhook a new report is posted to. Treat it as a password: anyone holding it can post to that channel |
+| `NOTIFY_KIND` | `slack`, `discord`, `teams` or `webhook`, when the URL's own host does not say — behind a relay, a gateway, a proxy. Unset, the host decides |
+| `NOTIFY_SMTP_HOST` | The mail server to send through. Setting it switches the mail on; the four below go with it |
+| `NOTIFY_SMTP_PORT` | 465 for implicit TLS, 587 otherwise. Left unset, the sink picks by `secure` |
+| `NOTIFY_SMTP_USER`, `NOTIFY_SMTP_PASS` | The account. Without both, no `AUTH` is attempted at all — and `AUTH` over a connection that is not encrypted is refused rather than sent |
+| `NOTIFY_SMTP_FROM` | The envelope sender and the `From` header: `bugs@example.com`. Required |
+| `NOTIFY_SMTP_TO` | Who is told. One address, or several separated by commas. Required |
+
+`hooks.slack.com` is a Slack webhook, `discord.com` a Discord one and
+`*.webhook.office.com` or `*.logic.azure.com` a Microsoft Teams Workflows one,
+so a URL pasted from any of the three needs nothing else: the message arrives
+as Block Kit, as an embed or as an Adaptive Card, with the facts, five console
+lines and a button to the report. Anything else is posted as JSON — the whole
+report with the rendered Markdown beside it — which is the shape an intake of
+your own would want.
+
+Both are set at once if you want both. Neither is set by default, and that is
+deliberate: an inbox that mailed somebody the first time it was started would
+be worse than one that is quiet.
+
+The links in the message point back here — the detail page at `/r/<id>` and the
+picture at `/r/<id>.png` — so set `PUBLIC_URL=https://bugs.example.com`, the
+same variable the feeds use. Without it the address the process is bound to is
+what goes out, which is right on a laptop and wrong behind a proxy. **Both
+addresses are behind the password**, which means Slack and Teams cannot render
+the picture: they fetch it themselves and are refused, and the person who
+clicks the button signs in as usual. That is the right way round. The
+alternative is a public URL for a screenshot of somebody's application, and the
+privacy note at the end of this file is about exactly that.
+
+A delivery runs after the report is on disk and can never take it away:
+`handleReport` gives each sink its own deadline, and a webhook revoked last
+week is a line on stderr and still a `201` for the reporter. Nothing is
+retried — the report is in `reports/` and in the feed either way, which is why
+this is a notification and not a queue.
+
 ## Behind TLS
 
 Basic auth over plain HTTP sends the password in every request. Put a
@@ -203,8 +247,9 @@ screenshots in it.
 | `REPORTS_DIR` | `/data` in the image, `./reports` otherwise |
 | `PORT` | 8788 |
 | `HOST` | `127.0.0.1` by default; the image sets `0.0.0.0`, because in a container the proxy is on the other side of the boundary |
-| `PUBLIC_URL` | The address the feeds link to, when the request's own host is not it |
+| `PUBLIC_URL` | The address the feeds and the notifications link to, when the request's own host is not it |
 | `ALLOWED_ORIGIN`, `MAX_REPORTS` | As above |
+| `NOTIFY_WEBHOOK`, `NOTIFY_KIND`, `NOTIFY_SMTP_*` | Who is told about a new report, and how. *Be told about new reports* above |
 
 On **Dokploy**, in eight lines:
 

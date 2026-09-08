@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { createServer as createHttpServer } from "node:http";
 import type { Readable } from "node:stream";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -639,5 +640,136 @@ test("both feeds stop at the newest fifty reports", async () => {
     assert.equal(child(entries[0]!, "title")!.text, messages[54]);
   } finally {
     await stop(running);
+  }
+});
+
+/**
+ * A webhook that records what it was told, on a port the operating system
+ * picks. It answers 200 to everything: what is under test is what the inbox
+ * sends, not what a chat service would make of it.
+ */
+async function fakeWebhook(): Promise<{
+  url: string;
+  bodies: Record<string, unknown>[];
+  close: () => Promise<void>;
+}> {
+  const bodies: Record<string, unknown>[] = [];
+  const hook = createHttpServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      try {
+        bodies.push(JSON.parse(text) as Record<string, unknown>);
+      } catch {
+        bodies.push({ unparsed: text });
+      }
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("ok");
+    });
+  });
+  await new Promise<void>((resolve) => hook.listen(0, "127.0.0.1", () => resolve()));
+  const address = hook.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    url: `http://127.0.0.1:${port}/hook`,
+    bodies,
+    close: () => new Promise<void>((resolve) => hook.close(() => resolve())),
+  };
+}
+
+/** Waits for the webhook to have been told `count` times, then insists on it. */
+async function toldTimes(bodies: unknown[], count: number): Promise<void> {
+  for (let waited = 0; waited < 5000 && bodies.length < count; waited += 25) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(bodies.length, count, `the webhook was told ${bodies.length} times, not ${count}`);
+}
+
+test("every stored report is announced to NOTIFY_WEBHOOK, linking the detail page", async () => {
+  const hook = await fakeWebhook();
+  const running = await start({
+    NOTIFY_WEBHOOK: hook.url,
+    PUBLIC_URL: "https://bugs.example.test",
+  });
+  try {
+    const first = await post(running.origin, "the save button does nothing");
+    const second = await post(running.origin, "and neither does cancel");
+    await toldTimes(hook.bodies, 2);
+
+    const sent = hook.bodies.map((body) => JSON.stringify(body));
+    assert.ok(
+      sent.some((text) => text.includes(`https://bugs.example.test/r/${first}`)),
+      "the first report is linked where the inbox keeps it",
+    );
+    assert.ok(
+      sent.some((text) => text.includes(`https://bugs.example.test/r/${second}`)),
+      "and so is the second",
+    );
+    assert.equal(hook.bodies[0]!.message, "the save button does nothing");
+    assert.match(String(hook.bodies[0]!.markdown ?? ""), /the save button does nothing/);
+  } finally {
+    await stop(running);
+    await hook.close();
+  }
+});
+
+test("NOTIFY_KIND says what the webhook is when its host does not", async () => {
+  const hook = await fakeWebhook();
+  const running = await start({
+    NOTIFY_WEBHOOK: hook.url,
+    NOTIFY_KIND: "slack",
+    PUBLIC_URL: "https://bugs.example.test",
+  });
+  try {
+    const id = await post(running.origin, "the header overlaps the menu");
+    await toldTimes(hook.bodies, 1);
+    const body = hook.bodies[0]!;
+    assert.ok(Array.isArray(body.blocks), "a Slack webhook is told in Block Kit");
+    assert.ok(
+      JSON.stringify(body).includes(`https://bugs.example.test/r/${id}`),
+      "and the button opens the detail page",
+    );
+  } finally {
+    await stop(running);
+    await hook.close();
+  }
+});
+
+test("a webhook that is not there does not cost the reporter their report", async () => {
+  // Nothing is listening on port 1, so the sink fails as certainly as a
+  // webhook revoked last week does.
+  const running = await start({
+    NOTIFY_WEBHOOK: "http://127.0.0.1:1/hook",
+    PUBLIC_URL: "https://bugs.example.test",
+  });
+  try {
+    const posted = await fetch(`${running.origin}/api/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "bug", message: "the report survives the notification" }),
+    });
+    assert.equal(posted.status, 201, "the report is stored and the reporter is told so");
+    const { id } = (await posted.json()) as { id: string };
+    const stored = await fetch(`${running.origin}/r/${id}.json`, {
+      headers: { Authorization: auth },
+    });
+    assert.equal(stored.status, 200, "and it really is on disk");
+  } finally {
+    await stop(running);
+  }
+});
+
+test("without the notify variables nobody is told", async () => {
+  const hook = await fakeWebhook();
+  const running = await start({ PUBLIC_URL: "https://bugs.example.test" });
+  try {
+    await post(running.origin, "nothing should leave this process");
+    // Long enough for a sink to have run, had there been one to run.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(hook.bodies.length, 0);
+  } finally {
+    await stop(running);
+    await hook.close();
   }
 });
