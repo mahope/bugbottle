@@ -94,6 +94,21 @@ export const MAX_STORAGE_VALUES = 20;
  */
 export const MAX_PERF_MS = 3_600_000;
 
+/**
+ * How large a session replay may be, serialised. A megabyte is a generous
+ * thirty seconds of rrweb and small enough that a row, an email and a JSON
+ * column all survive it. Over it the replay is dropped whole, exactly as an
+ * oversized screenshot is: half a recording plays no better than none.
+ */
+export const MAX_REPLAY_BYTES = 1024 * 1024;
+
+/**
+ * How many replay events one report may carry. The byte cap is the real
+ * bound; this one stops a body of a million tiny objects from costing a
+ * million iterations before the byte cap is reached.
+ */
+export const MAX_REPLAY_EVENTS = 20_000;
+
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -267,6 +282,39 @@ export type StorageSnapshot = {
   values?: Record<string, string>;
 };
 
+/**
+ * One rrweb event, as rrweb wrote it.
+ *
+ * Only `type` and `timestamp` are read — by the buffer in `bugbottle/rrweb` to
+ * find the checkouts, and by the validator to tell an event from whatever else
+ * arrived in the array. The rest is rrweb's payload and is carried through
+ * unread, because this library does not know how to play a replay and should
+ * not pretend to. That is also why the whole thing is bounded by size rather
+ * than field by field: it is somebody else's format.
+ */
+export type ReplayEvent = {
+  /** rrweb's event type number. 2 is a full snapshot. */
+  type: number;
+  /** Epoch milliseconds. */
+  timestamp: number;
+  [key: string]: unknown;
+};
+
+/**
+ * A session replay: the events and how long they cover.
+ *
+ * This is the heaviest and the most sensitive thing a report can carry — a
+ * recording of somebody using your application — so it is only ever here
+ * because the application called `attachRrweb` and handed its own rrweb
+ * `record` in.
+ */
+export type ReplayCapture = {
+  /** rrweb events, oldest first, starting at a full snapshot. */
+  events: ReplayEvent[];
+  /** How many seconds the events span, rounded. */
+  seconds: number;
+};
+
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
   type: ReportType;
@@ -290,6 +338,8 @@ export type BugReport = {
   perf?: PerfSnapshot;
   /** What was in the browser's stores, when `bugbottle/perf` was measuring. */
   storage?: StorageSnapshot;
+  /** The last seconds before the report, when `bugbottle/rrweb` was recording. */
+  replay?: ReplayCapture;
   screenshotDataUrl?: string;
 };
 
@@ -671,6 +721,70 @@ export function normaliseStorage(raw: unknown): StorageSnapshot | null {
   }
 
   return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Validates the session replay a report arrived with.
+ *
+ * Three rules, and they are the only ones this can honestly have. An event is
+ * an object with a numeric `type` and a numeric `timestamp`; anything else in
+ * the array is not an rrweb event and is dropped. The payload of an event is
+ * carried through unread, because it is rrweb's format and not ours — which is
+ * exactly why the third rule is a hard ceiling on the serialised size, and why
+ * going over it drops the whole replay rather than part of it. A replay cut in
+ * the middle does not play.
+ *
+ * Null bytes are stripped out of the serialised form before it is parsed back,
+ * for the reason every other validator strips them: Postgres refuses a text
+ * value containing one, and a replay is nested attacker-controlled JSON on its
+ * way into a column.
+ *
+ * `seconds` is recomputed from the events that survived rather than believed.
+ * Never throws: a malformed replay means "no replay", not a failed report.
+ */
+export function normaliseReplay(raw: unknown): ReplayCapture | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.events)) return null;
+
+  const events: ReplayEvent[] = [];
+  for (const item of o.events) {
+    if (events.length >= MAX_REPLAY_EVENTS) break;
+    if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
+    const event = item as Record<string, unknown>;
+    if (typeof event.type !== "number" || !Number.isFinite(event.type)) continue;
+    if (typeof event.timestamp !== "number" || !Number.isFinite(event.timestamp)) continue;
+    events.push(event as ReplayEvent);
+  }
+  if (events.length === 0) return null;
+
+  let serialised: string;
+  try {
+    serialised = JSON.stringify(events);
+  } catch {
+    // Circular, or a BigInt somebody hand-wrote. Either way it cannot be
+    // stored and it is certainly not an rrweb recording.
+    return null;
+  }
+  if (serialised.length > MAX_REPLAY_BYTES) return null;
+
+  // `JSON.stringify` writes a null byte as the six characters `\u0000`, so
+  // that is what has to be matched here: the serialised text never holds a
+  // real one, and this file may not contain one either.
+  const nulEscape = "\\u0000";
+  let clean = events;
+  if (serialised.includes(nulEscape)) {
+    try {
+      clean = JSON.parse(serialised.split(nulEscape).join("")) as ReplayEvent[];
+    } catch {
+      return null;
+    }
+  }
+
+  const first = clean[0]?.timestamp ?? 0;
+  const last = clean[clean.length - 1]?.timestamp ?? first;
+  const span = Math.round((last - first) / 1000);
+  return { events: clean, seconds: Number.isFinite(span) && span > 0 ? span : 0 };
 }
 
 export class InvalidScreenshotError extends Error {

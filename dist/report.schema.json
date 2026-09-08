@@ -93,6 +93,10 @@
           "$ref": "#/$defs/PerfSnapshot",
           "description": "What the page cost, when `bugbottle/perf` was measuring."
         },
+        "replay": {
+          "$ref": "#/$defs/ReplayCapture",
+          "description": "The last seconds before the report, when `bugbottle/rrweb` was recording."
+        },
         "screenshotDataUrl": {
           "maxLength": 2900000,
           "pattern": "^data:image/png;base64,",
@@ -303,6 +307,47 @@
           "type": "number"
         }
       },
+      "type": "object"
+    },
+    "ReplayCapture": {
+      "description": "A session replay: the events and how long they cover.\n\nThis is the heaviest and the most sensitive thing a report can carry — a recording of somebody using your application — so it is only ever here because the application called `attachRrweb` and handed its own rrweb `record` in.",
+      "properties": {
+        "events": {
+          "description": "rrweb events, oldest first, starting at a full snapshot.",
+          "items": {
+            "$ref": "#/$defs/ReplayEvent"
+          },
+          "maxItems": 20000,
+          "type": "array"
+        },
+        "seconds": {
+          "description": "How many seconds the events span, rounded.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "events",
+        "seconds"
+      ],
+      "type": "object"
+    },
+    "ReplayEvent": {
+      "additionalProperties": {},
+      "description": "One rrweb event, as rrweb wrote it.\n\nOnly `type` and `timestamp` are read — by the buffer in `bugbottle/rrweb` to find the checkouts, and by the validator to tell an event from whatever else arrived in the array. The rest is rrweb's payload and is carried through unread, because this library does not know how to play a replay and should not pretend to. That is also why the whole thing is bounded by size rather than field by field: it is somebody else's format.",
+      "properties": {
+        "timestamp": {
+          "description": "Epoch milliseconds.",
+          "type": "number"
+        },
+        "type": {
+          "description": "rrweb's event type number. 2 is a full snapshot.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "timestamp"
+      ],
       "type": "object"
     },
     "ReportContext": {

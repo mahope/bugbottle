@@ -215,6 +215,7 @@ export {
   normaliseBreadcrumbs,
   normaliseNetwork,
   normalisePerf,
+  normaliseReplay,
   normaliseStorage,
   MAX_MESSAGE_LENGTH,
   MAX_CONTACT_LENGTH,
@@ -233,6 +234,8 @@ export {
   MAX_STORAGE_VALUES,
   MAX_COOKIE_NAMES,
   MAX_PERF_MS,
+  MAX_REPLAY_BYTES,
+  MAX_REPLAY_EVENTS,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
   MAX_CONTEXT_LENGTHS,
@@ -250,4 +253,6 @@ export {
   type PerfSnapshot,
   type StorageKeyRef,
   type StorageSnapshot,
+  type ReplayEvent,
+  type ReplayCapture,
 } from "../report-core.ts";

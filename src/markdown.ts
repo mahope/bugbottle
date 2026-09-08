@@ -19,6 +19,7 @@ import {
   normaliseMessage,
   normaliseNetwork,
   normalisePerf,
+  normaliseReplay,
   normaliseStorage,
   type Breadcrumb,
   type ElementRef,
@@ -168,6 +169,7 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   const network = normaliseNetwork(r.network);
   const perf = normalisePerf(r.perf);
   const storage = normaliseStorage(r.storage);
+  const replay = normaliseReplay(r.replay);
   const consoleEntries = normaliseConsole(r.console, {
     maxEntries: options.maxConsoleEntries,
   });
@@ -199,6 +201,13 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   if (context.connection) facts.push(["Connection", context.connection]);
   const ts = consoleEntries.at(-1)?.ts;
   if (ts) facts.push(["Last console entry", ts]);
+  // One line rather than a section: the events themselves are for a player,
+  // not for a reader, so what a reader wants here is that there is a recording
+  // and roughly how much of one.
+  if (replay) {
+    const count = `${replay.events.length} event${replay.events.length === 1 ? "" : "s"}`;
+    facts.push(["Replay", `${count} over ${replay.seconds} s (attached)`]);
+  }
   if (options.screenshotUrl) facts.push(["Screenshot", options.screenshotUrl]);
   else if (typeof r.screenshotDataUrl === "string" && r.screenshotDataUrl) {
     facts.push(["Screenshot", "attached"]);

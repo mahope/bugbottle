@@ -8,7 +8,7 @@
 
 import { collectContext } from "./capture.ts";
 import { getConsoleBuffer } from "./console-buffer.ts";
-import { readBreadcrumbs, readNetwork, readPerf, readStorage } from "./registry.ts";
+import { readBreadcrumbs, readNetwork, readPerf, readReplay, readStorage } from "./registry.ts";
 import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
 
 export type BuildReportInput = {
@@ -46,6 +46,13 @@ export type BuildReportInput = {
    * the option.
    */
   includePerf?: boolean;
+  /**
+   * Attach the buffered session replay. Default true, which means "whenever
+   * `attachRrweb` from `bugbottle/rrweb` is recording" — an application that
+   * never imports that module has nothing to attach and pays nothing for the
+   * option.
+   */
+  includeReplay?: boolean;
   /** Elements the reporter pointed at, from `pickElement`. */
   elements?: ElementRef[];
   /**
@@ -94,6 +101,10 @@ export function buildReport(input: BuildReportInput): BugReport & Record<string,
     if (perf) report.perf = perf;
     const storage = readStorage();
     if (storage) report.storage = storage;
+  }
+  if (input.includeReplay ?? true) {
+    const replay = readReplay();
+    if (replay) report.replay = replay;
   }
   if (input.screenshotDataUrl) report.screenshotDataUrl = input.screenshotDataUrl;
   const body = { ...input.extra, ...report };

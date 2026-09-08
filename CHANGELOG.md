@@ -9,6 +9,36 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `bugbottle/rrweb`: `attachRrweb(record, { seconds = 30, maxBytes = 512 * 1024 })`,
+  the last half-minute before the panel opened, for the applications that
+  already run rrweb. An adapter and not a recorder — rrweb is not a dependency
+  and is never imported, so the application hands its own `record` in the way
+  it hands the screenshot renderer in, and the type of it is structural. rrweb
+  is asked for a fresh full snapshot every ten seconds, because a checkout is
+  the only place a recording can be cut, and the buffer keeps whole checkout
+  groups: the oldest goes when it falls entirely outside the window, and again
+  while the serialised buffer is over `maxBytes`. The newest group is never
+  dropped, so `seconds` is a floor rather than a promise; one snapshot larger
+  than the cap is dropped whole, like an oversized screenshot, because half a
+  replay does not play. Registered through `src/registry.ts` beside the
+  breadcrumbs, the network log and the perf snapshot, so the core pays 19 bytes
+  for one registry read (1316 → 1335 gzipped) and not one byte of the module,
+  which is 711 gzipped against a 768-byte budget. The report gains
+  `replay: { events, seconds }`; `includeReplay: false` leaves it out of one
+  report. Masking is rrweb's own and is the only control there is —
+  `scrubReport` does not walk somebody else's event format — so
+  `maskAllInputs: true` is the default here, `data-bugbottle-mask` becomes
+  rrweb's `maskTextSelector`, and `data-bugbottle-block` and `data-bugbottle`
+  become its `blockSelector`, which also stops the panel filming itself.
+  On the server `normaliseReplay` keeps the events that are objects with a
+  numeric `type` and `timestamp`, strips null bytes, recomputes `seconds`, and
+  drops the whole replay over `MAX_REPLAY_BYTES` (1 MB); `handleReport` takes
+  `replay: "keep" | "drop"`, defaulting to keep and dropping before anything is
+  scrubbed, deduplicated, stored or rendered; `toMarkdown` prints one line —
+  `Replay: 240 events over 32 s (attached)`. In the schema as `ReplayCapture`
+  and `ReplayEvent`. The README says plainly what it is: a recording of a
+  person using your software, to which the privacy section applies twice.
+  picker included), `bugbottle/server` 0.8 kB.
 - `examples/inbox`: a place for reports to land, in one file and with no
   dependencies. A Node 22+ server that receives them with `handleReport`,
   writes each one to disk as `<time>-<id>.json` beside `<id>.png` — the

@@ -113,6 +113,7 @@ jobs:
           echo 'import { onShortcut, onUncaughtError } from "bugbottle/triggers"; export { onShortcut, onUncaughtError };' > triggers.js
           echo 'import { onShake, requestShakePermission } from "bugbottle/shake"; export { onShake, requestShakePermission };' > shake.js
           echo 'import { createSigner } from "bugbottle/sign"; export { createSigner };' > sign.js
+          echo 'import { attachRrweb } from "bugbottle/rrweb"; export { attachRrweb };' > rrweb.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
         run: |
@@ -133,7 +134,8 @@ jobs:
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
           npx esbuild shake.js --bundle --minify --format=esm --outfile=out-shake.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
-          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-shake out-sign; do
+          npx esbuild rrweb.js --bundle --minify --format=esm --outfile=out-rrweb.js
+          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-shake out-sign out-rrweb; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -154,6 +156,12 @@ jobs:
           # `src/perf.ts` — the observers, the store walk and the cookie parse
           # are in `bugbottle/perf` and are bundled only by an application that
           # imports it. That is the seam this budget exists to guard.
+          # #55 added 19 more bytes for the same reason and in the same shape:
+          # one registry read for the rrweb buffer (1316 -> 1335 measured
+          # locally). None of `src/rrweb.ts` is here — the adapter, the rolling
+          # buffer and the byte cap are in `bugbottle/rrweb` and are bundled
+          # only by an application that imports it and hands rrweb's own
+          # `record` in.
           if [ "$core" -gt 1536 ]; then
             echo "bugbottle is $core bytes gzipped; the budget is 1536" >&2
             exit 1
@@ -282,6 +290,16 @@ jobs:
           shake=$(gzip -c out-shake.js | wc -c)
           if [ "$shake" -gt 768 ]; then
             echo "bugbottle/shake is $shake bytes gzipped; the budget is 768" >&2
+            exit 1
+          fi
+          # The rrweb adapter: the rolling buffer, the checkout trim and the
+          # byte cap. It imports two types and nothing at run time — rrweb
+          # itself is the application's, handed in as `record` — so this number
+          # is the module. 711 bytes gzipped when it landed, against the
+          # 768-byte budget the issue set for it.
+          rrweb=$(gzip -c out-rrweb.js | wc -c)
+          if [ "$rrweb" -gt 768 ]; then
+            echo "bugbottle/rrweb is $rrweb bytes gzipped; the budget is 768" >&2
             exit 1
           fi
           # One key import, one HMAC and a hex loop, and it imports nothing at

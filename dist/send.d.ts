@@ -41,6 +41,13 @@ export type BuildReportInput = {
      * the option.
      */
     includePerf?: boolean;
+    /**
+     * Attach the buffered session replay. Default true, which means "whenever
+     * `attachRrweb` from `bugbottle/rrweb` is recording" — an application that
+     * never imports that module has nothing to attach and pays nothing for the
+     * option.
+     */
+    includeReplay?: boolean;
     /** Elements the reporter pointed at, from `pickElement`. */
     elements?: ElementRef[];
     /**

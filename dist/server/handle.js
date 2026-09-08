@@ -17,7 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
-import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
+import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseReplay, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
 import { fingerprint } from "../fingerprint.js";
 import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 import { toMarkdown } from "../markdown.js";
@@ -52,6 +52,7 @@ const KNOWN_KEYS = new Set([
     "network",
     "perf",
     "storage",
+    "replay",
     "screenshotDataUrl",
 ]);
 /** Longest key kept for a bucket: a header is not allowed to size the map. */
@@ -502,6 +503,7 @@ export function validateReport(payload) {
         network: normaliseNetwork(body.network),
         perf: normalisePerf(body.perf),
         storage: normaliseStorage(body.storage),
+        replay: normaliseReplay(body.replay),
         extra: collectExtra(body),
         receivedAt: new Date().toISOString(),
     };
@@ -609,6 +611,11 @@ export async function handleReport(request, options = {}) {
         let report = validateReport(payload);
         if (!report)
             return json({ error: EMPTY_MESSAGE_ERROR }, 400, cors);
+        // Dropped before scrubbing, deduplicating, storing or rendering, so a
+        // deployment that says no to replays never has one in memory a moment
+        // longer than the parse took.
+        if (options.replay === "drop")
+            report.replay = null;
         if (options.scrub) {
             report = scrubReport(report, options.scrub === true ? {} : options.scrub);
         }

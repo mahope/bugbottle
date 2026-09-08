@@ -72,6 +72,19 @@ export declare const MAX_STORAGE_VALUES = 20;
  * bloated by a browser — or an attacker — sending 1e300.
  */
 export declare const MAX_PERF_MS = 3600000;
+/**
+ * How large a session replay may be, serialised. A megabyte is a generous
+ * thirty seconds of rrweb and small enough that a row, an email and a JSON
+ * column all survive it. Over it the replay is dropped whole, exactly as an
+ * oversized screenshot is: half a recording plays no better than none.
+ */
+export declare const MAX_REPLAY_BYTES: number;
+/**
+ * How many replay events one report may carry. The byte cap is the real
+ * bound; this one stops a body of a million tiny objects from costing a
+ * million iterations before the byte cap is reached.
+ */
+export declare const MAX_REPLAY_EVENTS = 20000;
 export type ConsoleLevel = "error" | "warn";
 /**
  * One line of a parsed stack: where the code was, never what it said. Source
@@ -242,6 +255,37 @@ export type StorageSnapshot = {
     /** Values of the allow-listed keys, clipped. */
     values?: Record<string, string>;
 };
+/**
+ * One rrweb event, as rrweb wrote it.
+ *
+ * Only `type` and `timestamp` are read — by the buffer in `bugbottle/rrweb` to
+ * find the checkouts, and by the validator to tell an event from whatever else
+ * arrived in the array. The rest is rrweb's payload and is carried through
+ * unread, because this library does not know how to play a replay and should
+ * not pretend to. That is also why the whole thing is bounded by size rather
+ * than field by field: it is somebody else's format.
+ */
+export type ReplayEvent = {
+    /** rrweb's event type number. 2 is a full snapshot. */
+    type: number;
+    /** Epoch milliseconds. */
+    timestamp: number;
+    [key: string]: unknown;
+};
+/**
+ * A session replay: the events and how long they cover.
+ *
+ * This is the heaviest and the most sensitive thing a report can carry — a
+ * recording of somebody using your application — so it is only ever here
+ * because the application called `attachRrweb` and handed its own rrweb
+ * `record` in.
+ */
+export type ReplayCapture = {
+    /** rrweb events, oldest first, starting at a full snapshot. */
+    events: ReplayEvent[];
+    /** How many seconds the events span, rounded. */
+    seconds: number;
+};
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
     type: ReportType;
@@ -265,6 +309,8 @@ export type BugReport = {
     perf?: PerfSnapshot;
     /** What was in the browser's stores, when `bugbottle/perf` was measuring. */
     storage?: StorageSnapshot;
+    /** The last seconds before the report, when `bugbottle/rrweb` was recording. */
+    replay?: ReplayCapture;
     screenshotDataUrl?: string;
 };
 export declare function isReportType(value: unknown): value is ReportType;
@@ -366,6 +412,26 @@ export declare function normalisePerf(raw: unknown): PerfSnapshot | null;
  * so a reader can tell "nothing stored" from "not measured". Never throws.
  */
 export declare function normaliseStorage(raw: unknown): StorageSnapshot | null;
+/**
+ * Validates the session replay a report arrived with.
+ *
+ * Three rules, and they are the only ones this can honestly have. An event is
+ * an object with a numeric `type` and a numeric `timestamp`; anything else in
+ * the array is not an rrweb event and is dropped. The payload of an event is
+ * carried through unread, because it is rrweb's format and not ours — which is
+ * exactly why the third rule is a hard ceiling on the serialised size, and why
+ * going over it drops the whole replay rather than part of it. A replay cut in
+ * the middle does not play.
+ *
+ * Null bytes are stripped out of the serialised form before it is parsed back,
+ * for the reason every other validator strips them: Postgres refuses a text
+ * value containing one, and a replay is nested attacker-controlled JSON on its
+ * way into a column.
+ *
+ * `seconds` is recomputed from the events that survived rather than believed.
+ * Never throws: a malformed replay means "no replay", not a failed report.
+ */
+export declare function normaliseReplay(raw: unknown): ReplayCapture | null;
 export declare class InvalidScreenshotError extends Error {
     constructor(message: string);
 }

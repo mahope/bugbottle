@@ -7,7 +7,7 @@
  */
 import { collectContext } from "./capture.js";
 import { getConsoleBuffer } from "./console-buffer.js";
-import { readBreadcrumbs, readNetwork, readPerf, readStorage } from "./registry.js";
+import { readBreadcrumbs, readNetwork, readPerf, readReplay, readStorage } from "./registry.js";
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
 export function buildReport(input) {
     const report = {
@@ -39,6 +39,11 @@ export function buildReport(input) {
         const storage = readStorage();
         if (storage)
             report.storage = storage;
+    }
+    if (input.includeReplay ?? true) {
+        const replay = readReplay();
+        if (replay)
+            report.replay = replay;
     }
     if (input.screenshotDataUrl)
         report.screenshotDataUrl = input.screenshotDataUrl;

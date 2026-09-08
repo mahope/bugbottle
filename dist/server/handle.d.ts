@@ -17,7 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
-import { type Breadcrumb, type ConsoleEntry, type ElementRef, type NetworkEntry, type PerfSnapshot, type ReportContext, type StorageSnapshot, type ReportType } from "../report-core.ts";
+import { type Breadcrumb, type ConsoleEntry, type ElementRef, type NetworkEntry, type PerfSnapshot, type ReplayCapture, type ReportContext, type StorageSnapshot, type ReportType } from "../report-core.ts";
 import { type MarkdownOptions } from "../markdown.ts";
 import { type ScrubOptions } from "../scrub.ts";
 import { type SendReportEmailOptions } from "../sinks/resend.ts";
@@ -65,6 +65,11 @@ export type ValidatedReport = {
     perf: PerfSnapshot | null;
     /** What was in the browser's stores, or null when the client was not looking. */
     storage: StorageSnapshot | null;
+    /**
+     * The session replay, or null when the client was not recording one, sent
+     * one that did not survive validation, or the handler was told to drop it.
+     */
+    replay: ReplayCapture | null;
     extra: Record<string, unknown>;
     /** ISO 8601 timestamp of when the server accepted it. */
     receivedAt: string;
@@ -319,6 +324,16 @@ export type HandleReportOptions = {
      * `toMarkdown` and the sinks as `screenshotUrl`.
      */
     screenshot?: "drop" | "keep" | ((bytes: Uint8Array, report: ValidatedReport) => Promise<string | undefined>);
+    /**
+     * What happens to the session replay. `"keep"` (the default) validates it
+     * and hands it to `store` on the report; `"drop"` throws it away, which is
+     * the setting for a deployment that has rrweb wired up on the client but has
+     * not decided where a recording of somebody's screen may be written.
+     *
+     * There is no function form on purpose: a replay is JSON and belongs in the
+     * row the rest of the report goes into, not in a bucket of its own.
+     */
+    replay?: "drop" | "keep";
     /** Where the report is written. Its `id` is what the client is told. */
     store?: (report: ValidatedReport, screenshot?: Uint8Array) => Promise<{
         id?: string;

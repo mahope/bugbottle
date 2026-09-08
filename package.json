@@ -76,6 +76,10 @@
       "types": "./dist/perf.d.ts",
       "default": "./dist/perf.js"
     },
+    "./rrweb": {
+      "types": "./dist/rrweb.d.ts",
+      "default": "./dist/rrweb.js"
+    },
     "./sign": {
       "types": "./dist/sign.d.ts",
       "default": "./dist/sign.js"
