@@ -1545,6 +1545,191 @@ page returned as HTML, or a 40 MB payload never reaches your storage.
 If your response has an `id` field, the client hands it to `onSent`. If a
 failed response has an `error` or `message` field, it is shown to the reporter.
 
+## Recipes
+
+The endpoint is the same everywhere; only the sentence that produces a
+`Request` differs. Here is that sentence, once per framework, with the file
+path the framework expects. Checked in September 2026 by installing each
+framework beside a packed `bugbottle` and running `tsc --noEmit` over the
+snippet: Next 16.3.4, SvelteKit 2.70.3, Nuxt 4.5.2 (h3 1.15.11), Astro 7.3.1,
+React Router 7.18.3 and 8.3.1, and Hono 4.13.7, all on TypeScript 5.9.
+
+Deno, Bun and Cloudflare Workers are not on the list because they need no
+recipe: they hand you a web `Request` and take a `Response`, so the first
+example in [Receiving a report](#receiving-a-report) is already the whole
+handler.
+
+### Next.js (App Router)
+
+`app/api/feedback/route.ts`:
+
+```ts
+import { handleReport, toResend } from "bugbottle/server";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  return handleReport(request, {
+    maxBodyBytes: 4 * 1024 * 1024,
+    sinks: [
+      toResend({
+        apiKey: process.env.RESEND_API_KEY!,
+        from: "bugs@acme.com",
+        to: "team@acme.com",
+      }),
+    ],
+  });
+}
+```
+
+The line that matters is `runtime`. `"nodejs"` is the default and the one to
+keep when `store` talks to a database; `"edge"` runs this handler unchanged,
+since nothing in `bugbottle/server` needs a Node built-in. A route handler is
+handed the body unparsed, so the Pages Router's `api.bodyParser.sizeLimit` has
+nothing to do with it and `maxBodyBytes` is the only ceiling — and the bytes
+reach `handleReport` exactly as they were sent, so `signature` verifies.
+The client goes in a `"use client"` component rendered from the root layout.
+
+### SvelteKit
+
+`src/routes/api/feedback/+server.ts`:
+
+```ts
+import type { RequestHandler } from "@sveltejs/kit";
+import { handleReport, toWebhook } from "bugbottle/server";
+
+export const POST: RequestHandler = ({ request }) =>
+  handleReport(request, {
+    maxBodyBytes: 4 * 1024 * 1024,
+    sinks: [toWebhook({ url: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
+  });
+```
+
+The export is named after the method and typed `RequestHandler`; `./$types`
+gives the same type once `svelte-kit sync` has run, and `$env/dynamic/private`
+is the SvelteKit way to read the same variable as `process.env`. `event.request`
+is the untouched web `Request`, so signing works.
+The client goes in `+layout.svelte`, inside `onMount`.
+
+### Nuxt
+
+`server/api/feedback.post.ts`:
+
+```ts
+import { defineEventHandler, toWebRequest } from "h3";
+import { handleReport, toGithub } from "bugbottle/server";
+
+export default defineEventHandler((event) =>
+  handleReport(toWebRequest(event), {
+    maxBodyBytes: 4 * 1024 * 1024,
+    sinks: [
+      toGithub({
+        token: process.env.GITHUB_TOKEN!,
+        owner: "acme",
+        repo: "app",
+        labels: ["bug"],
+      }),
+    ],
+  }),
+);
+```
+
+The line that matters is `toWebRequest(event)`: Nitro hands you an `H3Event`
+rather than a `Request`, and that turns one into the other. `.post.ts` in the
+filename is the method, so there is no `if` to write. Nuxt auto-imports both
+functions — the import line is for the type-checker and for whoever reads the
+file. The raw body survives as long as nothing called `readBody(event)` first,
+which consumes the stream signing needs.
+The client goes in a `.client.ts` plugin under `plugins/`.
+
+### Astro
+
+`src/pages/api/feedback.ts`:
+
+```ts
+import type { APIRoute } from "astro";
+import { handleReport, toLinear } from "bugbottle/server";
+
+export const prerender = false;
+
+export const POST: APIRoute = ({ request }) =>
+  handleReport(request, {
+    maxBodyBytes: 4 * 1024 * 1024,
+    sinks: [
+      toLinear({ apiKey: process.env.LINEAR_API_KEY!, teamId: process.env.LINEAR_TEAM_ID! }),
+    ],
+  });
+```
+
+`export const prerender = false` is the line to remember: in a static build an
+endpoint without it is run once at build time and there is nothing left to POST
+to. It needs an adapter, so the route runs on a server. `context.request` is
+the web `Request` as it arrived, so signing works.
+The client goes in a `<script>` in the layout — one island, no framework.
+
+### React Router 7 (and Remix)
+
+`app/routes/api.feedback.ts`:
+
+```ts
+import type { ActionFunctionArgs } from "react-router";
+import { handleReport, toResend } from "bugbottle/server";
+
+export async function action({ request }: ActionFunctionArgs) {
+  return handleReport(request, {
+    maxBodyBytes: 4 * 1024 * 1024,
+    sinks: [
+      toResend({
+        apiKey: process.env.RESEND_API_KEY!,
+        from: "bugs@acme.com",
+        to: "team@acme.com",
+      }),
+    ],
+  });
+}
+```
+
+It is an `action`, not a `loader`: a loader only ever sees a GET. Remix v2 is
+the same file with the import from `@remix-run/node`, and React Router's
+framework mode generates the same shape as `Route.ActionArgs` in
+`./+types/api.feedback` if you prefer the typed route. Nothing has read the
+body when `action` runs, so signing works — leave `request.formData()` and
+`request.json()` alone here.
+The client goes in the root route's component, or in `entry.client.tsx`.
+
+### Hono
+
+Anywhere in the app:
+
+```ts
+import { Hono } from "hono";
+import { handleReport, toWebhook } from "bugbottle/server";
+
+const app = new Hono<{ Bindings: { SLACK_WEBHOOK_URL: string } }>();
+
+app.post("/api/feedback", (c) =>
+  handleReport(c.req.raw, {
+    maxBodyBytes: 4 * 1024 * 1024,
+    sinks: [toWebhook({ url: c.env.SLACK_WEBHOOK_URL, format: "slack" })],
+  }),
+);
+
+export default app;
+```
+
+`c.req` is Hono's own wrapper; `c.req.raw` is the web `Request` underneath it,
+which is what `handleReport` wants. `Bindings` types `c.env` — on Workers those
+are the bindings, on Node and Bun read `process.env` instead. The raw body is
+untouched, so signing works, provided no middleware in front of this route has
+already read it.
+The client mounts wherever your HTML is served from; Hono only serves it.
+
+### WordPress
+
+No recipe: the plugin at
+[github.com/mahope/bugbottle-wordpress](https://github.com/mahope/bugbottle-wordpress)
+is the endpoint, the panel and an admin list of what arrived. One activation.
+
 ## Sending it somewhere
 
 Storing the report is one thing; seeing it is another. Seven sinks live in
