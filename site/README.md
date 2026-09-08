@@ -1,11 +1,12 @@
 # site/
 
 The site at [bugbottle.dev](https://bugbottle.dev): a landing page in English
-at `/` and Danish at `/da/`, the English documentation at `/docs/`, and a
-comparison page in both languages at `/compare/` and `/da/sammenlign/`. The
+at `/` and Danish at `/da/`, the English documentation at `/docs/`, the
+changelog at `/docs/changelog/`, and a comparison page in both languages at
+`/compare/` and `/da/sammenlign/`. The
 landing pages are static HTML written by hand; the documentation, the
-comparison, `sitemap.xml` and `robots.txt` are generated when the image is
-built. No framework, no analytics, no
+changelog, the comparison, `sitemap.xml` and `robots.txt` are generated when
+the image is built. No framework, no analytics, no
 cookies, and no external request of any kind: the two typefaces are served
 from this host and the favicon is an inline SVG.
 
@@ -23,6 +24,7 @@ from this host and the favicon is an inline SVG.
 | `compare.md` | The English "Compared with" page, as Markdown. The only prose on the site that is neither the landing page nor the README |
 | `da/sammenlign.md` | The same page in Danish, written for a Danish reader rather than translated |
 | `compare/`, `da/sammenlign/` | **Generated, never committed.** The two pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" below |
+| `docs/changelog/` | **Generated, never committed.** `CHANGELOG.md` rendered by the same script; see "The changelog" below |
 | `sitemap.xml`, `robots.txt` | **Generated, never committed.** Written by the same script; see "The sitemap and robots.txt" below |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
 | `panel-narrow.png` | The same capture clipped to the panel alone, used by the hero below 48rem |
@@ -224,7 +226,7 @@ in a table and nowhere else, and `elementPicker` was unsearchable while the
 rows were thrown away. Underscores survive the markup stripping for the same
 reason: `DEFAULT_MASK_SELECTOR` is exactly the word somebody types, and taking
 the underscores out with the backticks around them made every
-`SCREAMING_CASE` name in the documentation impossible to find. The file is about 70 kB, which is why `docs.js`
+`SCREAMING_CASE` name in the documentation impossible to find. The file is about 110 kB, which is why `docs.js`
 fetches it **on the first focus of the field** and never with the page — a
 reader who does not search pays nothing, and nginx gzips it to a fifth.
 
@@ -263,8 +265,8 @@ It serves `site/` and `dist/` the way nginx does — the security headers
 included, parsed straight out of `site/security-headers.conf` — and runs the pinned
 `axe-core` over both landing pages, the documentation index, one deep
 documentation page, the documentation index again with the search field
-holding results, and the two comparison pages, in **both colour schemes** —
-fourteen runs. The search state is a click, a word typed and a wait for the
+holding results, the two comparison pages and the changelog, in **both colour
+schemes** — sixteen runs. The search state is a click, a word typed and a wait for the
 list: the results are drawn from JavaScript and nothing else on the site would
 notice a link with no accessible name in them. It fails on a console message as well as on a violation, because
 a page that logs one is a page that is half-working and nothing else here
@@ -323,13 +325,43 @@ The English page is also listed in the documentation sidebar under About,
 which is the `extras` array on that group in the script rather than a slug,
 because it is not a README section.
 
+## The changelog
+
+`/docs/changelog/` is `CHANGELOG.md`, rendered by the same script through the
+same Markdown renderer as the comparison: one long article, no sidebar, no
+previous/next. It lives under `/docs/` rather than beside the comparison
+because it is documentation — it is the answer to "what moved" — and it is
+listed in the sidebar and on the documentation index under About, in the same
+`extras` array, for the same reason: it is not a README section.
+
+Each `##` in the file is a release, and each becomes an `<h2>` whose id is the
+version with hyphens for dots: `/docs/changelog/#0-9-0`, which is an anchor
+anybody can guess and the two landing pages stamp into their "Version x.y.z,
+released …" line. `scripts/release.mjs` moves that link with the version it
+already moves. `Unreleased` keeps its own name and its own anchor. The
+headings under a release — Added, Fixed, Changed — are `<h3>` with **no id at
+all**, because a dozen elements answering to `#added` is eleven anchors that
+go to the wrong place.
+
+Above the first release is the list of every version, in the ruled column
+"On this page" uses, so `docs.js` marks the release the reader is scrolling
+through. A reader arrives at a changelog looking for one version, and without
+the list that means scrolling past everything newer than it.
+
+The page is in the search index by release: one entry for the file's
+preamble, then one per version carrying the paragraph under its heading and
+not the whole release. The changelog says of every feature what the
+documentation says at greater length, and the ranking counts occurrences, so
+indexing all of it would put thirteen release entries above the page that
+actually documents whatever was searched for.
+
 ## The sitemap and robots.txt
 
 `site/sitemap.xml` and `site/robots.txt` are written by the same script run and
 gitignored like `site/docs/`, so a new documentation page cannot be added
 without appearing in the sitemap. The sitemap lists absolute
 `https://bugbottle.dev` URLs: the two landing pages, the documentation index
-and every documentation page, and the two comparison pages. The pairs that
+and every documentation page, the changelog, and the two comparison pages. The pairs that
 exist in both languages — the landing pages, and the two comparison pages —
 carry `xhtml:link` alternates for `en`, `da` and `x-default` in both
 directions; the documentation exists in English only and carries none.
@@ -338,7 +370,7 @@ Every `<url>` carries a `<lastmod>`, and the date is the date of the commit
 that last touched the file the page is generated from — `git log -1
 --format=%cs -- <file>`, which prints exactly the `YYYY-MM-DD` the element
 wants. The landing pages are dated by their own HTML, the comparison pages by
-their own Markdown, and the documentation index and all thirty documentation
+their own Markdown, the changelog by `CHANGELOG.md`, and the documentation index and all thirty documentation
 pages by `README.md`, since that is the only source they have. Never file
 mtimes: a checkout resets every one of them, so mtimes would tell a crawler
 that the whole site changed on the day it was last deployed.
@@ -480,6 +512,7 @@ curl -si localhost:8089/docs/api/ | head -1
 curl -si localhost:8089/docs/search.json | head -1
 curl -si localhost:8089/compare/ | head -1
 curl -si localhost:8089/da/sammenlign/ | head -1
+curl -si localhost:8089/docs/changelog/ | head -1
 curl -si localhost:8089/sitemap.xml | head -3
 curl -si localhost:8089/robots.txt | head -3
 curl -si localhost:8089/fonts/sourcesans3-400.woff2 | head -1

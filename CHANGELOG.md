@@ -9,9 +9,28 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- The changelog is a page on the site: `/docs/changelog/`, generated from this
+  file by `scripts/build-docs.mjs` in the same run as the documentation and the
+  comparison, with the site's typography and the same header and footer. Each
+  release is an `<h2>` anchored at its version with hyphens for dots, so
+  `/docs/changelog/#0-9-0` is a link anyone can guess; the headings under a
+  release carry no id, because a dozen elements answering to `#added` is eleven
+  anchors pointing at the wrong place. The list of releases sits above the
+  first one, in the ruled column "On this page" uses, and `docs.js` marks the
+  release being read. Both landing pages' "Version x.y.z, released …" line now
+  links to that release instead of to the raw file on GitHub, and
+  `scripts/release.mjs` moves the link with the version it already stamps. The
+  page is in the sitemap, dated by this file's last commit, and in the search
+  index by release — one entry per version carrying the paragraph under its
+  heading, not everything under it, so thirteen releases cannot outrank the
+  page that documents whatever was searched for. It is listed under About in
+  the sidebar beside "Compared with", through the same `extras` array, because
+  it is not a README section. `scripts/a11y-site.mjs` audits it in both colour
+  schemes: sixteen page-and-scheme runs now, still zero violations.
+  Closes #72.
 - CI runs the browser audits. A third job, `browser`, builds, generates the
   site and runs `npm run a11y` (axe over the panel's seven states and the
-  site's fourteen page-and-scheme runs, with the real security headers served)
+  site's sixteen page-and-scheme runs, with the real security headers served)
   and `npm run smoke:annotate` (the blur destroyed the pixels it covered) in
   the Chrome the `ubuntu-latest` image ships. A violation, a console message or
   a surviving pixel fails the pull request, and the axe reports are uploaded as

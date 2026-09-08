@@ -4,8 +4,8 @@
  * `scripts/a11y-audit.mjs` mounts `bugbottle/ui` on a scratch page and audits
  * the widget. This one audits the site: the two landing pages, the
  * documentation index, one deep documentation page, the index again with the
- * search field open on results, and the two comparison pages, in both colour
- * schemes, with the pinned `axe-core`. Contrast, heading
+ * search field open on results, the two comparison pages and the changelog, in
+ * both colour schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
  * without breaking a test.
@@ -124,6 +124,7 @@ const PAGES = [
   ["docs-search", "/docs/", "search"],
   ["compare-en", "/compare/"],
   ["compare-da", "/da/sammenlign/"],
+  ["changelog", "/docs/changelog/"],
 ];
 
 let failures = 0;
