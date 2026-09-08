@@ -54,7 +54,7 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Thirteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Fourteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
 `./annotate`, `./queue`, `./triggers`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
@@ -161,10 +161,14 @@ used to be one `setItem`. `bugbottle/vue` and `bugbottle/svelte` are budgeted
 at 1536 bytes each, but *marginally*: a bundle of either weighs about 5.4 kB,
 nearly all of it the capture, the picker and the send that any form pays for,
 so CI subtracts a bundle of `buildReport`/`sendReport`/`captureScreenshot`/
-`pickElement` and checks the difference. The IIFE budget is 19456 bytes gzipped
-(about 18 kB with the queue, the triggers, the accessibility pass and the 0.6
-evidence); masking, the queue and the triggers each cost it roughly half a
-kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35. `bugbottle/annotate` is budgeted at
+`pickElement` and checks the difference. `bugbottle/sign` is budgeted at 512
+bytes and measures about 370: two WebCrypto calls and a hex loop, importing
+nothing. Masking, the queue and the triggers each cost the IIFE roughly half a
+kilobyte to a kilobyte, and it was 18432 bytes through 0.6. The panel budget
+went from 9 kB to 10 kB for #35: the focus trap and return, the radiogroup and
+its arrow keys, the live region and the two-scheme colours are about 0.7 kB,
+and five new locale strings are the rest — in the IIFE, times eight languages.
+`bugbottle/annotate` is budgeted at
 2048 bytes and measures 1441: a canvas, three tools and an undo stack, with
 nothing imported. #36 then took the panel budget from 10 kB to 12 kB and the
 IIFE from 18432 to 20992 bytes (measured 11971 and 20450). The panel imports

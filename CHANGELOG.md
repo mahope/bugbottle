@@ -7,21 +7,9 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
-## 0.6.0 — 2026-09-07
-
-The adoptable release: one form state shared by React, Vue and Svelte; a
-panel that a keyboard and a screen reader can use; the offline queue; a
-keyboard shortcut and an opt-in open-on-error; stack frames and a wider page
-context on every report; the Linear sink and a JSON Schema for the payload;
-documentation generated from this README at bugbottle.dev/docs. No breaking
-changes for the ESM entries; the script-tag build grew from 13.7 kB to 18.1 kB
-gzipped because it carries every default in eight languages.
-
-Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
-`bugbottle/react` 5.5 kB, `bugbottle/vue` 5.6 kB, `bugbottle/svelte` 5.4 kB,
-`bugbottle/ui` 10.1 kB, `bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network`
-1.2 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
-`dist/bugbottle.js` 18.1 kB, `bugbottle/server` validators 0.5 kB.
+The annotator, request signing and the comparison page. Recorded here rather
+than under 0.6.0, where they were first written down: all three landed after
+that tag was cut.
 
 ### Added
 
@@ -87,6 +75,40 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
   also on `window.bugbottle` for a page with its own form. `npm run a11y` now
   audits five states rather than three, the two new ones with the editor open,
   and reports no violations.
+
+### Fixed
+
+- The ready-made panel posted the picture as it was captured when Send was
+  pressed with the editor still open, because the marks were only folded in by
+  "Done". A blur the reporter had just drawn over a customer name never reached
+  the report. The marks are committed when the report is built.
+- `createAnnotator`: the blur left the last column and row of its region
+  carrying their original pixels when a drag began or ended between two pixels,
+  and slid the region sideways when a drag began off the canvas. Both edges are
+  now rounded outwards and then clamped.
+- `handleReport`: the replay cache kept an accepted signature for `maxSkewMs`
+  from the moment it arrived rather than from the timestamp it signed. The skew
+  window runs in both directions, so a signature dated ahead of the server's
+  clock was forgotten while it was still acceptable and the captured body could
+  be posted a second time.
+
+## 0.6.0 — 2026-09-07
+
+The adoptable release: one form state shared by React, Vue and Svelte; a
+panel that a keyboard and a screen reader can use; the offline queue; a
+keyboard shortcut and an opt-in open-on-error; stack frames and a wider page
+context on every report; the Linear sink and a JSON Schema for the payload;
+documentation generated from this README at bugbottle.dev/docs. No breaking
+changes for the ESM entries; the script-tag build grew from 13.7 kB to 18.1 kB
+gzipped because it carries every default in eight languages.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
+`bugbottle/react` 5.5 kB, `bugbottle/vue` 5.6 kB, `bugbottle/svelte` 5.4 kB,
+`bugbottle/ui` 10.1 kB, `bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network`
+1.2 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`dist/bugbottle.js` 18.1 kB, `bugbottle/server` validators 0.5 kB.
+
+### Added
 
 - `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
   a composable over refs. `type` and `message` are writable computeds, so
