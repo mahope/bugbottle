@@ -1502,7 +1502,7 @@ import { expressHandler, toWebhook } from "bugbottle/server";
 app.post(
   "/api/bug-report",
   express.json({ limit: "5mb" }),
-  expressHandler({ sinks: [toWebhook({ url: process.env.SLACK_WEBHOOK_URL!, format: "slack" })] }),
+  expressHandler({ sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })] }),
 );
 ```
 
@@ -1832,7 +1832,7 @@ import { handleReport, toWebhook } from "bugbottle/server";
 export const POST: RequestHandler = ({ request }) =>
   handleReport(request, {
     maxBodyBytes: 4 * 1024 * 1024,
-    sinks: [toWebhook({ url: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
+    sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
   });
 ```
 
@@ -1941,7 +1941,7 @@ const app = new Hono<{ Bindings: { SLACK_WEBHOOK_URL: string } }>();
 app.post("/api/feedback", (c) =>
   handleReport(c.req.raw, {
     maxBodyBytes: 4 * 1024 * 1024,
-    sinks: [toWebhook({ url: c.env.SLACK_WEBHOOK_URL, format: "slack" })],
+    sinks: [toWebhook({ endpoint: c.env.SLACK_WEBHOOK_URL, format: "slack" })],
   }),
 );
 
@@ -2012,13 +2012,24 @@ clipped to the 2000 characters Discord accepts:
 ```ts
 import { sendReportWebhook } from "bugbottle/server";
 
-await sendReportWebhook(payload, { url: process.env.SLACK_WEBHOOK_URL!, format: "slack" });
-await sendReportWebhook(payload, { url: process.env.DISCORD_WEBHOOK_URL!, format: "discord" });
 await sendReportWebhook(payload, {
-  url: process.env.INTAKE_URL!,
+  endpoint: process.env.SLACK_WEBHOOK_URL!,
+  format: "slack",
+});
+await sendReportWebhook(payload, {
+  endpoint: process.env.DISCORD_WEBHOOK_URL!,
+  format: "discord",
+});
+await sendReportWebhook(payload, {
+  endpoint: process.env.INTAKE_URL!,
   headers: { "X-Token": process.env.INTAKE_TOKEN! },
 });
 ```
+
+The address was `url` until 0.9, where everything else in the package calls it
+`endpoint`. That name still works and is deprecated; it goes in 1.0. A vendor's
+own address keeps the vendor's own word — `webhookUrl` for the Slack and
+Discord sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
 
 ### Slack and Discord
 

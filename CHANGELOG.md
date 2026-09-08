@@ -9,6 +9,12 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- `sendReportWebhook` and `toWebhook` take `endpoint`, the word the rest of the
+  package uses for the address it POSTs to. `url` still works, is marked
+  `@deprecated`, and goes in 1.0 (#67); giving both is a type error rather than
+  a guess. A vendor's own address keeps the vendor's own word — `webhookUrl`,
+  `host`, `site`, `dsn`.
+
 - `handleReport`'s three pluggable stores are all called `store` now:
   `rateLimit: { store }`, `dedupe: { store }` and `signature: { store }`.
   Inside the option object the prefix said nothing the key did not, and the

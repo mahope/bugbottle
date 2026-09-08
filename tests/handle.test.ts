@@ -474,7 +474,7 @@ test("toResend, toWebhook and toGithub hand the sink context to the sinks", asyn
     screenshot: async () => "https://private.example.com/shots/2.png",
     sinks: [
       toResend({ apiKey: "re_key", from: "bugs@example.com", to: "team@example.com", fetch }),
-      toWebhook({ url: "https://hooks.example.com/x", format: "slack", fetch }),
+      toWebhook({ endpoint: "https://hooks.example.com/x", format: "slack", fetch }),
       toGithub({ token: "gh_token", owner: "acme", repo: "app", fetch }),
     ],
   });

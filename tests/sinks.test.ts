@@ -192,7 +192,7 @@ test("a resend answer without an id resolves with no id rather than failing", as
 test("the json webhook posts the report itself plus a markdown field", async () => {
   const { fetch, calls } = fakeFetch(200, { ok: true });
   const result = await sendReportWebhook(report, {
-    url: "https://hook.example.com/intake",
+    endpoint: "https://hook.example.com/intake",
     headers: { "X-Token": "s3cret" },
     fetch,
   });
@@ -209,7 +209,7 @@ test("the json webhook posts the report itself plus a markdown field", async () 
 test("slack gets text and discord gets content", async () => {
   const slack = fakeFetch(200, "ok");
   await sendReportWebhook(report, {
-    url: "https://hooks.slack.com/services/x",
+    endpoint: "https://hooks.slack.com/services/x",
     format: "slack",
     fetch: slack.fetch,
   });
@@ -497,4 +497,14 @@ test("a malformed report is still filed in linear, with a fallback title", async
   assert.equal(result.id, "iss_2");
   assert.equal(result.identifier, undefined);
   assert.equal(linearInput(calls).title, "Feedback: Feedback");
+});
+
+test("the deprecated url still says where the webhook is", async () => {
+  const { fetch, calls } = fakeFetch(200, { ok: true });
+  const result = await sendReportWebhook(report, {
+    url: "https://hook.example.com/old-name",
+    fetch,
+  });
+  assert.equal(result.status, 200);
+  assert.equal(calls[0]?.url, "https://hook.example.com/old-name");
 });
