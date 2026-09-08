@@ -7,6 +7,28 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The consistency release. The whole public API was read once before 1.0 —
+412 exported names across eighteen entry points — and the seven naming rules
+that came out of it are now in CLAUDE.md. Every rename ships as an alias:
+`onError` beside `onFailure`, `maxEntries` beside `maxItems`, `store` beside
+the three store names, `endpoint` beside the webhook `url`, `MAX_SLACK_*` and
+`MAX_DISCORD_*` beside the vendor-first spellings, and every `init*` returns
+its `stop()`. Nothing is removed; the removals are issues #63–#67 for 1.0.
+Beside it: a Content-Security-Policy on every path of the site, the server
+bundle asserted in CI against DOM symbols, Jira line breaks as `hardBreak`
+nodes, the inbox example indexed and capped, honest result counts in the docs
+search, and the review fixes to the replay cap, the null-byte strip, the store
+answers and the contact input.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.4 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`bugbottle/shake` 0.6 kB, `bugbottle/sign` 0.4 kB, `bugbottle/rrweb` 0.7 kB,
+`dist/bugbottle.js` 24.1 kB, `dist/bugbottle.slim.js` 20.6 kB,
+`bugbottle/server` validators 0.6 kB.
+
 ### Added
 
 - `docs/api-audit-1.0.md`: the whole public API read once before 1.0 freezes it

@@ -49,7 +49,7 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   breadcrumbs 1.3 kB; the network log
   1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.3 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 24.0 kB, and the slim one 20.5 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 24.1 kB, and the slim one 20.6 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
