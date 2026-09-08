@@ -44,6 +44,15 @@ The wire format is unchanged: a 0.15 browser and a 1.0 server understand each
 other in both directions, and so do the schema, the OpenAPI document and the
 GitHub Action.
 
+Sizes moved by single-digit bytes and no budget moved with them. Measured
+against 0.15.0 with the same recipe: `bugbottle/react` −4, `bugbottle/vue` −5,
+`bugbottle/svelte` −6, `bugbottle/solid` −5, `bugbottle/ui` −6,
+`bugbottle/queue` 1545 → 1539, `bugbottle/server` −2, `dist/bugbottle.js` −14
+and `dist/bugbottle.slim.js` −12. The core rose three bytes, which is the
+compressor rather than the code: everything #68 took off the entry was already
+tree-shaken out of a bundle that never called it, which is why that issue was
+about what the entry says it is and not about bytes.
+
 ### Changed
 
 - **One shape for the screenshot address across all eleven sinks** (#69).

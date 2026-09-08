@@ -228,7 +228,8 @@ run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
 script tag nothing at all — the IIFE does not export it, because a page with no
 bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1600 bytes and measures
-1545: it imports only a type, so that number is the module itself. It was
+1539 (1545 until 1.0 removed the `maxItems` alias): it imports only a type, so
+that number is the module itself. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is
 delivered — which is a read-modify-write, a claim and a release where there
@@ -371,6 +372,17 @@ alone weighs 2798, `gitlabSink` alone 4528 (`toMarkdown` is most of it), and
 both together 5613. `smtpSink` alone weighs 8037 with `node:net` and `node:tls`
 external: the client itself is a small part of that, and the rest is
 `toMarkdown` and the locale it reads the subject and the intro out of.
+
+1.0 (#97) moved every number by single digits and no budget with them: the
+seven aliases and the fourteen names #68 took off the core entry were all
+either tree-shaken already or a line of `??`. Against 0.15.0:
+`bugbottle/react` −4, `bugbottle/vue` −5, `bugbottle/svelte` −6,
+`bugbottle/solid` −5, `bugbottle/ui` −6, `bugbottle/queue` −6,
+`bugbottle/server` −2, `dist/bugbottle.js` −14, `dist/bugbottle.slim.js` −12,
+and the core +3, which is the compressor rather than the code. Measure the core
+and `bugbottle/network` on Linux before writing either down: Git Bash's `gzip`
+reads both about 130 bytes higher than CI's on files this small, while every
+larger bundle agrees to the byte.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global
