@@ -70,6 +70,16 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- `teamsSink` read a refusal as a delivery on a legacy connector webhook. Those
+  are retired but still in use, and they answer `200` with `Webhook message
+  delivery failed with error: …` in the body where a Workflows webhook answers
+  202 with nothing — so the status check passed and the report was gone without
+  a line in any log. A 200 whose body opens with that phrase is a `SinkError`
+  now, carrying the reason (#88).
+- `teamsSink` now checks `webhookUrl` with `new URL` when the sink is built. A
+  mistyped address used to reach `fetch` and come back as a failure whose
+  message quotes the URL — which is the credential — into a log, on the first
+  report rather than where it was configured (#88).
 - `smtpSink` sent the whole report in the clear when something on the path
   stripped STARTTLS out of the EHLO reply. That reply is not authenticated, so
   a downgrade is a line removed from a list; the only guard was the refusal to

@@ -2448,7 +2448,16 @@ inputs and no `Action.Submit`: a webhook has nowhere to send an answer.
 Workflows replies `202 Accepted` with an empty body, so the sink treats every
 2xx as success. That 202 means the flow was queued and not that the card
 rendered — if nothing appears in the channel, look at the flow's run history in
-Power Automate rather than at the status code.
+Power Automate rather than at the status code. The one exception is the retired
+connector webhooks, which are still out there and answer `200` for a refusal
+with the reason in the body: a body that opens with `Webhook message delivery
+failed` is a `SinkError` carrying that line, whatever the status said, because
+a lost report must not be logged as a delivered one.
+
+`webhookUrl` is checked with `new URL` when you build the sink, so a mistyped
+address fails where it was configured rather than half an hour later inside a
+`fetch` error that would have quoted your URL — which is the credential — into
+a log.
 
 A Workflows message is capped at **28 kB**, and Teams refuses a larger one
 outright rather than clipping it for you. No report can reach that on its own —
