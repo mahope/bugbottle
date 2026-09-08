@@ -2,10 +2,47 @@
 
 All notable changes are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/). Until 1.0, minor versions may
-change the API; the changelog says so when they do.
+[Semantic Versioning](https://semver.org/). Since 1.0 that is a promise rather
+than an intention: removing or renaming an export, an option or a `data-*`
+attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
+
+The freeze. 1.0 says what the next version number will mean: **removing or
+renaming an export, an option or a `data-*` attribute needs a major version, a
+new entry point needs a minor one**, and a patch changes behaviour only where
+the behaviour was a bug. Nothing new is added here. What lands is the other
+half of the September audit (#62): the seven aliases 0.9 introduced beside the
+names it settled on are removed, the server validators and `toMarkdown` leave
+the browser entry, and the eleven sinks agree on one shape for the picture
+address.
+
+The whole public surface — every export of all twenty entry points — is
+generated from the build into `docs/api-audit-1.0.md` by
+`node scripts/api-table.mjs`, so a rename is a diff rather than a surprise;
+`tests/exports.test.ts` writes the exports map out in full and fails when it,
+the README's API section and `CLAUDE.md` stop agreeing; and the seven naming
+rules in `CLAUDE.md` are the contract the next name is chosen by rather than a
+style preference.
+
+Every migration in one table. All seven are mechanical, and nobody has to read
+a value to make one:
+
+| Was | Is | Where |
+|---|---|---|
+| `SendOptions.onFailure` | `SendOptions.onError` | `sendReport` |
+| `QueueOptions.maxItems` | `QueueOptions.maxEntries` | `createQueue` |
+| `SLACK_MAX_*`, `DISCORD_MAX_*` (13) | `MAX_SLACK_*`, `MAX_DISCORD_*` | `bugbottle/server` |
+| `rateLimit.rateLimitStore` | `rateLimit.store` | `handleReport` |
+| `dedupe.dedupeStore` | `dedupe.store` | `handleReport` |
+| `signature.replayStore` | `signature.store` | `handleReport` |
+| `SendReportWebhookOptions.url` | `SendReportWebhookOptions.endpoint` | `sendReportWebhook`, `toWebhook` |
+| `import { normalise*, toMarkdown } from "bugbottle"` | `… from "bugbottle/server"` | the core entry |
+| `slackSink({ screenshotUrl: (r) => … })` | `slackSink({ screenshotUrlFrom: (r) => … })` | Slack, Discord, Teams |
+
+The wire format is unchanged: a 0.15 browser and a 1.0 server understand each
+other in both directions, and so do the schema, the OpenAPI document and the
+GitHub Action.
 
 ### Changed
 
