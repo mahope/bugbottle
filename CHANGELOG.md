@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.10.0 — 2026-09-08
+
 The visible release: the browser audits — axe over the panel and every site
 page with the security headers served, and the pixel proof that the blur
 destroys what it covers — now run in CI on every push, so what the two
