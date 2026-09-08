@@ -30,6 +30,7 @@ import {
   MAX_BREADCRUMB_TEXT_LENGTH,
   MAX_CONSOLE_ENTRIES,
   MAX_CONSOLE_MESSAGE_LENGTH,
+  MAX_COOKIE_NAMES,
   MAX_ELEMENTS,
   MAX_ELEMENT_TEXT_LENGTH,
   MAX_MESSAGE_LENGTH,
@@ -37,6 +38,9 @@ import {
   MAX_SCREENSHOT_DATA_URL_LENGTH,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
+  MAX_STORAGE_KEYS,
+  MAX_STORAGE_KEY_LENGTH,
+  MAX_STORAGE_VALUE_LENGTH,
 } from "../src/report-core.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -116,6 +120,16 @@ export function buildReportSchema(): Json {
   at(report, ["elements"]).maxItems = MAX_ELEMENTS;
   at(report, ["breadcrumbs"]).maxItems = MAX_BREADCRUMBS;
   at(report, ["network"]).maxItems = MAX_NETWORK_ENTRIES;
+
+  const storage = at(defs, ["StorageSnapshot", "properties"]);
+  at(storage, ["local"]).maxItems = MAX_STORAGE_KEYS;
+  at(storage, ["session"]).maxItems = MAX_STORAGE_KEYS;
+  at(storage, ["cookies"]).maxItems = MAX_COOKIE_NAMES;
+  at(storage, ["cookies", "items"]).maxLength = MAX_STORAGE_KEY_LENGTH;
+  at(storage, ["values", "additionalProperties"]).maxLength = MAX_STORAGE_VALUE_LENGTH;
+
+  const storageKey = at(defs, ["StorageKeyRef", "properties"]);
+  at(storageKey, ["key"]).maxLength = MAX_STORAGE_KEY_LENGTH;
 
   const screenshot = at(report, ["screenshotDataUrl"]);
   screenshot.maxLength = MAX_SCREENSHOT_DATA_URL_LENGTH;

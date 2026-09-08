@@ -69,5 +69,24 @@ export const fullReportBody = {
     },
     { ts: "2026-09-07T10:00:01.000Z", method: "GET", url: "/api/me", status: 0, ms: 30, error: true },
   ],
+  perf: {
+    lcp: 3412,
+    cls: 0.081,
+    inp: 210,
+    ttfb: 128,
+    domContentLoaded: 641,
+    load: 1200,
+    longTasks: { count: 3, totalMs: 480 },
+    memory: { usedMB: 32, limitMB: 2048 },
+  },
+  storage: {
+    local: [
+      { key: "theme", length: 4 },
+      { key: "authToken", length: 132 },
+    ],
+    session: [{ key: "cart", length: 7 }],
+    cookies: ["session", "consent"],
+    values: { tenant: "acme" },
+  },
   screenshotDataUrl: PNG_DATA_URL,
 };

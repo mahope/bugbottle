@@ -12,7 +12,12 @@ import {
   type ValidatedReport,
 } from "../src/server/handle.ts";
 import { expressHandler } from "../src/server/express.ts";
-import { PNG_BYTES, PNG_DATA_URL, reportBody as body } from "./report-fixtures.ts";
+import {
+  PNG_BYTES,
+  PNG_DATA_URL,
+  fullReportBody,
+  reportBody as body,
+} from "./report-fixtures.ts";
 
 /** A POST the way a browser sends one. */
 function post(payload: unknown, init: RequestInit = {}): Request {
@@ -866,4 +871,75 @@ test("a multi-byte character split across two chunks survives the raw read", asy
 
   assert.equal(state.status, 202);
   assert.equal(stored?.message, message);
+});
+
+test("the perf and storage blocks are validated and reach the row", async () => {
+  let stored: ValidatedReport | undefined;
+  resetDedupe();
+  const response = await handleReport(post({ ...fullReportBody, message: "Perf and storage" }), {
+    store: async (report) => {
+      stored = report;
+      return { id: "r_perf" };
+    },
+    screenshot: "drop",
+  });
+  assert.equal(response.status, 201);
+  assert.equal(stored?.perf?.lcp, 3412);
+  assert.deepEqual(stored?.perf?.longTasks, { count: 3, totalMs: 480 });
+  assert.deepEqual(stored?.storage?.cookies, ["session", "consent"]);
+  assert.deepEqual(stored?.storage?.values, { tenant: "acme" });
+  // Neither is `extra`: both are known top-level fields now.
+  assert.equal("perf" in (stored?.extra ?? {}), false);
+  assert.equal("storage" in (stored?.extra ?? {}), false);
+});
+
+test("a malformed perf or storage block is dropped, not a reason to refuse the report", async () => {
+  let stored: ValidatedReport | undefined;
+  const response = await handleReport(
+    post({ ...body, message: "Nonsense blocks", perf: "very slow", storage: [1, 2, 3] }),
+    {
+      store: async (report) => {
+        stored = report;
+        return { id: "r_bad" };
+      },
+    },
+  );
+  assert.equal(response.status, 201);
+  assert.equal(stored?.perf, null);
+  assert.equal(stored?.storage, null);
+});
+
+test("the server scrubber redacts an allow-listed storage value", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(
+    post({
+      ...body,
+      message: "Redacted storage",
+      storage: { cookies: ["session"], values: { profile: "ada@example.com" } },
+    }),
+    {
+      scrub: true,
+      store: async (report) => {
+        stored = report;
+        return { id: "r_scrub" };
+      },
+    },
+  );
+  assert.equal(stored?.storage?.values?.profile, "[redacted]");
+});
+
+test("the markdown a sink is handed carries the performance figures", async () => {
+  let markdown = "";
+  await handleReport(post({ ...fullReportBody, message: "Markdown for a sink" }), {
+    store: async () => ({ id: "r_md" }),
+    screenshot: "drop",
+    sinks: [
+      async (_report, ctx) => {
+        markdown = ctx.markdown;
+      },
+    ],
+  });
+  assert.match(markdown, /### Performance/);
+  assert.match(markdown, /Largest contentful paint/);
+  assert.match(markdown, /<details><summary>Storage<\/summary>/);
 });

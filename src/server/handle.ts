@@ -27,12 +27,16 @@ import {
   normaliseElements,
   normaliseMessage,
   normaliseNetwork,
+  normalisePerf,
+  normaliseStorage,
   InvalidScreenshotError,
   type Breadcrumb,
   type ConsoleEntry,
   type ElementRef,
   type NetworkEntry,
+  type PerfSnapshot,
   type ReportContext,
+  type StorageSnapshot,
   type ReportType,
 } from "../report-core.ts";
 import { fingerprint } from "../fingerprint.ts";
@@ -74,6 +78,8 @@ const KNOWN_KEYS = new Set([
   "elements",
   "breadcrumbs",
   "network",
+  "perf",
+  "storage",
   "screenshotDataUrl",
 ]);
 
@@ -94,6 +100,10 @@ export type ValidatedReport = {
   elements: ElementRef[];
   breadcrumbs: Breadcrumb[];
   network: NetworkEntry[];
+  /** What the page cost, or null when the client was not measuring. */
+  perf: PerfSnapshot | null;
+  /** What was in the browser's stores, or null when the client was not looking. */
+  storage: StorageSnapshot | null;
   extra: Record<string, unknown>;
   /** ISO 8601 timestamp of when the server accepted it. */
   receivedAt: string;
@@ -586,6 +596,8 @@ export function validateReport(payload: unknown): ValidatedReport | null {
     elements: normaliseElements(body.elements),
     breadcrumbs: normaliseBreadcrumbs(body.breadcrumbs),
     network: normaliseNetwork(body.network),
+    perf: normalisePerf(body.perf),
+    storage: normaliseStorage(body.storage),
     extra: collectExtra(body),
     receivedAt: new Date().toISOString(),
   };

@@ -23,6 +23,8 @@ export type MarkdownOptions = {
     screenshotUrl?: string;
     /** Wrap the console section in a `<details>` block. Default true. */
     collapseConsole?: boolean;
+    /** Wrap the storage section in a `<details>` block. Default true. */
+    collapseStorage?: boolean;
 };
 /**
  * Renders a report (raw request body or validated) as Markdown. Never throws

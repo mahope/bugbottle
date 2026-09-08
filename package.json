@@ -68,6 +68,10 @@
       "types": "./dist/network.d.ts",
       "default": "./dist/network.js"
     },
+    "./perf": {
+      "types": "./dist/perf.d.ts",
+      "default": "./dist/perf.js"
+    },
     "./sign": {
       "types": "./dist/sign.d.ts",
       "default": "./dist/sign.js"

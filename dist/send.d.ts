@@ -27,6 +27,13 @@ export type BuildReportInput = {
      * option.
      */
     includeNetwork?: boolean;
+    /**
+     * Attach the timings and the storage snapshot. Default true, which means
+     * "whenever `initPerf` from `bugbottle/perf` is measuring" — an application
+     * that never imports that module has nothing to attach and pays nothing for
+     * the option.
+     */
+    includePerf?: boolean;
     /** Elements the reporter pointed at, from `pickElement`. */
     elements?: ElementRef[];
     /**

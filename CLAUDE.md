@@ -22,6 +22,7 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
 | `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |
+| `src/perf.ts` | `initPerf()` — the Web Vitals from buffered `PerformanceObserver` entries (LCP last candidate, CLS without recent input, INP as the worst interaction), the navigation milestones, long tasks, the JS heap where it exists, plus the storage snapshot: key names and value lengths, cookie names, values only for an opt-in allow-list. Own entry point. Never a cookie value, on any setting | registry, report-core |
 | `src/queue.ts` | `createQueue()` — a `localStorage` queue in front of the endpoint, flushed on init, `online` and visibility, with backoff. Own entry point. Imports `send.ts` nowhere: one `fetch` of its own | report-core (types) |
 | `src/triggers.ts` | `onShortcut(combo, handler)` and `onUncaughtError(handler, options)` — the two ways into the panel that need no button. Own entry point. Listeners only: never renders, never sends | fingerprint |
 | `src/fingerprint.ts` | `fingerprint(report)` + `stableHash(text)` — one identity for a report, computed the same way in the browser and on the server. Imported by nothing in the core entry, so it is tree-shaken when unused | nothing |
@@ -58,10 +59,10 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Fourteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Fifteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
-`./annotate`, `./queue`, `./triggers`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
+`./perf`, `./annotate`, `./queue`, `./triggers`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -156,7 +157,11 @@ already pays for — the marginal cost there is around 0.55 kB.
 the review fixes (one `loadend` listener per instance, an era guard on
 in-flight requests, and a reset that only unpatches what is still ours) cost
 about 100 bytes more. It imports `scrubUrl` alone, so the rest of `scrub.ts` is
-tree-shaken away. `bugbottle/queue` is budgeted at 1330 bytes and measures
+tree-shaken away. `bugbottle/perf` is budgeted at 1280 bytes and measures
+1236: five observers, the navigation entry, two store walks and a cookie parse,
+importing nothing but four constants. The core moved 1272 → 1310 bytes for it,
+and that 38 bytes is the whole cost to a consumer who never imports it — two
+registry reads in `buildReport`. `bugbottle/queue` is budgeted at 1330 bytes and measures
 about 1290: it imports only a type, so that number is the module itself. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is
@@ -180,14 +185,15 @@ those 1441 bytes are in a bundle only when `createAnnotator` is passed to
 `mountBugbottle`, and the panel budget came back to 11 kB (measures 10 997
 against the 10 229 it weighed before the annotator existed; #48 added about
 fifty bytes for Escape leaving the editor and the longer sentence the canvas
-reads out). The IIFE gzips to 21 377 against its 21 504, so the eight
-languages leave little room: measure it before lengthening a locale string. The 720 bytes in
+reads out). #42 then added `bugbottle/perf` to the script tag behind `data-perf`, which
+cost about 1.08 kB — the module is carried whether or not the attribute is
+present — so the IIFE measures 22514 and its budget is 23040; the eight
+languages leave little room, so measure before lengthening a locale string. The 720 bytes in
 between are the panel's own half — the toolbar, its CSS, the open/close wiring
 and eight English strings — and they cannot be tree-shaken out of a static
 import, so 10 kB is not reachable again with the feature in the panel; a
 dynamic import would only move the cost onto a network round trip in the middle
-of a report. The IIFE budget is 21504 (about 21.1 kB with #37 signing beside the
-annotator): it is the build that carries
+of a report. The IIFE is the build that carries
 everything, so it imports the annotator itself, hands it to the panel through
 `mount`, and pays for the eight locale strings in eight languages on top, one
 of them a sentence because it is where the annotator says its keys to a screen

@@ -7,9 +7,10 @@ Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1.5 kB gzipped, `bugbottle/react` under 5.5 kB, `bugbottle/ui`
 under 10 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
-1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/triggers` under 1.3 kB,
+1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/perf` under 1.25 kB,
+`bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-`bugbottle/sign` under 512 bytes, the script-tag build under 19 kB. The core budget was 1 kB until 0.6, when stack
+`bugbottle/sign` under 512 bytes, the script-tag build under 22 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -52,6 +53,18 @@ V8, Firefox and Safari, never any source text), and six optional context facts:
 language, time zone, screen with pixel ratio, colour scheme, online state and
 effective connection type — each guarded, each clipped by `normaliseContext`,
 all of them in the facts table and in the schema.
+
+**0.6** — `bugbottle/perf`: the Web Vitals the browser already measured (LCP,
+CLS, INP with `first-input` as the fallback), the navigation milestones (TTFB,
+DOM content loaded, load), long tasks by count and total, and the JS heap where
+Chromium exposes it — all from buffered `PerformanceObserver` entries, with no
+`web-vitals` dependency. Beside it a storage snapshot: `localStorage` and
+`sessionStorage` key names with value lengths, and cookie names, capped at 50
+keys per store and 100 cookies. Never values, except the keys named in
+`allowValues`, and never a cookie value on any setting. `normalisePerf` and
+`normaliseStorage` on the server, both blocks in the schema, a "Performance"
+table and a collapsed "Storage" block in `toMarkdown`, and `scrubReport` over
+the allow-listed values and the cookie names.
 
 **0.6** — `report.schema.json` generated from the types by
 `scripts/build-schema.ts`, shipped in the package and served at
@@ -141,7 +154,8 @@ bites. No SDK dependency.
 - Shake-to-report in its own entry. (The keyboard shortcut, the auto-open and
   the React error boundary shipped; see "Already shipped".)
 - Performance snapshot from buffered `PerformanceObserver` entries; storage
-  snapshot (keys and lengths only).
+  snapshot (keys and lengths only). (Shipped as `bugbottle/perf`; see "Already
+  shipped".)
 - Optional HMAC signature (WebCrypto) verified by the server helper. Documented
   honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
   see "Already shipped".)

@@ -24,6 +24,7 @@ import { initConsoleBuffer } from "./console-buffer.ts";
 import { pickElement } from "./element-picker.ts";
 import { locales, resolveLocale, type Locale } from "./locales.ts";
 import { initNetwork } from "./network.ts";
+import { initPerf } from "./perf.ts";
 import { createQueue } from "./queue.ts";
 import { scrubReport } from "./scrub.ts";
 import { buildReport, sendReport } from "./send.ts";
@@ -51,6 +52,7 @@ const api = {
   initConsoleBuffer,
   initBreadcrumbs,
   initNetwork,
+  initPerf,
   createQueue,
   locales,
   resolveLocale,
@@ -151,6 +153,10 @@ function autoMount(data: DOMStringMap): void {
   // Any value enables the network log, the same way `data-scrub` does. It is
   // opt-in rather than on: patching fetch is a bigger promise than listening.
   if (data.network !== undefined) initNetwork({ endpoint });
+  // Same shape again: any value turns the timings and the storage snapshot
+  // on. Opt-in rather than on, because listing what a page has stored is a
+  // bigger promise than timing it, and a script tag cannot ask first.
+  if (data.perf !== undefined) initPerf();
   // Any value turns the offline queue on, the same way `data-scrub` does. The
   // queue also flushes whatever an earlier visit left behind as it is created.
   if (data.queue !== undefined) options.queue = createQueue({ endpoint });

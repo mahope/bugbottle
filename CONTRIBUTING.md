@@ -30,11 +30,12 @@ need Node 18.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
   `bugbottle/react` 5.5 kB, `bugbottle/ui` 11 kB, `bugbottle/annotate` 2048
   bytes, `bugbottle/breadcrumbs`
-  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/queue` 1330 bytes,
+  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
+  `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/sign` 512 bytes,
   `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 21 kB. The
+  are small; the core they share is not), `dist/bugbottle.js` 22 kB. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
@@ -46,7 +47,12 @@ need Node 18.
   import. The script-tag build carries everything, including those strings in
   eight languages, so its budget did not come down. Every budget rise is argued
   in a comment beside it in `.github/workflows/ci.yml`; a new one needs the
-  same, and so does every fall.
+  same, and so does every fall. `bugbottle/perf` then took the script tag past
+  22 kB: the timings and the storage snapshot are opt-in behind `data-perf` at
+  run time, but the script tag carries every recorder it can switch on. The bare
+  core moved 1272 → 1310 bytes for it, which is the two registry reads in
+  `buildReport` and nothing else — the observers, the store walk and the cookie
+  parse are only ever bundled by an application that imports `bugbottle/perf`.
   `bugbottle/server` is measured and printed rather than budgeted: it is a
   server entry, and everything in it — the sinks included — is tree-shaken away
   from a consumer that imports only the validators. The number to watch there is
