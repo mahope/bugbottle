@@ -80,6 +80,15 @@ export declare const MAX_PERF_MS = 3600000;
  */
 export declare const MAX_REPLAY_BYTES: number;
 /**
+ * How many bytes a string costs once it is sent, stored or emailed. A
+ * JavaScript string is measured in UTF-16 code units, and every character
+ * outside Latin-1 costs more than one byte in UTF-8: a megabyte of `length`
+ * is up to three megabytes on the wire for a page written in Chinese or full
+ * of emoji. `TextEncoder` exists in every browser this library runs in and in
+ * Node, so the client and the server count the same way.
+ */
+export declare function utf8Length(text: string): number;
+/**
  * How many replay events one report may carry. The byte cap is the real
  * bound; this one stops a body of a million tiny objects from costing a
  * million iterations before the byte cap is reached.
@@ -423,10 +432,9 @@ export declare function normaliseStorage(raw: unknown): StorageSnapshot | null;
  * going over it drops the whole replay rather than part of it. A replay cut in
  * the middle does not play.
  *
- * Null bytes are stripped out of the serialised form before it is parsed back,
- * for the reason every other validator strips them: Postgres refuses a text
- * value containing one, and a replay is nested attacker-controlled JSON on its
- * way into a column.
+ * Null bytes are stripped out of the parsed events, for the reason every other
+ * validator strips them: Postgres refuses a text value containing one, and a
+ * replay is nested attacker-controlled JSON on its way into a column.
  *
  * `seconds` is recomputed from the events that survived rather than believed.
  * Never throws: a malformed replay means "no replay", not a failed report.

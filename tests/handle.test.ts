@@ -1152,3 +1152,34 @@ test("a dedupe store that throws lets the report through", async () => {
   assert.equal(errors.length, 4, "each failed get and set reaches onError");
   resetDedupe();
 });
+
+test("a dedupe store answering with something that is not an entry is not believed", async () => {
+  resetDedupe();
+  const errors: unknown[] = [];
+  const stored: string[] = [];
+  const options = {
+    dedupe: {
+      windowMs: 60_000,
+      dedupeStore: {
+        // A raw Redis value that was never JSON-parsed, or a store that
+        // answers `true` for "present". Believing it makes every report a
+        // duplicate and nothing is ever stored again.
+        get: async () => "yes" as unknown as { id?: string },
+        set: async () => {},
+      },
+    },
+    store: async () => {
+      stored.push("row");
+      return { id: "rep_11" };
+    },
+    onError: (err: unknown) => errors.push(err),
+  };
+
+  const first = await handleReport(post(body), options);
+  assert.equal(first.status, 201);
+  const second = await handleReport(post(body), options);
+  assert.equal(second.status, 201, "still a new report, not a duplicate");
+  assert.deepEqual(stored, ["row", "row"]);
+  assert.equal(errors.length, 2, "and the operator hears about it, once per report");
+  resetDedupe();
+});

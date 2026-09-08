@@ -28,7 +28,12 @@
  */
 
 import { registerReplaySource } from "./registry.ts";
-import { MAX_REPLAY_BYTES, type ReplayCapture, type ReplayEvent } from "./report-core.ts";
+import {
+  MAX_REPLAY_BYTES,
+  utf8Length,
+  type ReplayCapture,
+  type ReplayEvent,
+} from "./report-core.ts";
 
 export type { ReplayCapture, ReplayEvent };
 
@@ -122,11 +127,13 @@ let attached = false;
  * What one event costs, near enough. `JSON.stringify` on every event is the
  * honest measure and it is what the cap is really about; the alternative is
  * measuring the whole buffer on every emit, which is the same work multiplied
- * by the number of events already in it.
+ * by the number of events already in it. UTF-8 bytes rather than code units,
+ * because that is what a recording of a page written in Chinese really weighs
+ * on the wire — up to three times its `length`.
  */
 function sizeOf(event: RrwebEvent): number {
   try {
-    return JSON.stringify(event).length + 1;
+    return utf8Length(JSON.stringify(event)) + 1;
   } catch {
     // A circular event is not one rrweb produces, and it is certainly not one
     // that can be sent. Count it as large so the cap sheds it.

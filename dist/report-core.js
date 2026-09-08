@@ -78,6 +78,18 @@ export const MAX_PERF_MS = 3_600_000;
  * oversized screenshot is: half a recording plays no better than none.
  */
 export const MAX_REPLAY_BYTES = 1024 * 1024;
+const replayEncoder = new TextEncoder();
+/**
+ * How many bytes a string costs once it is sent, stored or emailed. A
+ * JavaScript string is measured in UTF-16 code units, and every character
+ * outside Latin-1 costs more than one byte in UTF-8: a megabyte of `length`
+ * is up to three megabytes on the wire for a page written in Chinese or full
+ * of emoji. `TextEncoder` exists in every browser this library runs in and in
+ * Node, so the client and the server count the same way.
+ */
+export function utf8Length(text) {
+    return replayEncoder.encode(text).byteLength;
+}
 /**
  * How many replay events one report may carry. The byte cap is the real
  * bound; this one stops a body of a million tiny objects from costing a
@@ -471,6 +483,34 @@ export function normaliseStorage(raw) {
     }
     return Object.keys(out).length > 0 ? out : null;
 }
+/** A real U+0000, built rather than typed: a literal NUL breaks tooling. */
+const NUL = String.fromCharCode(0);
+/**
+ * What `JSON.stringify` writes in place of a real NUL — computed from one
+ * rather than spelled out, because those six characters are also a string a
+ * page can legitimately render, and this file may hold neither form.
+ */
+const NUL_ESCAPE = JSON.stringify(NUL).slice(1, -1);
+/**
+ * A copy of `value` with every real null byte gone, out of the strings and out
+ * of the keys alike. Postgres refuses a text value containing one, and a
+ * replay is nested attacker-controlled JSON on its way into a column. What
+ * arrives here has already survived `JSON.stringify`, so there is nothing
+ * circular to guard against.
+ */
+function stripNuls(value) {
+    if (typeof value === "string")
+        return stripNullBytes(value);
+    if (Array.isArray(value))
+        return value.map(stripNuls);
+    if (typeof value === "object" && value !== null) {
+        const out = {};
+        for (const [key, item] of Object.entries(value))
+            out[stripNullBytes(key)] = stripNuls(item);
+        return out;
+    }
+    return value;
+}
 /**
  * Validates the session replay a report arrived with.
  *
@@ -482,10 +522,9 @@ export function normaliseStorage(raw) {
  * going over it drops the whole replay rather than part of it. A replay cut in
  * the middle does not play.
  *
- * Null bytes are stripped out of the serialised form before it is parsed back,
- * for the reason every other validator strips them: Postgres refuses a text
- * value containing one, and a replay is nested attacker-controlled JSON on its
- * way into a column.
+ * Null bytes are stripped out of the parsed events, for the reason every other
+ * validator strips them: Postgres refuses a text value containing one, and a
+ * replay is nested attacker-controlled JSON on its way into a column.
  *
  * `seconds` is recomputed from the events that survived rather than believed.
  * Never throws: a malformed replay means "no replay", not a failed report.
@@ -520,21 +559,15 @@ export function normaliseReplay(raw) {
         // stored and it is certainly not an rrweb recording.
         return null;
     }
-    if (serialised.length > MAX_REPLAY_BYTES)
+    if (utf8Length(serialised) > MAX_REPLAY_BYTES)
         return null;
-    // `JSON.stringify` writes a null byte as the six characters `\u0000`, so
-    // that is what has to be matched here: the serialised text never holds a
-    // real one, and this file may not contain one either.
-    const nulEscape = "\\u0000";
-    let clean = events;
-    if (serialised.includes(nulEscape)) {
-        try {
-            clean = JSON.parse(serialised.split(nulEscape).join(""));
-        }
-        catch {
-            return null;
-        }
-    }
+    // Stripping the escape out of the serialised text also hit an event whose
+    // own text was those six characters, because that is what `JSON.stringify`
+    // writes for both: the removal left JSON that would not parse and the whole
+    // replay was dropped for nothing. So the walk is over the parsed values
+    // instead, where a real NUL is one character and the six characters are six.
+    // The serialised form still decides whether the walk is worth doing at all.
+    const clean = serialised.includes(NUL_ESCAPE) ? stripNuls(events) : events;
     const first = clean[0]?.timestamp ?? 0;
     const last = clean[clean.length - 1]?.timestamp ?? first;
     const span = Math.round((last - first) / 1000);

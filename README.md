@@ -704,9 +704,11 @@ gzipped, no framework.
 reporter. It is off by default, because asking for an address is a promise to
 answer and that promise is yours to make. `contact: "required"` refuses to
 send without it, through the same inline error an empty message gets. The
-field is an `<input type="email">` for the keyboard it brings up on a phone,
-but nothing validates what is typed — "call me on 12345678" is a perfectly
-good answer, and it arrives as `contact` on the report either way. It is
+field is an ordinary text input with `inputmode="email"`, for the keyboard it
+brings up on a phone; the type is deliberately not `email`, because that plus
+`required` would mark a phone number invalid and a screen reader would announce
+it as an error. Nothing validates what is typed — "call me on 12345678" is a
+perfectly good answer, and it arrives as `contact` on the report either way. It is
 personal data once it is on: see [Please read this part](#please-read-this-part).
 
 "Edit picture" over the attached screenshot is the one thing the panel does
@@ -1218,7 +1220,9 @@ empties the buffer and unregisters it — the same thing `resetRrweb()` does.
 On the server, `normaliseReplay` keeps the events that are objects with a
 numeric `type` and `timestamp`, strips null bytes, recomputes `seconds` from
 what survived, and drops the whole replay when it serialises to more than
-`MAX_REPLAY_BYTES` (1 MB). `toMarkdown` prints one line — `Replay: 240 events
+`MAX_REPLAY_BYTES` (1 MB). That cap and `maxBytes` are both UTF-8 bytes, not
+characters: a recording of a page written in Chinese weighs up to three times
+its length. `toMarkdown` prints one line — `Replay: 240 events
 over 32 s (attached)` — because the events are for a player and not for a
 reader. `store` writes them with the rest of the report; no sink uploads them
 anywhere.
@@ -1677,7 +1681,9 @@ handleReport(req, {
 reporter with a `429` because Redis blinked loses the one report that was worth
 having, and the error reaches `onError` so you find out. A `dedupeStore` that
 throws lets it through as well, on both halves — a duplicate costs a row and an
-email, a refusal costs the report. A `replayStore` that throws answers `500`,
+email, a refusal costs the report — and so does one whose `get` answers with
+something that is not an entry, since a raw unparsed value taken at face value
+would make every report a duplicate. A `replayStore` that throws answers `500`,
 because the alternative is accepting a signature nobody managed to check
 against what has already been seen, which is exactly the replay the cache
 exists to stop.
