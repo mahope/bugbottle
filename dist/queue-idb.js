@@ -47,11 +47,15 @@ function promised(request) {
 /**
  * Where the reports go. Hand it to `createQueue` as `storage`.
  *
- * Nothing is opened until the queue first reads or writes, so this costs a
- * closure on a page that never files a report. A browser with no IndexedDB —
- * a locked-down page, an old WebView — makes `read` answer with nothing and
- * `update` reject, which is what the queue treats as "storage refused": it
- * drops the pictures, and then goes memory-only. The reports are still sent.
+ * Nothing is opened until the queue first writes, so this costs a closure on a
+ * page that never files a report. A browser with no IndexedDB — a locked-down
+ * page, an old WebView — makes `update` reject, which is what the queue treats
+ * as "storage refused": it drops the pictures, and then goes memory-only. The
+ * reports are still sent.
+ *
+ * The connection is given up when another tab asks for a newer version of the
+ * database, and opened again by the next write. A page that holds on blocks
+ * that tab's upgrade for as long as it is open.
  */
 export function createIdbStorage(options = {}) {
     const databaseName = options.databaseName ?? DEFAULT_DATABASE_NAME;
@@ -66,7 +70,7 @@ export function createIdbStorage(options = {}) {
         const factory = globalThis.indexedDB;
         if (!factory)
             return Promise.reject(new Error("IndexedDB is unavailable"));
-        opening = new Promise((resolve, reject) => {
+        const attempt = new Promise((resolve, reject) => {
             const request = factory.open(databaseName, 1);
             request.onupgradeneeded = () => {
                 // Keyed by the caller, not by a key path: what is stored is one array
@@ -75,16 +79,34 @@ export function createIdbStorage(options = {}) {
                     request.result.createObjectStore(storeName);
                 }
             };
-            request.onsuccess = () => resolve(request.result);
+            request.onsuccess = () => {
+                const db = request.result;
+                // Another tab has loaded a page that wants a newer database, and the
+                // browser is asking this connection to get out of the way. Refusing
+                // blocks the upgrade for as long as this tab is open; closing without
+                // forgetting the connection is worse, because every transaction after
+                // it throws and the queue is memory-only for the life of the page. So
+                // it is closed here and reopened by whatever needs it next.
+                db.onversionchange = () => {
+                    db.close();
+                    // Only if it is still the connection everyone is using: an open
+                    // that has already replaced this one must not be thrown away.
+                    if (opening === attempt)
+                        opening = null;
+                };
+                resolve(db);
+            };
             request.onerror = () => reject(request.error ?? new Error("IndexedDB would not open"));
             // Another tab is holding an older version open. Nothing here upgrades
             // twice, so this only ever fires on a database somebody else named.
             request.onblocked = () => reject(new Error("IndexedDB is blocked by another tab"));
         }).catch((error) => {
-            opening = null;
+            if (opening === attempt)
+                opening = null;
             throw error;
         });
-        return opening;
+        opening = attempt;
+        return attempt;
     }
     /** Runs one transaction and resolves when it has actually committed. */
     async function transact(mode, run) {
@@ -107,17 +129,6 @@ export function createIdbStorage(options = {}) {
         return result;
     }
     return {
-        async read() {
-            try {
-                const stored = await transact("readonly", (store) => promised(store.get(storageKey)));
-                return Array.isArray(stored) ? stored : [];
-            }
-            catch {
-                // A store that cannot be read is a store with nothing in it. The queue
-                // keeps what it holds in memory and goes on sending.
-                return [];
-            }
-        },
         update(change) {
             // Read and write in one `readwrite` transaction: the browser orders
             // those per database and per tab alike, so the read-modify-write two

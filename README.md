@@ -1052,7 +1052,9 @@ The last two are not custom properties: they are the `data-pos` and
 
 The [theme playground](https://bugbottle.dev/docs/languages-and-branding/#branding-and-theme)
 on the documentation site restyles a real panel as you move these controls and
-prints the `mountBugbottle` call and the CSS block to copy.
+prints the `mountBugbottle` call and the CSS block to copy. It prints only the
+keys you moved, so the block you copy leaves `scheme` alone and your panel goes
+on following the reader's system setting.
 
 ## Pointing at the element
 

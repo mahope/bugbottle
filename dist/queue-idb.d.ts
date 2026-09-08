@@ -46,11 +46,15 @@ export type IdbStorageOptions = {
 /**
  * Where the reports go. Hand it to `createQueue` as `storage`.
  *
- * Nothing is opened until the queue first reads or writes, so this costs a
- * closure on a page that never files a report. A browser with no IndexedDB —
- * a locked-down page, an old WebView — makes `read` answer with nothing and
- * `update` reject, which is what the queue treats as "storage refused": it
- * drops the pictures, and then goes memory-only. The reports are still sent.
+ * Nothing is opened until the queue first writes, so this costs a closure on a
+ * page that never files a report. A browser with no IndexedDB — a locked-down
+ * page, an old WebView — makes `update` reject, which is what the queue treats
+ * as "storage refused": it drops the pictures, and then goes memory-only. The
+ * reports are still sent.
+ *
+ * The connection is given up when another tab asks for a newer version of the
+ * database, and opened again by the next write. A page that holds on blocks
+ * that tab's upgrade for as long as it is open.
  */
 export declare function createIdbStorage(options?: IdbStorageOptions): QueueStorage;
 //# sourceMappingURL=queue-idb.d.ts.map

@@ -76,6 +76,12 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- The theme playground printed a block that pinned every colour it had read off
+  the panel and `scheme` as it happened to be, so a reader who copied it
+  verbatim shipped a panel that ignores `prefers-color-scheme` — the one
+  setting whose default is to follow the browser. It prints the keys the reader
+  moved and nothing else, and says so when nothing has moved. The site audit
+  checks it, since a browser is the only place the playground runs (#88).
 - The inbox example took a `NOTIFY_SMTP_PORT` that is not a number. `Number`
   answers a typo with `NaN`, which is not nullish, so the sink's own default
   never applied and the port reached it as `NaN` — the inbox came up looking

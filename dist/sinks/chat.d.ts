@@ -44,7 +44,14 @@ export type ChatReport = {
     /** When the report was accepted, or the last console entry's time. */
     timestamp: string | undefined;
 };
-/** Clips to `max` characters, spending the last one on an ellipsis. */
+/**
+ * Clips to `max` characters, spending the last one on an ellipsis.
+ *
+ * Characters, not UTF-16 units: an emoji or an ideograph outside the basic
+ * plane is two units, and cutting between them leaves a lone surrogate that
+ * every client draws as U+FFFD. The fast path is still `text.length`, which
+ * can only overcount, so nothing short is walked twice.
+ */
 export declare function clip(text: string, max: number): string;
 /**
  * A data URL is the whole picture inline, and neither service will fetch one:
