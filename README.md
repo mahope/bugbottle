@@ -757,9 +757,6 @@ await sendReport("/api/feedback", report, {
 });
 ```
 
-It was called `onFailure` until 0.9. That name still works and is deprecated;
-it goes in 1.0, and where both are given `onError` is the one that runs.
-
 ## The ready-made panel
 
 If you would rather not build a form, `bugbottle/ui` mounts a floating button

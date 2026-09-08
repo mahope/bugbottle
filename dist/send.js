@@ -148,9 +148,7 @@ export async function sendReport(endpoint, report, options = {}) {
     }
     catch (err) {
         const failure = err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
-        // One handler runs, never both: two spellings of one option are a mistake
-        // to make loudly rather than a thing to guess about.
-        const onError = options.onError ?? options.onFailure;
+        const { onError } = options;
         if (onError) {
             try {
                 await onError(payload, failure);

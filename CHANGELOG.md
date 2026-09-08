@@ -7,6 +7,11 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Removed
+
+- **`SendOptions.onFailure`** (#63). Rename it to `onError`: same signature,
+  same contract, awaited before the error reaches the caller.
+
 ## 0.15.0 — 2026-09-08
 
 The observable release. `handleReport` says what it decided: `onDecision`

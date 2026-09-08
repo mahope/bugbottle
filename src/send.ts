@@ -176,15 +176,6 @@ export type SendOptions = {
     error: unknown,
   ) => void | Promise<void>;
   /**
-   * @deprecated Renamed to `onError` in 0.9, which is what `MountOptions` and
-   * `HandleReportOptions` have always called the same idea. Removed in 1.0
-   * (#63). Given both, `onError` is the one that runs.
-   */
-  onFailure?: (
-    report: BugReport & Record<string, unknown>,
-    error: unknown,
-  ) => void | Promise<void>;
-  /**
    * Turn a failed response into a message for the reporter. Defaults to the
    * body's `error` or `message` field, then a generic one.
    */
@@ -325,9 +316,7 @@ export async function sendReport(
   } catch (err) {
     const failure =
       err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
-    // One handler runs, never both: two spellings of one option are a mistake
-    // to make loudly rather than a thing to guess about.
-    const onError = options.onError ?? options.onFailure;
+    const { onError } = options;
     if (onError) {
       try {
         await onError(payload, failure);
