@@ -175,6 +175,12 @@ export type RateLimitOptions = {
    * limit across all of them hands in its own store — Redis, Memcached, a
    * table with a TTL.
    */
+  store?: RateLimitStore;
+  /**
+   * @deprecated Renamed to `store` in 0.9 — inside `rateLimit` the prefix said
+   * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
+   * one that counts.
+   */
   rateLimitStore?: RateLimitStore;
 };
 
@@ -185,7 +191,7 @@ export type RateLimitOptions = {
  * needs no network costs no promise.
  *
  * ```ts
- * const rateLimitStore = {
+ * const store = {
  *   hit: async (key, windowMs) => {
  *     const count = await redis.incr(`bb:rl:${key}`);
  *     if (count === 1) await redis.pexpire(`bb:rl:${key}`, windowMs);
@@ -236,6 +242,12 @@ export type DedupeOptions = {
    * behind a load balancer store the same crash twice, so a deployment that
    * wants one answer across all of them hands in its own store.
    */
+  store?: DedupeStore;
+  /**
+   * @deprecated Renamed to `store` in 0.9 — inside `dedupe` the prefix said
+   * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
+   * one that is asked.
+   */
   dedupeStore?: DedupeStore;
 };
 
@@ -248,7 +260,7 @@ export type DedupeEntry = { id?: string };
  * synchronous.
  *
  * ```ts
- * const dedupeStore = {
+ * const store = {
  *   get: async (key) => {
  *     const value = await redis.get(`bb:dup:${key}`);
  *     return value === null ? undefined : (JSON.parse(value) as { id?: string });
@@ -329,6 +341,12 @@ export type SignatureOptions = {
    * millisecond after which the signature would be refused for being outside
    * the skew window anyway, which is exactly how long the entry has to live.
    */
+  store?: ReplayStore;
+  /**
+   * @deprecated Renamed to `store` in 0.9 — inside `signature` the prefix said
+   * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
+   * one that is asked.
+   */
   replayStore?: ReplayStore;
 };
 
@@ -338,7 +356,7 @@ export type SignatureOptions = {
  * store that needs no network costs no promise.
  *
  * ```ts
- * const replayStore = {
+ * const store = {
  *   has: (digest) => redis.exists(`bb:sig:${digest}`).then(Boolean),
  *   add: (digest, expiresAt) =>
  *     redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt),
@@ -375,7 +393,7 @@ export const MAX_SIGNATURE_ENTRIES_PER_SECOND = 128;
  * How many signed seconds are remembered at once. The default window spans 601
  * of them — five minutes on either side of our clock — so honest traffic never
  * reaches this. A `maxSkewMs` wider than this many seconds cannot be held in
- * memory in full; give such a deployment a `replayStore` instead.
+ * memory in full; give such a deployment a `signature.store` instead.
  */
 export const MAX_SIGNATURE_SECONDS = 640;
 
@@ -439,13 +457,13 @@ export type HandleReportOptions = {
   cors?: string | boolean;
   /**
    * In memory and per instance by default: fine per serverless isolate, not
-   * shared. `rateLimit.rateLimitStore` is the seam for a shared count.
+   * shared. `rateLimit.store` is the seam for a shared count.
    */
   rateLimit?: RateLimitOptions;
   /**
    * Answer a repeat of the same report with 200 `{ id, duplicate: true }`
    * instead of storing and delivering it again. In memory and per instance by
-   * default; `dedupe.dedupeStore` is the seam for one answer across a fleet.
+   * default; `dedupe.store` is the seam for one answer across a fleet.
    */
   dedupe?: DedupeOptions;
   /** Passed through to `toMarkdown` — extra facts, a heading level. */
@@ -506,7 +524,7 @@ function evictDedupe(now: number, windowMs: number): void {
  * one instance remembers its own traffic, and two instances behind a load
  * balancer do not share a cache. It stops a captured body being replayed at
  * the instance that saw it, which is where a replay of a browser's own request
- * lands anyway; `signature.replayStore` is the seam for the deployments that
+ * lands anyway; `signature.store` is the seam for the deployments that
  * need one answer across all of them.
  */
 const seenSignatures = new Map<number, Set<string>>();
@@ -659,8 +677,8 @@ async function verifySignature(
   // Only a signature that verified is remembered, so nobody can fill the cache
   // with digests of their own choosing — though a public key means they can
   // still mint digests that do verify, which is why the in-memory store bounds
-  // itself per signed second and why `replayStore` exists at all.
-  const store = options.replayStore;
+  // itself per signed second and why `signature.store` exists at all.
+  const store = options.store ?? options.replayStore;
   if (store) {
     // A store that throws propagates: `handleReport` answers 500 rather than
     // accept a signature it could not check against what it has already seen.
@@ -702,7 +720,7 @@ async function overRateLimit(
   // The key is attacker-controlled by default: a forwarded address is a header.
   // Clipping it bounds one entry, and the ceiling below bounds the whole map.
   const key = (options.key ?? defaultRateLimitKey)(request).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
-  const store = options.rateLimitStore;
+  const store = options.store ?? options.rateLimitStore;
   if (store) {
     try {
       // The count is checked before it is compared, for the same reason the
@@ -712,7 +730,7 @@ async function overRateLimit(
       // caller would be under their allowance for ever with nothing said.
       const count = await store.hit(key, options.windowMs);
       if (typeof count !== "number" || !Number.isFinite(count)) {
-        throw new TypeError("rateLimitStore.hit did not answer with a number");
+        throw new TypeError("rateLimit.store.hit did not answer with a number");
       }
       return count > options.limit;
     } catch (err) {
@@ -1018,7 +1036,7 @@ export async function handleReport(
     let dedupeKey: string | undefined;
     if (options.dedupe) {
       const now = Date.now();
-      const dedupeStore = options.dedupe.dedupeStore;
+      const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
       dedupeKey = (options.dedupe.key ?? fingerprint)(report);
       let seen: DedupeEntry | undefined;
       if (dedupeStore) {
@@ -1031,7 +1049,7 @@ export async function handleReport(
           const answer = await dedupeStore.get(dedupeKey);
           if (answer !== undefined && answer !== null) {
             if (isDedupeEntry(answer)) seen = answer;
-            else throw new TypeError("dedupeStore.get did not answer with a dedupe entry");
+            else throw new TypeError("dedupe.store.get did not answer with a dedupe entry");
           }
         } catch (err) {
           // Fails open. A duplicate costs a row and an email; a store that is
@@ -1092,7 +1110,7 @@ export async function handleReport(
     // Recorded once the report is stored, so a `store` that threw does not
     // leave a fingerprint that swallows the retry.
     if (dedupeKey !== undefined && options.dedupe) {
-      const dedupeStore = options.dedupe.dedupeStore;
+      const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
       if (dedupeStore) {
         try {
           await dedupeStore.set(dedupeKey, { id }, Date.now() + options.dedupe.windowMs);

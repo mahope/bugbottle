@@ -9,6 +9,15 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- `handleReport`'s three pluggable stores are all called `store` now:
+  `rateLimit: { store }`, `dedupe: { store }` and `signature: { store }`.
+  Inside the option object the prefix said nothing the key did not, and the
+  three of them spelled it three ways. `rateLimitStore`, `dedupeStore` and
+  `replayStore` still work, are marked `@deprecated`, and go in 1.0 (#66);
+  given both, `store` is the one that is asked. The two `TypeError`s a store
+  that answers with nonsense produces now name `rateLimit.store.hit` and
+  `dedupe.store.get`.
+
 - The thirteen Slack and Discord ceilings are `MAX_SLACK_*` and
   `MAX_DISCORD_*`, so every limit in the package starts with `MAX_` — Jira,
   GitLab, Sentry and report-core already did. The vendor-first `SLACK_MAX_*`

@@ -1572,7 +1572,7 @@ signature: {
   header: "X-Sig",         // default X-Bugbottle-Signature
   maxSkewMs: 5 * 60_000,   // default; the clock may be wrong in either direction
   require: true,           // default whenever `signature` is set
-  replayStore,             // optional; the default is in memory, per instance
+  store,                   // optional; the default is in memory, per instance
 }
 ```
 
@@ -1601,7 +1601,7 @@ only within the window, and only at that one instance. Two instances behind a
 load balancer do not share the cache, and a serverless isolate that has just
 started has an empty one.
 
-Hand in a `replayStore` when that is not enough — several instances, or a
+Hand in a `signature.store` when that is not enough — several instances, or a
 window wider than 640 seconds. It is one of the three seams in *Running more
 than one instance* below, and the only one that fails **closed**: a store that
 throws answers 500 rather than accept a signature nobody managed to check.
@@ -1658,7 +1658,7 @@ handleReport(req, {
   rateLimit: {
     limit: 20,
     windowMs: 60_000,
-    rateLimitStore: {
+    store: {
       // Count this request and answer with the total inside the window.
       hit: async (key, windowMs) => {
         const count = await redis.incr(`bb:rl:${key}`);
@@ -1669,7 +1669,7 @@ handleReport(req, {
   },
   dedupe: {
     windowMs: 60_000,
-    dedupeStore: {
+    store: {
       // Anything `get` answers with is a duplicate; expiry is the store's job.
       get: async (key) => {
         const value = await redis.get(`bb:dup:${key}`);
@@ -1681,7 +1681,7 @@ handleReport(req, {
   },
   signature: {
     key: process.env.BUGBOTTLE_SIGN_KEY!,
-    replayStore: {
+    store: {
       has: async (digest) => (await redis.exists(`bb:sig:${digest}`)) === 1,
       // `expiresAt` is the epoch millisecond the signature stops being
       // acceptable anyway, so it is exactly how long the row needs to live.
@@ -1692,17 +1692,21 @@ handleReport(req, {
 });
 ```
 
+All three are called `store`, inside `rateLimit`, `dedupe` and `signature`.
+They were `rateLimitStore`, `dedupeStore` and `replayStore` until 0.9; those
+names still work, are deprecated, and go in 1.0.
+
 **Two of them fail open and one fails closed, and that is deliberate.** A
-`rateLimitStore` that throws lets the report through: refusing an honest
+rate-limit store that throws lets the report through: refusing an honest
 reporter with a `429` because Redis blinked loses the one report that was worth
 having, and the error reaches `onError` so you find out. So does one whose
 `hit` answers with anything but a finite number — `"3"`, `null`, nothing at
 all — because `"3" > 30` is false and so is `NaN > 30`, and a limit switched
-off in silence is worse than one that says so. A `dedupeStore` that
+off in silence is worse than one that says so. A dedupe store that
 throws lets it through as well, on both halves — a duplicate costs a row and an
 email, a refusal costs the report — and so does one whose `get` answers with
 something that is not an entry, since a raw unparsed value taken at face value
-would make every report a duplicate. A `replayStore` that throws answers `500`,
+would make every report a duplicate. A signature store that throws answers `500`,
 because the alternative is accepting a signature nobody managed to check
 against what has already been seen, which is exactly the replay the cache
 exists to stop.

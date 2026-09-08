@@ -1006,7 +1006,7 @@ test("an injected rate-limit store is counted instead of the buckets", async () 
       limit: 2,
       windowMs: 60_000,
       key: () => "one-caller",
-      rateLimitStore: {
+      store: {
         hit: async (key: string, windowMs: number) => {
           asked.push([key, windowMs]);
           const count = (counts.get(key) ?? 0) + 1;
@@ -1043,7 +1043,7 @@ test("a rate-limit store that throws does not refuse an honest report", async ()
       limit: 1,
       windowMs: 60_000,
       key: () => "one-caller",
-      rateLimitStore: {
+      store: {
         hit: async () => {
           throw new Error("redis is down");
         },
@@ -1071,7 +1071,7 @@ test("a rate-limit store that answers with a string is reported and fails open",
       limit: 1,
       windowMs: 60_000,
       key: () => "one-caller",
-      rateLimitStore: { hit: async () => "3" as unknown as number },
+      store: { hit: async () => "3" as unknown as number },
     },
     onError: (err: unknown) => errors.push(err),
   };
@@ -1080,7 +1080,7 @@ test("a rate-limit store that answers with a string is reported and fails open",
   assert.equal((await handleReport(post(body), options)).status, 202);
   assert.equal(errors.length, 2);
   assert.ok(errors[0] instanceof TypeError);
-  assert.match(String(errors[0]), /rateLimitStore\.hit did not answer with a number/);
+  assert.match(String(errors[0]), /rateLimit\.store\.hit did not answer with a number/);
   resetRateLimits();
 });
 
@@ -1092,7 +1092,7 @@ test("a rate-limit store answering with nothing is reported too, not read as zer
       limit: 1,
       windowMs: 60_000,
       key: () => "one-caller",
-      rateLimitStore: { hit: () => undefined as unknown as number },
+      store: { hit: () => undefined as unknown as number },
     },
     onError: (err: unknown) => errors.push(err),
   };
@@ -1113,7 +1113,7 @@ test("an injected dedupe store is consulted and written with an expiry", async (
   const options = {
     dedupe: {
       windowMs,
-      dedupeStore: {
+      store: {
         get: async (key: string) => {
           asked.push(key);
           return kept.get(key);
@@ -1163,7 +1163,7 @@ test("a dedupe store that throws lets the report through", async () => {
   const options = {
     dedupe: {
       windowMs: 60_000,
-      dedupeStore: {
+      store: {
         get: async () => {
           throw new Error("redis is down");
         },
@@ -1204,7 +1204,7 @@ test("a dedupe store answering with something that is not an entry is not believ
   const options = {
     dedupe: {
       windowMs: 60_000,
-      dedupeStore: {
+      store: {
         // A raw Redis value that was never JSON-parsed, or a store that
         // answers `true` for "present". Believing it makes every report a
         // duplicate and nothing is ever stored again.
@@ -1225,5 +1225,68 @@ test("a dedupe store answering with something that is not an entry is not believ
   assert.equal(second.status, 201, "still a new report, not a duplicate");
   assert.deepEqual(stored, ["row", "row"]);
   assert.equal(errors.length, 2, "and the operator hears about it, once per report");
+  resetDedupe();
+});
+
+test("the deprecated store names still work, and `store` wins over them", async () => {
+  resetRateLimits();
+  const asked: string[] = [];
+  const deprecated = {
+    rateLimit: {
+      limit: 10,
+      windowMs: 60_000,
+      key: () => "one-caller",
+      rateLimitStore: {
+        hit: () => {
+          asked.push("rateLimitStore");
+          return 1;
+        },
+      },
+    },
+  };
+  assert.equal((await handleReport(post(body), deprecated)).status, 202);
+  assert.deepEqual(asked, ["rateLimitStore"], "the old name is still asked");
+
+  const both = {
+    rateLimit: {
+      limit: 10,
+      windowMs: 60_000,
+      key: () => "one-caller",
+      store: {
+        hit: () => {
+          asked.push("store");
+          return 1;
+        },
+      },
+      rateLimitStore: {
+        hit: () => {
+          asked.push("rateLimitStore again");
+          return 1;
+        },
+      },
+    },
+  };
+  assert.equal((await handleReport(post(body), both)).status, 202);
+  assert.deepEqual(asked, ["rateLimitStore", "store"], "one store is asked, never both");
+  resetRateLimits();
+});
+
+test("the deprecated dedupeStore is still asked and still answers", async () => {
+  resetDedupe();
+  const seen = new Map<string, { id?: string }>();
+  const options = {
+    dedupe: {
+      windowMs: 60_000,
+      dedupeStore: {
+        get: (key: string) => seen.get(key),
+        set: (key: string, entry: { id?: string }) => void seen.set(key, entry),
+      },
+    },
+    store: () => ({ id: "stored-once" }),
+  };
+  assert.equal((await handleReport(post(body), options)).status, 201);
+  const second = await handleReport(post(body), options);
+  assert.equal(second.status, 200);
+  assert.deepEqual(await second.json(), { id: "stored-once", duplicate: true });
   resetDedupe();
 });
