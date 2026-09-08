@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.7.0 — 2026-09-08
+
 The evidence release: the reporter can mark the picture before it leaves, a
 blur that really destroys what it covers, request signing with a replay cache
 that the key holder cannot empty, timings and a storage snapshot, shake to

@@ -55,6 +55,11 @@ const refs = (t) =>
     .split(`målt ved ${before}`).join(`målt ved ${version}`);
 for (const f of ["README.md", "site/index.html", "site/da/index.html"]) edit(f, refs);
 
+// The Sentry sink names its version in the envelope header, and a test pins it
+// to package.json, so the release stamps it too.
+edit("src/sinks/sentry.ts", (t) =>
+  t.replace(/export const SENTRY_CLIENT_VERSION = "[^"]+";/, `export const SENTRY_CLIENT_VERSION = "${version}";`));
+
 sh("npm run check");
 sh("git add -A");
 sh("git add -f dist");
