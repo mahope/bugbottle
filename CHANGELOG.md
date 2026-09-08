@@ -7,6 +7,28 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Fixed
+
+- The site served most of its files without `Referrer-Policy`. nginx replaces
+  the inherited `add_header` set as soon as a block adds a header of its own,
+  and every location in `site/nginx.conf` sets a `Cache-Control`, so
+  `/robots.txt`, `/sitemap.xml`, `/dist/`, `/fonts/`, `/style.css`, `/demo.js`
+  and every page re-added `X-Content-Type-Options` and dropped the rest. The
+  two headers now live in `site/security-headers.conf`, copied to
+  `/etc/nginx/snippets/` by the Dockerfile and included by the server block and
+  by every location inside it, so adding a header reaches all of them.
+
+### Changed
+
+- Every `<url>` in the generated `site/sitemap.xml` carries a `<lastmod>`: the
+  date of the commit that last touched the file the page is generated from,
+  read with `git log -1 --format=%cs` and never from a file mtime, which a
+  checkout resets. The site image's builder stage therefore installs `git` and
+  takes the repository in last, after the sources, so a commit does not
+  invalidate the layers above it; neither reaches the served image. The copy is
+  allowed to match nothing, since a source export and a git worktree both
+  arrive without a usable repository — the script then dates every page today.
+
 ## 0.7.0 — 2026-09-08
 
 The evidence release: the reporter can mark the picture before it leaves, a

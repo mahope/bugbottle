@@ -25,12 +25,15 @@
  * business in a package README.
  *
  * The last two files are for machines: site/sitemap.xml lists every URL the
- * site has, with hreflang alternates on the two pairs that exist in both
- * languages, and site/robots.txt allows everything and points at the sitemap.
+ * site has, each with the date of the commit that last touched the file it is
+ * generated from and with hreflang alternates on the two pairs that exist in
+ * both languages, and site/robots.txt allows everything and points at the
+ * sitemap.
  * Both are generated here rather than written by hand so a new docs page
  * cannot be left out of them, and both are gitignored like site/docs/.
  */
 
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -535,6 +538,38 @@ ${page.html}
 ${foot(page)}`;
 }
 
+/* The date a page reports in the sitemap is the date of the commit that last
+   touched the file it is generated from, never that file's mtime: a checkout
+   resets every mtime to the moment it ran, so mtimes would tell a crawler the
+   whole site changed on every deploy. `git log -1 --format=%cs` prints the
+   committer date as YYYY-MM-DD, which is what <lastmod> wants, and it needs
+   only the history — the file itself does not have to be in the working tree.
+
+   When there is no usable repository — a source export, or the site image
+   built from a context whose .git did not travel — every page is dated today.
+   That is a truthful answer for a build that just happened, and it keeps the
+   file valid rather than dropping the element from half the URLs. */
+const TODAY = new Date().toISOString().slice(0, 10);
+const lastmods = new Map();
+
+function lastmod(source) {
+  const cached = lastmods.get(source);
+  if (cached !== undefined) return cached;
+  let date = TODAY;
+  try {
+    const out = execFileSync("git", ["log", "-1", "--format=%cs", "--", source], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(out)) date = out;
+  } catch {
+    /* git missing, or not a repository. TODAY already stands. */
+  }
+  lastmods.set(source, date);
+  return date;
+}
+
 /* Every URL the site serves, with the two pairs that exist in both languages
    carrying alternates both ways. Written from the same page list the sidebar
    is built from, so a docs page cannot be added without landing here. */
@@ -545,16 +580,37 @@ function sitemapXml(pages) {
     { hreflang: "x-default", href: `${ORIGIN}${selfLang === "en" ? self : other}` },
   ];
 
+  /* Each URL names the file it is generated from, so its date is the date that
+     file last changed: the landing pages are their own HTML, the comparison
+     pages their own Markdown, and every documentation page — the index
+     included — is a slice of the one README. */
   const entries = [
-    { loc: `${ORIGIN}/`, alternates: pair("/", "/da/", "en", "da") },
-    { loc: `${ORIGIN}/da/`, alternates: pair("/da/", "/", "da", "en") },
-    { loc: `${ORIGIN}/compare/`, alternates: pair("/compare/", "/da/sammenlign/", "en", "da") },
+    {
+      loc: `${ORIGIN}/`,
+      source: "site/index.html",
+      alternates: pair("/", "/da/", "en", "da"),
+    },
+    {
+      loc: `${ORIGIN}/da/`,
+      source: "site/da/index.html",
+      alternates: pair("/da/", "/", "da", "en"),
+    },
+    {
+      loc: `${ORIGIN}/compare/`,
+      source: "site/compare.md",
+      alternates: pair("/compare/", "/da/sammenlign/", "en", "da"),
+    },
     {
       loc: `${ORIGIN}/da/sammenlign/`,
+      source: "site/da/sammenlign.md",
       alternates: pair("/da/sammenlign/", "/compare/", "da", "en"),
     },
-    { loc: `${ORIGIN}/docs/`, alternates: [] },
-    ...pages.map((page) => ({ loc: `${ORIGIN}${page.url}`, alternates: [] })),
+    { loc: `${ORIGIN}/docs/`, source: "README.md", alternates: [] },
+    ...pages.map((page) => ({
+      loc: `${ORIGIN}${page.url}`,
+      source: "README.md",
+      alternates: [],
+    })),
   ];
 
   const body = entries
@@ -565,7 +621,11 @@ function sitemapXml(pages) {
             `    <xhtml:link rel="alternate" hreflang="${alt.hreflang}" href="${escapeHtml(alt.href)}"/>`,
         )
         .join("\n");
-      return `  <url>\n    <loc>${escapeHtml(entry.loc)}</loc>${alternates ? `\n${alternates}` : ""}\n  </url>`;
+      return (
+        `  <url>\n    <loc>${escapeHtml(entry.loc)}</loc>\n` +
+        `    <lastmod>${lastmod(entry.source)}</lastmod>` +
+        `${alternates ? `\n${alternates}` : ""}\n  </url>`
+      );
     })
     .join("\n");
 
