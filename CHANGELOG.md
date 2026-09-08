@@ -45,6 +45,21 @@ change the API; the changelog says so when they do.
   was prose until now — and `scripts/a11y-site.mjs` a playground state, with
   four controls moved before axe looks. Nothing in the package changed.
   Closes #76.
+- `tests/fuzz.test.ts`: a seeded generator that builds thousands of hostile
+  reports — the wrong type at every path, strings past every limit, objects
+  nested deeper than a parser likes, null bytes, lone surrogates, `__proto__`
+  and `constructor` as keys, arrays where objects go, numbers written as
+  strings, NaN and Infinity — and feeds them through every `normalise*`,
+  `validateReport`, `collectExtra`, `scrubReport`, `toMarkdown` and
+  `handleReport`. It asserts three things and only three: nothing throws,
+  every output respects its `MAX_*` limit, and `handleReport` answers with a
+  status it chose rather than a 500 it fell into. The generator is hand-rolled
+  (no new dependency) and seeded, and a failure prints the seed and the
+  iteration, so `FUZZ_SEED=<seed> FUZZ_ITERATIONS=<n>` replays it exactly.
+  `FUZZ_ITERATIONS` defaults to 2000, a little over two seconds. It found the
+  two defects fixed below, and each of them has a named regression test beside
+  it in the same file.
+  Closes #79.
 
 ### Fixed
 
