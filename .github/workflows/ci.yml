@@ -86,6 +86,7 @@ jobs:
           echo 'import { useBugReport } from "bugbottle/react"; export { useBugReport };' > react.js
           echo 'import { useBugReport } from "bugbottle/vue"; export { useBugReport };' > vue.js
           echo 'import { createBugReport } from "bugbottle/svelte"; export { createBugReport };' > svelte.js
+          echo 'import { createBugReport } from "bugbottle/solid"; export { createBugReport };' > solid.js
           echo 'import { buildReport, sendReport, captureScreenshot, pickElement } from "bugbottle"; export { buildReport, sendReport, captureScreenshot, pickElement };' > form-core.js
           echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
           echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
@@ -104,6 +105,7 @@ jobs:
           npx esbuild react.js --bundle --minify --format=esm --external:react --outfile=out-react.js
           npx esbuild vue.js --bundle --minify --format=esm --external:vue --outfile=out-vue.js
           npx esbuild svelte.js --bundle --minify --format=esm --outfile=out-svelte.js
+          npx esbuild solid.js --bundle --minify --format=esm --external:solid-js --outfile=out-solid.js
           npx esbuild form-core.js --bundle --minify --format=esm --outfile=out-form-core.js
           npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
           npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
@@ -114,7 +116,7 @@ jobs:
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
-          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-sign; do
+          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-sign; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -253,24 +255,30 @@ jobs:
             echo "bugbottle/sign is $sign bytes gzipped; the budget is 512" >&2
             exit 1
           fi
-          # The two adapters are budgeted on what they add, not on what they
+          # The three adapters are budgeted on what they add, not on what they
           # weigh: a `bugbottle/vue` bundle is about 5.2 kB, and nearly all of
           # it is the capture, the picker and the send that any form pays for
           # whichever framework renders it. `form-core.js` imports exactly that
           # much of the core, so the difference is the adapter and the state
           # machine underneath it — 1315 bytes for Vue and 1186 for Svelte when
-          # they landed, against the same 1536-byte budget the other small
-          # entries get.
+          # they landed, and 1270 for Solid, against the same 1536-byte
+          # budget the other small entries get.
           formcore=$(gzip -c out-form-core.js | wc -c)
           vue=$(( $(gzip -c out-vue.js | wc -c) - formcore ))
           svelte=$(( $(gzip -c out-svelte.js | wc -c) - formcore ))
+          solid=$(( $(gzip -c out-solid.js | wc -c) - formcore ))
           echo "bugbottle/vue adds $vue bytes gzipped over the shared core"
           echo "bugbottle/svelte adds $svelte bytes gzipped over the shared core"
+          echo "bugbottle/solid adds $solid bytes gzipped over the shared core"
           if [ "$vue" -gt 1536 ]; then
             echo "bugbottle/vue adds $vue bytes gzipped; the budget is 1536" >&2
             exit 1
           fi
           if [ "$svelte" -gt 1536 ]; then
             echo "bugbottle/svelte adds $svelte bytes gzipped; the budget is 1536" >&2
+            exit 1
+          fi
+          if [ "$solid" -gt 1536 ]; then
+            echo "bugbottle/solid adds $solid bytes gzipped; the budget is 1536" >&2
             exit 1
           fi

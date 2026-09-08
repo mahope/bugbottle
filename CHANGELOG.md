@@ -13,6 +13,18 @@ that tag was cut.
 
 ### Added
 
+- `bugbottle/solid`: `createBugReport(options)`, the fourth binding over
+  `src/report-state.ts` and the last framework the roadmap named. Everything it
+  returns is an accessor — `state` through `type`, `message`, `screenshot`,
+  `elements`, `status` and the three convenience flags — so the JSX tracks
+  exactly what it reads, and the actions are the same ones the other three
+  adapters expose. The subscription is torn down by `onCleanup`, which in a
+  component is the component; `destroy` is returned for a form created outside
+  an owner. `solid-js` is an optional peer dependency (>= 1.8), so nothing
+  about it reaches a project that does not use it. 1270 bytes gzipped over the
+  bundle of `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` that
+  any form pays for, against the same 1536-byte marginal budget Vue and Svelte
+  are measured on.
 - `bugbottle/perf`: `initPerf(options?)`, a fifth recorder that answers "was it
   slow?" and "what state was the browser in?" without bundling `web-vitals`.
   `report.perf` carries LCP, CLS, INP, TTFB, DOM content loaded, load, the

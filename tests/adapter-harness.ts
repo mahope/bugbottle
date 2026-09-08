@@ -1,10 +1,10 @@
 /**
- * What the Vue and Svelte adapter tests share: a DOM, a renderer that never
- * touches a canvas, a stubbed `fetch` and a queue stand-in.
+ * What the Vue, Svelte and Solid adapter tests share: a DOM, a renderer that
+ * never touches a canvas, a stubbed `fetch` and a queue stand-in.
  *
  * The React test file grew these first and keeps its own copies on purpose —
  * it is the one file that pins the hook's behaviour, and the refactor onto
- * `src/report-state.ts` had to leave it untouched to prove that. The two
+ * `src/report-state.ts` had to leave it untouched to prove that. The three
  * adapters below assert the same behaviour through their own primitives.
  */
 

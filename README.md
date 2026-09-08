@@ -35,16 +35,16 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
 ```
 
 - **Headless, in your framework.** You render the form — with the React hook,
-  the Vue composable, the Svelte store, or the three plain functions
-  underneath them. The chrome around a feedback widget is exactly the part
+  the Vue composable, the Svelte store, the Solid accessors, or the three plain
+  functions underneath them. The chrome around a feedback widget is exactly the part
   that differs between applications, so this owns the state, the capture and
   the submit — not your markup.
 - **Bring your own backend.** There is no dashboard and no hosted service to
   sign up for. A report is a JSON body on a `fetch`; the receiving end is a
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
-  is about 1.4 kB gzipped; with the element picker and the React, Vue or
-  Svelte adapter, 5.4 kB; the optional ready-made panel, 10.7 kB; the picture
+  is about 1.4 kB gzipped; with the element picker and the React, Vue, Svelte
+  or Solid adapter, 5.4 kB; the optional ready-made panel, 10.7 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
   1.3 kB; the timings and storage snapshot 1.3 kB; the offline queue 1.3 kB;
@@ -276,6 +276,76 @@ methods on `form` for everything the reporter does.
 `svelte` is an optional peer dependency, and only its `Readable` type is used:
 the store contract is one function, implemented here, so the adapter adds no
 runtime dependency at all.
+
+## The form (Solid)
+
+The same state machine, as accessors: every value is a function, so the JSX
+tracks exactly what it reads.
+
+```tsx
+import { createBugReport } from "bugbottle/solid";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+import { For, Show, onMount } from "solid-js";
+
+function FeedbackForm() {
+  const form = createBugReport({
+    endpoint: "/api/feedback",
+    screenshot: htmlToImage, // leave out to disable screenshots
+  });
+
+  onMount(() => form.open());
+
+  return (
+    <form data-bugbottle onSubmit={(e) => (e.preventDefault(), form.submit())}>
+      <For each={form.types}>
+        {(t) => (
+          <button type="button" onClick={() => form.setType(t)}>
+            {t}
+          </button>
+        )}
+      </For>
+
+      <textarea value={form.message()} onInput={(e) => form.setMessage(e.currentTarget.value)} />
+
+      <Show when={form.canScreenshot()}>
+        <label>
+          <input
+            type="checkbox"
+            checked={form.includeScreenshot()}
+            onChange={(e) => form.toggleScreenshot(e.currentTarget.checked)}
+          />
+          Attach a picture of this page
+        </label>
+      </Show>
+      <Show when={form.screenshot()}>{(src) => <img src={src()} alt="" />}</Show>
+
+      <button type="button" onClick={() => form.pickElement()}>
+        {form.isPicking() ? "Click anything to attach it — Esc to stop" : "Point at the element"}
+      </button>
+      <ul>
+        <For each={form.elements()}>
+          {(el, i) => (
+            <li>
+              <code>{el.selector}</code> {el.text}
+              <button type="button" onClick={() => form.removeElement(i())}>
+                ×
+              </button>
+            </li>
+          )}
+        </For>
+      </ul>
+
+      <p role="status">{form.statusMessage()}</p>
+      <button disabled={form.isSending()}>Send</button>
+    </form>
+  );
+}
+```
+
+The subscription is torn down with the owner the function was called in — the
+component, normally; call `form.destroy()` yourself if you called it outside
+one. `solid-js` is an optional peer dependency, so nothing about it reaches a
+project that does not use it.
 
 ## Catching render errors (React)
 
@@ -1929,6 +1999,10 @@ types.
 **`bugbottle/svelte`** — `createBugReport`, a readable store plus the actions,
 and the `BugReportView`, `UseBugReportOptions` and `BugReportStatus` types.
 Optional peer `svelte` >= 4.
+
+**`bugbottle/solid`** — `createBugReport`, accessors over the same machine plus
+the actions, and the `UseBugReportOptions` and `BugReportStatus` types.
+Optional peer `solid-js` >= 1.8.
 
 **`bugbottle/html-to-image`** — `htmlToImage`, a `ScreenshotRenderer`.
 Requires `html-to-image`.

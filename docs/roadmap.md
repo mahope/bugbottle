@@ -88,12 +88,13 @@ and React 19's `createRootErrorHandlers` in `bugbottle/react`. And the shared
 a repeat answers 200 `{ id, duplicate: true }` without storing or delivering it
 twice.
 
-**0.6** — `bugbottle/vue` (`useBugReport`, a composable over refs) and
-`bugbottle/svelte` (`createBugReport`, a readable store plus the actions), over
+**0.6** — `bugbottle/vue` (`useBugReport`, a composable over refs),
+`bugbottle/svelte` (`createBugReport`, a readable store plus the actions) and
+`bugbottle/solid` (`createBugReport`, accessors torn down with the owner), over
 the new framework-agnostic `createReportState` in `src/report-state.ts` that
-the React hook was refactored onto — one state machine, three bindings, about
-1.3 and 1.2 kB gzipped over the core a form pays for anyway. Both peers are
-optional.
+the React hook was refactored onto — one state machine, four bindings, about
+1.3, 1.2 and 1.27 kB gzipped over the core a form pays for anyway. All three
+peers are optional.
 
 **0.6** — `bugbottle/sign`: an optional HMAC-SHA-256 over `<timestamp>.<body>`
 with a shared key (`createSigner`, WebCrypto, 366 bytes gzipped), a `sign` seam
@@ -162,7 +163,8 @@ bites. No SDK dependency.
 
 ## 0.6 — adapters and triggers
 
-- Solid adapter. (Vue and Svelte shipped; see "Already shipped".)
+- Solid adapter. (Shipped as `bugbottle/solid`, beside Vue and Svelte; see
+  "Already shipped".)
 - Shake-to-report in its own entry. (The keyboard shortcut, the auto-open and
   the React error boundary shipped; see "Already shipped".)
 - Performance snapshot from buffered `PerformanceObserver` entries; storage

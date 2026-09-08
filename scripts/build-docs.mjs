@@ -98,6 +98,7 @@ const GROUPS = [
       "the-form-react",
       "the-form-vue",
       "the-form-svelte",
+      "the-form-solid",
       "catching-render-errors-react",
       "opening-it-without-a-button",
       "the-form-anything-else",

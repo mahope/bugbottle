@@ -33,7 +33,7 @@ need Node 18.
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
   `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/sign` 512 bytes,
-  `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
+  `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
   are small; the core they share is not), `dist/bugbottle.js` 22 kB. The
   panel and the script tag grew with the accessibility pass, and everything
