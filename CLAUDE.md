@@ -25,6 +25,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/perf.ts` | `initPerf()` — the Web Vitals from buffered `PerformanceObserver` entries (LCP last candidate, CLS without recent input, INP as the worst interaction), the navigation milestones, long tasks, the JS heap where it exists, plus the storage snapshot: key names and value lengths, cookie names, values only for an opt-in allow-list. Own entry point. Never a cookie value, on any setting | registry, report-core |
 | `src/queue.ts` | `createQueue()` — a `localStorage` queue in front of the endpoint, flushed on init, `online` and visibility, with backoff. Own entry point. Imports `send.ts` nowhere: one `fetch` of its own | report-core (types) |
 | `src/triggers.ts` | `onShortcut(combo, handler)` and `onUncaughtError(handler, options)` — the two ways into the panel that need no button. Own entry point. Listeners only: never renders, never sends | fingerprint |
+| `src/shake.ts` | `onShake(handler, options?)` — a `devicemotion` listener with gravity filtered out, three alternating threshold crossings in a second, a cool-down, and nothing measured while the page is hidden. Plus `requestShakePermission()`, the only thing that prompts, and only when the application calls it from a gesture. Own entry point. Listener only: never renders, never sends | triggers (the `ListenerHost` type alone, so nothing at run time) |
 | `src/fingerprint.ts` | `fingerprint(report)` + `stableHash(text)` — one identity for a report, computed the same way in the browser and on the server. Imported by nothing in the core entry, so it is tree-shaken when unused | nothing |
 | `src/react/boundary.ts` | `BugReportBoundary` (catches a render error, renders your fallback with a `report()`) and `createRootErrorHandlers` for React 19. No JSX — `tsc` alone builds this package | send, fingerprint |
 | `src/registry.ts` | Two slots: `initBreadcrumbs` and `initNetwork` register getters, `send.ts` reads them. Keeps the core free of the recorders | report-core (types) |
@@ -64,10 +65,10 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Sixteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Seventeen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./solid`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
-`./perf`, `./annotate`, `./queue`, `./triggers`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
+`./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -153,7 +154,7 @@ alone; `BugReportBoundary` costs about 370 bytes more for the applications that
 import it. `bugbottle/ui` moved from 8 kB to 9 kB when the panel started
 importing `bugbottle/triggers`, so a keyboard shortcut works with no wiring,
 and to 9.25 kB when those triggers learnt about shadow roots.
-`bugbottle/triggers` is budgeted at 1300 bytes (measures about 1265): a
+`bugbottle/triggers` is budgeted at 1300 bytes (measures 1281): a
 standalone 2.7 kB minified module has no compression dictionary to share, and
 the shadow-DOM fix — the composed path plus the focus chain through
 `shadowRoot.activeElement` — added about 130 bytes to the 1133 it used to be.
@@ -182,7 +183,16 @@ so CI subtracts a bundle of `buildReport`/`sendReport`/`captureScreenshot`/
 `pickElement` and checks the difference — 1321, 1192 and 1270 bytes when Solid
 landed. `bugbottle/sign` is budgeted at 512
 bytes and measures about 370: two WebCrypto calls and a hex loop, importing
-nothing. The IIFE budget was 19456 bytes gzipped
+nothing. `bugbottle/shake` is budgeted at 768 bytes and measures 685: one
+listener, a high-pass filter over three axes and the iOS permission call,
+importing nothing but a type. It is its own entry rather than a third function
+in `bugbottle/triggers`, which has nineteen bytes of room left, and because a
+phone gesture is not something a desktop application should be made to carry.
+The panel takes it as a function handed in, like the annotator, so
+`bugbottle/ui` moved 10 997 → 11 091 (the wiring, not the module) and the IIFE
+22 501 → 23 073 with its budget at 23552 — that build carries every module and
+has to expose `requestShakePermission`, since a page with no bundler has no
+other way to ask iOS. The IIFE budget was 19456 bytes gzipped
 before the annotator (about 18 kB with the queue, the triggers, the
 accessibility pass and the 0.6 evidence); masking, the queue and the triggers
 each cost it roughly half a kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35. `bugbottle/annotate` is budgeted at
@@ -197,7 +207,9 @@ against the 10 229 it weighed before the annotator existed; #48 added about
 fifty bytes for Escape leaving the editor and the longer sentence the canvas
 reads out). #42 then added `bugbottle/perf` to the script tag behind `data-perf`, which
 cost about 1.08 kB — the module is carried whether or not the attribute is
-present — so the IIFE measures 22514 and its budget is 23040; the eight
+present — so the IIFE measured 22501, and 23073 once #43 added
+`bugbottle/shake` and `requestShakePermission` to the namespace, which is why
+its budget is 23552; the eight
 languages leave little room, so measure before lengthening a locale string. The 720 bytes in
 between are the panel's own half — the toolbar, its CSS, the open/close wiring
 and eight English strings — and they cannot be tree-shaken out of a static

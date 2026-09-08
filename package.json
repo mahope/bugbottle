@@ -88,6 +88,10 @@
       "types": "./dist/triggers.d.ts",
       "default": "./dist/triggers.js"
     },
+    "./shake": {
+      "types": "./dist/shake.d.ts",
+      "default": "./dist/shake.js"
+    },
     "./locales": {
       "types": "./dist/locales.d.ts",
       "default": "./dist/locales.js"

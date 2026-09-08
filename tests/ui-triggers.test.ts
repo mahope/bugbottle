@@ -44,6 +44,7 @@ for (const key of Object.getOwnPropertyNames(win)) {
 const { mountBugbottle } = await import("../src/ui/index.ts");
 const { en } = await import("../src/locales.ts");
 const { DEFAULT_SHORTCUT, parseShortcut } = await import("../src/triggers.ts");
+const { onShake } = await import("../src/shake.ts");
 
 const ENDPOINT = "https://example.test/api/bug-reports";
 
@@ -183,4 +184,58 @@ test("shortcut false installs no listener, and a custom combination is honoured"
   win.document.dispatchEvent(event);
   assert.equal(parts(custom.host).panel.hidden, false);
   custom.destroy();
+});
+
+/** One motion reading, the way a phone delivers it. */
+function move(x: number): void {
+  const event = new win.Event("devicemotion");
+  Object.assign(event, { accelerationIncludingGravity: { x, y: 0, z: 9.8 } });
+  win.dispatchEvent(event);
+}
+
+/** A shake: the still phone that seeds gravity, then three alternating swings. */
+function shakePhone(): void {
+  move(0);
+  move(40);
+  move(-40);
+  move(40);
+}
+
+test("a shake opens the panel when the detector is handed in", () => {
+  const { fn } = fakeFetch();
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn, shake: onShake });
+  const { panel } = parts(widget.host);
+
+  shakePhone();
+  assert.equal(panel.hidden, false);
+
+  // A shake opens; it never closes. The gesture that would close the panel is
+  // the same one that shook it open, and a reporter holding a phone moves it.
+  widget.close();
+  widget.destroy();
+});
+
+test("the shake threshold can be tuned, and a destroyed widget stops listening", () => {
+  const { fn } = fakeFetch();
+  const deaf = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch: fn,
+    shake: { on: onShake, threshold: 60 },
+  });
+  shakePhone();
+  assert.equal(parts(deaf.host).panel.hidden, true, "40 m/s² is under a 60 m/s² threshold");
+  deaf.destroy();
+
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn, shake: onShake });
+  widget.destroy();
+  shakePhone();
+  assert.equal(parts(widget.host).panel.hidden, true);
+});
+
+test("no shake option installs no motion listener", () => {
+  const { fn } = fakeFetch();
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn });
+  shakePhone();
+  assert.equal(parts(widget.host).panel.hidden, true);
+  widget.destroy();
 });

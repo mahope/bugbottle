@@ -27,6 +27,7 @@ import { initNetwork } from "./network.ts";
 import { initPerf } from "./perf.ts";
 import { createQueue } from "./queue.ts";
 import { scrubReport } from "./scrub.ts";
+import { onShake, requestShakePermission } from "./shake.ts";
 import { buildReport, sendReport } from "./send.ts";
 import { createSigner } from "./sign.ts";
 import { onShortcut, onUncaughtError } from "./triggers.ts";
@@ -68,6 +69,10 @@ const api = {
   // wants a shortcut without the panel, and they cost nothing extra here.
   onShortcut,
   onUncaughtError,
+  // The gesture and the permission call that goes with it. A page that wires
+  // its own form gets both; `data-shake` below is the no-JavaScript way in.
+  onShake,
+  requestShakePermission,
 };
 
 declare global {
@@ -138,6 +143,14 @@ function autoMount(data: DOMStringMap): void {
   // to switch it off. This build ships no renderer, so it matters only once a
   // page passes one to `mount` itself.
   if (data.annotate === "off") options.annotate = false;
+  // Presence enables the shake gesture, the same way `data-scrub` does, and an
+  // acceleration in m/s² tunes the threshold: `data-shake="12"` is a lighter
+  // flick. On iOS nothing arrives until the page has called
+  // `window.bugbottle.requestShakePermission()` from a button of its own.
+  if (data.shake !== undefined) {
+    const threshold = Number(data.shake);
+    options.shake = threshold > 0 ? { on: onShake, threshold } : onShake;
+  }
   // Any value enables the scrubber, including the empty string of a bare
   // `data-scrub` attribute — the point is that ticking it is one word.
   if (data.scrub !== undefined) options.scrub = scrubReport;

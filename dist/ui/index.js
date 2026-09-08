@@ -705,6 +705,12 @@ export function mountBugbottle(options) {
     if (options.shortcut !== false) {
         unsubscribes.push(onShortcut(options.shortcut ?? DEFAULT_SHORTCUT, toggle));
     }
+    // A shake opens the panel rather than toggling it: the gesture that would
+    // close it is the same one that shook it open, and a reporter mid-sentence
+    // holding a phone moves it about.
+    const shake = typeof options.shake === "function" ? { on: options.shake } : options.shake;
+    if (shake)
+        unsubscribes.push(shake.on(open, shake));
     if (options.openOnError) {
         const prefill = options.openOnError !== true && options.openOnError.prefill === true;
         unsubscribes.push(onUncaughtError((error) => openForError(error.message, prefill)));

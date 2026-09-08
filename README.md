@@ -48,7 +48,8 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
   1.3 kB; the timings and storage snapshot 1.3 kB; the offline queue 1.3 kB;
-  the everything script tag, 22.5 kB. `html-to-image` is only pulled in by the module that
+  shake-to-report 0.7 kB;
+  the everything script tag, 23.1 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
@@ -456,6 +457,70 @@ still have to press send. Closing the panel puts the ordinary intro back.
 From the script tag it is `data-shortcut` (`data-shortcut="off"` for none) and
 `data-open-on-error` (any value, or `"prefill"`).
 
+### Shake to report
+
+On a phone there is no keyboard, and shaking the device is what people already
+expect from a bug reporter. `bugbottle/shake` is that gesture in 685 bytes
+gzipped, importing nothing:
+
+```ts
+import { onShake, requestShakePermission } from "bugbottle/shake";
+
+const off = onShake(() => widget.open());
+```
+
+A shake is three crossings of 15 m/s² with alternating direction inside one
+second, measured on whichever axis moves most once gravity has been filtered
+out. Alternation is what separates a shake from a drop — falling onto a desk is
+one large reading in one direction — and after a shake the detector is quiet for
+three seconds, so one gesture opens one panel however long the reporter keeps
+shaking. `threshold` and `cooldownMs` change both; `windowMs` changes the
+second. Nothing is measured while the page is hidden: the listener comes off on
+`visibilitychange` and goes back on when the page returns. On a laptop it simply
+never fires, which is why no media query switches it off.
+
+**iOS needs a gesture, and only Safari has the gate.** Since iOS 13, Safari
+delivers no motion events at all until `DeviceMotionEvent.requestPermission()`
+has been called from inside a user gesture — a real click or tap — and granted.
+`onShake` never calls it: a permission prompt nobody asked for is worse than a
+feature nobody found, and the browser would refuse it outside a gesture anyway.
+Put it on a button of your own:
+
+```ts
+button.addEventListener("click", async () => {
+  const state = await requestShakePermission();
+  // "unsupported" is every browser but Safari, where motion simply arrives.
+  if (state === "denied") showTheButtonInstead();
+});
+```
+
+`requestShakePermission()` resolves to `"granted"`, `"denied"` or
+`"unsupported"`, and a call Safari rejects because it did not come from a
+gesture is reported as `"denied"` rather than thrown. Two more facts worth
+knowing: motion is a secure-context feature, so a page served over plain HTTP
+gets no events whatever the permission says; and until permission is granted
+`onShake` is installed and silent, which is exactly what it looks like on a
+desktop.
+
+The panel takes the detector the way it takes the annotator — a function you
+hand in, so nobody pays for a gesture they never use:
+
+```ts
+import { onShake } from "bugbottle/shake";
+
+mountBugbottle({
+  endpoint: "/api/feedback",
+  shake: onShake, // or { on: onShake, threshold: 12, cooldownMs: 5000 }
+});
+```
+
+It is off by default, because of the permission dance above. A shake opens the
+panel; it never closes it, since the gesture that would close it is the one that
+shook it open. From the script tag it is `data-shake` — presence enables it,
+and a number tunes the threshold (`data-shake="12"` is a lighter flick). That
+build also exposes `window.bugbottle.requestShakePermission()`, which is the
+only way a page with no bundler can ask iOS.
+
 ## The form (anything else)
 
 Every adapter is a thin layer over three functions that work anywhere:
@@ -635,6 +700,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `mask` | What to hide in the screenshot; `false` photographs the page as it is. See [Masking](#masking). |
 | `trigger` | `false` for no floating button, or an element or selector to use your own. |
 | `shortcut` | The combination that opens the panel. Default `mod+shift+b`; `false` installs no listener. |
+| `shake` | Open the panel when the phone is shaken. Off by default; hand in `onShake` from `bugbottle/shake`, or `{ on: onShake, threshold, cooldownMs }`. See [Shake to report](#shake-to-report). |
 | `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
 | `queue`, `scrub`, `sign`, `beforeSend` | The same seams the plain functions take. |
 | `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. |
@@ -670,7 +736,7 @@ so it is announced in the reporter's language.
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
 that mounts the panel from the tag itself, the annotator included. About
-20.5 kB gzipped:
+23.1 kB gzipped:
 
 ```html
 <script
@@ -705,6 +771,7 @@ run on your page.
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
 | `data-annotate="off"` | Leaves out "Edit picture" and its rectangle, arrow and blur. This build carries the annotator, so the attribute only switches it off; it does not make the file smaller. Only matters once you give `mount` a renderer; see [Marking the picture](#marking-the-picture). |
 | `data-shortcut` | The combination that opens the panel. `mod+shift+b` unless you say otherwise; `off` installs no listener. |
+| `data-shake` | Present, with any value, opens the panel when the phone is shaken; a number is the threshold in m/s² (`data-shake="12"` is a lighter flick). On iOS nothing arrives until the page calls `window.bugbottle.requestShakePermission()` from a button of its own. See "Shake to report". |
 | `data-open-on-error` | Present, with any value, opens the panel on an uncaught error. `prefill` also fills the message in. |
 
 The tag also patches the console immediately and starts breadcrumbs, so an
@@ -717,7 +784,8 @@ building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
 `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
 `createQueue`,
 `locales`, `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`,
-`pickElement`, `createAnnotator`, `onShortcut`, `onUncaughtError` and
+`pickElement`, `createAnnotator`, `onShortcut`, `onUncaughtError`,
+`onShake`, `requestShakePermission` and
 `version` — so a
 page that wants pictures can load `html-to-image` itself and call
 `window.bugbottle.mount({ endpoint, screenshot })`. Leave `data-endpoint` off
@@ -1953,7 +2021,8 @@ type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 `locales`,
 `resolveLocale`, `scrubReport`, `createSigner`, `buildReport`, `sendReport`,
 `pickElement`,
-`onShortcut`, `onUncaughtError`, `version`, and
+`onShortcut`, `onUncaughtError`, `onShake`, `requestShakePermission`,
+`version`, and
 `data-*` auto-mount. See "One script tag".
 
 **WordPress** — the plugin at
@@ -1988,6 +2057,11 @@ requests".
 `ShortcutOptions`, `UncaughtError`, `UncaughtErrorOptions` and `ListenerHost`
 types.
 
+**`bugbottle/shake`** — `onShake`, `requestShakePermission`,
+`DEFAULT_SHAKE_THRESHOLD`, `DEFAULT_SHAKE_COOLDOWN_MS`,
+`DEFAULT_SHAKE_WINDOW_MS`, and the `ShakeOptions` and `ShakeEvent` types. See
+"Shake to report".
+
 **`bugbottle/react`** — `useBugReport`, `BugReportBoundary`,
 `createRootErrorHandlers`, `describeRenderError`, and the
 `BugReportBoundaryProps`, `ReportErrorOptions`, `RootErrorHandlerOptions` and
@@ -2008,8 +2082,8 @@ Optional peer `solid-js` >= 1.8.
 Requires `html-to-image`.
 
 **`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions` (whose
-`annotate` takes `createAnnotator` itself), `Theme`, `Brand` and
-`BugbottleWidget` types.
+`annotate` takes `createAnnotator` itself and whose `shake` takes `onShake`),
+`Theme`, `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
 `locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,
