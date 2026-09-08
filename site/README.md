@@ -40,6 +40,36 @@ from this host and the favicon is an inline SVG.
 | `security-headers.conf` | The security headers, in one file because nginx does not merge them. Copied to `/etc/nginx/snippets/` and included by every block in `nginx.conf`; see "The security headers" below |
 | `Dockerfile` | A `node:22-alpine` stage that generates `docs/`, then `nginx:alpine` plus these files and `dist/` |
 
+## The sections of the landing pages
+
+Seven sections, the same seven in both languages and in the same order, so a
+reader who switches language mid-page lands on the argument they were reading
+rather than on a page that is missing it:
+
+| Section | What it is for | Ground |
+|---|---|---|
+| `hero` | The sentence, the panel screenshot, the release stamp | `--surface` |
+| `specs` | Eight terms and what each one means: what the library does, and what it leaves to you | `--paper` |
+| `start` | The three ways in, the inbox, and the size table | `--surface` |
+| `demo` | The real panel and the payload it would have posted | `--paper` |
+| `sinks` | The eleven places a report can land | `--surface` |
+| `privacy` | The screenshot warning, printed on the slab | `--slab` |
+| `colophon` | Who writes this | `--surface` |
+
+The grounds alternate deliberately, and `main > section` draws the rule
+between them; a new section has to be given a place in that alternation
+(`#start, #sinks, #colophon` in `style.css`) or two paper sections end up
+against each other with only a hairline between them.
+
+`sinks` names all eleven rather than counting them, because the question a
+reader arrives with is "does it reach the tracker we already use" and the
+answer is a name they can see. The names are written by hand in both pages,
+in the order of the README's own table under "Sending it somewhere", and the
+heading says how many there are: a twelfth sink means editing the README
+table, both headings and both lists. `.sinks` is the only style it needed —
+a wrapping row of terms held to `--measure`, so it sits in the same column as
+the prose around it.
+
 ## The typefaces
 
 Two families, and no more: **Newsreader** at 600 for the headings, the hero

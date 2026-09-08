@@ -135,7 +135,22 @@
           <dd>
             Dansk, engelsk, svensk, norsk, tysk, hollandsk, fransk og spansk. Alle
             tekster kan skiftes ud, og panelet henter sit udseende fra en håndfuld
-            CSS-variabler.
+            CSS-variabler. I
+            <a href="/docs/languages-and-branding/#branding-and-theme" hreflang="en">legepladsen for temaer</a>
+            skifter et rigtigt panel udseende, mens du skruer på knapperne, og koden
+            til at kopiere står nedenunder.
+          </dd>
+        </div>
+        <div>
+          <dt>En nedetid koster ikke rapporten</dt>
+          <dd>
+            <code>bugbottle/queue</code> gemmer en mislykket afsendelse i
+            <code>localStorage</code> og sender den, når browseren er tilbage. Nægter
+            lageret at tage imod, ryger billedet frem for rapporten — og køen skriver
+            en linje om det i rapporten, så ingen forveksler et tabt skærmbillede med
+            et, der aldrig blev taget.
+            <a href="/docs/when-the-network-is-down/" hreflang="en">Når netværket er nede</a>
+            (på engelsk).
           </dd>
         </div>
         <div>
@@ -144,6 +159,16 @@
             Alt, hvad browseren sender, bliver behandlet som fjendtligt: længder bliver
             klippet, nulbytes fjernet, og et skærmbillede kontrolleret på signaturen i
             de afkodede bytes frem for på den type, det påstår at have.
+          </dd>
+        </div>
+        <div>
+          <dt>Der er en tjekliste til privatlivsspørgsmålet</dt>
+          <dd>
+            Hvert felt en rapport kan indeholde, hvad der står i det, hvor længe det
+            bør gemmes, og et afsnit du kan skrive ind i din egen persondatapolitik:
+            <a href="/da/privatliv/">tjeklisten for privatliv</a> er skrevet til den,
+            der skal svare på spørgsmålet — på dansk, med den engelske udgave
+            ved siden af.
           </dd>
         </div>
       </dl>
@@ -327,6 +352,17 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
           <a href="https://github.com/mahope/bugbottle#the-form-react" hreflang="en">afsnittet om formularen</a>
           (på engelsk).
         </p>
+
+        <p class="small muted">
+          Mangler du et sted at lade rapporterne lande? Kør indbakken: én container,
+          ét kodeord.
+          <a href="https://github.com/mahope/bugbottle/tree/main/examples/inbox" hreflang="en"><code>examples/inbox</code></a>
+          er en Node-server uden afhængigheder, der tager imod rapporterne, skriver
+          hver enkelt på disken ved siden af sit billede og viser en liste, man kun kan
+          læse, bag <code>INBOX_PASSWORD</code>. Der følger en <code>Dockerfile</code>
+          og en <code>compose.yml</code> med, så en VPS til 30 kroner og et domæne er
+          hele udrulningen.
+        </p>
       </div>
     </div>
   </section>
@@ -372,6 +408,44 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sinks" class="reveal">
+    <div class="wrap spread">
+      <div class="spread-head">
+        <h2>Elleve steder, en rapport kan lande</h2>
+      </div>
+      <div class="spread-body">
+        <p>
+          At gemme en rapport er én ting; at se den er en anden.
+          <code>bugbottle/server</code> har elleve færdige afsendere med — ti af dem
+          er en formatering oven på ét <code>fetch</code>-kald, den ellevte er en
+          lille SMTP-klient, og ingen af dem har en eneste afhængighed:
+        </p>
+        <ul class="sinks">
+          <li>Resend</li>
+          <li>SMTP</li>
+          <li>Webhook</li>
+          <li>Slack</li>
+          <li>Discord</li>
+          <li>Teams</li>
+          <li>GitHub</li>
+          <li>GitLab</li>
+          <li>Jira</li>
+          <li>Linear</li>
+          <li>Sentry</li>
+        </ul>
+        <p>
+          Ingen af dem læser dine miljøvariabler: nøglen, adressen og tokenet er
+          argumenter, så man kan se på kaldet, hvor hemmeligheden kommer fra — og
+          intet af det kan drive med over i en browserpakke.
+          <a href="/docs/sending-it-somewhere/" hreflang="en">Tabellen i dokumentationen</a>
+          har, hvad hvert enkelt kræver, hvad en rapport bliver til der, hvilke af dem
+          du selv kan hoste, og hvad det koster i en serverpakke at importere det (på
+          engelsk).
+        </p>
       </div>
     </div>
   </section>

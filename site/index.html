@@ -134,7 +134,21 @@
           <dd>
             Danish, English, Swedish, Norwegian, German, Dutch, French and Spanish, with
             every string replaceable and the panel themed from a handful of CSS
-            variables.
+            variables. The
+            <a href="/docs/languages-and-branding/#branding-and-theme">theme playground</a>
+            restyles a real panel while you move the controls and prints the code to
+            paste.
+          </dd>
+        </div>
+        <div>
+          <dt>An outage does not lose the report</dt>
+          <dd>
+            <code>bugbottle/queue</code> keeps a failed send in
+            <code>localStorage</code> and delivers it when the browser comes back. When
+            the storage refuses the write, it drops the picture rather than the report
+            and writes a line saying so, so nobody mistakes a lost screenshot for one
+            that was never taken.
+            <a href="/docs/when-the-network-is-down/">When the network is down</a>.
           </dd>
         </div>
         <div>
@@ -143,6 +157,17 @@
             Everything the browser sends is treated as hostile input: lengths clipped,
             null bytes stripped, and a screenshot checked by the signature in its
             decoded bytes rather than the type it claims to be.
+          </dd>
+        </div>
+        <div>
+          <dt>There is a checklist for the privacy question</dt>
+          <dd>
+            Every field a report can carry, what it holds, how long to keep it and a
+            paragraph you can put in your own policy: the
+            <a href="/docs/privacy-checklist/">privacy checklist</a> is written for
+            whoever has to answer that question, and there is
+            <a href="/da/privatliv/" lang="da" hreflang="da">a Danish half</a> of it
+            for the site owner who has to sign it off.
           </dd>
         </div>
       </dl>
@@ -322,6 +347,15 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
           <code>bugbottle/react</code> gives you the same core with none of the markup:
           <a href="https://github.com/mahope/bugbottle#the-form-react">the README section on the form</a>.
         </p>
+
+        <p class="small muted">
+          Nowhere to put the reports yet? Run the inbox: one container, one password.
+          <a href="https://github.com/mahope/bugbottle/tree/main/examples/inbox"><code>examples/inbox</code></a>
+          is a dependency-free Node server that receives reports, writes each one to
+          disk beside its picture and serves a read-only list behind
+          <code>INBOX_PASSWORD</code>. It ships with a <code>Dockerfile</code> and a
+          <code>compose.yml</code>, so a €4 VPS and a domain is the whole deployment.
+        </p>
       </div>
     </div>
   </section>
@@ -368,6 +402,43 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sinks" class="reveal">
+    <div class="wrap spread">
+      <div class="spread-head">
+        <h2>Eleven places a report can land</h2>
+      </div>
+      <div class="spread-body">
+        <p>
+          Storing a report is one thing; seeing it is another.
+          <code>bugbottle/server</code> ships eleven sinks — ten of them a formatter
+          over a single <code>fetch</code>, the eleventh a small SMTP client, none with
+          a dependency of its own:
+        </p>
+        <ul class="sinks">
+          <li>Resend</li>
+          <li>SMTP</li>
+          <li>Webhook</li>
+          <li>Slack</li>
+          <li>Discord</li>
+          <li>Teams</li>
+          <li>GitHub</li>
+          <li>GitLab</li>
+          <li>Jira</li>
+          <li>Linear</li>
+          <li>Sentry</li>
+        </ul>
+        <p>
+          None of them reads your environment: the key, the URL and the token are
+          arguments, so the call site says where the secret came from and nothing can
+          drift into a browser bundle.
+          <a href="/docs/sending-it-somewhere/">The table in the documentation</a> has
+          what each one needs, what a report turns into there, which of them you can
+          self-host, and what importing it costs a server bundle.
+        </p>
       </div>
     </div>
   </section>
