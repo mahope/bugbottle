@@ -98,7 +98,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node --experimental-strip-types scripts/build-schema.ts && node scripts/build-iife.mjs",
     "build:docs": "node scripts/build-docs.mjs",
-    "a11y": "node scripts/a11y-audit.mjs",
+    "a11y": "node scripts/a11y-audit.mjs && node scripts/a11y-site.mjs",
+    "shot:panel": "node scripts/capture-panel.mjs",
+    "shot:og": "node scripts/render-og.mjs",
     "smoke:annotate": "node scripts/annotate-smoke.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",

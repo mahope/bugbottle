@@ -383,6 +383,8 @@ ${alternates}
 <meta property="og:image:alt" content="bugbottle: a report card with a message, an element selector, a console error and a breadcrumb trail, sealed with a 201.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${ORIGIN}/og.png">
+<link rel="preload" href="/fonts/sourcesans3-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/newsreader-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/docs.css">
 </head>
@@ -397,15 +399,14 @@ ${alternates}
       </svg>
       bugbottle
     </a>
-    <nav aria-label="${lang === "da" ? "Websted" : "Site"}">
+    <nav class="site-nav" aria-label="${lang === "da" ? "Websted" : "Site"}">
+      <a href="/docs/"${page.docsCurrent === false ? ' hreflang="en"' : ' aria-current="true"'}>${lang === "da" ? "Dokumentation" : "Docs"}</a>
       <a href="https://github.com/mahope/bugbottle">GitHub</a>
       <a href="https://www.npmjs.com/package/bugbottle">npm</a>
-      <a href="/docs/"${page.docsCurrent === false ? ' hreflang="en"' : ' aria-current="true"'}>${lang === "da" ? "Dokumentation" : "Docs"}</a>
-      <span class="lang">
-        <a href="${page.enUrl ?? "/"}" lang="en" hreflang="en"${lang === "en" && page.enUrl ? ' aria-current="page"' : ""}>EN</a>
-        <span aria-hidden="true">/</span>
-        <a href="${page.daUrl ?? "/da/"}" lang="da" hreflang="da"${lang === "da" ? ' aria-current="page"' : ""}>DA</a>
-      </span>
+    </nav>
+    <nav class="lang" aria-label="${lang === "da" ? "Sprog" : "Language"}">
+      <a href="${page.enUrl ?? "/"}" lang="en" hreflang="en"${lang === "en" ? ' aria-current="page"' : ""}>EN</a>
+      <a href="${page.daUrl ?? "/da/"}" lang="da" hreflang="da"${lang === "da" ? ' aria-current="page"' : ""}>DA</a>
     </nav>
   </div>
 </header>
@@ -415,8 +416,11 @@ ${alternates}
 /* The same footer as the landing page, in either language, plus the link to
    the comparison — which is the one page a reader weighing up bugbottle is
    looking for and would otherwise never find. */
-function foot(lang) {
+function foot(page) {
+  const lang = typeof page === "string" ? page : (page.lang ?? "en");
   const da = lang === "da";
+  const enUrl = (typeof page === "string" ? undefined : page.enUrl) ?? "/";
+  const daUrl = (typeof page === "string" ? undefined : page.daUrl) ?? "/da/";
   return `
 <footer>
   <div class="wrap">
@@ -436,6 +440,10 @@ function foot(lang) {
         ? "Siden sætter ingen cookies, kører ingen statistik og henter ingenting udefra."
         : "This page sets no cookies, runs no analytics and makes no external request."
     }</p>
+    <div class="lang lang-footer">
+      <a href="${enUrl}" lang="en" hreflang="en"${da ? "" : ' aria-current="page"'}>English</a>
+      <a href="${daUrl}" lang="da" hreflang="da"${da ? ' aria-current="page"' : ""}>Dansk</a>
+    </div>
   </div>
 </footer>
 
@@ -461,9 +469,16 @@ function sidebar(pages, currentSlug) {
   }).join("\n");
 
   const indexMark = currentSlug === "index" ? ' aria-current="page"' : "";
+  /* A <details> that is open in the HTML, so a reader without JavaScript gets
+     the whole list on every width — which is what the page did before. On a
+     phone docs.js closes it at load, where twenty-eight links above the
+     article are a wall rather than a table of contents. */
   return `  <nav class="docs-sidebar" aria-label="Documentation">
+    <details class="docs-topics" open>
+      <summary>Topics</summary>
       <p class="docs-group"><a href="/docs/"${indexMark}>All topics</a></p>
 ${groups}
+    </details>
   </nav>`;
 }
 
@@ -500,7 +515,7 @@ ${onThisPage(page)}${page.html}
     <nav class="docs-pager" aria-label="Nearby pages">${previous}${next}</nav>
   </article>
 </main>
-${foot("en")}`;
+${foot(page)}`;
 }
 
 /* A comparison page: the documentation's typography and chrome, but no
@@ -516,7 +531,7 @@ function standaloneHtml(page) {
 ${page.html}
   </article>
 </main>
-${foot(page.lang)}`;
+${foot(page)}`;
 }
 
 /* Every URL the site serves, with the two pairs that exist in both languages
@@ -617,7 +632,7 @@ ${groups}
     </div>
   </article>
 </main>
-${foot("en")}`;
+${foot(page)}`;
 }
 
 async function main() {

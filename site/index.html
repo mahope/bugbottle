@@ -23,6 +23,8 @@
 <meta property="og:image:alt" content="bugbottle: a report card with a message, an element selector, a console error and a breadcrumb trail, sealed with a 201.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://bugbottle.dev/og.png">
+<link rel="preload" href="/fonts/sourcesans3-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/newsreader-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -79,7 +81,10 @@
 
       <figure class="shot">
         <div class="shot-frame">
-          <img src="/panel.png" width="1760" height="1074" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+          <picture>
+            <source media="(max-width: 48rem)" srcset="/panel-narrow.png" width="788" height="950">
+            <img src="/panel.png" width="1352" height="1050" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+          </picture>
         </div>
         <figcaption>
           The panel from <code>bugbottle/ui</code>, captured on this page. The button in
@@ -111,7 +116,7 @@
         <div>
           <dt>It stays small</dt>
           <dd>
-            No runtime dependencies, and seven entry points so a page pays only for
+            No runtime dependencies, and one entry point per piece, so a page pays only for
             what it imports. The core is 1.3 kB gzipped. The
             <a href="#start">table below</a> has the rest.
           </dd>
@@ -213,67 +218,69 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
         </div>
       </div>
 
-      <table class="sizes">
-        <caption>What each entry point costs, measured at 0.6.0</caption>
-        <thead>
-          <tr>
-            <th scope="col">Import</th>
-            <th scope="col">Gzipped</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">bugbottle</th>
-            <td>1.3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/react</th>
-            <td>5.5 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/vue</th>
-            <td>5.6 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/svelte</th>
-            <td>5.4 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/ui</th>
-            <td>10.1 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/breadcrumbs</th>
-            <td>1.3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/network</th>
-            <td>1.2 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/queue</th>
-            <td>1.3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/triggers</th>
-            <td>1.3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">the script tag above</th>
-            <td>18.1 kB</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="small muted">
-        Bundled with esbuild, minified, without <code>html-to-image</code>. CI fails the
-        build when they grow past the budget.
-      </p>
+      <div class="offset-body">
+        <table class="sizes">
+          <caption>What each entry point costs, measured at 0.6.0</caption>
+          <thead>
+            <tr>
+              <th scope="col">Import</th>
+              <th scope="col">Gzipped</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">bugbottle</th>
+              <td>1.3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/react</th>
+              <td>5.5 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/vue</th>
+              <td>5.6 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/svelte</th>
+              <td>5.4 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/ui</th>
+              <td>10.1 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/breadcrumbs</th>
+              <td>1.3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/network</th>
+              <td>1.2 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/queue</th>
+              <td>1.3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/triggers</th>
+              <td>1.3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">the script tag above</th>
+              <td>18.1 kB</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="small muted">
+          Bundled with esbuild, minified, without <code>html-to-image</code>. CI fails the
+          build when they grow past the budget.
+        </p>
 
-      <p class="small muted">
-        Rather build the form yourself? <code>useBugReport</code> from
-        <code>bugbottle/react</code> gives you the same core with none of the markup:
-        <a href="https://github.com/mahope/bugbottle#the-form-react">the README section on the form</a>.
-      </p>
+        <p class="small muted">
+          Rather build the form yourself? <code>useBugReport</code> from
+          <code>bugbottle/react</code> gives you the same core with none of the markup:
+          <a href="https://github.com/mahope/bugbottle#the-form-react">the README section on the form</a>.
+        </p>
+      </div>
     </div>
   </section>
 
@@ -315,61 +322,69 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
   </section>
 
   <section id="privacy" class="reveal">
-    <div class="wrap">
-      <h2>Read this before you turn screenshots on</h2>
-      <p>
-        A screenshot of your application contains whatever the reporter could see. In a
-        clinical system that can mean a patient photograph; in a payroll tool, a salary;
-        in yours, perhaps somebody's inbox or a half-written message they had not sent
-        yet.
-      </p>
-      <p>Three things follow, and the library cannot do them for you:</p>
-      <ol>
-        <li>
-          <strong>Put screenshots somewhere private.</strong> If your object storage
-          bucket has a public read policy, and many media buckets do, anything you write
-          to it can be fetched by anyone holding the URL. Use a separate bucket with no
-          public policy.
-        </li>
-        <li>
-          <strong>Serve them back through an authenticated route.</strong> Never give a
-          screenshot a public URL. Look the storage key up from the row rather than
-          taking it from the request, so an id cannot be used to walk your bucket.
-        </li>
-        <li>
-          <strong>Say so before the picture is taken.</strong> Put it in the form, next
-          to the checkbox, not in a policy nobody opens.
-        </li>
-      </ol>
-      <p>
-        Requiring people to be signed in is worth considering too. An anonymous
-        screenshot is one nobody can be asked about later, and nobody can be told has
-        been deleted.
-        <a href="https://github.com/mahope/bugbottle#please-read-this-part">The full section in the README.</a>
-      </p>
+    <div class="wrap spread">
+      <div class="spread-head">
+        <h2>Read this before you turn screenshots on</h2>
+      </div>
+      <div class="spread-body">
+        <p>
+          A screenshot of your application contains whatever the reporter could see. In a
+          clinical system that can mean a patient photograph; in a payroll tool, a salary;
+          in yours, perhaps somebody's inbox or a half-written message they had not sent
+          yet.
+        </p>
+        <p>Three things follow, and the library cannot do them for you:</p>
+        <ol>
+          <li>
+            <strong>Put screenshots somewhere private.</strong> If your object storage
+            bucket has a public read policy, and many media buckets do, anything you write
+            to it can be fetched by anyone holding the URL. Use a separate bucket with no
+            public policy.
+          </li>
+          <li>
+            <strong>Serve them back through an authenticated route.</strong> Never give a
+            screenshot a public URL. Look the storage key up from the row rather than
+            taking it from the request, so an id cannot be used to walk your bucket.
+          </li>
+          <li>
+            <strong>Say so before the picture is taken.</strong> Put it in the form, next
+            to the checkbox, not in a policy nobody opens.
+          </li>
+        </ol>
+        <p>
+          Requiring people to be signed in is worth considering too. An anonymous
+          screenshot is one nobody can be asked about later, and nobody can be told has
+          been deleted.
+          <a href="https://github.com/mahope/bugbottle#please-read-this-part">The full section in the README.</a>
+        </p>
+      </div>
     </div>
   </section>
 
   <section id="colophon" class="reveal">
-    <div class="wrap">
-      <h2>Who writes this</h2>
-      <p>
-        I am Mads Holst Jensen, a freelance web and AI developer in Denmark, working
-        under the name Mahope. bugbottle came out of two client applications whose users
-        kept reporting things I could not reproduce. I built the part that collects the
-        evidence, then took pieces out of it until it was small enough to give away.
-      </p>
-      <p>
-        I build this sort of thing for other people's products as well: the path a user
-        takes when something is wrong, the internal tool nobody has had time for, the
-        integration that has to keep working after I have gone. If that is what you are
-        missing, write and tell me what it is.
-      </p>
-      <p class="signature">
-        <strong>Mads Holst Jensen</strong>
-        <a href="https://mahoje.dk">mahoje.dk</a>
-        <a href="mailto:mads@mahope.dk">mads@mahope.dk</a>
-      </p>
+    <div class="wrap spread">
+      <div class="spread-head">
+        <h2>Who writes this</h2>
+      </div>
+      <div class="spread-body">
+        <p>
+          I am Mads Holst Jensen, a freelance web and AI developer in Denmark, working
+          under the name Mahope. bugbottle came out of two client applications whose users
+          kept reporting things I could not reproduce. I built the part that collects the
+          evidence, then took pieces out of it until it was small enough to give away.
+        </p>
+        <p>
+          I build this sort of thing for other people's products as well: the path a user
+          takes when something is wrong, the internal tool nobody has had time for, the
+          integration that has to keep working after I have gone. If that is what you are
+          missing, write and tell me what it is.
+        </p>
+        <p class="signature">
+          <strong>Mads Holst Jensen</strong>
+          <a href="https://mahoje.dk">mahoje.dk</a>
+          <a href="mailto:mads@mahope.dk">mads@mahope.dk</a>
+        </p>
+      </div>
     </div>
   </section>
 
@@ -385,6 +400,10 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
     </nav>
     <p>MIT licence. Written and maintained by <a href="https://mahoje.dk">Mahope</a> in Denmark.</p>
     <p>This page sets no cookies, runs no analytics and makes no external request.</p>
+    <div class="lang lang-footer">
+      <a href="/" aria-current="page" lang="en" hreflang="en">English</a>
+      <a href="/da/" lang="da" hreflang="da">Dansk</a>
+    </div>
   </div>
 </footer>
 

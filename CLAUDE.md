@@ -46,13 +46,17 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `src/sinks/discord.ts` | `discordSink(options)` — the same over one embed: title, description, colour by report type, fields, `image`, `url`, `timestamp`, footer. `buildDiscordMessage` builds the body. The 6000-character embed budget is spent on the description last, because the facts are what somebody triages from | chat, error, report-core (types) |
 | `src/sinks/sentry.ts` | `sentrySink(options)` — one envelope per report on a DSN's ingest endpoint, Sentry, GlitchTip and Bugsink alike. Takes the DSN apart, builds the event (message, level, tags, `contexts.feedback`, the three recorders as one sorted breadcrumb timeline, elements in `extra`) and the attachment item for the screenshot, then POSTs the bytes with `X-Sentry-Auth`. `buildSentryEvent` and `buildSentryEnvelope` are exported; `SentrySinkError` carries `retryAfter` and `X-Sentry-Rate-Limits`. The comment at the top names the doc version it was written against, and the three places it knowingly departs from it | chat, error, report-core |
 | `site/` | The landing page (EN + DA), static, served by nginx from `site/Dockerfile` on Dokploy. Not part of the npm package | dist (at image build) |
+| `site/fonts/` | The four woff2 faces the site is set in — Newsreader 600, Source Sans 3 400/400i/600, latin only. Taken from Google Fonts and **served from this host**: the footer promises no external request, so a `fonts.googleapis.com` link is not an option. `site/README.md` has the recipe | nothing |
 | `site/docs/` | **Generated, never committed.** One page per README section, written by `scripts/build-docs.mjs` (marked, pinned) in the Dockerfile's `node:22-alpine` builder stage. The README is the only copy of that text; a new `##` section must be placed in the script's `GROUPS` or the build fails | README.md (at image build) |
 | `site/compare/`, `site/da/sammenlign/`, `site/sitemap.xml`, `site/robots.txt` | **Generated, never committed**, by the same `scripts/build-docs.mjs` run. The comparison pages come from `site/compare.md` and `site/da/sammenlign.md` — every vendor claim links its source and the figures are dated; the sitemap lists every URL with `hreflang` alternates on the two bilingual pairs | site/compare.md, site/da/sammenlign.md (at image build) |
 | `src/server/` | Re-exports of report-core, markdown and the sinks for `bugbottle/server` | report-core, markdown, sinks |
 | `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, the optional HMAC `signature` check over the raw text, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers. The replay cache is bucketed by the *signed second* and bounded inside each one (128 digests, 640 seconds), because the signing key is public: a flood of valid signatures must not be able to evict an honest digest dated any other second. `signature.replayStore` (`has`/`add(digest, expiresAt)`) replaces it with a shared one; `t=` is `/^\d{1,16}$/` and the digest is verified over the timestamp as it was sent | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express`. A signed route mounted behind `express.json()` cannot be verified at all, so it calls `onError` once per handler naming the parser and answers the same 401 | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
-| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over five states through `puppeteer-core`. `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
+| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over five states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
+| `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page and the two comparison pages, in both colour schemes, failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first | site, dist (at run time) |
+| `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time) |
+| `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time) |
 | `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate` | dist (at run time) |
 | `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts` | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
@@ -126,7 +130,9 @@ npm run check       # typecheck → test → build → docs, in that order; run 
 npm test            # node --test on tests/*.test.ts (needs Node 22+)
 npm run build       # tsc → dist/ (ESM + .d.ts + source maps) → report.schema.json → IIFE
 npm run build:docs  # site/docs/, /compare/, /da/sammenlign/, sitemap.xml, robots.txt; fails on an ungrouped `##` section
-npm run a11y        # axe-core over the panel in a real Chrome; needs a build first
+npm run a11y        # axe-core over the panel and over the site pages, in a real Chrome; needs a build and build:docs first
+npm run shot:panel  # re-capture the hero pictures from the current panel
+npm run shot:og     # re-render site/og.png from site/og.svg
 npm run smoke:annotate  # the blur really pixelates, in a real Chrome; needs a build first
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
@@ -214,7 +220,13 @@ in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 `scripts/a11y-audit.mjs` is that procedure written down: it serves `dist/`,
 mounts the panel with everything showing and runs the pinned `axe-core` over
 five states (closed, open light, open dark, annotator light, annotator dark),
-exiting non-zero on a violation. `scripts/annotate-smoke.mjs` is the same
+exiting non-zero on a violation. `scripts/a11y-site.mjs` is the same procedure
+aimed at `site/`: six pages in two colour schemes, and a console message counts
+as a failure there too. Site changes also carry a performance floor —
+Lighthouse mobile on `/` must stay at or above 95, and it measured 97 with no
+layout shift — but measure it against a server that gzips text, because nginx
+does and an ungzipped measurement is about six points lower for reasons that
+have nothing to do with the page. `scripts/annotate-smoke.mjs` is the same
 procedure aimed at pixels rather than at the accessibility tree: only a real
 canvas can say whether the blur destroyed what it covered.
 

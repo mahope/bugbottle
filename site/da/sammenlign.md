@@ -1,5 +1,5 @@
 bugbottle er en lille brik i et godt besat felt, og det er ikke den mest
-avancerede brik. Siden her stiller biblioteket op ved siden af fire værktøjer,
+avancerede brik. Siden her stiller biblioteket op ved siden af fem værktøjer,
 folk rent faktisk bruger, så du på et minut kan se, om du har brug for et
 bibliotek eller et produkt. Alle tal er tjekket den 7. september 2026 på den
 side, der er linket til i hver række; priser og funktioner flytter sig, så
