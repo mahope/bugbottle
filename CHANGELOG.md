@@ -9,6 +9,34 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `smtpSink({ host, port?, secure?, user?, pass?, allowInsecureAuth?, from, to,
+  subject?, replyTo?, clientName?, timeoutMs?, tls?, locale?, screenshotUrl?,
+  screenshotUrlFrom?, markdown? })` in `bugbottle/server`: email through any
+  SMTP account, without Resend and without a dependency. The eleventh sink and
+  the only one that speaks a protocol rather than an HTTP API — a small client
+  on `node:net` and `node:tls` that does EHLO, STARTTLS when the server offers
+  it, AUTH PLAIN or LOGIN, one message and QUIT, with a deadline on every phase
+  rather than on the conversation as a whole. One report is one connection: no
+  pooling, no pipelining, no queue, no attachments, because the retrying
+  belongs to whoever runs the endpoint and that is what keeps it a single file.
+  The message is RFC 5322 with folded headers and dot-stuffing, a
+  `multipart/alternative` of the report as `text/plain` and the same report as
+  `text/markdown`, quoted-printable when it is not pure ASCII so the body stays
+  readable on the wire, and the `Reply-To` taken from the report's `contact`
+  line exactly as the Resend sink takes it. A refusal throws `SinkError`
+  carrying the server's own reply code and line; a failure with no reply — a
+  hang, a refused connection — throws one with `SMTP_NO_REPLY` (`0`).
+  **AUTH is refused over a connection that is not encrypted** unless
+  `allowInsecureAuth: true` is set, because base64 is not encryption and every
+  hop to the mail server could read the password; credentials never reach an
+  error message or a log. `sendReportSmtp`, `buildMessage`, `foldHeader` and
+  `dotStuff` are exported beside the factory. Nothing in the core entry imports
+  it, and the validator-only `bugbottle/server` bundle is still 584 bytes
+  gzipped with no `node:` module in it. Tested against a scripted SMTP server
+  on `node:net`, the STARTTLS upgrade included: the test builds a self-signed
+  certificate in DER from a `node:crypto` key pair rather than checking a
+  private key into the repository (#81).
+
 - `teamsSink({ webhookUrl, screenshotUrl?, reportUrl?, buttonText?, fetch? })`
   in `bugbottle/server`: one Adaptive Card per report in a Microsoft Teams
   channel. The tenth sink and the third chat one, built on the same

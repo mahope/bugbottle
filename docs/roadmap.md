@@ -264,6 +264,19 @@ a success, and the 28 kB a webhook accepts is a budget the card is measured
 against before it is sent — console first, then the facts from the back, then
 the reporter's own words. Server-only, so it costs a browser bundle nothing.
 
+**Unreleased** — `smtpSink`, the eleventh sink and the first that is not an
+HTTP API (#81). Email meant Resend, which meant an account and a verified
+domain; most self-hosters already have an SMTP account and no reason to get
+another one. So it speaks SMTP itself on `node:net` and `node:tls`: EHLO,
+STARTTLS when the server offers it, AUTH PLAIN or LOGIN, one message, QUIT,
+with a deadline on every phase. The message is RFC 5322 with folded headers,
+dot-stuffing and a `multipart/alternative` of the report as text and as
+Markdown; the `Reply-To` comes from the `contact` line as it does for Resend.
+AUTH over an unencrypted connection is refused unless `allowInsecureAuth` says
+otherwise, and a refusal throws `SinkError` with the server's reply code and
+line. Still zero dependencies, still server-only, and still nothing in the
+shared server path: the validator-only bundle did not move a byte.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
@@ -296,7 +309,7 @@ bites. No SDK dependency.
   honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
   see "Already shipped".)
 - More sinks: Jira, GitLab. (All of them shipped — Slack, Discord, the Sentry
-  envelope, `jiraSink`, `gitlabSink` and now `teamsSink`; see "Already
+  envelope, `jiraSink`, `gitlabSink`, `teamsSink` and now `smtpSink`; see "Already
   shipped". Attachments on the two issue trackers are noted there as a later
   job.)
 
