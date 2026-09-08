@@ -432,10 +432,9 @@ export declare function normaliseStorage(raw: unknown): StorageSnapshot | null;
  * going over it drops the whole replay rather than part of it. A replay cut in
  * the middle does not play.
  *
- * Null bytes are stripped out of the serialised form before it is parsed back,
- * for the reason every other validator strips them: Postgres refuses a text
- * value containing one, and a replay is nested attacker-controlled JSON on its
- * way into a column.
+ * Null bytes are stripped out of the parsed events, for the reason every other
+ * validator strips them: Postgres refuses a text value containing one, and a
+ * replay is nested attacker-controlled JSON on its way into a column.
  *
  * `seconds` is recomputed from the events that survived rather than believed.
  * Never throws: a malformed replay means "no replay", not a failed report.

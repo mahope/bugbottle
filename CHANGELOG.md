@@ -184,6 +184,11 @@ change the API; the changelog says so when they do.
   server and in the rolling buffer alike, so a recording of a page written in
   Chinese or full of emoji passed a "1 MB" cap at up to three megabytes on the
   wire. Both count with `TextEncoder` now.
+- `normaliseReplay` stripped null bytes by removing the escape from the
+  serialised JSON, which also matched an event whose own text was those six
+  characters — leaving JSON that would not parse, so the whole replay was
+  dropped. It now walks the parsed events and removes real null bytes from the
+  string values and keys.
 
 ### Changed
 

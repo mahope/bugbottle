@@ -326,6 +326,20 @@ test("null bytes are stripped out of a replay", () => {
   assert.equal(data.text, "ab");
 });
 
+test("an event whose text merely looks like an escaped NUL survives whole", () => {
+  // The six characters backslash-u-0000, as text a page really rendered. The
+  // strip used to run over the serialised JSON, where that reads exactly like
+  // the escape `JSON.stringify` writes for a real NUL, so removing it left
+  // invalid JSON and the whole replay was dropped.
+  const literal = "\\" + "u0000";
+  const replay = normaliseReplay({
+    events: [{ type: 3, timestamp: 1000, data: { text: `a${literal}b` } }],
+  });
+  assert.equal(replay?.events.length, 1);
+  const data = replay?.events[0]?.data as { text: string };
+  assert.equal(data.text, `a${literal}b`);
+});
+
 test("validateReport carries the replay through", () => {
   const report = validateReport({
     message: "it froze",
