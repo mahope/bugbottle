@@ -9,6 +9,24 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- A Danish getting-started page on the site, `/da/kom-i-gang/`. The panel
+  speaks Danish and the landing page is Danish; the documentation is English
+  only, and most of the people who will install this from the owner's network
+  are Danish site owners and WordPress users. One page is enough: three routes
+  from nothing to a first report — the pinned jsDelivr script tag, the
+  WordPress plugin with its real setting names, and a bundler with the React,
+  Vue, Svelte or Solid hook — the privacy section in Danish, and links into the
+  English reference for everything deeper. It is written as
+  `site/da/kom-i-gang.md` and rendered by `scripts/build-docs.mjs` like the two
+  comparison pages, linked from the Danish landing page's hero buttons and
+  footer, and in `sitemap.xml`. No `hreflang`: `/docs/install/` is the nearest
+  English page and it is a different one, so claiming they are the same page in
+  two languages would be false. Not in `docs/search.json` either, which is what
+  the entry's `indexed: false` says — it is the Danish retelling of pages the
+  index already has in English. `scripts/release.mjs` now edits this file too,
+  so the script tag keeps naming the current version, and
+  `scripts/a11y-site.mjs` audits it in both colour schemes.
+  Closes #77.
 - A theme playground in the documentation, under "Branding and theme" on
   `/docs/languages-and-branding/`: labelled controls for the primary colour, the
   ground, the ink, the corner radius, the font, the position and the colour

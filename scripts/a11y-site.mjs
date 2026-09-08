@@ -128,6 +128,7 @@ const PAGES = [
   ["docs-playground", "/docs/languages-and-branding/", "playground"],
   ["compare-en", "/compare/"],
   ["compare-da", "/da/sammenlign/"],
+  ["kom-i-gang", "/da/kom-i-gang/"],
   ["changelog", "/docs/changelog/"],
 ];
 

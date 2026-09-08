@@ -2,8 +2,9 @@
 
 The site at [bugbottle.dev](https://bugbottle.dev): a landing page in English
 at `/` and Danish at `/da/`, the English documentation at `/docs/`, the
-changelog at `/docs/changelog/`, and a comparison page in both languages at
-`/compare/` and `/da/sammenlign/`. The
+changelog at `/docs/changelog/`, a comparison page in both languages at
+`/compare/` and `/da/sammenlign/`, and one Danish getting-started page at
+`/da/kom-i-gang/`. The
 landing pages are static HTML written by hand; the documentation, the
 changelog, the comparison, `sitemap.xml` and `robots.txt` are generated when
 the image is built. No framework, no analytics, no
@@ -24,7 +25,8 @@ from this host and the favicon is an inline SVG.
 | `docs/search.json` | **Generated, never committed.** The search index the field in the sidebar reads; see "The search" below |
 | `compare.md` | The English "Compared with" page, as Markdown. The only prose on the site that is neither the landing page nor the README |
 | `da/sammenlign.md` | The same page in Danish, written for a Danish reader rather than translated |
-| `compare/`, `da/sammenlign/` | **Generated, never committed.** The two pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" below |
+| `da/kom-i-gang.md` | The Danish getting-started page, as Markdown: three routes to a first report and the privacy part in Danish. See "Kom i gang" below |
+| `compare/`, `da/sammenlign/`, `da/kom-i-gang/` | **Generated, never committed.** The three pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" and "Kom i gang" below |
 | `docs/changelog/` | **Generated, never committed.** `CHANGELOG.md` rendered by the same script; see "The changelog" below |
 | `sitemap.xml`, `robots.txt` | **Generated, never committed.** Written by the same script; see "The sitemap and robots.txt" below |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
@@ -331,8 +333,8 @@ included, parsed straight out of `site/security-headers.conf` — and runs the p
 `axe-core` over both landing pages, the English landing page again with the
 demo's panel open and the picture editor over it, the documentation index, one
 deep documentation page, the documentation index again with the search field
-holding results, the theme playground with a control moved, the two comparison pages and the changelog, in **both colour
-schemes** — twenty runs. Three of those runs are states rather than pages. The
+holding results, the theme playground with a control moved, the two comparison pages, the Danish getting-started page and the changelog,
+in **both colour schemes** — twenty-two runs. Three of those runs are states rather than pages. The
 search state is a click, a word typed and a wait for the
 list: the results are drawn from JavaScript and nothing else on the site would
 notice a link with no accessible name in them. The annotator state opens the
@@ -397,6 +399,50 @@ The English page is also listed in the documentation sidebar under About,
 which is the `extras` array on that group in the script rather than a slug,
 because it is not a README section.
 
+## Kom i gang
+
+`/da/kom-i-gang/` is the one Danish way in. The panel speaks Danish and the
+landing page is Danish, but the documentation is English only, and most of the
+people who will install this from the owner's network are Danish site owners
+and WordPress users. The page walks three routes from nothing to a first
+report — the script tag, the WordPress plugin, and a bundler with the React,
+Vue, Svelte or Solid hook — says the privacy part in Danish, and links into the
+English reference for everything deeper.
+
+The text is `site/da/kom-i-gang.md`, rendered exactly like the comparison
+pages: the same renderer, the landing page's header and footer, no sidebar. It
+is linked from the Danish landing page's hero buttons and its footer, and from
+nowhere in the English tree.
+
+Two decisions worth writing down, because both look like omissions:
+
+- **No `hreflang`, and no counterpart in the sitemap.** `/docs/install/` is the
+  nearest English page and it is not this one: it is the README's opening —
+  what the package is and how to install it — while this page walks three
+  routes to a first report, the WordPress plugin among them, and repeats the
+  privacy section. `hreflang` is a promise that two URLs are the same page in
+  two languages, and that promise would be false here. The `STANDALONE` entry
+  simply carries no `otherUrl`, and the sitemap entry no alternates.
+- **Not in `docs/search.json`.** The comparison pages are indexed because
+  "compared with" is a question an English reader asks from the docs search
+  too. This page is not: it is the Danish retelling of `/docs/install/` and the
+  pages around it, so indexing it would put a Danish result above the English
+  page a docs search is actually asking for. The entry carries
+  `indexed: false`, which also excludes it from the check that every page the
+  run wrote is in the index. The Danish pages have no search field of their
+  own — `docs.js` builds one only in the documentation sidebar.
+
+The jsDelivr script tag on the page pins the current version, so
+`scripts/release.mjs` edits this file along with the README and the two landing
+pages. Add any new file that names a version to that list, or the page will
+hand out a stale tag one release later.
+
+`site/Dockerfile` names its Markdown into the docs stage and its generated
+directory out of it, the way it does for the comparison pages — the image
+copies files by name rather than copying `site/da/`, so the Markdown source is
+never served beside the page built from it. A new standalone page needs both
+lines or it is simply missing from the image.
+
 ## The changelog
 
 `/docs/changelog/` is `CHANGELOG.md`, rendered by the same script through the
@@ -433,10 +479,12 @@ actually documents whatever was searched for.
 gitignored like `site/docs/`, so a new documentation page cannot be added
 without appearing in the sitemap. The sitemap lists absolute
 `https://bugbottle.dev` URLs: the two landing pages, the documentation index
-and every documentation page, the changelog, and the two comparison pages. The pairs that
+and every documentation page, the changelog, the two comparison pages and
+`/da/kom-i-gang/`. The pairs that
 exist in both languages — the landing pages, and the two comparison pages —
 carry `xhtml:link` alternates for `en`, `da` and `x-default` in both
-directions; the documentation exists in English only and carries none.
+directions; the documentation exists in English only and carries none, and
+neither does the Danish getting-started page — see "Kom i gang" for why.
 
 Every `<url>` carries a `<lastmod>`, and the date is the date of the commit
 that last touched the file the page is generated from — `git log -1
@@ -584,6 +632,7 @@ curl -si localhost:8089/docs/api/ | head -1
 curl -si localhost:8089/docs/search.json | head -1
 curl -si localhost:8089/compare/ | head -1
 curl -si localhost:8089/da/sammenlign/ | head -1
+curl -si localhost:8089/da/kom-i-gang/ | head -1
 curl -si localhost:8089/docs/changelog/ | head -1
 curl -si localhost:8089/sitemap.xml | head -3
 curl -si localhost:8089/robots.txt | head -3
