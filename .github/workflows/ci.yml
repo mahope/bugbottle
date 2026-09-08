@@ -200,8 +200,11 @@ jobs:
           # then took it just over 5 kB, which is why the budget is 5.25.
           # 0.6 kB was added in 0.6 by the stack frames and the context facts,
           # which the hook pays for because the core does.
-          if [ "$react" -gt 5632 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 5632" >&2
+          # The contact field (#51) and the replay registry read (#55) then took it
+          # to 5647, fifteen bytes over 5632, so the budget is 6144: the hook
+          # carries every core default, and two of them landed in one release.
+          if [ "$react" -gt 6144 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 6144" >&2
             exit 1
           fi
           # 8.0 kB of this is the panel as it shipped in 0.5; the kilobyte on

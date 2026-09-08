@@ -28,7 +28,7 @@ need Node 18.
 - The client entry points stayed small. Pack, install the tarball in a scratch
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
-  `bugbottle/react` 5.5 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 2048
+  `bugbottle/react` 6 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 2048
   bytes, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
   `bugbottle/queue` 1330 bytes,

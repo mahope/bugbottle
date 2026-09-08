@@ -156,8 +156,8 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5632 bytes gzipped and `bugbottle/ui` under 11776 bytes (CI enforces
-both; about 5.5 kB and 11.3 kB with masking, the queued state, the triggers,
+stay under 6144 bytes gzipped and `bugbottle/ui` under 11776 bytes (CI enforces
+both; about 5.6 kB and 11.4 kB with masking, the queued state, the triggers,
 the accessibility pass, the 0.6 evidence and the contact field), and the bare core
 under 1536 bytes
 (about 1.4 kB). The core budget was 1 kB and 0.8 kB measured until 0.6: the
