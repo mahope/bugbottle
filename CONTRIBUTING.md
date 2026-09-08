@@ -108,7 +108,7 @@ need Node 18.
   `src/ui/` also has an accessible name, and that name is a locale string too.
 - A change to `src/ui/` keeps `node scripts/a11y-audit.mjs` at zero axe
   violations, over all seven states, and a change to `site/` keeps
-  `node scripts/a11y-site.mjs` at zero over its eighteen page-and-scheme runs —
+  `node scripts/a11y-site.mjs` at zero over its twenty page-and-scheme runs —
   a console message counts there too. A change to `src/annotate.ts` also keeps
   `node scripts/annotate-smoke.mjs` green, which is the only place the blur is
   proved to destroy pixels rather than to cover them. All three need Chrome and

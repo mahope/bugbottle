@@ -944,16 +944,38 @@ script-tag build, which still carry the eight. `pt` is European Portuguese and
 
 ### Branding and theme
 
-The panel's look comes from `theme` — `primary`, `onPrimary`, `background`,
-`text`, `muted`, `border`, `radius`, `font`, `shadow`, `zIndex`, `position`,
-and `scheme` (`"light"`, `"dark"` or `"auto"`) — and from `brand` (`name`,
-`logo` as an image URL or inline SVG). The same values are CSS custom
-properties on the host element (`--bb-primary`, `--bb-radius`, …), so a
-stylesheet can restyle it without touching JavaScript:
+The panel's look comes from `theme` and from `brand` (`name`, `logo` as an
+image URL or inline SVG). Every value in `theme` is also a CSS custom property
+on the host element, so a stylesheet can restyle the panel without touching
+JavaScript:
 
 ```css
 [data-bugbottle="ui"] { --bb-primary: #0f766e; --bb-font: "Inter", sans-serif; }
 ```
+
+The whole list, and nothing else:
+
+| CSS variable | `theme` key | What it is |
+| --- | --- | --- |
+| `--bb-primary` | `primary` | The brand colour: the button, the send action, the marks the annotator draws |
+| `--bb-on-primary` | `onPrimary` | The text and icons that sit on the brand colour |
+| `--bb-bg` | `background` | The panel's ground |
+| `--bb-text` | `text` | The ink |
+| `--bb-muted` | `muted` | Hints, notes and the status line |
+| `--bb-border` | `border` | The rules around the panel and its fields |
+| `--bb-radius` | `radius` | The corner radius, as a CSS length |
+| `--bb-font` | `font` | The font stack the panel is set in |
+| `--bb-shadow` | `shadow` | The shadow under the panel |
+| `--bb-z` | `zIndex` | Where the panel sits against the application |
+| — | `position` | Which corner it lives in: `"bottom-right"` (the default), `"bottom-left"`, `"top-right"` or `"top-left"` |
+| — | `scheme` | `"light"`, `"dark"` or `"auto"` — `"auto"` follows the reader's system setting |
+
+The last two are not custom properties: they are the `data-pos` and
+`data-scheme` attributes on the host, which the panel's own stylesheet reads.
+
+The [theme playground](https://bugbottle.dev/docs/languages-and-branding/#branding-and-theme)
+on the documentation site restyles a real panel as you move these controls and
+prints the `mountBugbottle` call and the CSS block to copy.
 
 ## Pointing at the element
 
