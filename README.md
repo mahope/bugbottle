@@ -683,6 +683,13 @@ milliseconds before the tab is closed may not reach the disk, where
 `localStorage` always does. Which of the two matters more depends on whether
 your reports carry pictures.
 
+When another tab loads a page that wants a newer version of the database, the
+browser asks this connection to stand aside. It does: the connection is closed
+and the next write opens a fresh one. A page that holds on instead blocks the
+other tab's upgrade for as long as it stays open, and a page that closes
+without reopening throws on every transaction afterwards and is memory-only for
+good.
+
 It is a separate entry point because the default must not pay for it:
 `bugbottle/queue` is about 1.5 kB and this is another 650 bytes, only for those
 who ask for it. A browser with no IndexedDB at all makes the queue memory-only,

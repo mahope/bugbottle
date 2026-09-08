@@ -125,14 +125,36 @@ function fakeIndexedDB(options: { quota?: number } = {}) {
     return tx;
   }
 
+  /** Every connection handed out, so a test can act on the live one. */
+  type FakeDatabase = {
+    onversionchange: (() => void) | null;
+    closed: boolean;
+    close: () => void;
+    objectStoreNames: { contains: (name: string) => boolean };
+    createObjectStore: (name: string) => void;
+    transaction: (name: string, mode: string) => unknown;
+  };
+  const connections: FakeDatabase[] = [];
+
   const factory = {
     open(_name: string, _version: number) {
       const req = request() as FakeRequest & { result: unknown };
-      const db = {
+      const db: FakeDatabase = {
+        onversionchange: null,
+        closed: false,
+        close() {
+          db.closed = true;
+        },
         objectStoreNames: { contains: (name: string) => stores.has(name) },
         createObjectStore: (name: string) => void stores.set(name, new Map()),
-        transaction,
+        transaction(name: string, mode: string) {
+          // What a real connection does once it is closed, and the reason a
+          // page that ignores `versionchange` goes memory-only for good.
+          if (db.closed) throw new Error("InvalidStateError: the database is closed");
+          return transaction(name, mode);
+        },
       };
+      connections.push(db);
       req.result = db;
       queueMicrotask(() => {
         req.onupgradeneeded?.();
@@ -140,6 +162,13 @@ function fakeIndexedDB(options: { quota?: number } = {}) {
       });
       return req;
     },
+  };
+
+  /** What another tab asking for a new version looks like from in here. */
+  const versionChange = (): void => {
+    const live = connections.at(-1);
+    assert.ok(live, "a connection was opened");
+    live.onversionchange?.();
   };
 
   /**
@@ -155,7 +184,7 @@ function fakeIndexedDB(options: { quota?: number } = {}) {
     }
   };
 
-  return { factory, stores, idle };
+  return { factory, stores, idle, connections, versionChange };
 }
 
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -332,4 +361,36 @@ test("a browser without IndexedDB keeps the reports in memory and still sends th
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.body.message, "nowhere to put it");
   assert.equal(queue.size(), 0);
+});
+
+test("a connection another tab forces closed is reopened on the next write", async () => {
+  const { factory, stores, idle, connections, versionChange } = fakeIndexedDB();
+  globals["indexedDB"] = factory;
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    storage: createIdbStorage(),
+    fetch: fakeFetch(503).fetch,
+  });
+
+  queue.enqueue(report("before the upgrade"));
+  await idle();
+  assert.equal(connections.length, 1, "one connection so far");
+
+  // Another tab loaded a version of the page that wants a newer database. The
+  // browser asks this connection to get out of the way; a page that does not
+  // answer blocks the upgrade, and a page that closes without reopening throws
+  // on every transaction afterwards and goes memory-only for good.
+  versionChange();
+  assert.equal(connections[0]?.closed, true, "the connection stood aside");
+
+  queue.enqueue(report("after the upgrade"));
+  await idle();
+  assert.equal(connections.length, 2, "and the next write opened a new one");
+
+  const stored = (stores.get(STORE)?.get(KEY) ?? []) as { body: BugReport }[];
+  assert.deepEqual(
+    stored.map((item) => item.body.message),
+    ["before the upgrade", "after the upgrade"],
+    "nothing was lost across the reopen",
+  );
 });

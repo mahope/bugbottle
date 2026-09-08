@@ -76,6 +76,12 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- `createIdbStorage()` went memory-only for the life of the page when another
+  tab upgraded the database. Nothing listened for `versionchange`, so the
+  connection was closed under it and every transaction after that threw — and
+  until the browser gave up, this tab was also what blocked the other tab's
+  upgrade. It now closes the connection when asked and opens a fresh one on the
+  next write (#88).
 - The chat sinks left half a character behind when they clipped. `clip` sliced
   UTF-16 units, so a message ending on an emoji or an ideograph outside the
   basic plane lost one of its two units and Slack, Discord and Teams all drew
