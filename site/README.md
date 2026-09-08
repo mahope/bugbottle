@@ -214,11 +214,17 @@ flat `[{ url, title, heading, text }]`: one entry per page, then one per
 heading inside it, in the order of the sidebar. `url` carries the anchor, so a
 result opens the page at the part it matched.
 
-`text` is the whole prose of that slice with the code blocks, tables and
-markup taken out, not an opening sentence. A reader searches for a word they
+`text` is the whole prose of that slice with the code blocks and the markup
+taken out, not an opening sentence. A reader searches for a word they
 remember, and the word worth remembering is as often in the middle of a
 section as at the top of it: "replay" is a paragraph deep inside "Signing
-requests" and finds it. The file is about 70 kB, which is why `docs.js`
+requests" and finds it. Table rows are part of that prose — the cells joined
+by spaces, the alignment row dropped — because several options are documented
+in a table and nowhere else, and `elementPicker` was unsearchable while the
+rows were thrown away. Underscores survive the markup stripping for the same
+reason: `DEFAULT_MASK_SELECTOR` is exactly the word somebody types, and taking
+the underscores out with the backticks around them made every
+`SCREAMING_CASE` name in the documentation impossible to find. The file is about 70 kB, which is why `docs.js`
 fetches it **on the first focus of the field** and never with the page — a
 reader who does not search pays nothing, and nginx gzips it to a fifth.
 
@@ -227,8 +233,17 @@ before heading before text; inside a rank the entry that says the word most
 often wins, which is the difference between a page that mentions something and
 the page that is about it; a tie after that keeps the order of the sidebar.
 The top eight are listed as plain links with an `aria-live="polite"` count
-above them. Escape empties the field, Enter opens the first result, and the
-form's submit is cancelled so it never reloads the page.
+above them; when there were more, the count says so — "8 of 40 results" —
+because a reader who cannot see the field would otherwise be told that a
+truncated list is everything there is. Three details of that count are
+deliberate. It is in the page from the moment the field is, empty and clipped
+to nothing rather than `display: none`, since a live region that enters the
+accessibility tree together with its first content is one several screen
+readers never announce. Its text is written 250 ms after the list, so a word
+typed at speed queues one announcement rather than one per letter — the list
+itself is drawn immediately. And an unchanged sentence is not rewritten, so
+nothing is said twice. Escape empties the field, Enter opens the first result,
+and the form's submit is cancelled so it never reloads the page.
 
 The field is built by `docs.js` rather than written into the HTML: a page
 whose JavaScript never ran must not offer a box that cannot answer, and what

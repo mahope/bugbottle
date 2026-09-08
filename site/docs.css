@@ -137,8 +137,19 @@
   color: var(--muted);
 }
 
+/* It is also the live region, so it is clipped rather than hidden while it is
+   empty: `display: none` takes it out of the accessibility tree, and a region
+   that enters the tree with its first content is one several screen readers
+   never announce. Clipped, it takes no room and stays where it was. */
 .docs-search-count:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .docs-search-count:not(:empty) {

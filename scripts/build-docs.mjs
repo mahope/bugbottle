@@ -294,10 +294,15 @@ function describe(body) {
   return `${cut > 40 ? clipped.slice(0, cut) : clipped}…`;
 }
 
-/* The plain prose of a slice of Markdown, for the search index: fenced code,
-   tables and heading lines dropped, links and emphasis unwrapped. What is left
-   is the sentences a reader would recognise, which is what a substring search
-   has to match against. */
+/* The plain prose of a slice of Markdown, for the search index: fenced code
+   and heading lines dropped, links and emphasis unwrapped, table cells kept as
+   text. What is left is the sentences a reader would recognise, which is what
+   a substring search has to match against.
+
+   Underscores survive: an option called `DEFAULT_MASK_SELECTOR` is exactly the
+   kind of word a reader half-remembers and types into the field, and stripping
+   the underscore with the backticks around it made every such name
+   unsearchable. */
 function prose(lines) {
   const kept = [];
   let fence = null;
@@ -311,14 +316,30 @@ function prose(lines) {
     }
     if (fence !== null) continue;
     if (/^\s*#/.test(line)) continue;
-    if (/^\s*\|/.test(line)) continue;
+    /* A table row is content, and several options are documented nowhere else.
+       The alignment row underneath the header says nothing, so it goes; the
+       cells of every other row stay, separated by spaces. */
+    if (/^\s*\|/.test(line)) {
+      if (/^\s*\|[\s:|-]*$/.test(line)) continue;
+      kept.push(
+        line
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((cell) => cell.trim())
+          .filter((cell) => cell !== "")
+          .join(" "),
+      );
+      continue;
+    }
     kept.push(line.replace(/^\s*(>|[-*+]|\d+\.)\s+/, ""));
   }
   return kept
     .join(" ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[`*_]/g, "")
+    .replace(/[`*]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }

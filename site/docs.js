@@ -115,6 +115,9 @@
   var oneLabel = danish ? "1 resultat" : "1 result";
   var failedLabel = danish ? "Søgningen kunne ikke hentes" : "The search index did not load";
   var MAX_RESULTS = 8;
+  /* Long enough that a word typed at speed is announced once rather than once
+     per letter, short enough that nobody waits for it. */
+  var ANNOUNCE_DELAY = 250;
 
   addSearch(document.querySelector(".docs-sidebar"));
 
@@ -138,7 +141,13 @@
 
     /* The count is what a screen reader hears when the list changes; the list
        itself is a plain list of links, which needs no announcing of its own
-       and stays operable with every key a link already understands. */
+       and stays operable with every key a link already understands.
+
+       It is in the page from the moment the field is, empty and clipped to
+       nothing rather than `display: none`: a live region that arrives in the
+       accessibility tree together with its first content is a region several
+       screen readers were not watching, and the first search of the session
+       is announced to nobody. */
     var count = document.createElement("p");
     count.className = "docs-search-count";
     count.setAttribute("aria-live", "polite");
@@ -194,7 +203,7 @@
           },
           function () {
             state = "failed";
-            count.textContent = failedLabel;
+            announce(failedLabel, true);
           },
         );
     }
@@ -204,23 +213,51 @@
       if (hit) window.location.assign(hit.url);
     }
 
+    /* The list is written the moment it changes; only the sentence about it
+       waits. A polite region updated on every keystroke queues one
+       announcement per letter, and a reader typing a word hears the first
+       four of them before the one that is true. */
+    var announceTimer = 0;
+    function announce(message, now) {
+      window.clearTimeout(announceTimer);
+      if (message === count.textContent) return;
+      if (now) {
+        count.textContent = message;
+        return;
+      }
+      announceTimer = window.setTimeout(function () {
+        count.textContent = message;
+      }, ANNOUNCE_DELAY);
+    }
+
+    /* Say how many of how many when the list is cut short. "8 results" for a
+       query with forty matches tells a reader who cannot see the field that
+       they have read everything there is, which is the one thing the sentence
+       must not do. */
+    function countLabel(found, total) {
+      if (found === 0) return noneLabel;
+      if (found < total) {
+        return danish
+          ? found + " af " + total + " resultater"
+          : found + " of " + total + " results";
+      }
+      if (found === 1) return oneLabel;
+      return found + (danish ? " resultater" : " results");
+    }
+
     function render() {
       var query = field.value.trim().toLowerCase();
       while (list.firstChild) list.removeChild(list.firstChild);
       shown = [];
       if (query === "" || state === "failed") {
-        count.textContent = state === "failed" ? failedLabel : "";
+        announce(state === "failed" ? failedLabel : "", true);
         return;
       }
       if (!index) return;
 
-      shown = match(query);
-      count.textContent =
-        shown.length === 0
-          ? noneLabel
-          : shown.length === 1
-            ? oneLabel
-            : shown.length + (danish ? " resultater" : " results");
+      var hits = match(query);
+      shown = hits.slice(0, MAX_RESULTS);
+      announce(countLabel(shown.length, hits.length));
 
       for (var i = 0; i < shown.length; i += 1) {
         list.appendChild(result(shown[i]));
@@ -248,7 +285,10 @@
     /* Case-insensitive substring, ranked title before heading before text.
        Inside a rank the entry that says the word most often wins, which is
        the difference between the page a word is mentioned on and the page it
-       is about; a tie after that keeps the order of the sidebar. */
+       is about; a tie after that keeps the order of the sidebar.
+
+       Every match is returned, not the eight that are shown: the count has to
+       know how many there were to say so. */
     function match(query) {
       var hits = [];
       for (var i = 0; i < index.length; i += 1) {
@@ -277,7 +317,7 @@
       hits.sort(function (a, b) {
         return a.rank - b.rank || b.weight - a.weight || a.order - b.order;
       });
-      return hits.slice(0, MAX_RESULTS);
+      return hits;
     }
 
     function occurrences(haystack, needle) {
