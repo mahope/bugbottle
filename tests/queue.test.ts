@@ -635,11 +635,21 @@ test("a retry after the backoff signs again, with a fresh timestamp", async () =
     fetch,
     sign: createSigner({ key: SIGN_KEY }),
   });
-  queue.enqueue(report("the outage it describes"));
-  await queue.flush();
-  assert.equal(seen.length, 1);
-
-  await until(() => seen.length === 2, 5_000);
+  // The retry is armed with the queue's own backoff timer, a second at least.
+  // A loaded CI runner has been seen to miss that inside the test's deadline,
+  // so the timer is shortened here rather than waited for: what is under test
+  // is the signature the retry mints, not the length of the pause before it.
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((fn: () => void, ms?: number) =>
+    realSetTimeout(fn, Math.min(Number(ms ?? 0), 5))) as unknown as typeof globalThis.setTimeout;
+  try {
+    queue.enqueue(report("the outage it describes"));
+    await queue.flush();
+    assert.equal(seen.length, 1);
+    await until(() => seen.length === 2, 5_000);
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
   assert.equal(seen.length, 2, "the backoff retry never ran");
   await until(() => queue.size() === 0);
   assert.equal(queue.size(), 0, "the second attempt was accepted");

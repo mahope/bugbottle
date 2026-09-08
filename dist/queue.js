@@ -299,6 +299,10 @@ export function createQueue(options) {
         stopTimer();
         timer = setTimeout(() => {
             timer = null;
+            // The timer is the backoff. A clock that reads a millisecond behind the
+            // timer would otherwise make `flush` refuse its own retry, and nothing
+            // else runs it until the network or the tab changes state.
+            nextAttempt = 0;
             void flush();
         }, delay);
         // Node keeps the process alive for a pending timer; a browser does not
