@@ -27,11 +27,11 @@ Without npm, install the tagged release straight from GitHub, or import the
 built files from the jsDelivr CDN — `dist/` is committed for exactly that:
 
 ```bash
-npm install github:mahope/bugbottle#v0.12.0
+npm install github:mahope/bugbottle#v0.13.0
 ```
 
 ```js
-import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.12.0/dist/index.js";
+import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.13.0/dist/index.js";
 ```
 
 - **Headless, in your framework.** You render the form — with the React hook,
@@ -864,7 +864,7 @@ that mounts the panel from the tag itself, the annotator included. About
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.12.0/dist/bugbottle.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.13.0/dist/bugbottle.js"
   data-endpoint="/api/feedback"
   data-locale="da"
   data-primary="#e11d48"
@@ -873,7 +873,7 @@ that mounts the panel from the tag itself, the annotator included. About
 ```
 
 `dist/` is committed, so the same file is on jsDelivr from the git tag as well:
-`https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.12.0/dist/bugbottle.js`. Pin a
+`https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.13.0/dist/bugbottle.js`. Pin a
 version in either form; `@latest` is a way to have a stranger's next release
 run on your page.
 
@@ -888,13 +888,13 @@ There are two files, and they are the same panel:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.12.0/dist/bugbottle.slim.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.13.0/dist/bugbottle.slim.js"
   data-endpoint="/api/feedback"
 ></script>
 ```
 
 From the git tag it is
-`https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.12.0/dist/bugbottle.slim.js`.
+`https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.13.0/dist/bugbottle.slim.js`.
 
 The slim build reads every attribute in the table below except four, which it
 ignores because the code behind them is not in it: **`data-annotate`**,
@@ -950,7 +950,7 @@ page that wants pictures can load `html-to-image` itself and call
 the tag and nothing mounts on its own:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.12.0/dist/bugbottle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.13.0/dist/bugbottle.js"></script>
 <script>
   window.bugbottle.initConsoleBuffer();
   window.bugbottle.mount({
@@ -966,7 +966,7 @@ site. Pin the file with its hash so a swapped file cannot run:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.12.0/dist/bugbottle.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.13.0/dist/bugbottle.js"
   integrity="sha384-…"
   crossorigin="anonymous"
   data-endpoint="/api/feedback"
@@ -1748,7 +1748,7 @@ useBugReport({
 With the script tag, it is one attribute:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.12.0/dist/bugbottle.js"
+<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.13.0/dist/bugbottle.js"
         data-endpoint="/api/bug-report"
         data-sign-key="the-key-your-server-knows"></script>
 ```

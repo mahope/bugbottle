@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.13.0 — 2026-09-08
+
 The reviewed release. A fresh-context review read everything since 0.9.0 and
 found six defects, all fixed with tests written first: an SMTP address header
 that encoded the address itself, a file-store index that two early reports
