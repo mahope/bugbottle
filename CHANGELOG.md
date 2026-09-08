@@ -7,6 +7,26 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Fixed
+
+- The documentation search told a screen-reader user that a truncated list was
+  everything there was: it showed the top eight matches and announced their
+  number, so a query with forty hits said "8 results". It now says "8 of 40
+  results" whenever the list is cut short, in both languages.
+- The count is the search's live region, and it was `display: none` while
+  empty — outside the accessibility tree at the moment its first content
+  arrived, which is why NVDA and JAWS commonly said nothing for the first
+  search of a session. It is now clipped rather than hidden: no room in the
+  layout, present in the tree from the start. Its text is also written 250 ms
+  after the list instead of on every keystroke, so typing a word queues one
+  polite announcement rather than one per letter, and an unchanged sentence is
+  not rewritten.
+- The search index stripped every underscore along with the backticks around
+  it, so `DEFAULT_MASK_SELECTOR` and every other `SCREAMING_CASE` name was
+  unfindable, and it dropped README table rows entirely, so options documented
+  only in a table — `elementPicker` among them — were invisible to the field.
+  Underscores now survive and table cells are indexed as text.
+
 ## 0.8.0 — 2026-09-08
 
 The reachable release: the report can carry how to answer the person who
