@@ -7,6 +7,14 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Fixed
+
+- The landing-page demo imported `toMarkdown` from the server entry, which since
+  `fileStore` re-exports a module that imports `node:fs`; a browser then tried to
+  fetch `node:fs/promises` and the CSP refused it, so the demo panel broke on the
+  live site until the demo imported `dist/markdown.js` directly. The browser audit
+  in CI caught it on the merge, which is what it is for.
+
 ## 0.11.0 — 2026-09-08
 
 The tested release. A seeded fuzzer now throws thousands of hostile bodies at

@@ -20,7 +20,7 @@
 import { createAnnotator } from "/dist/annotate.js";
 import { initConsoleBuffer } from "/dist/index.js";
 import { da, en } from "/dist/locales.js";
-import { toMarkdown } from "/dist/server/index.js";
+import { toMarkdown } from "/dist/markdown.js";
 import { mountBugbottle } from "/dist/ui/index.js";
 
 const danish = document.documentElement.lang === "da";
