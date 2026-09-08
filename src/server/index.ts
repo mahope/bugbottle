@@ -116,7 +116,6 @@ export {
 export {
   sendReportWebhook,
   MAX_DISCORD_CONTENT,
-  DISCORD_MAX_CONTENT,
   type SendReportWebhookOptions,
   type SendReportWebhookTarget,
   type SendReportWebhookResult,
@@ -154,11 +153,6 @@ export {
   MAX_SLACK_HEADER_TEXT,
   MAX_SLACK_FIELDS,
   MAX_SLACK_FIELD_TEXT,
-  SLACK_MAX_BLOCKS,
-  SLACK_MAX_TEXT,
-  SLACK_MAX_HEADER_TEXT,
-  SLACK_MAX_FIELDS,
-  SLACK_MAX_FIELD_TEXT,
   type SlackSinkOptions,
 } from "../sinks/slack.ts";
 
@@ -231,13 +225,6 @@ export {
   MAX_DISCORD_FIELD_VALUE,
   MAX_DISCORD_FOOTER_TEXT,
   MAX_DISCORD_EMBED_TOTAL,
-  DISCORD_MAX_EMBED_TITLE,
-  DISCORD_MAX_EMBED_DESCRIPTION,
-  DISCORD_MAX_EMBED_FIELDS,
-  DISCORD_MAX_FIELD_NAME,
-  DISCORD_MAX_FIELD_VALUE,
-  DISCORD_MAX_FOOTER_TEXT,
-  DISCORD_MAX_EMBED_TOTAL,
   type DiscordSinkOptions,
 } from "../sinks/discord.ts";
 

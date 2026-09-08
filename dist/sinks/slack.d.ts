@@ -68,29 +68,4 @@ export declare function buildSlackMessage(report: unknown, options: SlackSinkOpt
  * ```
  */
 export declare function slackSink(options: SlackSinkOptions): ChatSink;
-/**
- * @deprecated Renamed to `MAX_SLACK_BLOCKS` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const SLACK_MAX_BLOCKS = 50;
-/**
- * @deprecated Renamed to `MAX_SLACK_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const SLACK_MAX_TEXT = 3000;
-/**
- * @deprecated Renamed to `MAX_SLACK_HEADER_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const SLACK_MAX_HEADER_TEXT = 150;
-/**
- * @deprecated Renamed to `MAX_SLACK_FIELDS` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const SLACK_MAX_FIELDS = 10;
-/**
- * @deprecated Renamed to `MAX_SLACK_FIELD_TEXT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const SLACK_MAX_FIELD_TEXT = 2000;
 //# sourceMappingURL=slack.d.ts.map

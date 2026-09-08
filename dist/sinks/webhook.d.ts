@@ -52,9 +52,4 @@ export type SendReportWebhookResult = {
  * that something is wrong.
  */
 export declare function sendReportWebhook(report: unknown, options: SendReportWebhookOptions): Promise<SendReportWebhookResult>;
-/**
- * @deprecated Renamed to `MAX_DISCORD_CONTENT` in 0.9: every other ceiling in the
- * package starts with `MAX_`. Removed in 1.0 (#65).
- */
-export declare const DISCORD_MAX_CONTENT = 2000;
 //# sourceMappingURL=webhook.d.ts.map

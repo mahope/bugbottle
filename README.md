@@ -3408,9 +3408,7 @@ with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `buildDiscordMessage`, `buildTeamsMessage`, `escapeSlack`, `escapeTeams`,
 `DISCORD_COLOURS`, `TEAMS_CARD_SCHEMA`, `TEAMS_CARD_VERSION`,
 `TEAMS_CARD_CONTENT_TYPE`, the `MAX_SLACK_*`,
-`MAX_DISCORD_*` and `MAX_TEAMS_*` limits (the vendor-first `SLACK_MAX_*` and
-`DISCORD_MAX_*`
-spellings still exist, deprecated, and go in 1.0), `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
+`MAX_DISCORD_*` and `MAX_TEAMS_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `DiscordSinkOptions`, `TeamsSinkOptions`, `ChatSink`, `ChatSinkContext` and
 `UrlFrom` types,
 `sentrySink`, `buildSentryEvent`, `buildSentryEnvelope`, `parseSentryDsn`,

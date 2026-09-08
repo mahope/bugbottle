@@ -14,6 +14,10 @@ change the API; the changelog says so when they do.
 - **`QueueOptions.maxItems`** (#64). Rename it to `maxEntries`, which is what
   the console buffer, the breadcrumbs and the network log call the same cap:
   same meaning, same default of five, oldest evicted first.
+- **The thirteen vendor-first `SLACK_MAX_*` and `DISCORD_MAX_*` limits** (#65).
+  The rename is mechanical, and nobody has to read a value to make it:
+  `<VENDOR>_MAX_<REST>` becomes `MAX_<VENDOR>_<REST>`, so `SLACK_MAX_TEXT` is
+  `MAX_SLACK_TEXT` and `DISCORD_MAX_EMBED_TITLE` is `MAX_DISCORD_EMBED_TITLE`.
 
 ## 0.15.0 — 2026-09-08
 

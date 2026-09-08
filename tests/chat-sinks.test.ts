@@ -496,25 +496,6 @@ test("the discord sink hands its abort signal to fetch", async () => {
   assert.equal(calls[0]?.init.signal, controller.signal);
 });
 
-test("the vendor-first limit names are the same numbers as the MAX_ ones", async () => {
-  const slack = await import("../src/sinks/slack.ts");
-  const discord = await import("../src/sinks/discord.ts");
-  const webhook = await import("../src/sinks/webhook.ts");
-  assert.equal(slack.SLACK_MAX_BLOCKS, slack.MAX_SLACK_BLOCKS);
-  assert.equal(slack.SLACK_MAX_TEXT, slack.MAX_SLACK_TEXT);
-  assert.equal(slack.SLACK_MAX_HEADER_TEXT, slack.MAX_SLACK_HEADER_TEXT);
-  assert.equal(slack.SLACK_MAX_FIELDS, slack.MAX_SLACK_FIELDS);
-  assert.equal(slack.SLACK_MAX_FIELD_TEXT, slack.MAX_SLACK_FIELD_TEXT);
-  assert.equal(discord.DISCORD_MAX_EMBED_TITLE, discord.MAX_DISCORD_EMBED_TITLE);
-  assert.equal(discord.DISCORD_MAX_EMBED_DESCRIPTION, discord.MAX_DISCORD_EMBED_DESCRIPTION);
-  assert.equal(discord.DISCORD_MAX_EMBED_FIELDS, discord.MAX_DISCORD_EMBED_FIELDS);
-  assert.equal(discord.DISCORD_MAX_FIELD_NAME, discord.MAX_DISCORD_FIELD_NAME);
-  assert.equal(discord.DISCORD_MAX_FIELD_VALUE, discord.MAX_DISCORD_FIELD_VALUE);
-  assert.equal(discord.DISCORD_MAX_FOOTER_TEXT, discord.MAX_DISCORD_FOOTER_TEXT);
-  assert.equal(discord.DISCORD_MAX_EMBED_TOTAL, discord.MAX_DISCORD_EMBED_TOTAL);
-  assert.equal(webhook.DISCORD_MAX_CONTENT, webhook.MAX_DISCORD_CONTENT);
-});
-
 test("clip counts code points, so it never leaves half a character behind", () => {
   // Two astral characters are four UTF-16 units. Clipping at three used to cut
   // the second one in half and leave a lone surrogate, which renders as U+FFFD.
