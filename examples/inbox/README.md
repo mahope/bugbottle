@@ -34,6 +34,7 @@ it was indexed.
 | `GET /r/<id>.json` | The stored JSON, exactly as it is on disk |
 | `GET /r/<id>.png` | The screenshot |
 | `POST /r/<id>/delete` | Removes both files. Same-origin only: see below |
+| `GET /metrics` | The inbox in OpenMetrics text: what the endpoint has answered, and how much is on disk. *Scrape it* below |
 | `GET /demo.html` | A page with the ready-made panel mounted against this server |
 | `GET /health` | `ok`, and nothing else. Public, for the platform's check |
 
@@ -211,6 +212,76 @@ week is a line on stderr and still a `201` for the reporter. Nothing is
 retried — the report is in `reports/` and in the feed either way, which is why
 this is a notification and not a queue.
 
+## Scrape it
+
+`GET /metrics` is the inbox in [OpenMetrics](https://openmetrics.io) text —
+the format Prometheus, VictoriaMetrics, Grafana Alloy and Netdata all read
+without being told anything about it:
+
+```
+# TYPE bugbottle_decisions counter
+# HELP bugbottle_decisions Answers this endpoint has given, by reason, since it started.
+bugbottle_decisions_total{reason="stored"} 412
+bugbottle_decisions_total{reason="duplicate"} 37
+bugbottle_decisions_total{reason="rate-limited"} 4
+…
+# TYPE bugbottle_reports_stored gauge
+bugbottle_reports_stored 389
+# TYPE bugbottle_last_report_timestamp_seconds gauge
+# UNIT bugbottle_last_report_timestamp_seconds seconds
+bugbottle_last_report_timestamp_seconds 1757260800.412
+# EOF
+```
+
+Three families, and each of them answers a different question:
+
+| | |
+|---|---|
+| `bugbottle_decisions_total{reason="…"}` | Every answer the endpoint has given since the process started, one series per reason. All eleven words are there from the first scrape, at zero if they have not fired — a counter that appears only once it has failed is one `rate()` reads as no change at all |
+| `bugbottle_reports_stored` | How many reports are on disk now. It goes **down** when the cap or `RETENTION_DAYS` deletes something, which is why it is a gauge |
+| `bugbottle_last_report_timestamp_seconds` | When the newest stored report arrived, in seconds, or 0 on an empty inbox. `time() - bugbottle_last_report_timestamp_seconds` is its age, which is the thing worth alerting on: an endpoint that has quietly stopped receiving looks exactly like a quiet week |
+
+The counters come from `onDecision` — the same hook `AUDIT_LOG` prints, and
+*Knowing what it decided* in the main README has the eleven words and what each
+of them means. They are counted whether or not the audit log is on. They live
+in memory, so a restart is a reset; that is what a counter is, and it is why
+this stays an example with no dependency and no state of its own. The gauges
+come from the in-memory index, so a scrape reads no file and walks no
+directory.
+
+There is deliberately no `bugbottle_reports_bytes`. The index knows a report's
+name, title, type, page, time and whether there is a picture — not what either
+file weighs — so summing bytes would mean two `stat` calls per report on every
+scrape, four thousand of them every fifteen seconds on an inbox at its
+ceiling. `du -sh` on the volume, or the node exporter's filesystem series,
+answers that question without this process in the way.
+
+**It is behind the password**, with the rest of the inbox and for the same
+reason: how many reports arrived and when the last one did are facts about
+somebody's application, and a scrape URL travels as far as a feed URL does.
+Prometheus has taken `basic_auth` in a job since 2.0, so that costs two lines:
+
+```yaml
+scrape_configs:
+  - job_name: bugbottle-inbox
+    scheme: https
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["bugs.example.com"]
+    basic_auth:
+      username: inbox           # ignored, but the field is required
+      password_file: /etc/prometheus/bugbottle-inbox.password
+```
+
+`password_file` rather than `password`, because the alternative is the inbox
+password in a configuration file that is copied, templated and committed.
+`curl -u inbox:PASSWORD https://bugs.example.com/metrics` is the same request
+by hand.
+
+Nothing here is cached — `no-store, private`, as the feeds are — and the
+response ends in `# EOF`, which is how an OpenMetrics parser knows it read all
+of it rather than as much as a dropped connection left behind.
+
 ## Behind TLS
 
 Basic auth over plain HTTP sends the password in every request. Put a
@@ -312,7 +383,9 @@ gives, on stdout, which is where Docker keeps logs:
 That is `handleReport`'s `onDecision` hook and nothing else — *Knowing what it
 decided* in the main README has the eleven `reason` words. `address` is the
 caller as `TRUST_PROXY` resolves it, so it is the same address the rate limit
-counted against.
+counted against. The same hook feeds `/metrics`, which counts every decision
+whether this is on or not: a line naming a caller is a second copy of
+something, and a counter is not.
 
 It is off by default because a line per report is a second place somebody's
 data could end up, and this one deliberately carries none of it: no message, no

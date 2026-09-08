@@ -91,11 +91,57 @@ const trustProxy = readTrustProxy();
  * fingerprint is how two lines about the same report are tied together.
  */
 const auditLog = (process.env.AUDIT_LOG ?? "").trim() === "1";
-const onDecision = auditLog
-  ? (decision) => {
-      console.log(JSON.stringify({ event: "bugbottle.decision", ...decision }));
-    }
-  : undefined;
+
+/**
+ * The eleven words `handleReport` can answer with, every one of them seeded at
+ * zero.
+ *
+ * A counter that appears only once it has fired is a counter nothing can graph
+ * across a restart: `rate()` over a series whose first sample is the first
+ * refusal reads that refusal as no change at all. Naming the whole set here
+ * costs eleven lines in a scrape and makes every one of them a series from the
+ * first request onwards. The order is the order the main README lists them in.
+ */
+const DECISION_REASONS = [
+  "stored",
+  "accepted",
+  "duplicate",
+  "not-post",
+  "rate-limited",
+  "unauthorised",
+  "too-large",
+  "timeout",
+  "bad-signature",
+  "invalid",
+  "error",
+];
+
+/**
+ * How many times each answer has been given since this process started.
+ *
+ * In memory and nowhere else: a restart is a reset, which is what a Prometheus
+ * counter expects and what lets this stay a dependency-free example. The
+ * numbers are counts of answers, never anything out of a report.
+ */
+const decisions = new Map(DECISION_REASONS.map((reason) => [reason, 0]));
+
+/** Counts one answer. An unknown word is still counted, rather than dropped. */
+function countDecision(reason) {
+  decisions.set(reason, (decisions.get(reason) ?? 0) + 1);
+}
+
+/**
+ * One decision, counted always and printed behind `AUDIT_LOG=1`.
+ *
+ * The counting is unconditional because `/metrics` is: an operator who turns
+ * the audit log off should not silently lose their graphs with it. The
+ * printing is the thing that writes a second copy of anything, so that is the
+ * half with a switch on it.
+ */
+const onDecision = (decision) => {
+  countDecision(decision.reason);
+  if (auditLog) console.log(JSON.stringify({ event: "bugbottle.decision", ...decision }));
+};
 
 /**
  * The header the trusted setting reads, or null when nothing is trusted. The
@@ -708,6 +754,64 @@ ${entries}
 `;
 }
 
+/**
+ * The inbox as OpenMetrics text, which is the format Prometheus, VictoriaMetrics
+ * and Grafana Alloy all read without being told anything.
+ *
+ * Three families and no more. The counters come from `onDecision`, so they are
+ * exactly the answers the endpoint gave; the gauges come from the in-memory
+ * index, so a scrape reads no file and walks no directory — which matters,
+ * because a scrape happens every fifteen seconds for as long as the inbox
+ * runs.
+ *
+ * There is deliberately no `bugbottle_reports_bytes`. The index knows a
+ * report's name, title, type, page, time and whether there is a picture, and
+ * not what either file weighs; summing that would mean two `stat` calls per
+ * report on every scrape, and on an inbox at its two-thousand ceiling that is
+ * four thousand of them a quarter of a minute. `du` on the volume answers the
+ * same question without this process in the way.
+ *
+ * A counter's family name must not carry the `_total` its samples do — that is
+ * the one thing about the format that surprises people — and the file ends
+ * with `# EOF`, which is what tells a parser it read all of it rather than as
+ * much as a dropped connection left.
+ */
+function metricsText(entries) {
+  const lines = [];
+
+  lines.push("# TYPE bugbottle_decisions counter");
+  lines.push(
+    "# HELP bugbottle_decisions Answers this endpoint has given, by reason, since it started.",
+  );
+  for (const [reason, count] of decisions) {
+    lines.push(`bugbottle_decisions_total{reason="${reason}"} ${count}`);
+  }
+
+  lines.push("# TYPE bugbottle_reports_stored gauge");
+  lines.push("# HELP bugbottle_reports_stored Reports on disk in this inbox right now.");
+  lines.push(`bugbottle_reports_stored ${entries.length}`);
+
+  // Seconds, because that is the unit every timestamp in this format is in,
+  // and zero when there is nothing — a gauge that is absent until the first
+  // report is a gauge an alert cannot be written against. `time() - this` is
+  // then the age of the newest report, which is the question worth alerting
+  // on: an endpoint that has stopped receiving looks exactly like a quiet week
+  // until you graph it.
+  const newest = Date.parse(entries[0]?.receivedAt ?? "");
+  lines.push("# TYPE bugbottle_last_report_timestamp_seconds gauge");
+  lines.push("# UNIT bugbottle_last_report_timestamp_seconds seconds");
+  lines.push(
+    "# HELP bugbottle_last_report_timestamp_seconds When the newest stored report arrived, " +
+      "or 0 when the inbox is empty.",
+  );
+  lines.push(
+    `bugbottle_last_report_timestamp_seconds ${Number.isFinite(newest) ? newest / 1000 : 0}`,
+  );
+
+  lines.push("# EOF");
+  return `${lines.join("\n")}\n`;
+}
+
 /** Reads the request body, refusing anything over the ceiling. */
 function readBody(req, res) {
   return new Promise((resolve) => {
@@ -716,6 +820,11 @@ function readBody(req, res) {
     req.on("data", (chunk) => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
+        // `handleReport` never sees this one — the socket is closed before the
+        // body is whole — so the count it would have made is made here, with
+        // the word it would have used. Without this the one refusal an inbox
+        // on a small VPS meets most often is the one `/metrics` cannot see.
+        countDecision("too-large");
         res.writeHead(413, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Report is too large" }));
         req.destroy();
@@ -778,10 +887,9 @@ const server = createServer(async (req, res) => {
           remoteAddress: req.socket?.remoteAddress,
           trustProxy,
           rateLimit: { limit: 30, windowMs: 60_000 },
-          // One line per answer when AUDIT_LOG is on, and nothing at all when
-          // it is not: an option that is undefined is an option handleReport
-          // never calls.
-          ...(onDecision ? { onDecision } : {}),
+          // Every answer, counted for `/metrics` and printed when AUDIT_LOG
+          // says so. The hook is the only place either number comes from.
+          onDecision,
           dedupe: { windowMs: 60_000 },
           // One named origin or nothing. A wildcard would let any page on the
           // internet fill this disk, and the disk is where the pictures are.
@@ -837,6 +945,20 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && path === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(listPage(await reports.list()));
+      return;
+    }
+
+    // Behind the password with the rest of the inbox, and for the same reason:
+    // how many reports arrived and when the last one did are facts about
+    // somebody's application, and a scrape URL travels as far as a feed URL.
+    // Prometheus has had a `basic_auth` block in every job since 2.0, so this
+    // costs the operator two lines rather than a public route.
+    if (req.method === "GET" && path === "/metrics") {
+      res.writeHead(200, {
+        "Content-Type": "application/openmetrics-text; version=1.0.0; charset=utf-8",
+        "Cache-Control": "no-store, private",
+      });
+      res.end(metricsText(await reports.list()));
       return;
     }
 

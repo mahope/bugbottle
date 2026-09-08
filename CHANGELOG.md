@@ -31,6 +31,24 @@ change the API; the changelog says so when they do.
   Sixteen tests, one per answer; the validator-only `bugbottle/server` bundle
   is unmoved at 584 bytes, since none of this is on a validator's path.
 
+- **`examples/inbox` exposes `/metrics` in OpenMetrics text** (#95), fed by
+  `onDecision` and behind the same password as the rest of the inbox.
+  `bugbottle_decisions_total{reason="…"}` is one series per reason word, all
+  eleven present from the first scrape so `rate()` reads the first refusal as a
+  change rather than as a new series; `bugbottle_reports_stored` and
+  `bugbottle_last_report_timestamp_seconds` come from the in-memory index, so a
+  scrape reads no file and walks no directory. `time() -
+  bugbottle_last_report_timestamp_seconds` is the age of the newest report,
+  which is the alert worth writing: an endpoint that has quietly stopped
+  receiving looks exactly like a quiet week. The counters live in memory and
+  reset with the process, which is what a counter is and what keeps this an
+  example with no dependency. The body a socket refuses at four megabytes never
+  reaches `handleReport`, so the example counts that `too-large` itself.
+  Deliberately no `bugbottle_reports_bytes`: the index carries no sizes, and
+  summing them would be two `stat` calls per report on every scrape. The
+  library is untouched — this is the example, its README's new *Scrape it*
+  section with a Prometheus job, and three tests.
+
 
 ### Documentation
 
