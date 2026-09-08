@@ -78,13 +78,14 @@ export type MaybePromise<T> = T | Promise<T>;
  */
 export type QueueStorage = {
     /**
-     * Everything stored. The queue checks what comes back rather than trusting
-     * it, so a storage may hand over whatever it read.
-     */
-    read(): MaybePromise<QueuedReport[]>;
-    /**
      * Reads, applies `change` to what was stored, writes the result back, and
      * answers with what is now stored.
+     *
+     * It is the only method, and deliberately: a plain `read` beside it would be
+     * a second way to see the queue that no caller here can use safely, since
+     * anything read outside a read-modify-write is stale the moment another tab
+     * commits. The queue checks what `update` answers with rather than trusting
+     * it, so a storage may hand back whatever it holds.
      *
      * It is one call rather than a read and a write so that a storage which
      * *can* be atomic gets to be: IndexedDB orders read-write transactions per

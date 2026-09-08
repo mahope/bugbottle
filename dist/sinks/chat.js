@@ -25,13 +25,23 @@ const TYPE_LABEL = {
 };
 /** The longest first line a chat title keeps before the ellipsis. */
 const MAX_TITLE_LENGTH = 80;
-/** Clips to `max` characters, spending the last one on an ellipsis. */
+/**
+ * Clips to `max` characters, spending the last one on an ellipsis.
+ *
+ * Characters, not UTF-16 units: an emoji or an ideograph outside the basic
+ * plane is two units, and cutting between them leaves a lone surrogate that
+ * every client draws as U+FFFD. The fast path is still `text.length`, which
+ * can only overcount, so nothing short is walked twice.
+ */
 export function clip(text, max) {
     if (max <= 0)
         return "";
     if (text.length <= max)
         return text;
-    return `${text.slice(0, max - 1).trimEnd()}…`;
+    const characters = Array.from(text);
+    if (characters.length <= max)
+        return text;
+    return `${characters.slice(0, max - 1).join("").trimEnd()}…`;
 }
 /**
  * A data URL is the whole picture inline, and neither service will fetch one:

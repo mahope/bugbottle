@@ -21,7 +21,12 @@
  *     allows.
  *
  * The defaults are read off the mounted panel with getComputedStyle rather
- * than written down, so the controls always start where the panel starts.
+ * than written down, so the controls always start where the panel starts —
+ * and they are kept, because they are also what tells a change from a default.
+ * Only the keys the reader moved are printed: a block that pinned every colour
+ * as it was read, and `scheme` as it happened to be, would ship a panel that
+ * ignores the reader's own colour scheme, which is the one setting whose
+ * default is "follow the browser".
  */
 
 import { mountBugbottle } from "/dist/ui/index.js";
@@ -65,6 +70,9 @@ function setUp(block, stage) {
      the panel — so nothing here is a guess about what src/ui/index.ts thinks
      the defaults are. */
   const theme = {};
+  /* Each control's starting value, so `apply` can tell a change from a default
+     and print only what the reader actually moved. */
+  const defaults = new Map();
   const styles = window.getComputedStyle(host);
 
   for (const input of controls) {
@@ -82,6 +90,8 @@ function setUp(block, stage) {
          therefore the empty string. An empty value is printed by nobody. */
       input.value = "";
     }
+
+    defaults.set(input, input.value);
 
     input.addEventListener("input", function () {
       apply(input);
@@ -123,7 +133,10 @@ function setUp(block, stage) {
       else host.style.setProperty(variable, value);
     }
 
-    if (value === "") delete theme[key];
+    /* A control back where it started is a control the reader has said nothing
+       about, and the panel's own default is better than a copy of it frozen
+       into somebody's source. */
+    if (value === "" || input.value === defaults.get(input)) delete theme[key];
     else theme[key] = value;
 
     const output = document.getElementById(input.id + "-value");
@@ -142,12 +155,17 @@ function setUp(block, stage) {
       lines.push("    " + key + ": " + JSON.stringify(theme[key]) + ",");
     }
     if (jsOut) {
-      jsOut.textContent =
-        "mountBugbottle({\n" +
-        '  endpoint: "/api/report",\n' +
-        "  theme: {\n" +
-        lines.join("\n") +
-        "\n  },\n});";
+      jsOut.textContent = lines.length
+        ? "mountBugbottle({\n" +
+          '  endpoint: "/api/report",\n' +
+          "  theme: {\n" +
+          lines.join("\n") +
+          "\n  },\n});"
+        : "mountBugbottle({\n" +
+          '  endpoint: "/api/report",\n' +
+          "});\n\n" +
+          "/* Move a control and it appears here. Nothing moved is nothing to\n" +
+          "   write down: the panel's own defaults are the better default. */";
     }
 
     const css = [];
@@ -158,12 +176,14 @@ function setUp(block, stage) {
       css.push("  " + variable + ": " + theme[key] + ";");
     }
     if (cssOut) {
-      cssOut.textContent =
-        '[data-bugbottle="ui"] {\n' +
-        css.join("\n") +
-        "\n}\n" +
-        "/* position and scheme are not custom properties: they are the\n" +
-        "   data-pos and data-scheme attributes the panel sets on its host. */";
+      cssOut.textContent = css.length
+        ? '[data-bugbottle="ui"] {\n' +
+          css.join("\n") +
+          "\n}\n" +
+          "/* position and scheme are not custom properties: they are the\n" +
+          "   data-pos and data-scheme attributes the panel sets on its host. */"
+        : "/* Move a colour or the corner radius and the custom properties\n" +
+          "   appear here. */";
     }
   }
 }

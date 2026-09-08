@@ -354,6 +354,26 @@ function webhookKind(target) {
 }
 
 /**
+ * A port out of the environment, or nothing when the variable is unset.
+ *
+ * `Number("smtp")` is `NaN`, and `NaN` is not nullish, so a typo used to reach
+ * the sink as a port and defeat its own default — the inbox came up looking
+ * healthy and failed on the first report, hours later. A misconfiguration is
+ * cheapest to fix while somebody is still looking at the configuration, so
+ * this refuses to start instead.
+ */
+function envPort(name) {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(`Refusing to start: ${name} must be a port between 1 and 65535.`);
+    process.exit(1);
+  }
+  return port;
+}
+
+/**
  * The deliveries this inbox makes, read from the environment and nothing else.
  *
  * They are the library's own sinks: the example adds no delivery code, only
@@ -403,7 +423,8 @@ function notifySinks() {
       );
     } else {
       const options = { host: smtpHost, from, to, screenshotUrlFrom: screenshotUrl };
-      if (process.env.NOTIFY_SMTP_PORT) options.port = Number(process.env.NOTIFY_SMTP_PORT);
+      const port = envPort("NOTIFY_SMTP_PORT");
+      if (port !== undefined) options.port = port;
       if (process.env.NOTIFY_SMTP_USER) options.user = process.env.NOTIFY_SMTP_USER;
       if (process.env.NOTIFY_SMTP_PASS) options.pass = process.env.NOTIFY_SMTP_PASS;
       sinks.push(async (report, ctx) => {

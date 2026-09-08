@@ -18,7 +18,7 @@ import {
   MAX_DISCORD_FIELD_VALUE,
   MAX_DISCORD_EMBED_TOTAL,
 } from "../src/sinks/discord.ts";
-import { MAX_CHAT_CONSOLE_ENTRIES } from "../src/sinks/chat.ts";
+import { clip, MAX_CHAT_CONSOLE_ENTRIES } from "../src/sinks/chat.ts";
 import { SinkError } from "../src/sinks/error.ts";
 import type { ReportSink } from "../src/server/handle.ts";
 
@@ -513,4 +513,25 @@ test("the vendor-first limit names are the same numbers as the MAX_ ones", async
   assert.equal(discord.DISCORD_MAX_FOOTER_TEXT, discord.MAX_DISCORD_FOOTER_TEXT);
   assert.equal(discord.DISCORD_MAX_EMBED_TOTAL, discord.MAX_DISCORD_EMBED_TOTAL);
   assert.equal(webhook.DISCORD_MAX_CONTENT, webhook.MAX_DISCORD_CONTENT);
+});
+
+test("clip counts code points, so it never leaves half a character behind", () => {
+  // Two astral characters are four UTF-16 units. Clipping at three used to cut
+  // the second one in half and leave a lone surrogate, which renders as U+FFFD.
+  assert.equal(clip("\u{1F41B}\u{1F41B}", 3), "\u{1F41B}\u{1F41B}", "two characters fit in three");
+
+  const three = clip("\u{1F41B}\u{1F41B}\u{1F41B}", 2);
+  assert.equal(three, "\u{1F41B}…");
+  assert.equal(Array.from(three).length, 2, "the clip is measured in characters");
+  assert.doesNotMatch(three, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/, "no lone surrogate is left");
+});
+
+test("a message of astral characters is clipped without a replacement character", () => {
+  const payload = buildSlackMessage(
+    { ...report, message: "\u{1F41B}".repeat(4000) },
+    { webhookUrl: SLACK_URL },
+  );
+  const message = ((blocksOf(payload)[1]?.text as { text: string }) ?? { text: "" }).text;
+  assert.ok(Array.from(message).length <= MAX_SLACK_TEXT, "the clip is in characters");
+  assert.ok(!message.includes("�"), "nothing was cut in half");
 });

@@ -199,6 +199,28 @@ async function audit(name, path, scheme, state) {
     await tab.evaluate(
       () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
     );
+
+    /* The printed call is a thing readers copy, so it must say what they did
+       and nothing else. A block that also pinned every colour and `scheme` as
+       it happened to be read off the panel would ship a panel that ignores the
+       reader's own scheme — the one setting whose default is "follow the
+       browser". Not an accessibility question, but this is the only place a
+       browser runs the playground. */
+    const printed = await tab.evaluate(
+      () => document.querySelector("[data-playground-js]")?.textContent ?? "",
+    );
+    for (const key of ["primary", "radius", "font", "position"]) {
+      if (!printed.includes(`${key}:`)) {
+        console.error(`  the playground did not print the ${key} the reader changed`);
+        failures += 1;
+      }
+    }
+    for (const key of ["scheme", "background", "text"]) {
+      if (printed.includes(`${key}:`)) {
+        console.error(`  the playground printed ${key}, which the reader never touched`);
+        failures += 1;
+      }
+    }
   }
 
   if (state === "search") {

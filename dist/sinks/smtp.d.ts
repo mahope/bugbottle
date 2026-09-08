@@ -62,6 +62,20 @@ export type SmtpSinkOptions = {
      * for a server on the same host, or in a test.
      */
     allowInsecureAuth?: boolean;
+    /**
+     * Refuses to send the report at all over a connection that never became
+     * encrypted. STARTTLS is advertised in a reply nothing has authenticated
+     * yet, so anything on the path can strip it out of the EHLO list and the
+     * client will happily carry on in the clear — and where no credentials are
+     * set, the AUTH refusal above never fires, so nothing else notices.
+     *
+     * Left unset, it is true on the submission port (587) and whenever
+     * credentials are set, and false otherwise — the ports that carry mail
+     * across a network, rather than the relay listening on the same machine.
+     * `allowInsecureAuth` lowers the default with it, because it already names a
+     * server the caller has decided to trust. Set it explicitly either way.
+     */
+    requireTls?: boolean;
     /** The envelope sender and the `From` header: `bugs@example.com`. */
     from: string;
     /** One recipient or several. */

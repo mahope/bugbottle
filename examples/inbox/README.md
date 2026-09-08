@@ -146,7 +146,7 @@ only the environment variables that switch one on:
 | `NOTIFY_WEBHOOK` | The webhook a new report is posted to. Treat it as a password: anyone holding it can post to that channel |
 | `NOTIFY_KIND` | `slack`, `discord`, `teams` or `webhook`, when the URL's own host does not say — behind a relay, a gateway, a proxy. Unset, the host decides |
 | `NOTIFY_SMTP_HOST` | The mail server to send through. Setting it switches the mail on; the four below go with it |
-| `NOTIFY_SMTP_PORT` | 465 for implicit TLS, 587 otherwise. Left unset, the sink picks by `secure` |
+| `NOTIFY_SMTP_PORT` | 465 for implicit TLS, 587 otherwise. Left unset, the sink picks by `secure`; anything that is not a port between 1 and 65535 stops the inbox starting, rather than being discovered on the first report |
 | `NOTIFY_SMTP_USER`, `NOTIFY_SMTP_PASS` | The account. Without both, no `AUTH` is attempted at all — and `AUTH` over a connection that is not encrypted is refused rather than sent |
 | `NOTIFY_SMTP_FROM` | The envelope sender and the `From` header: `bugs@example.com`. Required |
 | `NOTIFY_SMTP_TO` | Who is told. One address, or several separated by commas. Required |

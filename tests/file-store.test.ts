@@ -358,6 +358,62 @@ test("a report stored while the cap is deleting another is still listed", async 
   );
 });
 
+test("a report deleted from outside is dropped from the listing when it is read", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir });
+  const { id } = await store.store(report("Deleted by hand", "2026-09-08T10:00:00.000Z"));
+  await store.store(report("Still here", "2026-09-08T11:00:00.000Z"));
+  const entry = (await store.list()).find((other) => other.id === id);
+  assert.ok(entry, "it was listed to begin with");
+
+  // Somebody's `rm`, a backup restore, a volume remounted: this process is
+  // assumed to be the only writer and sometimes it is not.
+  await rm(join(dir, entry.file));
+
+  assert.equal(await store.read(id), null, "there is nothing to read");
+  assert.equal(
+    (await store.list()).some((other) => other.id === id),
+    false,
+    "and the entry that read found nothing behind is gone from the listing",
+  );
+  assert.deepEqual(
+    (await store.list()).map((other) => other.title),
+    ["Still here"],
+    "the rest of the index is untouched",
+  );
+});
+
+test("refresh walks the directory again and picks up what changed underneath", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir });
+  await store.store(report("From this process", "2026-09-08T10:00:00.000Z"));
+  assert.equal((await store.list()).length, 1);
+
+  // A second process wrote one report and deleted the other. Neither is
+  // something the index could know about.
+  const outsider = {
+    type: "bug",
+    message: "From somewhere else",
+    receivedAt: "2026-09-08T12:00:00.000Z",
+  };
+  await writeFile(
+    join(dir, "2026-09-08T12-00-00-000Z-3f1b8c2e-0a4d-4c9e-9b1a-2f6d5e4c3b2a.json"),
+    JSON.stringify(outsider),
+  );
+  assert.equal((await store.list()).length, 1, "the index knows nothing about it yet");
+
+  const listed = await store.refresh();
+  assert.deepEqual(
+    listed.map((entry) => entry.title).sort(),
+    ["From somewhere else", "From this process"],
+  );
+  assert.deepEqual(
+    (await store.list()).map((entry) => entry.title).sort(),
+    ["From somewhere else", "From this process"],
+    "and the walk it did is the index from now on",
+  );
+});
+
 test("an arrival time cannot walk out of the directory it names a file in", async () => {
   const dir = await scratch();
   const store = fileStore({ dir });

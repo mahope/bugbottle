@@ -66,6 +66,14 @@ export const MAX_TEAMS_CONSOLE = 3000;
 /** An `Action.OpenUrl` title is a button, and a button is one short line. */
 export const MAX_TEAMS_BUTTON_TEXT = 75;
 
+/**
+ * How a retired Office 365 connector webhook opens a refusal it answered 200
+ * to. Workflows webhooks answer 202 and say nothing, so this only ever matches
+ * the old kind — which are still in use, and still worth telling apart from a
+ * delivery.
+ */
+const LEGACY_TEAMS_FAILURE = "Webhook message delivery failed";
+
 export type TeamsSinkOptions = {
   /**
    * The Workflows webhook URL, from "post to a channel when a webhook request
@@ -283,8 +291,12 @@ export function buildTeamsMessage(
   while (jsonByteLength(payload) > MAX_TEAMS_MESSAGE_BYTES && parts.message.length > 0) {
     // Every character dropped is at least one byte dropped, so subtracting the
     // overspend in characters always makes progress and usually ends it here.
+    // The count has to be `clip`'s own — characters, not UTF-16 units — or a
+    // message of emoji would ask for a limit it is already under and the loop
+    // would never end.
     const over = jsonByteLength(payload) - MAX_TEAMS_MESSAGE_BYTES;
-    parts.message = clip(parts.message, Math.max(0, parts.message.length - over - 1));
+    const characters = Array.from(parts.message).length;
+    parts.message = clip(parts.message, Math.max(0, characters - over - 1));
     payload = envelope(buildCard(parts));
   }
 
@@ -296,12 +308,27 @@ export function buildTeamsMessage(
  * Workflows webhook. Resolves on any 2xx — Workflows answers 202 with an empty
  * body — throws `SinkError` carrying the status and the response body on
  * anything else, and lets network failures from `fetch` propagate as they are.
+ * A 200 whose body opens with a legacy connector's delivery failure is a
+ * refusal too, whatever the status says. `webhookUrl` is checked with
+ * `new URL` here, so a mistyped address fails at wiring time rather than on
+ * the first report.
  *
  * ```ts
  * handleReport(req, { sinks: [teamsSink({ webhookUrl: process.env.TEAMS_URL! })] });
  * ```
  */
 export function teamsSink(options: TeamsSinkOptions): ChatSink {
+  // A webhook address that is not an address is a configuration mistake, and
+  // the place to say so is where it was configured — not on the first report,
+  // half an hour later, inside a `fetch` failure whose message would quote the
+  // value back into a log. `new URL` is the whole check: what it accepts is
+  // what `fetch` will accept.
+  try {
+    new URL(options.webhookUrl);
+  } catch {
+    throw new SinkError("teamsSink was given a webhookUrl that is not a URL", 0, null);
+  }
+
   return async (report, ctx = {}) => {
     const doFetch = options.fetch ?? globalThis.fetch;
     const response = await doFetch(options.webhookUrl, {
@@ -311,10 +338,18 @@ export function teamsSink(options: TeamsSinkOptions): ChatSink {
       ...(ctx.signal ? { signal: ctx.signal } : {}),
     });
 
+    const body = await readBody(response);
     if (!response.ok) {
-      const body = await readBody(response);
       const fallback = `Microsoft Teams refused the report with status ${response.status}`;
       throw new SinkError(messageFromBody(body, fallback), response.status, body);
+    }
+    // The retired Office 365 connector webhooks answer 200 for a refusal and
+    // put the reason in the body, so a status check alone reads a lost report
+    // as a delivered one. Only the start of the body counts: the phrase is how
+    // that endpoint opens its failures, and matching it anywhere would turn a
+    // report that merely quotes it into a delivery failure.
+    if (typeof body === "string" && body.startsWith(LEGACY_TEAMS_FAILURE)) {
+      throw new SinkError(body.trim().slice(0, 200), response.status, body);
     }
   };
 }

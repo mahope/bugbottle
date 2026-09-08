@@ -99,6 +99,10 @@ export declare function buildTeamsMessage(report: unknown, options: TeamsSinkOpt
  * Workflows webhook. Resolves on any 2xx — Workflows answers 202 with an empty
  * body — throws `SinkError` carrying the status and the response body on
  * anything else, and lets network failures from `fetch` propagate as they are.
+ * A 200 whose body opens with a legacy connector's delivery failure is a
+ * refusal too, whatever the status says. `webhookUrl` is checked with
+ * `new URL` here, so a mistyped address fails at wiring time rather than on
+ * the first report.
  *
  * ```ts
  * handleReport(req, { sinks: [teamsSink({ webhookUrl: process.env.TEAMS_URL! })] });

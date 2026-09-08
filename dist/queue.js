@@ -129,7 +129,6 @@ function localStorageQueue(key) {
             }
         };
         return {
-            read,
             update(change) {
                 const next = change(read());
                 if (next.length === 0)

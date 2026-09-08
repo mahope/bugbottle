@@ -458,16 +458,32 @@ function createSession(socket, timeoutMs) {
             deliver();
         });
     }
-    function write(text) {
+    /**
+     * Sends bytes, on the same deadline every other phase gets. A server that
+     * stops reading closes its TCP window rather than saying anything, and the
+     * write then never calls back: without this timer a direct caller of
+     * `sendReportSmtp` waits for ever, since only the reads were bounded.
+     */
+    function write(text, phase) {
         if (failure)
             return Promise.reject(failure);
         return new Promise((resolve, reject) => {
-            current.write(text, (error) => (error ? reject(error) : resolve()));
+            const timer = setTimeout(() => {
+                fail(localError(`The SMTP server did not read ${phase} within ${timeoutMs} ms`));
+                reject(failure);
+            }, timeoutMs);
+            current.write(text, (error) => {
+                clearTimeout(timer);
+                if (error)
+                    reject(error);
+                else
+                    resolve();
+            });
         });
     }
     /** Sends a command and reads the reply it is answered with. */
     async function command(line, phase) {
-        await write(`${line}\r\n`);
+        await write(`${line}\r\n`, phase);
         return read(phase);
     }
     /** Puts TLS over the connection, keeping the reply reader attached. */
@@ -581,6 +597,10 @@ export async function sendReportSmtp(report, options, ctx = {}) {
     const secure = options.secure ?? (options.port ?? DEFAULT_SMTP_PORT) === SMTP_TLS_PORT;
     const port = options.port ?? (secure ? SMTP_TLS_PORT : DEFAULT_SMTP_PORT);
     const timeoutMs = options.timeoutMs ?? DEFAULT_SMTP_TIMEOUT_MS;
+    const requireTls = options.requireTls ??
+        (!secure &&
+            !options.allowInsecureAuth &&
+            (port === DEFAULT_SMTP_PORT || Boolean(options.user && options.pass)));
     const recipients = (Array.isArray(options.to) ? options.to : [options.to]).map((address) => headerSafe(address));
     if (recipients.length === 0)
         throw localError("The SMTP sink was given no recipient");
@@ -634,11 +654,21 @@ export async function sendReportSmtp(report, options, ctx = {}) {
                 throw replyError("the second EHLO", hello);
             offered = capabilities(hello);
         }
-        if (options.user && options.pass) {
-            if (!session.secure && !options.allowInsecureAuth) {
+        if (!session.secure) {
+            // The password is the sharper failure, so it is named first: its message
+            // is the one that points at the escape hatch a test or a local relay
+            // needs. The report itself is refused straight after, for the accounts
+            // that set no credentials at all and would otherwise notice nothing.
+            if (options.user && options.pass && !options.allowInsecureAuth) {
                 throw localError("The SMTP server offered no STARTTLS, so authenticating would send the password " +
                     "in the clear. Use a TLS port, or set allowInsecureAuth for a server you trust.");
             }
+            if (requireTls) {
+                throw localError("The SMTP server offered no STARTTLS, so the report would travel in the clear. " +
+                    "Use a TLS port, or set requireTls: false for a server you trust.");
+            }
+        }
+        if (options.user && options.pass) {
             await authenticate(session, options.user, options.pass, offered);
         }
         const mailFrom = await session.command(`MAIL FROM:<${sender}>`, "MAIL FROM");
@@ -654,7 +684,7 @@ export async function sendReportSmtp(report, options, ctx = {}) {
         const data = await session.command("DATA", "DATA");
         if (data.code !== 354)
             throw replyError("DATA", data);
-        await session.write(`${dotStuff(toCrlf(message))}\r\n.\r\n`);
+        await session.write(`${dotStuff(toCrlf(message))}\r\n.\r\n`, "the message");
         const accepted = await session.read("the message");
         if (accepted.code !== 250)
             throw replyError("the message", accepted);

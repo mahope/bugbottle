@@ -423,9 +423,75 @@ test("every 2xx is a success, 202 with an empty body included", async () => {
   }
 });
 
+test("a legacy webhook's 200 that says delivery failed is still a SinkError", async () => {
+  // The retired Office 365 connector webhooks answer 200 and put the failure
+  // in the body, so a status check on its own reads a lost report as delivered.
+  const { fetch } = fakeFetch(
+    200,
+    "Webhook message delivery failed with error: Microsoft Teams endpoint returned HTTP error 413.",
+  );
+  await assert.rejects(teamsSink({ webhookUrl: TEAMS_URL, fetch })(report), (err: unknown) => {
+    assert.ok(err instanceof SinkError);
+    assert.equal(err.status, 200);
+    assert.match(err.message, /^Webhook message delivery failed/);
+    return true;
+  });
+});
+
+test("a 200 whose body only mentions the phrase later is a success", async () => {
+  const { fetch } = fakeFetch(200, "1 (Webhook message delivery failed is not what happened)");
+  await teamsSink({ webhookUrl: TEAMS_URL, fetch })(report);
+});
+
+test("an invalid webhook url is refused at construction, before any fetch", () => {
+  let called = false;
+  const fetch = (async () => {
+    called = true;
+    return new Response(null, { status: 202 });
+  }) as typeof globalThis.fetch;
+  assert.throws(
+    () => teamsSink({ webhookUrl: "not a url", fetch }),
+    (err: unknown) => {
+      assert.ok(err instanceof SinkError);
+      assert.equal(err.status, 0);
+      assert.match(err.message, /webhookUrl/);
+      assert.doesNotMatch(err.message, /not a url/, "the value is never quoted back");
+      return true;
+    },
+  );
+  assert.equal(called, false, "nothing was sent");
+});
+
 test("the teams sink hands its abort signal to fetch", async () => {
   const { fetch, calls } = fakeFetch(202);
   const controller = new AbortController();
   await teamsSink({ webhookUrl: TEAMS_URL, fetch })(report, { signal: controller.signal });
   assert.equal(calls[0]?.init.signal, controller.signal);
+});
+
+test("a card of astral characters is clipped to the cap without looping", () => {
+  // The message is measured in characters and the cap in bytes, and an emoji
+  // is two UTF-16 units. Asking `clip` for a limit in units would be a limit
+  // the message is already under, so nothing would come off and the loop would
+  // never end — which only shows when the overspend is smaller than the
+  // difference between the two counts, so the address is sized to leave the
+  // card a few hundred bytes over and no more.
+  const message = "\u{1F41B}".repeat(2000);
+  const url = (padding: number) => `https://files.example.com/${"a".repeat(padding)}.png`;
+  const base = jsonByteLength(
+    buildTeamsMessage({ type: "bug", message }, { webhookUrl: TEAMS_URL, screenshotUrl: () => url(0) }),
+  );
+  const padding = MAX_TEAMS_MESSAGE_BYTES - base + 500;
+  assert.ok(padding > 0, "the address is what puts the card over the cap");
+
+  const payload = buildTeamsMessage(
+    { type: "bug", message },
+    { webhookUrl: TEAMS_URL, screenshotUrl: () => url(padding) },
+  );
+
+  assert.ok(jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES, "the card fits");
+  const text = String(textBlocks(payload)[1]?.text ?? "");
+  assert.ok(text.length > 0, "a truncated sentence still says what went wrong");
+  assert.ok(Array.from(text).length < 2000, "and it really was clipped");
+  assert.ok(!text.includes("�"), "nothing was cut in half");
 });

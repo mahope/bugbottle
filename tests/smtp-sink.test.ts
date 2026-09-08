@@ -15,7 +15,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createServer, type Server, type Socket } from "node:net";
+import { connect as netConnect, createServer, type Server, type Socket } from "node:net";
 import { TLSSocket } from "node:tls";
 import { generateKeyPairSync, sign as signWith } from "node:crypto";
 import {
@@ -152,6 +152,12 @@ type FakeOptions = {
   replies?: Record<string, string>;
   /** The verb after which the server says nothing at all. */
   hangAfter?: string;
+  /**
+   * The verb after which the server stops reading from the socket. It still
+   * holds the connection open, so the kernel buffers fill and a client that
+   * keeps writing is stalled rather than told anything.
+   */
+  pauseAfter?: string;
   /** Offers STARTTLS and really upgrades, with this key and certificate. */
   tls?: { key: string; cert: string };
 };
@@ -259,6 +265,7 @@ async function startSmtp(options: FakeOptions = {}): Promise<Fake> {
         case "DATA":
           inData = true;
           say("354 End data with <CR><LF>.<CR><LF>");
+          if (options.pauseAfter?.toUpperCase() === "DATA") current.pause();
           return;
         case "QUIT":
           say("221 2.0.0 Bye");
@@ -295,6 +302,45 @@ async function startSmtp(options: FakeOptions = {}): Promise<Fake> {
       server.close(() => resolve());
     });
   return state;
+}
+
+/** How much a stalled write is asked to push before the deadline is expected. */
+const STALL_BYTES = 24 * 1024 * 1024;
+
+/**
+ * Whether a write to a peer that has stopped reading really blocks here. Linux
+ * closes the window after a few megabytes; Windows loopback does not, so the
+ * write-deadline test skips there rather than asserting something the platform
+ * cannot produce.
+ */
+async function stallsOnWrite(): Promise<boolean> {
+  // The peer is kept, not just paused: a socket that never reads never notices
+  // the other end going away either, so `server.close()` would wait for ever
+  // unless this test destroys it itself.
+  const peers = new Set<Socket>();
+  const server = createServer({ pauseOnConnect: true }, (peer) => peers.add(peer));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  try {
+    return await new Promise<boolean>((resolve) => {
+      const socket = netConnect(port, "127.0.0.1", () => {
+        const timer = setTimeout(() => {
+          socket.destroy();
+          resolve(true);
+        }, 500);
+        socket.write("x".repeat(STALL_BYTES), () => {
+          clearTimeout(timer);
+          socket.destroy();
+          resolve(false);
+        });
+      });
+      socket.on("error", () => resolve(false));
+    });
+  } finally {
+    for (const peer of peers) peer.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 }
 
 /** The message as the server reconstructs it: dot-stuffing taken back off. */
@@ -621,6 +667,87 @@ test("a connection that is refused is a SinkError with no reply code", async () 
   );
   assert.ok(failure instanceof SinkError, "a refused connection is a SinkError too");
   assert.equal(failure.status, SMTP_NO_REPLY);
+});
+
+test("requireTls refuses a server that offered no STARTTLS, before the message", async () => {
+  const fake = await startSmtp();
+  try {
+    const failure = await sendReportSmtp(report, {
+      host: "127.0.0.1",
+      port: fake.port,
+      from: "bugs@example.com",
+      to: "team@example.com",
+      requireTls: true,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    assert.ok(failure instanceof SinkError, "a downgrade is a SinkError");
+    assert.equal(failure.status, SMTP_NO_REPLY);
+    assert.match(failure.message, /requireTls/);
+    assert.equal(fake.data, "", "the report never reached the wire");
+    assert.ok(
+      !fake.commands.some((line) => line.startsWith("MAIL")),
+      "the envelope was never started",
+    );
+  } finally {
+    await fake.close();
+  }
+});
+
+test("requireTls is satisfied by a STARTTLS upgrade", async () => {
+  const identity = selfSigned();
+  const fake = await startSmtp({ tls: identity });
+  try {
+    await sendReportSmtp(report, {
+      host: "localhost",
+      port: fake.port,
+      from: "bugs@example.com",
+      to: "team@example.com",
+      requireTls: true,
+      tls: { rejectUnauthorized: false },
+    });
+    assert.ok(fake.encrypted, "the conversation moved inside TLS");
+    assert.match(received(fake), /## Bug: The save button does nothing/);
+  } finally {
+    await fake.close();
+  }
+});
+
+test("a server that stops reading ends in a write timeout, not a hang", async (t) => {
+  // A write only stalls where the peer's TCP window really closes. On Windows
+  // loopback it never does — a paused socket still swallows hundreds of
+  // megabytes at memory speed — so the platform is asked first rather than the
+  // test being written to pass by accident.
+  if (!(await stallsOnWrite())) {
+    t.skip("this platform's loopback applies no write backpressure");
+    return;
+  }
+  const fake = await startSmtp({ pauseAfter: "DATA" });
+  try {
+    const started = Date.now();
+    const failure = await sendReportSmtp(
+      { ...report, message: "x".repeat(STALL_BYTES) },
+      {
+        host: "127.0.0.1",
+        port: fake.port,
+        from: "bugs@example.com",
+        to: "team@example.com",
+        timeoutMs: 250,
+      },
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    assert.ok(failure instanceof SinkError, "a stalled write is a SinkError");
+    assert.equal(failure.status, SMTP_NO_REPLY);
+    assert.match(failure.message, /did not read the message within 250 ms/);
+    assert.ok(Date.now() - started < 10_000, "it gave up quickly");
+  } finally {
+    await fake.close();
+  }
 });
 
 test("smtpSink is a factory `handleReport` can run, and takes the screenshot URL", async () => {

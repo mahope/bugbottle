@@ -683,26 +683,37 @@ milliseconds before the tab is closed may not reach the disk, where
 `localStorage` always does. Which of the two matters more depends on whether
 your reports carry pictures.
 
+When another tab loads a page that wants a newer version of the database, the
+browser asks this connection to stand aside. It does: the connection is closed
+and the next write opens a fresh one. A page that holds on instead blocks the
+other tab's upgrade for as long as it stays open, and a page that closes
+without reopening throws on every transaction afterwards and is memory-only for
+good.
+
 It is a separate entry point because the default must not pay for it:
 `bugbottle/queue` is about 1.5 kB and this is another 650 bytes, only for those
 who ask for it. A browser with no IndexedDB at all makes the queue memory-only,
 and the reports are still sent.
 
-Your own storage is two functions:
+Your own storage is one function:
 
 ```ts
 import type { QueueStorage } from "bugbottle/queue";
 
 const storage: QueueStorage = {
-  read: () => readTheArray(),                            // now or later
   update: (change) => writeBack(change(readTheArray())), // throws when refused
 };
 ```
 
 `update` reads, applies `change` and writes the result back as one step, so a
 storage that can be atomic gets to be, and it answers with what is now stored.
-Either function may return a promise. A refused write throws, or rejects, and
-that is what starts the fallback above.
+It may return a promise. A refused write throws, or rejects, and that is what
+starts the fallback above.
+
+There is deliberately no plain `read` beside it: anything read outside a
+read-modify-write is stale the moment another tab commits, so every path
+through the queue — the flush on load included — goes through `update`, even
+the ones that only want to look.
 
 ### Two tabs, one queue
 
@@ -1041,7 +1052,9 @@ The last two are not custom properties: they are the `data-pos` and
 
 The [theme playground](https://bugbottle.dev/docs/languages-and-branding/#branding-and-theme)
 on the documentation site restyles a real panel as you move these controls and
-prints the `mountBugbottle` call and the CSS block to copy.
+prints the `mountBugbottle` call and the CSS block to copy. It prints only the
+keys you moved, so the block you copy leaves `scheme` alone and your panel goes
+on following the reader's system setting.
 
 ## Pointing at the element
 
@@ -1661,12 +1674,13 @@ it, because an inbox with no ceiling is a disk that fills; `0` keeps
 everything, which is a decision about a disk rather than a default.
 `screenshots: false` keeps the JSON and never writes a picture at all.
 
-Three more calls are there for whoever builds a page over the directory:
+Four more calls are there for whoever builds a page over the directory:
 
 ```ts
 const listed = await reports.list();          // newest first, one small entry each
 const found = await reports.read(id, { screenshot: true });
 await reports.remove(id);                     // the JSON and the picture
+await reports.refresh();                      // walk the directory again
 ```
 
 `list()` answers `{ id, file, title, type, url, receivedAt, screenshot }` per
@@ -1674,6 +1688,14 @@ report — the strings a list shows, without reading every file for them. The
 directory is walked once, on the first call that needs it, and kept up to date
 by every write and delete after that; `read(id)` then reads exactly the one
 file that was asked for, and only fetches the picture when you ask for it.
+
+An entry `read` finds nothing behind is dropped from the listing then and
+there, so a report deleted by something outside this process stops being a link
+that answers 404 for the rest of the run. `refresh()` is the deliberate version
+of the same thing: it walks the directory again and answers with what is there
+now, which is what to call after a backup is restored underneath the inbox or
+when something else has been writing to the directory. Nothing calls it on its
+own — a walk on every request is the cost this index exists to avoid.
 
 Two of its properties are worth saying out loud, because they are the reasons
 not to write this yourself:
@@ -2336,9 +2358,27 @@ host, reached over the loopback interface, that wants a password anyway. If you
 find yourself setting it for a server somewhere else, the answer is a port that
 does TLS, not the flag.
 
+**The report itself is refused in the clear too, on the ports that carry mail
+across a network.** STARTTLS is advertised in an EHLO reply nothing has
+authenticated yet, so anything on the path can strip it out of the list and the
+conversation carries on unencrypted — with the whole report in it. Where no
+credentials are set, the AUTH refusal above never fires and nothing else would
+notice. So `requireTls` gives up before MAIL FROM when the connection never
+became encrypted. Left unset it is true on the submission port (587) and
+whenever `user` and `pass` are set, and false otherwise, which leaves the relay
+on `localhost:25` working as it did; `allowInsecureAuth` lowers the default
+with it, because it already names a server you decided to trust. Set
+`requireTls: true` on any other port that leaves the machine, and
+`requireTls: false` only for a server you can see from where you are standing.
+
 Credentials never reach a log or an error message: an AUTH failure is reported
 with the server's reply, never with what was sent, because the base64 of an
 AUTH LOGIN step is the password in a thin disguise.
+
+`timeoutMs` is a deadline on every phase, and that includes the writes: a
+server that stops reading closes its TCP window rather than saying anything,
+and without a deadline there the message body would stall for ever. Nothing in
+the conversation can now block longer than one phase's worth.
 
 ### Slack and Discord
 
@@ -2441,7 +2481,16 @@ inputs and no `Action.Submit`: a webhook has nowhere to send an answer.
 Workflows replies `202 Accepted` with an empty body, so the sink treats every
 2xx as success. That 202 means the flow was queued and not that the card
 rendered — if nothing appears in the channel, look at the flow's run history in
-Power Automate rather than at the status code.
+Power Automate rather than at the status code. The one exception is the retired
+connector webhooks, which are still out there and answer `200` for a refusal
+with the reason in the body: a body that opens with `Webhook message delivery
+failed` is a `SinkError` carrying that line, whatever the status said, because
+a lost report must not be logged as a delivered one.
+
+`webhookUrl` is checked with `new URL` when you build the sink, so a mistyped
+address fails where it was configured rather than half an hour later inside a
+`fetch` error that would have quoted your URL — which is the credential — into
+a log.
 
 A Workflows message is capped at **28 kB**, and Teams refuses a larger one
 outright rather than clipping it for you. No report can reach that on its own —

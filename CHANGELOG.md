@@ -9,6 +9,72 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- **Pre-1.0 shape change:** `QueueStorage` is one function, not two. `read` was
+  required of every storage and called from nowhere — every path through the
+  queue goes through `update`, because anything read outside a
+  read-modify-write is stale the moment another tab commits. A custom storage
+  written as an object literal with a `read` on it is now a type error: delete
+  the method, nothing called it. `createIdbStorage()` has lost its own (#88).
+- Sizes after the #88 review fixes, all inside the budgets they already had:
+  `bugbottle/queue` 1553 → 1545 (the seam lost a method), `bugbottle/queue-idb`
+  654 → 661 (`versionchange`), `bugbottle/ui` 11 485 → 11 486,
+  `dist/bugbottle.js` 24 424 → 24 441 and `dist/bugbottle.slim.js`
+  20 886 → 20 896. The validator-only server bundle is 584 bytes, unmoved.
+- `fileStore` listed reports that were no longer there. The index is built by
+  one walk and kept up to date by this process's own writes, so a report
+  deleted from outside stayed in every listing until the process restarted —
+  a link that answered 404 each time somebody tried it. An entry `read` finds
+  nothing behind is dropped from the index then and there, and the new
+  `refresh()` walks the directory again on purpose, in place, for the backup
+  restored underneath an inbox (#88).
+- The theme playground printed a block that pinned every colour it had read off
+  the panel and `scheme` as it happened to be, so a reader who copied it
+  verbatim shipped a panel that ignores `prefers-color-scheme` — the one
+  setting whose default is to follow the browser. It prints the keys the reader
+  moved and nothing else, and says so when nothing has moved. The site audit
+  checks it, since a browser is the only place the playground runs (#88).
+- The inbox example took a `NOTIFY_SMTP_PORT` that is not a number. `Number`
+  answers a typo with `NaN`, which is not nullish, so the sink's own default
+  never applied and the port reached it as `NaN` — the inbox came up looking
+  healthy and failed on the first report, hours after the mistake was made. It
+  refuses to start now, which is while somebody is still looking at the
+  configuration (#88).
+- `createIdbStorage()` went memory-only for the life of the page when another
+  tab upgraded the database. Nothing listened for `versionchange`, so the
+  connection was closed under it and every transaction after that threw — and
+  until the browser gave up, this tab was also what blocked the other tab's
+  upgrade. It now closes the connection when asked and opens a fresh one on the
+  next write (#88).
+- The chat sinks left half a character behind when they clipped. `clip` sliced
+  UTF-16 units, so a message ending on an emoji or an ideograph outside the
+  basic plane lost one of its two units and Slack, Discord and Teams all drew
+  the leftover as `�`. It counts characters now. The Teams byte budget
+  counts them the same way where it works out how much to ask for: a limit in
+  units is a limit a message of emoji is already under, and the loop that
+  clipped it would never have ended (#88).
+- `teamsSink` read a refusal as a delivery on a legacy connector webhook. Those
+  are retired but still in use, and they answer `200` with `Webhook message
+  delivery failed with error: …` in the body where a Workflows webhook answers
+  202 with nothing — so the status check passed and the report was gone without
+  a line in any log. A 200 whose body opens with that phrase is a `SinkError`
+  now, carrying the reason (#88).
+- `teamsSink` now checks `webhookUrl` with `new URL` when the sink is built. A
+  mistyped address used to reach `fetch` and come back as a failure whose
+  message quotes the URL — which is the credential — into a log, on the first
+  report rather than where it was configured (#88).
+- `smtpSink` sent the whole report in the clear when something on the path
+  stripped STARTTLS out of the EHLO reply. That reply is not authenticated, so
+  a downgrade is a line removed from a list; the only guard was the refusal to
+  authenticate over an unencrypted connection, which never fires for an account
+  with no `user` and `pass`. The new `requireTls` gives up before MAIL FROM —
+  true by default on the submission port (587) and wherever credentials are
+  set, false for the relay on the same machine, and `allowInsecureAuth` lowers
+  the default with it (#88).
+- `smtpSink` could hang for ever on a server that stopped reading. Every read
+  had a deadline and no write had one, so the message body — the one write big
+  enough to fill a TCP window — waited on a socket that would never drain,
+  taking a direct caller of `sendReportSmtp` with it. `timeoutMs` now bounds
+  the writes as well as the reads (#88).
 - The offline queue survives a full `localStorage` (#85). A refused write used
   to turn the queue memory-only and that was all: the report reached storage
   nowhere and was gone on the next reload, which is what an outage ends in. It
