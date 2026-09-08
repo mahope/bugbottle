@@ -41,8 +41,10 @@ Everything except the endpoint, the demo page and the health route is behind
 `Authorization: Basic`, compared against `INBOX_PASSWORD` in constant time.
 The username is ignored.
 
-Reports go to `examples/inbox/reports/` — or wherever `REPORTS_DIR` says — as
-two files each:
+Storage is `fileStore` from `bugbottle/server`, which is where this used to
+keep two hundred lines of its own: the example hands it a directory and a cap
+and does no filesystem work itself. Reports go to `examples/inbox/reports/` —
+or wherever `REPORTS_DIR` says — as two files each:
 
 - `<time>-<id>.json`, the validated report **without** the screenshot data
   URL, so the file stays readable;
@@ -50,6 +52,13 @@ two files each:
 
 Deleting a report deletes both. There is no database and nothing to migrate;
 `rm -rf reports/` is the whole retention policy until you write a better one.
+
+Both files are written under a temporary name and renamed into place, which is
+atomic within a directory: a process killed halfway through four megabytes of
+picture leaves a `.tmp` file that no listing looks at, never a truncated report
+or half a screenshot. And every id in a URL is matched against the shape
+`crypto.randomUUID()` writes before it becomes part of a path, so `/r/../../..`
+is a 404 rather than a question about how `normalize` works.
 
 The directory does have a ceiling. `MAX_REPORTS` — 2000 by default — is how
 many reports are kept; once a new one takes the count past it, the oldest are
@@ -62,11 +71,16 @@ switch the cap off, and watch the disk yourself.
 The list is held in memory. The directory is walked once, at the first request
 that needs it, and after that a write appends to the list and a delete removes
 from it — nothing re-reads the directory, because this process is the only
-thing that writes to it. Only the four strings the list shows are kept, so a
+thing that writes to it. Only the few strings the list shows are kept, so a
 thousand reports cost a few hundred kilobytes rather than a thousand parsed
 reports; the detail page reads the one file it was asked for. If you point a
 second process at the same `REPORTS_DIR`, neither will see the other's
 reports until it restarts — one process per directory.
+
+None of that is special to the example. `fileStore({ dir, maxReports })` is in
+`bugbottle/server`, and `list()`, `read(id)` and `remove(id)` are there for
+whoever wants a different page over the same directory — see *Receiving a
+report* in the main README.
 
 The detail page renders `toMarkdown` through a tiny subset — headings,
 paragraphs, tables, fenced code, lists and the two `<details>` lines the

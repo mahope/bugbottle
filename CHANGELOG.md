@@ -31,6 +31,33 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
 
 ### Added
 
+- `fileStore({ dir, maxReports?, screenshots? })` in `bugbottle/server`: the
+  `store` function `handleReport` takes, backed by a directory. One JSON file
+  per report named `<receivedAt>-<id>.json`, the decoded PNG beside it as
+  `<id>.png`, and `list()`, `read(id, { screenshot? })` and `remove(id)` for
+  whoever builds a page over it. It is the storage `examples/inbox` had grown
+  for itself, lifted into the library, and the example now runs on it with its
+  fourteen tests unchanged.
+
+  Three things it does that a first attempt does not. Every write goes to a
+  temporary name and is renamed into place, so a process killed mid-write
+  leaves a `.tmp` file no listing looks at rather than a truncated report or
+  half a screenshot. An id reaching `read` or `remove` came out of a URL, so it
+  is matched against the shape `crypto.randomUUID()` writes before any path is
+  built — there is no normalising afterwards to get wrong. And the picture is
+  signature-checked in its bytes before it is written under a `.png` name,
+  whatever the caller called it; one that fails is dropped and the report is
+  stored without it, because screenshots fail open.
+
+  `maxReports` (2000 by default) deletes the oldest when the directory is over
+  it, `0` keeps everything, and `screenshots: false` writes the JSON alone. The
+  index is built by one walk of the directory on the first call that needs it
+  and kept up to date by every write and delete after that, so a list costs no
+  directory walk and a detail page reads one file. It is Node-only —
+  `node:fs/promises`, `node:path`, `node:crypto` — and nothing the validators
+  reach imports it: the validator-only bundle is still 583 bytes gzipped and
+  its minified text still mentions neither `node:fs` nor `readFile`. (#82)
+
 - `teamsSink({ webhookUrl, screenshotUrl?, reportUrl?, buttonText?, fetch? })`
   in `bugbottle/server`: one Adaptive Card per report in a Microsoft Teams
   channel. The tenth sink and the third chat one, built on the same

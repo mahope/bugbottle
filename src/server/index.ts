@@ -61,6 +61,19 @@ export {
   type ValidatedReport,
 } from "./handle.ts";
 
+// The directory of files most small deployments want before they want a
+// database. It is the one module here that reaches for `node:fs`, and nothing
+// the validators reach imports it, so the validator-only bundle stays free of
+// it — CI greps the minified text to be sure.
+export {
+  fileStore,
+  DEFAULT_MAX_REPORTS,
+  type FileStore,
+  type FileStoreOptions,
+  type StoredReport,
+  type StoredReportFile,
+} from "./file-store.ts";
+
 export {
   expressHandler,
   type ExpressRequestLike,
