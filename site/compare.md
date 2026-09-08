@@ -7,7 +7,7 @@ decide anything.
 
 | Tool | Licence | Hosted or your endpoint | What it captures | Size in your bundle | Price |
 |---|---|---|---|---|---|
-| **bugbottle** | MIT, client and server helpers alike ([LICENSE](https://github.com/mahope/bugbottle/blob/main/LICENSE)) | Your endpoint. There is no bugbottle server to send anything to | Console errors and warnings, page context, the element pointed at, click and navigation breadcrumbs, failed and slow requests, an optional DOM screenshot ([docs](/docs/)) | About 1.4 kB gzipped for the core, 5.4 kB for the React hook, 10 kB for the ready-made panel ([budgets in CI](https://github.com/mahope/bugbottle/blob/main/CONTRIBUTING.md)) | Free |
+| **bugbottle** | MIT, client and server helpers alike ([LICENSE](https://github.com/mahope/bugbottle/blob/main/LICENSE)) | Your endpoint. There is no bugbottle server to send anything to | Console errors and warnings, page context, the element pointed at, click and navigation breadcrumbs, failed and slow requests, an optional DOM screenshot the reporter can mark with a rectangle, an arrow or a destructive blur ([docs](/docs/)) | About 1.4 kB gzipped for the core, 5.5 kB for the React hook, 12 kB for the ready-made panel ([budgets in CI](https://github.com/mahope/bugbottle/blob/main/CONTRIBUTING.md)) | Free |
 | **[Marker.io](https://marker.io)** | Commercial | Hosted. Reports land in Marker.io and are pushed to your tracker | Annotated screenshot, session replay, console and network logs, browser and environment details ([console logs](https://marker.io/blog/console-logs)) | Not published | From $39/mo; console, network and replay start on the $149/mo Team plan ([pricing](https://marker.io/pricing)) |
 | **[Jam](https://jam.dev)** | Commercial | Hosted. A Jam is a link on jam.dev | Screen recording, console, network, device and browser details, the actions leading up to the bug, all from the moment you press record ([jam.dev](https://jam.dev)) | Nothing — it is a browser extension, not a script in your app | Free tier, then $14 per creator per month ([pricing](https://jam.dev/pricing)) |
 | **[Sentry User Feedback](https://docs.sentry.io/platforms/javascript/user-feedback/)** | SDK is MIT ([sentry-javascript](https://github.com/getsentry/sentry-javascript)) | Sentry's ingest. The widget is yours to replace, the backend is not | The message plus screenshot and attachments, joined to the error, the release, the trace and the replay Sentry already has ([docs](https://docs.sentry.io/platforms/javascript/user-feedback/)) | Not published as one number: the widget is loaded on top of the browser SDK, which is the larger part | Free developer plan, then from $26/mo ([pricing](https://sentry.io/pricing/)) |
@@ -17,7 +17,11 @@ decide anything.
 ## What the others do that bugbottle does not
 
 Marker.io and Jam both hand a non-technical reporter something bugbottle
-cannot: a picture they drew on, and in Jam's case a video of what they did.
+cannot: in Jam's case a video of what they did, and in both cases a place for
+the report to land with a queue, an assignee and a history. bugbottle now has
+the drawing — a rectangle, an arrow and a blur over the screenshot — but it
+still ends at the JSON it posts to your endpoint.
+
 Neither needs a developer to install anything in the application at all — Jam
 is a browser extension, which means it works on a site you do not own, and on
 the third-party page your bug turned out to be on.
@@ -27,17 +31,18 @@ it is the only one in this table that ties the sentence someone typed to the
 stack trace, the release and the session replay of the same moment. bugbottle
 sends a report; Sentry sends a report into a case file that was already open.
 
-BugPin gives you the dashboard, the triage and the annotated screenshot that
-bugbottle deliberately does not ship, and you can still run it on your own
-hardware. rrweb records far more than bugbottle ever will: it is the recorder
-underneath several of the products above, and if what you need is to watch the
-minute before the bug, nothing here replaces it.
+BugPin gives you the dashboard and the triage that bugbottle deliberately
+does not ship, and you can still run it on your own hardware. rrweb records
+far more than bugbottle ever will: it is the recorder underneath several of
+the products above, and if what you need is to watch the minute before the
+bug, nothing here replaces it.
 
 ## When to pick something else
 
-Pick Jam or Marker.io if the people reporting bugs are not developers and the
-thing that unblocks them is drawing a red circle on a screenshot. Pick Sentry
-User Feedback if you already pay Sentry, because a second store of reports
+Pick Jam or Marker.io if the people reporting bugs are not developers and what
+unblocks them is a place the report lands in — a queue, an owner, a status —
+rather than a route in your own application. Pick Sentry User Feedback if you
+already pay Sentry, because a second store of reports
 next to the one you check every morning is a store nobody checks. Pick BugPin
 or another self-hosted product if you want a dashboard and are happy to run a
 service and its database. Pick rrweb if the question is "what did they do

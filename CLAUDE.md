@@ -57,7 +57,7 @@ adapters wrap it; server-side validators check what arrives. No UI, no backend, 
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Thirteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Fourteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
 `./annotate`, `./queue`, `./triggers`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
@@ -164,7 +164,9 @@ used to be one `setItem`. `bugbottle/vue` and `bugbottle/svelte` are budgeted
 at 1536 bytes each, but *marginally*: a bundle of either weighs about 5.4 kB,
 nearly all of it the capture, the picker and the send that any form pays for,
 so CI subtracts a bundle of `buildReport`/`sendReport`/`captureScreenshot`/
-`pickElement` and checks the difference. The IIFE budget was 19456 bytes gzipped
+`pickElement` and checks the difference. `bugbottle/sign` is budgeted at 512
+bytes and measures about 370: two WebCrypto calls and a hex loop, importing
+nothing. The IIFE budget was 19456 bytes gzipped
 before the annotator (about 18 kB with the queue, the triggers, the
 accessibility pass and the 0.6 evidence); masking, the queue and the triggers
 each cost it roughly half a kilobyte to a kilobyte. The panel budget went from 9 kB to 10 kB for #35. `bugbottle/annotate` is budgeted at
@@ -185,7 +187,9 @@ annotator): it is the build that carries
 everything, so it imports the annotator itself, hands it to the panel through
 `mount`, and pays for the eight locale strings in eight languages on top, one
 of them a sentence because it is where the annotator says its keys to a screen
-reader.
+reader. Measure before you write a budget down: #36 recorded 11971 and 20450
+for files that measured 12126 and 21042 with the pinned esbuild, and CI was red
+on main until the review after it corrected the number.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

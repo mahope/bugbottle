@@ -264,6 +264,37 @@ test("the marked picture is what the report carries", async () => {
   widget.destroy();
 });
 
+test("sending straight from the editor sends the marked picture, not the original", async () => {
+  const bodies: string[] = [];
+  const widget = mount({
+    fetch: (async (_url: string, init: { body: string }) => {
+      bodies.push(init.body);
+      return new Response(JSON.stringify({ id: "rep_1" }), { status: 201 });
+    }) as unknown as typeof globalThis.fetch,
+  });
+  const p = await withPicture(widget);
+  p.editBtn.click();
+  await settle();
+  // A blur over the customer's name, and then Send rather than Done — the
+  // button is right there and nothing says the marks have to be confirmed
+  // first. Posting the picture as it was captured would post the very pixels
+  // the reporter had just covered up.
+  fire(p.canvas, "pointerdown", 5, 5);
+  fire(p.canvas, "pointermove", 40, 30);
+  fire(p.canvas, "pointerup", 40, 30);
+
+  const textarea = p.root.querySelector("textarea") as HTMLTextAreaElement;
+  textarea.value = "The customer name is showing";
+  (p.root.querySelector(".send") as HTMLButtonElement).click();
+  await settle();
+
+  assert.equal(bodies.length, 1);
+  assert.equal(JSON.parse(bodies[0] ?? "{}").screenshotDataUrl, MARKED);
+  assert.ok(p.editor.hidden, "and the editor is closed behind the send");
+
+  widget.destroy();
+});
+
 test("closing the panel keeps the marks; clearing the picture drops the editor", async () => {
   const widget = mount();
   const p = await withPicture(widget);

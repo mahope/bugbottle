@@ -7,7 +7,7 @@ følg linket, før du beslutter noget.
 
 | Værktøj | Licens | Hostet eller dit eget endepunkt | Hvad det opsamler | Størrelse i din bundle | Pris |
 |---|---|---|---|---|---|
-| **bugbottle** | MIT, både klienten og serverhjælperne ([LICENSE](https://github.com/mahope/bugbottle/blob/main/LICENSE)) | Dit eget endepunkt. Der findes ingen bugbottle-server at sende til | Konsolfejl og advarsler, sidens kontekst, elementet brugeren peger på, klik og navigation som brødkrummer, fejlede og langsomme kald, og et skærmbillede hvis du slår det til ([dokumentation](/docs/)) | Cirka 1,4 kB gzippet for kernen, 5,4 kB for React-hooket, 10 kB for det færdige panel ([budgetterne i CI](https://github.com/mahope/bugbottle/blob/main/CONTRIBUTING.md)) | Gratis |
+| **bugbottle** | MIT, både klienten og serverhjælperne ([LICENSE](https://github.com/mahope/bugbottle/blob/main/LICENSE)) | Dit eget endepunkt. Der findes ingen bugbottle-server at sende til | Konsolfejl og advarsler, sidens kontekst, elementet brugeren peger på, klik og navigation som brødkrummer, fejlede og langsomme kald,  og et skærmbillede hvis du slår det til, som brugeren kan markere med rektangel, pil eller en destruktiv sløring ([dokumentation](/docs/)) | Cirka 1,4 kB gzippet for kernen, 5,5 kB for React-hooket, 12 kB for det færdige panel ([budgetterne i CI](https://github.com/mahope/bugbottle/blob/main/CONTRIBUTING.md)) | Gratis |
 | **[Marker.io](https://marker.io)** | Kommerciel | Hostet. Rapporterne lander hos Marker.io og skubbes videre til dit issue-system | Skærmbillede med tegninger ovenpå, session replay, konsol- og netværkslog, browser og miljø ([om konsollogs](https://marker.io/blog/console-logs)) | Ikke oplyst | Fra 39 $/md.; konsol, netværk og replay følger først med på Team til 149 $/md. ([priser](https://marker.io/pricing)) |
 | **[Jam](https://jam.dev)** | Kommerciel | Hostet. Et jam er et link på jam.dev | Skærmoptagelse, konsol, netværk, oplysninger om browser og maskine, og de handlinger der gik forud for fejlen ([jam.dev](https://jam.dev)) | Ingenting — det er en browserudvidelse, ikke et script i din app | Gratis niveau, derefter 14 $ pr. bruger pr. måned ([priser](https://jam.dev/pricing)) |
 | **[Sentry User Feedback](https://docs.sentry.io/platforms/javascript/user-feedback/)** | SDK'et er MIT ([sentry-javascript](https://github.com/getsentry/sentry-javascript)) | Sentrys ingest. Brugerfladen må du gerne skifte ud, backenden ikke ([dokumentation](https://docs.sentry.io/platforms/javascript/user-feedback/)) | Beskeden plus skærmbillede og vedhæftninger, koblet på den fejl, den release, det trace og det replay Sentry allerede har ([dokumentation](https://docs.sentry.io/platforms/javascript/user-feedback/)) | Ikke oplyst som ét tal: widgetten ligger oven på browser-SDK'et, som fylder mest | Gratis udviklerplan, derefter fra 26 $/md. ([priser](https://sentry.io/pricing/)) |
@@ -16,9 +16,13 @@ følg linket, før du beslutter noget.
 
 ## Hvad de andre kan, som bugbottle ikke kan
 
-Marker.io og Jam giver en ikke-teknisk kollega noget, bugbottle ikke kan: et
-billede, de selv har tegnet på, og hos Jam en video af det, de gjorde. Ingen af
-dem kræver, at en udvikler installerer noget i applikationen — Jam er en
+Marker.io og Jam giver en ikke-teknisk kollega noget, bugbottle ikke kan: hos
+Jam en video af det, de gjorde, og hos dem begge et sted, rapporten lander, med
+en kø, en ansvarlig og en historik. bugbottle kan nu selve tegningen — et
+rektangel, en pil og en sløring oven på skærmbilledet — men den slutter
+stadig ved den JSON, den sender til dit eget endepunkt.
+
+Ingen af dem kræver, at en udvikler installerer noget i applikationen — Jam er en
 browserudvidelse og virker derfor også på et website, du ikke selv ejer, og på
 den tredjepartsside, fejlen viste sig at ligge på.
 
@@ -36,7 +40,8 @@ noget her, der erstatter det.
 ## Hvornår du skal vælge noget andet
 
 Vælg Jam eller Marker.io, hvis dem der melder fejl ikke er udviklere, og det
-der får dem videre er at tegne en rød ring på et skærmbillede. Vælg Sentry
+der får dem videre er et sted, rapporten lander — en kø, en ejer, en status —
+frem for en rute i din egen applikation. Vælg Sentry
 User Feedback, hvis du allerede betaler for Sentry — et ekstra sted at kigge
 efter rapporter er et sted, ingen får kigget. Vælg BugPin eller et andet
 selvhostet produkt, hvis du vil have et dashboard og gerne vil drive en

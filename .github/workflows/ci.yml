@@ -64,6 +64,9 @@ jobs:
           # come down: it went up by the twenty-odd bytes of that wiring. Signing
           # (#37) landed beside it; the two together measure about 21.1 kB, so the
           # budget is 21504.
+          # Measure before writing a budget down: #36 recorded 20450 for a file
+          # that gzips to 21042 with the pinned esbuild, so this job was red on
+          # main until the number was corrected.
           if [ "$iife" -gt 21504 ]; then
             echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 21504" >&2
             exit 1

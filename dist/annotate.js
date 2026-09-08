@@ -66,10 +66,16 @@ export function createAnnotator(canvas, dataUrl, options = {}) {
     });
     /** Replaces the region with the average colour of each block in it. */
     function pixelate(x, y, w, h) {
+        // Both edges are rounded outwards and then clamped, rather than the origin
+        // being floored and the *extent* ceiled: with a fractional origin the
+        // latter stops a pixel short of the drag, and with a drag that began off
+        // the canvas it slides the whole region sideways. A pixel this tool was
+        // asked to destroy and did not is the one failure that matters here, so it
+        // covers a fraction of a pixel too much rather than too little.
         const sx = Math.max(0, Math.floor(x));
         const sy = Math.max(0, Math.floor(y));
-        const sw = Math.min(canvas.width - sx, Math.ceil(w));
-        const sh = Math.min(canvas.height - sy, Math.ceil(h));
+        const sw = Math.min(canvas.width, Math.ceil(x + w)) - sx;
+        const sh = Math.min(canvas.height, Math.ceil(y + h)) - sy;
         if (sw < 1 || sh < 1)
             return;
         const data = ctx.getImageData(sx, sy, sw, sh).data;

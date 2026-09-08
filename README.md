@@ -934,7 +934,9 @@ frosted rectangle over the region — it reads those pixels back out of the
 canvas, averages them in 12-pixel blocks and paints the averages on top, so
 the original pixels are gone from the exported PNG. Whoever receives the
 report cannot recover what was under it. That is the tool to reach for when a
-picture caught a customer name the masking rules did not know about.
+picture caught a customer name the masking rules did not know about. The
+region is rounded outwards to whole pixels before it is averaged, so a drag
+covers a fraction of a pixel too much rather than a fraction too little.
 
 In the ready-made panel it is a button, "Edit picture", that appears once a
 picture is attached; it opens a toolbar and the canvas in place of the
@@ -952,6 +954,8 @@ mountBugbottle({ endpoint: "/api/feedback", screenshot: htmlToImage, annotate: c
 Leave `annotate` out (or pass `false`) and nothing on screen leads to an
 editor. The script tag is the build that carries everything, so it wires the
 annotator up for you and `data-annotate="off"` is how you switch it off there.
+Sending with the editor still open keeps the marks: the picture is folded back
+into the report either way, so a blur cannot be lost by skipping "Done".
 
 With your own form, use the annotator directly. It is its own entry point,
 about 1.4 kB gzipped, and it draws on a canvas you supply:
@@ -1133,7 +1137,7 @@ useBugReport({
 With the script tag, it is one attribute:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.5.0/dist/bugbottle.js"
+<script src="https://cdn.jsdelivr.net/npm/bugbottle@0.6.0/dist/bugbottle.js"
         data-endpoint="/api/bug-report"
         data-sign-key="the-key-your-server-knows"></script>
 ```
@@ -1169,8 +1173,10 @@ signature: {
 Missing when required, wrong, outside the skew window, or already seen: all
 four answer `401 { error: "Bad signature" }`, and they answer it identically,
 because telling a caller *which* part they got wrong is telling them how to get
-it right. Every accepted signature is remembered until it ages out of the skew
-window — the last 10 000 of them, in memory, per instance, with the same
+it right. Every accepted signature is remembered until the timestamp it signed
+ages out of the skew window — which is later than its arrival, because the
+window runs in both directions — the last 10 000 of them, in memory, per
+instance, with the same
 honesty as the rate limit: it stops a captured body being replayed at the
 instance that saw it, not across a fleet behind a load balancer.
 

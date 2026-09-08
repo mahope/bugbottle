@@ -501,6 +501,12 @@ export function mountBugbottle(options) {
             textarea.focus();
             return;
         }
+        // Marks the reporter made but never confirmed with "Done" are still marks
+        // they made. Send sits below the editor and nothing says the editor has to
+        // be closed first, so committing them here is what keeps a blur from being
+        // dropped on the way out — sending the captured picture instead would post
+        // exactly the pixels somebody had just covered up.
+        closeEditor(true);
         sending = true;
         sendBtn.disabled = true;
         sendBtn.textContent = ui.sending;

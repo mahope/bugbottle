@@ -7,6 +7,10 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The annotator, request signing and the comparison page. Recorded here rather
+than under 0.6.0, where they were first written down: all three landed after
+that tag was cut.
+
 ### Added
 
 - `bugbottle/server`: `slackSink` and `discordSink`, two incoming-webhook sinks
@@ -28,43 +32,6 @@ change the API; the changelog says so when they do.
   3000 characters per Slack text object, 10 fields per section; 256, 4096, 25,
   256 and 1024 on a Discord embed, and 6000 across it, where the description is
   what gives way first because the facts are what somebody triages from.
-
-### Changed
-
-- **Breaking, for the panel:** `mountBugbottle`'s `annotate` option is now the
-  `createAnnotator` function itself rather than a boolean. This corrects the
-  annotator entry above: the panel imported `src/annotate.ts` unconditionally,
-  so every application that mounted the panel shipped a canvas editor it might
-  never open — `bugbottle/ui` went from 10 229 to 12 131 bytes gzipped and
-  `annotate: false` hid the button without shrinking anything. The annotator is
-  now handed in the way `screenshot`, `scrub` and `sign` are:
-  `mountBugbottle({ endpoint, screenshot, annotate: createAnnotator })`. Leave
-  it out and the editor is not in your bundle at all; `bugbottle/ui` is back to
-  10 951 bytes, and the CI budget with it, from 12 kB to 11 kB. What is left of
-  the 720-byte difference against the pre-annotator panel is the panel's own
-  toolbar, its CSS and its eight English strings, which no bundler can remove
-  from a static import. The script tag is unchanged for its readers: it is the
-  build that carries everything, so it hands the annotator in itself and
-  `data-annotate="off"` still switches the button off.
-
-## 0.6.0 — 2026-09-07
-
-The adoptable release: one form state shared by React, Vue and Svelte; a
-panel that a keyboard and a screen reader can use; the offline queue; a
-keyboard shortcut and an opt-in open-on-error; stack frames and a wider page
-context on every report; the Linear sink and a JSON Schema for the payload;
-documentation generated from this README at bugbottle.dev/docs. No breaking
-changes for the ESM entries; the script-tag build grew from 13.7 kB to 18.1 kB
-gzipped because it carries every default in eight languages.
-
-Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
-`bugbottle/react` 5.5 kB, `bugbottle/vue` 5.6 kB, `bugbottle/svelte` 5.4 kB,
-`bugbottle/ui` 10.1 kB, `bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network`
-1.2 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
-`dist/bugbottle.js` 18.1 kB, `bugbottle/server` validators 0.5 kB.
-
-### Added
-
 - `bugbottle/sign`: `createSigner({ key, header? })` returns the `sign` function
   `sendReport` takes, signing the serialised body with WebCrypto HMAC-SHA-256
   and sending `X-Bugbottle-Signature: t=<unix ms>,v1=<hex>` over
@@ -127,6 +94,58 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
   also on `window.bugbottle` for a page with its own form. `npm run a11y` now
   audits five states rather than three, the two new ones with the editor open,
   and reports no violations.
+
+### Changed
+
+- **Breaking, for the panel:** `mountBugbottle`'s `annotate` option is now the
+  `createAnnotator` function itself rather than a boolean. This corrects the
+  annotator entry above: the panel imported `src/annotate.ts` unconditionally,
+  so every application that mounted the panel shipped a canvas editor it might
+  never open — `bugbottle/ui` went from 10 229 to 12 131 bytes gzipped and
+  `annotate: false` hid the button without shrinking anything. The annotator is
+  now handed in the way `screenshot`, `scrub` and `sign` are:
+  `mountBugbottle({ endpoint, screenshot, annotate: createAnnotator })`. Leave
+  it out and the editor is not in your bundle at all; `bugbottle/ui` is back to
+  10 951 bytes, and the CI budget with it, from 12 kB to 11 kB. What is left of
+  the 720-byte difference against the pre-annotator panel is the panel's own
+  toolbar, its CSS and its eight English strings, which no bundler can remove
+  from a static import. The script tag is unchanged for its readers: it is the
+  build that carries everything, so it hands the annotator in itself and
+  `data-annotate="off"` still switches the button off.
+
+### Fixed
+
+- The ready-made panel posted the picture as it was captured when Send was
+  pressed with the editor still open, because the marks were only folded in by
+  "Done". A blur the reporter had just drawn over a customer name never reached
+  the report. The marks are committed when the report is built.
+- `createAnnotator`: the blur left the last column and row of its region
+  carrying their original pixels when a drag began or ended between two pixels,
+  and slid the region sideways when a drag began off the canvas. Both edges are
+  now rounded outwards and then clamped.
+- `handleReport`: the replay cache kept an accepted signature for `maxSkewMs`
+  from the moment it arrived rather than from the timestamp it signed. The skew
+  window runs in both directions, so a signature dated ahead of the server's
+  clock was forgotten while it was still acceptable and the captured body could
+  be posted a second time.
+
+## 0.6.0 — 2026-09-07
+
+The adoptable release: one form state shared by React, Vue and Svelte; a
+panel that a keyboard and a screen reader can use; the offline queue; a
+keyboard shortcut and an opt-in open-on-error; stack frames and a wider page
+context on every report; the Linear sink and a JSON Schema for the payload;
+documentation generated from this README at bugbottle.dev/docs. No breaking
+changes for the ESM entries; the script-tag build grew from 13.7 kB to 18.1 kB
+gzipped because it carries every default in eight languages.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.3 kB,
+`bugbottle/react` 5.5 kB, `bugbottle/vue` 5.6 kB, `bugbottle/svelte` 5.4 kB,
+`bugbottle/ui` 10.1 kB, `bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network`
+1.2 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`dist/bugbottle.js` 18.1 kB, `bugbottle/server` validators 0.5 kB.
+
+### Added
 
 - `bugbottle/vue`: `useBugReport(options)`, the same form as the React hook as
   a composable over refs. `type` and `message` are writable computeds, so
@@ -856,4 +875,4 @@ First cut. Extracted from the feedback bubble in two production apps.
   error type.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
-  picker included), `bugbottle/server` 0.8 kB.
+  picker included), `bugbottle/server` 0.8 kB.
