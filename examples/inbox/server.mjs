@@ -66,6 +66,40 @@ function authorised(req) {
   return sameSecret(offered, password);
 }
 
+/**
+ * True when a state-changing request came from the inbox's own pages.
+ *
+ * The password alone is not enough here. A browser attaches a cached
+ * `Authorization` header to a cross-site form POST exactly as it does to a
+ * same-site one — `SameSite` governs cookies and has nothing to say about HTTP
+ * auth — so without this check any page the operator happens to be visiting can
+ * delete a report whose id it knows. A reporter learns an id by sending one:
+ * the endpoint answers with it.
+ *
+ * `Sec-Fetch-Site` is the modern answer and `Origin` the older one; every
+ * browser has sent both on a cross-origin POST for years. A request carrying
+ * neither is not a browser — curl, a deploy script — and is allowed through,
+ * because refusing it would break scripting the inbox without stopping the
+ * attack this exists for.
+ */
+function sameOrigin(req) {
+  const site = req.headers["sec-fetch-site"];
+  if (site && site !== "same-origin" && site !== "none") return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const host = req.headers.host;
+  try {
+    return Boolean(host) && new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function forbidden(res) {
+  res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("This request did not come from the inbox\n");
+}
+
 function unauthorised(res) {
   res.writeHead(401, {
     "WWW-Authenticate": 'Basic realm="bugbottle inbox", charset="UTF-8"',
@@ -411,6 +445,12 @@ const server = createServer(async (req, res) => {
 
     const remove = /^\/r\/([^/]+)\/delete$/.exec(path);
     if (req.method === "POST" && remove) {
+      // The one route that changes anything, so the one that needs more than
+      // the password: see `sameOrigin`.
+      if (!sameOrigin(req)) {
+        forbidden(res);
+        return;
+      }
       const found = await findReport(remove[1]);
       if (!found) {
         res.writeHead(404).end();

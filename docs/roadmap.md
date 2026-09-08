@@ -5,13 +5,14 @@ Short version. The reasoning is in `research-features.md` and
 
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
-bare core under 1.5 kB gzipped, `bugbottle/react` under 5.5 kB, `bugbottle/ui`
-under 11.5 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
-1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/perf` under 1.25 kB,
-`bugbottle/triggers` under 1.3 kB,
-`bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-`bugbottle/sign` under 512 bytes, `bugbottle/rrweb` under 768 bytes, the
-script-tag build under 24 kB. The core budget was 1 kB until 0.6, when stack
+bare core under 1.5 kB gzipped, `bugbottle/react` under 6 kB, `bugbottle/ui`
+under 11.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/breadcrumbs` under
+1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1.3 kB,
+`bugbottle/perf` under 1.25 kB, `bugbottle/triggers` under 1.3 kB,
+`bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
+over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` and
+`bugbottle/rrweb` under 768 bytes each, the script-tag build under 24 kB and
+its slim twin under 20.5 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -79,7 +80,7 @@ cooldownMs }` — and `data-shake` switches it on from the script tag. 685 bytes
 gzipped against a 768-byte budget; the panel pays 94 bytes of wiring and none of
 the module.
 
-**0.7** — `jiraSink` and `gitlabSink`, for the teams on neither GitHub nor
+**0.8** — `jiraSink` and `gitlabSink`, for the teams on neither GitHub nor
 Linear. Jira is the only sink that does not send Markdown: REST v3 takes the
 Atlassian Document Format, so `buildJiraDescription` renders the report as a
 node tree — a paragraph, a bullet list of facts and the element, a code block
@@ -93,7 +94,7 @@ answer is then referenced from the description, so both are a later job and the
 screenshot travels as `screenshotUrl` in the meantime. The validator-only
 `bugbottle/server` bundle is unchanged at 528 bytes gzipped.
 
-**0.7** — `bugbottle/rrweb`: `attachRrweb(record, { seconds, maxBytes })`, a
+**0.8** — `bugbottle/rrweb`: `attachRrweb(record, { seconds, maxBytes })`, a
 rolling replay buffer over the application's own rrweb `record` — an adapter,
 not a recorder, with rrweb neither imported nor depended on. A full snapshot
 every ten seconds is what makes the buffer trimmable, since a replay can only
@@ -178,11 +179,12 @@ adapters, and in the panel as `contact: false | true | "required"`, where
 uses. Three locale strings in eight languages and `data-contact` on the script
 tag. It earns its keep at the far end: `reply_to` on the Resend mail when it
 looks like an address, `contexts.feedback.contact_email` in Sentry on the same
-test, a fact row in `toMarkdown` and so in the GitHub and Linear issues, and a
+test, a fact row in `toMarkdown` and so in the GitHub, GitLab and Linear
+issues, the same row built by hand in the Jira document, and a
 first field in Slack and Discord. `scrubReport(report, { contact: true })`
 takes the line out whole for the teams that keep reports somewhere public.
 
-**0.7** — `rateLimit.rateLimitStore` and `dedupe.dedupeStore` beside
+**0.8** — `rateLimit.rateLimitStore` and `dedupe.dedupeStore` beside
 `signature.replayStore`, so all three things `handleReport` remembers between
 requests are seams rather than a `Map` in one process, and a fleet behind a
 load balancer answers as one endpoint. `hit(key, windowMs)` for the limit,
@@ -199,6 +201,14 @@ use, the documentation carrying the landing page's own header with a topic
 list that collapses on a phone, and a language switch in the footer. Audited
 with `scripts/a11y-site.mjs` — six pages, two colour schemes, zero violations
 and no console message — and Lighthouse mobile at 97 with no layout shift.
+
+**Alongside** — search over the documentation, from a field at the top of the
+sidebar. The index is one entry per page and per heading, generated beside the
+pages by `scripts/build-docs.mjs` and fetched on the first focus of the field
+rather than with the page; matches are ranked title, heading, prose, top eight.
+The field is built by `site/docs.js`, so a reader without JavaScript gets the
+topic list they had before rather than a box that cannot answer. Documented in
+`site/README.md` under *The search*.
 
 **Alongside** — `dist/bugbottle.slim.js`, a second script-tag build: the same
 panel and all eight locales without the annotator, the timings snapshot, the
@@ -262,7 +272,7 @@ bites. No SDK dependency.
 
 - Annotation shipped early, in 0.6; see "Already shipped".
 - `create-bugbottle` scaffold for a receiving endpoint.
-- Playground and StackBlitz demo. (The rrweb adapter shipped early, in 0.7, as
+- Playground and StackBlitz demo. (The rrweb adapter shipped early, in 0.8, as
   `bugbottle/rrweb`; see "Already shipped".)
 - Freeze the report schema and the `beforeSend` contract.
 

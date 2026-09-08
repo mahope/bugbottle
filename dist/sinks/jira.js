@@ -28,7 +28,7 @@
  * "Create issue" and the Atlassian Document Format structure reference on
  * 2026-09-08.
  */
-import { isReportType, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, } from "../report-core.js";
+import { isReportType, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, } from "../report-core.js";
 import { messageFromBody, readBody, SinkError } from "./error.js";
 import { clip, resolveUrl } from "./chat.js";
 /** The v3 path, appended to the site's base URL. */
@@ -110,6 +110,14 @@ export function buildJiraDescription(report, options = {}, ctx = {}) {
         maxEntries: options.maxConsoleEntries ?? MAX_JIRA_CONSOLE_ENTRIES,
     });
     const facts = [`Type: ${TYPE_LABEL[type]}`];
+    // Directly under the type, exactly where `toMarkdown` puts it: a triager
+    // deciding what to do with a report wants to know whether they can answer it
+    // before anything else. This sink builds its own facts rather than rendering
+    // Markdown, so the line has to be added here as well or a team on Jira is
+    // the one team that asked for a contact and never sees it.
+    const contact = normaliseContact(r.contact);
+    if (contact)
+        facts.push(`Contact: ${contact}`);
     if (context.url)
         facts.push(`Page: ${context.url}`);
     if (context.viewport)

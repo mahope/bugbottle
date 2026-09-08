@@ -53,8 +53,9 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
-  webhook, or a GitHub issue — server-side helpers over one Markdown
-  rendering, keys never in the browser.
+  webhook, an issue in GitHub, GitLab, Jira or Linear, or an event in Sentry —
+  nine server-side sinks over one Markdown rendering, keys never in the
+  browser.
 - **Your language, your brand.** Eight bundled locales, every string
   overridable, and a panel themed with a handful of CSS variables.
 - **Server helpers included.** Every field a browser sends is checked before it
@@ -422,7 +423,7 @@ pass `scrub: scrubReport` if a message could carry anything personal.
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
-always wanted. `bugbottle/triggers` is two listeners, under 1.2 kB gzipped
+always wanted. `bugbottle/triggers` is two listeners, under 1.3 kB gzipped
 together and importing nothing but the fingerprint hash:
 
 ```ts
@@ -2208,7 +2209,9 @@ UTF-8 safe, so a token with an accent in it does not throw on the way out. The
 summary is the report's type and its first line — `Bug: The save button does
 nothing` — clipped to the 255 characters Jira keeps, unless you pass `title`.
 `facts` adds bullets of your own, and `maxConsoleEntries` shortens the code
-block, which Jira renders in full with no way to collapse it.
+block, which Jira renders in full with no way to collapse it. A `contact` line
+on the report is the bullet directly under the type, where the Markdown sinks
+put it too.
 
 A refused create names the field: Jira answers with an `errorMessages` list and
 an `errors` object keyed by field, and both are joined into the `SinkError`

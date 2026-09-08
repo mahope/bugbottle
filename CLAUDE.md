@@ -228,7 +228,7 @@ reads out). #42 then added `bugbottle/perf` to the script tag behind `data-perf`
 cost about 1.08 kB — the module is carried whether or not the attribute is
 present — so the IIFE measured 22501, and 23073 once #43 added
 `bugbottle/shake` and `requestShakePermission` to the namespace, which is why
-its budget is 23552; the eight
+its budget was 23552 then (24576 now, see #51 below); the eight
 languages leave little room, so measure before lengthening a locale string. The 720 bytes in
 between are the panel's own half — the toolbar, its CSS, the open/close wiring
 and eight English strings — and they cannot be tree-shaken out of a static
