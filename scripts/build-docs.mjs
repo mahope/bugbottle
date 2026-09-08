@@ -778,7 +778,15 @@ async function main() {
      a sitemap it is a duplicate URL in it. It is always a mistake, so it is a
      build failure like the other two. */
   const twice = [...new Set(placed.filter((slug, i) => placed.indexOf(slug) !== i))];
-  if (missing.length > 0 || ghosts.length > 0 || twice.length > 0) {
+  /* Two README headings that slugify the same way — "## Queue" and "## queue",
+     or two sections genuinely called the same thing — used to collapse
+     silently in the `new Map(sections)` below, and the second one won: its
+     page was written under the first one's name and the first one's text was
+     simply gone from the site, with the README still holding both. The build
+     is the only place that can notice, because the README reads perfectly
+     well. */
+  const duplicates = [...new Set(found.filter((slug, i) => found.indexOf(slug) !== i))];
+  if (missing.length > 0 || ghosts.length > 0 || twice.length > 0 || duplicates.length > 0) {
     const lines = [];
     if (missing.length > 0) {
       lines.push(`README sections with no group in scripts/build-docs.mjs: ${missing.join(", ")}`);
@@ -788,6 +796,9 @@ async function main() {
     }
     if (twice.length > 0) {
       lines.push(`Slugs placed in more than one group slot: ${twice.join(", ")}`);
+    }
+    if (duplicates.length > 0) {
+      lines.push(`README \`##\` headings sharing one slug: ${duplicates.join(", ")}`);
     }
     throw new Error(lines.join("\n"));
   }

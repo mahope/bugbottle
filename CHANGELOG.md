@@ -31,6 +31,12 @@ change the API; the changelog says so when they do.
   together — once a new one takes the count past it. Thirty reports a minute at
   four megabytes each is a full disk soon enough, and a full disk is an inbox
   that has stopped accepting anything.
+- `npm run build:docs` fails on two README `##` headings that slugify the same
+  way, beside the ungrouped and ghost checks it already had. They used to
+  collapse in a `Map` and the second heading won, so one section's text
+  disappeared from the site while the README still held both — and the README
+  reads perfectly well either way, so the build is the only place that can
+  notice.
 
 ## 0.8.0 — 2026-09-08
 
