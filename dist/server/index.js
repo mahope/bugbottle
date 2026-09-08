@@ -18,6 +18,11 @@ export { fingerprint, stableHash } from "../fingerprint.js";
 // `Response`. Importing it is opt-in, so an integrator who only wants the
 // validators does not bundle the sinks it reaches for.
 export { handleReport, validateReport, collectExtra, resetRateLimits, resetDedupe, resetSignatures, toResend, toWebhook, toGithub, toLinear, SinkTimeoutError, DEFAULT_MAX_BODY_BYTES, DEFAULT_BODY_TIMEOUT_MS, DEFAULT_SINK_TIMEOUT_MS, MAX_EXTRA_KEYS, MAX_EXTRA_STRING_LENGTH, MAX_RATE_LIMIT_KEY_LENGTH, MAX_RATE_LIMIT_BUCKETS, MAX_DEDUPE_ENTRIES, MAX_SIGNATURE_ENTRIES, MAX_SIGNATURE_ENTRIES_PER_SECOND, MAX_SIGNATURE_SECONDS, DEFAULT_SIGNATURE_SKEW_MS, BAD_SIGNATURE_ERROR, EMPTY_MESSAGE_ERROR, TOO_LARGE_ERROR, } from "./handle.js";
+// The directory of files most small deployments want before they want a
+// database. It is the one module here that reaches for `node:fs`, and nothing
+// the validators reach imports it, so the validator-only bundle stays free of
+// it — CI greps the minified text to be sure.
+export { fileStore, DEFAULT_MAX_REPORTS, } from "./file-store.js";
 export { expressHandler, } from "./express.js";
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.

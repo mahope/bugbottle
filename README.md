@@ -1570,6 +1570,63 @@ is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
 answers `413` and calls `req.destroy()` rather than buffering the rest of a
 body it has already refused.
 
+### A directory of files
+
+`store` is a function you write, and for a great many deployments the function
+you write first is "put it on the disk". `fileStore` is that written once:
+
+```ts
+import { fileStore, handleReport } from "bugbottle/server";
+
+const reports = fileStore({ dir: "./reports", maxReports: 2000 });
+
+export const POST = (req: Request) => handleReport(req, { store: reports.store });
+```
+
+One JSON file per report, named `<arrival time>-<id>.json` so the directory
+sorts by age, with the decoded PNG beside it as `<id>.png`. The split keeps the
+JSON readable — a megabyte of base64 in the middle of a file makes it
+unopenable — and deleting a report is deleting two files nobody has to parse.
+`maxReports` (2000 by default) deletes the oldest once the directory is over
+it, because an inbox with no ceiling is a disk that fills; `0` keeps
+everything, which is a decision about a disk rather than a default.
+`screenshots: false` keeps the JSON and never writes a picture at all.
+
+Three more calls are there for whoever builds a page over the directory:
+
+```ts
+const listed = await reports.list();          // newest first, one small entry each
+const found = await reports.read(id, { screenshot: true });
+await reports.remove(id);                     // the JSON and the picture
+```
+
+`list()` answers `{ id, file, title, type, url, receivedAt, screenshot }` per
+report — the strings a list shows, without reading every file for them. The
+directory is walked once, on the first call that needs it, and kept up to date
+by every write and delete after that; `read(id)` then reads exactly the one
+file that was asked for, and only fetches the picture when you ask for it.
+
+Two of its properties are worth saying out loud, because they are the reasons
+not to write this yourself:
+
+- **Every write is a rename.** The bytes go to a temporary name and are renamed
+  into place, which is atomic within a directory. A process killed halfway
+  through four megabytes leaves a `.tmp` file that no listing looks at, never a
+  truncated report or half a screenshot.
+- **An id is a UUID or it is nothing.** `read` and `remove` take an id that
+  came out of a URL, which makes it attacker-controlled text on its way to a
+  path. It is matched against the shape `crypto.randomUUID()` writes *before*
+  any path is built, so `../../etc/passwd` is answered with `null` rather than
+  normalised and hoped about. The picture is checked the same way: what gets
+  written under a `.png` name has a PNG signature in its bytes, whatever the
+  caller called it, and one that does not is dropped while the report is
+  stored — screenshots fail open here as everywhere else.
+
+It is a directory, not a database: one process is assumed to be the only thing
+writing to it, because the index is held in memory. Two instances over one
+volume want the real thing. `examples/inbox` is `fileStore` plus a password, a
+list and a detail page, and is the shortest way to see it working.
+
 ### Signing requests
 
 An endpoint that anybody can POST to will eventually be found by somebody with
@@ -2782,7 +2839,9 @@ so the hook can default without dragging eight languages in), and the `Locale`,
 `localesExtra`, the five optional languages in the same `Locale` shape. Nothing
 imports this entry, so a site that does not ask for it never carries it.
 
-**`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
+**`bugbottle/server`** — `handleReport`, `expressHandler`, `fileStore`
+(with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
+`StoredReport` and `StoredReportFile` types), `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
 `resetDedupe`, `resetSignatures`, `fingerprint`, `stableHash`,
 `decodeScreenshotDataUrl`, `normaliseMessage`, `normaliseContact`,

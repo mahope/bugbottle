@@ -264,6 +264,20 @@ a success, and the 28 kB a webhook accepts is a budget the card is measured
 against before it is sent — console first, then the facts from the back, then
 the reporter's own words. Server-only, so it costs a browser bundle nothing.
 
+**Unreleased** — `fileStore({ dir, maxReports?, screenshots? })` in
+`bugbottle/server` (#82): the storage `examples/inbox` had grown for itself,
+lifted into the library. A JSON file per report with the PNG beside it, plus
+`list`, `read` and `remove` for whoever builds a page over the directory. It is
+what most small deployments want before they want a database, and the three
+parts nobody wants to get wrong twice are in it: the write is a rename, so a
+crash leaves a `.tmp` rather than half a report; an id is matched against the
+UUID shape before a path is built, so a traversal is answered with `null`; and
+the picture is signature-checked in its bytes before it is written. Node-only,
+and tree-shaken out of every bundle that does not name it — the validator-only
+bundle is unchanged at 583 bytes. The example now routes, authorises and
+renders, and does no filesystem work of its own; its fourteen tests did not
+move.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in

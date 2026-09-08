@@ -13,11 +13,11 @@
  * first.
  */
 import { createServer } from "node:http";
-import { readFile, writeFile, readdir, mkdir, rm } from "node:fs/promises";
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize } from "node:path";
-import { handleReport, toMarkdown } from "bugbottle/server";
+import { fileStore, handleReport, toMarkdown } from "bugbottle/server";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "..", "dist");
@@ -253,102 +253,22 @@ const PAGE = (title, body) => `<!doctype html>
 `;
 
 /**
- * The list, in memory: one small entry per stored report rather than the
- * reports themselves.
+ * Where a report goes: one JSON file per report with the decoded picture
+ * beside it, an in-memory index of the strings the list shows, a cap on the
+ * directory, and an atomic write under all of it.
  *
- * Reading and parsing every file on every request is fine for the first
- * hundred reports and is quietly quadratic after that — and it was being done
- * for the detail page too, which needs exactly one of them. So the directory
- * is walked once, at the first request that needs the list, and the four
- * strings the list actually shows are kept. After that a write appends and a
- * delete removes; nothing re-reads the directory, because this process is the
- * only thing that writes to it.
- *
- * `null` until that first walk. It is not a cache to be invalidated: dropping
- * an entry that is still on disk would hide a report, so every path that
- * touches the directory touches this in the same breath.
+ * All of that is `fileStore` in `bugbottle/server` now. It used to be two
+ * hundred lines of this file, which is how it earnt its way into the library:
+ * the rename that stops a half-written report from ever being read, the id
+ * that cannot become a path, and the cap that deletes the oldest first are the
+ * parts everybody needs and nobody wants to get wrong twice. What is left here
+ * is routing, the password and the HTML.
  */
-let index = null;
-
-/** How many reports the directory holds before the oldest are deleted. */
-const MAX_REPORTS = Number(process.env.MAX_REPORTS ?? 2000);
-
-/** The strings the list shows, taken from a report once and then kept. */
-function summarise(id, file, report) {
-  return {
-    id,
-    file,
-    title: String(report?.message ?? "").split(/\r?\n/)[0] ?? "",
-    type: String(report?.type ?? ""),
-    url: String(report?.context?.url ?? ""),
-    receivedAt: String(report?.receivedAt ?? ""),
-  };
-}
-
-/** Every stored report, newest first. Built once, then kept up to date. */
-async function listReports() {
-  if (index) return index;
-  let files = [];
-  try {
-    files = await readdir(reportsDir);
-  } catch {
-    index = [];
-    return index;
-  }
-  const entries = [];
-  // The name begins with the arrival time, so sorting the names sorts by age.
-  for (const file of files.filter((name) => name.endsWith(".json")).sort().reverse()) {
-    const id = /-([0-9a-f-]{36})\.json$/.exec(file)?.[1];
-    if (!id) continue;
-    try {
-      entries.push(summarise(id, file, JSON.parse(await readFile(join(reportsDir, file), "utf8"))));
-    } catch {
-      // A half-written file is skipped rather than allowed to empty the list.
-    }
-  }
-  index = entries;
-  return index;
-}
-
-/** One list entry by id, or null. The id is checked before it reaches a path. */
-async function findReport(id) {
-  if (!/^[0-9a-f-]{36}$/.test(id)) return null;
-  return (await listReports()).find((entry) => entry.id === id) ?? null;
-}
-
-/** The stored JSON for one entry — one file, read only when it is asked for. */
-async function readReport(entry) {
-  try {
-    return JSON.parse(await readFile(join(reportsDir, entry.file), "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-/** Forgets an entry and deletes both of its files. */
-async function forget(entry) {
-  if (index) index = index.filter((other) => other.id !== entry.id);
-  await rm(join(reportsDir, entry.file), { force: true });
-  await rm(join(reportsDir, `${entry.id}.png`), { force: true });
-}
-
-/**
- * Deletes the oldest reports until the directory is back inside `MAX_REPORTS`.
- *
- * An inbox with no ceiling is a disk that fills: the rate limit allows thirty
- * reports a minute and each of them may carry four megabytes of picture, so a
- * fortnight of somebody's script is a full volume and an inbox that has
- * stopped accepting anything. Oldest first, because the newest report is the
- * one somebody is about to read.
- */
-async function prune() {
-  if (!index || !Number.isFinite(MAX_REPORTS) || MAX_REPORTS <= 0) return;
-  while (index.length > MAX_REPORTS) {
-    const oldest = index[index.length - 1];
-    if (!oldest) break;
-    await forget(oldest);
-  }
-}
+const reports = fileStore({
+  dir: reportsDir,
+  /** How many reports the directory holds before the oldest are deleted. */
+  maxReports: Number(process.env.MAX_REPORTS ?? 2000),
+});
 
 function listPage(reports) {
   const items = reports
@@ -462,15 +382,15 @@ function when(value) {
 async function feedItems(req) {
   const base = baseUrl(req);
   const items = [];
-  for (const entry of (await listReports()).slice(0, FEED_LIMIT)) {
-    const report = await readReport(entry);
-    if (!report) continue;
+  for (const entry of (await reports.list()).slice(0, FEED_LIMIT)) {
+    const found = await reports.read(entry.id);
+    if (!found) continue;
     items.push({
       url: `${base}/r/${entry.id}`,
       title: entry.title || "Report",
       type: entry.type || "other",
       published: when(entry.receivedAt),
-      markdown: toMarkdown(report, { headingLevel: 0 }),
+      markdown: toMarkdown(found.report, { headingLevel: 0 }),
     });
   }
   return { base, items };
@@ -556,30 +476,6 @@ function readBody(req, res) {
   });
 }
 
-/**
- * Where a report goes: the validated JSON under its arrival time, the decoded
- * picture beside it under the id alone. The split keeps the JSON readable —
- * a megabyte of base64 in the middle of a file makes it unopenable — and it
- * means deleting a report is deleting two files nobody has to parse.
- */
-async function store(report, screenshot) {
-  const id = randomUUID();
-  // Before the write, not after: the first report of a run is what triggers
-  // the one walk of the directory, and a walk that ran afterwards would find
-  // this report on disk and then be handed it a second time below.
-  const reports = await listReports();
-
-  await mkdir(reportsDir, { recursive: true });
-  const stamp = report.receivedAt.replace(/[:.]/g, "-");
-  const file = `${stamp}-${id}.json`;
-  await writeFile(join(reportsDir, file), JSON.stringify(report, null, 2));
-  if (screenshot) await writeFile(join(reportsDir, `${id}.png`), screenshot);
-
-  reports.unshift(summarise(id, file, report));
-  await prune();
-  return { id };
-}
-
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   const path = url.pathname;
@@ -612,7 +508,7 @@ const server = createServer(async (req, res) => {
           // One named origin or nothing. A wildcard would let any page on the
           // internet fill this disk, and the disk is where the pictures are.
           cors: process.env.ALLOWED_ORIGIN,
-          store,
+          store: reports.store,
         },
       );
       res.writeHead(response.status, { "Content-Type": "application/json" });
@@ -650,7 +546,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && path === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(listPage(await listReports()));
+      res.end(listPage(await reports.list()));
       return;
     }
 
@@ -675,30 +571,25 @@ const server = createServer(async (req, res) => {
 
     const json = /^\/r\/([^/]+)\.json$/.exec(path);
     if (req.method === "GET" && json) {
-      const found = await findReport(json[1]);
+      const found = await reports.read(json[1]);
       if (!found) {
         res.writeHead(404).end();
         return;
       }
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(await readFile(join(reportsDir, found.file)));
+      res.end(JSON.stringify(found.report, null, 2));
       return;
     }
 
     const png = /^\/r\/([^/]+)\.png$/.exec(path);
     if (req.method === "GET" && png) {
-      const found = await findReport(png[1]);
-      if (!found) {
+      const found = await reports.read(png[1], { screenshot: true });
+      if (!found?.screenshot) {
         res.writeHead(404).end();
         return;
       }
-      try {
-        const bytes = await readFile(join(reportsDir, `${found.id}.png`));
-        res.writeHead(200, { "Content-Type": "image/png" });
-        res.end(bytes);
-      } catch {
-        res.writeHead(404).end();
-      }
+      res.writeHead(200, { "Content-Type": "image/png" });
+      res.end(Buffer.from(found.screenshot));
       return;
     }
 
@@ -710,38 +601,25 @@ const server = createServer(async (req, res) => {
         forbidden(res);
         return;
       }
-      const found = await findReport(remove[1]);
-      if (!found) {
+      if (!(await reports.remove(remove[1]))) {
         res.writeHead(404).end();
         return;
       }
-      await forget(found);
       res.writeHead(303, { Location: "/" }).end();
       return;
     }
 
     const detail = /^\/r\/([^/]+)$/.exec(path);
     if (req.method === "GET" && detail) {
-      const found = await findReport(detail[1]);
+      // One file, the one that was asked for. The index carries the name and
+      // whether there is a picture; the report itself is read only here.
+      const found = await reports.read(detail[1]);
       if (!found) {
         res.writeHead(404).end();
         return;
       }
-      // One file, the one that was asked for. The list's index carries the
-      // name; the report itself is read only here.
-      const report = await readReport(found);
-      if (!report) {
-        res.writeHead(404).end();
-        return;
-      }
-      let hasPicture = true;
-      try {
-        await readFile(join(reportsDir, `${found.id}.png`));
-      } catch {
-        hasPicture = false;
-      }
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(detailPage({ id: found.id, report }, hasPicture));
+      res.end(detailPage({ id: found.entry.id, report: found.report }, found.entry.screenshot));
       return;
     }
 

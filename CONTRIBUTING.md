@@ -58,8 +58,9 @@ need Node 18.
   core moved 1272 → 1310 bytes for it, which is the two registry reads in
   `buildReport` and nothing else — the observers, the store walk and the cookie
   parse are only ever bundled by an application that imports `bugbottle/perf`.
-  `bugbottle/server` is budgeted at 1024 bytes and measures 582: it is a
-  server entry, and everything in it — the sinks included — is tree-shaken away
+  `bugbottle/server` is budgeted at 1024 bytes and measures 583: it is a
+  server entry, and everything in it — the sinks and `fileStore` included — is
+  tree-shaken away
   from a consumer that imports only the validators, so staying about half a
   kilobyte is the proof that no sink leaked into the shared path. CI also greps
   that minified bundle for `document`, `window.`, `navigator` and
