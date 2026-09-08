@@ -191,6 +191,22 @@ export function buildTeamsMessage(report, options, ctx = {}) {
         parts.facts = parts.facts.slice(0, -1);
         payload = envelope(buildCard(parts));
     }
+    // Then, only if it has to be, an address. Neither can be clipped — half a
+    // signed URL is a broken link, not a shorter one — so the question is not
+    // whether the card is over the cap now but whether it could ever get under
+    // it: the floor is the same card with no console, no facts and no message,
+    // and a floor over the budget is an address that has to go. Without this the
+    // reporter's words are spent first and the card is refused anyway, which
+    // loses the report to keep a link to it.
+    const floor = () => jsonByteLength(envelope(buildCard({ ...parts, facts: [], consoleText: undefined, message: "" })));
+    if (floor() > MAX_TEAMS_MESSAGE_BYTES && parts.screenshot) {
+        parts.screenshot = undefined;
+        payload = envelope(buildCard(parts));
+    }
+    if (floor() > MAX_TEAMS_MESSAGE_BYTES && parts.link) {
+        parts.link = undefined;
+        payload = envelope(buildCard(parts));
+    }
     while (jsonByteLength(payload) > MAX_TEAMS_MESSAGE_BYTES && parts.message.length > 0) {
         // Every character dropped is at least one byte dropped, so subtracting the
         // overspend in characters always makes progress and usually ends it here.

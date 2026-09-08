@@ -39,6 +39,20 @@ test("a language tag resolves to the bundled locale or falls back", () => {
   assert.equal(resolveLocale("xx", da), da);
 });
 
+test("a language tag naming an inherited property falls back", () => {
+  // `resolveLocale(new URLSearchParams(location.search).get("lang"))` is the
+  // ordinary way to call this, so the tag is whatever was in the URL. A plain
+  // bracket read finds `Object.prototype` for `__proto__`, and the panel then
+  // throws on `locale.ui.title` at mount rather than showing English.
+  for (const tag of ["__proto__", "constructor", "prototype", "hasOwnProperty"]) {
+    assert.equal(resolveLocale(tag), en, `${tag} is not a language`);
+    assert.equal(resolveLocale(tag, da), da, `${tag} is not a language`);
+    assert.equal(resolveLocale(tag, en, all), en, `${tag} is not a language`);
+  }
+  // The region is dropped from one of these too, and finds nothing either.
+  assert.equal(resolveLocale("__proto__-DK"), en);
+});
+
 test("a merged map reaches the optional languages, and pt-BR lands on pt", () => {
   assert.equal(resolveLocale("pt", en, all), pt);
   assert.equal(resolveLocale("pt-BR", en, all), pt);

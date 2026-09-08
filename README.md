@@ -54,7 +54,7 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, an issue in GitHub, GitLab, Jira or Linear, or an event in Sentry —
-  ten server-side sinks over one Markdown rendering, keys never in the
+  eleven server-side sinks over one Markdown rendering, keys never in the
   browser.
 - **Your language, your brand.** Eight bundled locales, every string
   overridable, and a panel themed with a handful of CSS variables.

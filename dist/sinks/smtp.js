@@ -61,14 +61,102 @@ const MAX_HEADER_LINE = 78;
 function headerSafe(value) {
     return value.replace(/[\r\n]+/g, " ").trim();
 }
+/** The most an encoded word may be, markers included. RFC 2047 §2 says 75. */
+const MAX_ENCODED_WORD = 75;
+/** `=?UTF-8?B?` and `?=`, which every encoded word spends before its value. */
+const ENCODED_WORD_OVERHEAD = "=?UTF-8?B??=".length;
 /**
- * An RFC 2047 encoded word, for a subject with a non-ASCII character in it.
- * Base64 of the whole value rather than quoted-printable of the parts: a
- * subject is short, and a reader never sees the encoding either way.
+ * The bytes of source text an encoded word of at most `limit` characters has
+ * room for: base64 spends four characters on every three bytes, and the
+ * markers take twelve before any of the value does.
  */
-function encodeWord(value) {
-    const base64 = Buffer.from(value, "utf8").toString("base64");
-    return `=?UTF-8?B?${base64}?=`;
+function encodedWordBytes(limit) {
+    return Math.max(3, Math.floor((limit - ENCODED_WORD_OVERHEAD) / 4) * 3);
+}
+/** True for anything that cannot travel in a header as it stands. */
+function needsEncoding(value) {
+    return /[^\x20-\x7e]/.test(value);
+}
+/**
+ * A value as RFC 2047 encoded words — several of them when one would be over
+ * length, because a decoder is entitled to ignore a word longer than
+ * seventy-five characters and some of them do.
+ *
+ * The split walks code points rather than bytes, so a character is never cut
+ * in half across two words, and the words are joined with a space: RFC 2047
+ * §6.2 says the whitespace between two adjacent encoded words is not part of
+ * the text, which is what makes the split invisible to the reader.
+ */
+function encodeWords(value, limit = MAX_ENCODED_WORD) {
+    const room = encodedWordBytes(Math.min(limit, MAX_ENCODED_WORD));
+    const words = [];
+    let chunk = "";
+    let bytes = 0;
+    const flush = () => {
+        if (chunk)
+            words.push(`=?UTF-8?B?${Buffer.from(chunk, "utf8").toString("base64")}?=`);
+        chunk = "";
+        bytes = 0;
+    };
+    for (const character of value) {
+        const size = Buffer.byteLength(character, "utf8");
+        if (bytes + size > room)
+            flush();
+        chunk += character;
+        bytes += size;
+    }
+    flush();
+    return words.join(" ");
+}
+/** Headers whose value is a list of addresses rather than free text. */
+const ADDRESS_HEADERS = new Set(["From", "To", "Cc", "Bcc", "Reply-To", "Sender"]);
+/**
+ * Splits an address list on the commas that separate addresses, and not on the
+ * ones inside a quoted display name — `"Hansen, Bjørn" <a@b.c>` is one address
+ * and cutting it in two would make it two broken ones.
+ */
+function splitAddresses(list) {
+    const addresses = [];
+    let current = "";
+    let quoted = false;
+    let angled = false;
+    for (const character of list) {
+        if (character === '"')
+            quoted = !quoted;
+        else if (!quoted && character === "<")
+            angled = true;
+        else if (!quoted && character === ">")
+            angled = false;
+        else if (character === "," && !quoted && !angled) {
+            addresses.push(current);
+            current = "";
+            continue;
+        }
+        current += character;
+    }
+    addresses.push(current);
+    return addresses.map((address) => address.trim()).filter((address) => address.length > 0);
+}
+/**
+ * One address with only its display name encoded.
+ *
+ * Encoding the whole value would be simpler and wrong: `=?UTF-8?B?...?=` is a
+ * phrase, never an address, so a `From` built that way has no address in it at
+ * all — nothing can route it and nobody can reply to it. The `<local@domain>`
+ * half is ASCII by construction and is left exactly as it arrived.
+ */
+function encodeAddress(address, limit) {
+    const angled = /^(.*?)\s*(<[^>]*>)$/.exec(address);
+    if (!angled)
+        return needsEncoding(address) ? encodeWords(address, limit) : address;
+    const name = angled[1] ?? "";
+    const bare = angled[2] ?? "";
+    if (!name)
+        return bare;
+    // A quoted display name loses its quotes: an encoded word is a phrase in its
+    // own right and quoting one is not allowed.
+    const plain = /^"(.*)"$/.exec(name)?.[1] ?? name;
+    return needsEncoding(plain) ? `${encodeWords(plain, limit)} ${bare}` : `${name} ${bare}`;
 }
 /**
  * One header, folded to fit RFC 5322's line length.
@@ -79,7 +167,17 @@ function encodeWord(value) {
  */
 export function foldHeader(name, value) {
     const clean = headerSafe(value);
-    const encoded = /[^\x20-\x7e]/.test(clean) ? encodeWord(clean) : clean;
+    // An encoded word is one token and is never folded through, so it has to be
+    // short enough that the line it lands on still fits: the first one sits
+    // after `Name: `, which is the tightest place any of them can land.
+    const limit = MAX_HEADER_LINE - name.length - 2;
+    const encoded = ADDRESS_HEADERS.has(name)
+        ? splitAddresses(clean)
+            .map((address) => encodeAddress(address, limit))
+            .join(", ")
+        : needsEncoding(clean)
+            ? encodeWords(clean, limit)
+            : clean;
     const words = encoded.split(" ").filter((word) => word.length > 0);
     const lines = [];
     let line = `${name}:`;

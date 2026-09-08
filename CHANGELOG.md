@@ -68,6 +68,68 @@ change the API; the changelog says so when they do.
   chains its commits, and the refusal is answered rather than surrendered to;
   the issue hoped for a hundred bytes and it cost two hundred and forty.
 
+### Fixed
+
+- `smtpSink` sent an unroutable `From` when the address carried a non-ASCII
+  display name. `foldHeader` encoded the whole value as one RFC 2047 word, so
+  `Bjørn Hansen <bugs@example.com>` reached the wire as `=?UTF-8?B?…?=` and
+  nothing after it: an encoded word is a phrase, never an address, and a mail
+  server has nothing left to route or reply to. Only the display name is
+  encoded now, and the `<local@domain>` half travels as it arrived — for every
+  address in a list, split on the commas that separate addresses and not on the
+  ones inside a quoted name. The same fix bounds an encoded word at the
+  seventy-five characters RFC 2047 §2 allows: a Danish subject used to become
+  one word of a hundred and sixty, which a decoder is entitled to ignore, and
+  is now several that fold onto lines that fit.
+- `fileStore` lost a report when two arrived before the directory had been
+  walked. Both writes found no index, both walked, and the walk that finished
+  second became the index — so the first report was on disk, readable by id,
+  and in no listing until the process restarted. The walk is shared now, and
+  once there is an index it is added to and spliced from rather than replaced,
+  so a write holding it across an `await` is still holding the live one when
+  the cap deletes something underneath it.
+- `fileStore` built the front half of a file name out of the report's own
+  `receivedAt`. `handleReport` sets that field itself, but `store` is a
+  function anybody can call, and `../..` in it would have written the report
+  outside the directory — the same hole the id is checked against the UUID
+  shape to close. Only the characters a timestamp is made of survive it now.
+- `teamsSink` could post a card over the 28 kB Teams refuses above. The budget
+  dropped the console, then the facts, then clipped the message — and none of
+  those touches the screenshot address or the button, so a stored picture
+  behind a very long signed URL spent the reporter's whole message and left the
+  card over the cap regardless, which Teams then refused outright. An address
+  cannot be clipped, so it is now measured against the floor — the same card
+  with no console, no facts and no message — and dropped when even that will
+  not fit. A card that arrives without its picture says what went wrong; a card
+  that is refused says nothing.
+- CI's `browser` job has a fifteen-minute ceiling. A Chrome that never answers
+  used to run into GitHub's own six-hour default, which is a wedged runner
+  holding the queue rather than a red tick; a green run takes about three
+  minutes.
+- The README said "ten server-side sinks" in its opening summary where the
+  table below it lists eleven, and `docs/roadmap.md` still gave
+  `bugbottle/perf` a 1.25 kB budget where CI enforces 1536 bytes.
+- The inbox example's `ALLOWED_ORIGIN` did nothing a browser could use. The
+  preflight fell past the report route into the password check and came back a
+  401, so the report was never sent; and the answer to the POST was written
+  with a hard-coded `Content-Type` and none of the headers `handleReport` had
+  put on it, so even a request that got through arrived without
+  `Access-Control-Allow-Origin` and the browser discarded it. `OPTIONS` is
+  handled by `handleReport` now, before the password, and the response's own
+  headers are the ones written.
+- `resolveLocale` answered `"__proto__"` with `Object.prototype` and
+  `"constructor"` with a function. The tag is usually `navigator.language`, but
+  it is just as often a `?lang=` off the URL, and a plain bracket read finds
+  every inherited property of the map. Neither answer is a `Locale`, so the
+  panel threw on `locale.ui.title` at mount instead of falling back to English.
+  The lookup is `Object.hasOwn` now.
+- `scripts/build-docs.mjs` lost the theme playground silently when its README
+  heading was renamed. The page script is keyed on the slug and
+  `PAGE_SCRIPTS[slug] ?? []` answers a renamed one with nothing — the build
+  green, the section still on the site, the editor gone, and the theme table's
+  own check silent because that one only runs on the page it is attached to. A
+  hook with no page to hook onto is a build failure, like an ungrouped section.
+
 ## 0.12.0 — 2026-09-08
 
 The self-hosted release. Two things that used to need a service now need

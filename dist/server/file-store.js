@@ -62,9 +62,23 @@ export function fileStore(options) {
      * touches the directory touches this in the same breath.
      */
     let index = null;
-    async function ensureIndex() {
+    /**
+     * The walk in flight, so two calls that both find no index share one.
+     *
+     * Without it the second walk finishes last and its array becomes the index,
+     * throwing away whatever the first one had already been handed and added to
+     * — a report on disk that no listing mentions until the process restarts.
+     * Once there is an index it is never replaced, only added to and taken from,
+     * which is what lets a caller hold on to it across an `await`.
+     */
+    let walking = null;
+    function ensureIndex() {
         if (index)
-            return index;
+            return Promise.resolve(index);
+        walking ??= walk().finally(() => void (walking = null));
+        return walking;
+    }
+    async function walk() {
         let files = [];
         try {
             files = await readdir(dir);
@@ -111,10 +125,17 @@ export function fileStore(options) {
             await forget(oldest);
         }
     }
-    /** Forgets one entry and deletes both of its files. */
+    /**
+     * Forgets one entry and deletes both of its files.
+     *
+     * The entry is spliced out rather than filtered into a new array: a `store`
+     * that is between its write and the line that remembers it is holding this
+     * array, and replacing it would leave that report remembered nowhere.
+     */
     async function forget(entry) {
-        if (index)
-            index = index.filter((other) => other.id !== entry.id);
+        const at = index?.findIndex((other) => other.id === entry.id) ?? -1;
+        if (index && at !== -1)
+            index.splice(at, 1);
         await rm(join(dir, entry.file), { force: true });
         await rm(join(dir, `${entry.id}.png`), { force: true });
     }
@@ -126,12 +147,15 @@ export function fileStore(options) {
         const entries = await ensureIndex();
         await mkdir(dir, { recursive: true });
         const receivedAt = String(report?.receivedAt ?? new Date().toISOString());
-        const file = `${receivedAt.replace(/[:.]/g, "-")}-${id}.json`;
+        const file = `${nameSafe(receivedAt)}-${id}.json`;
         const picture = screenshots ? pngBytes(screenshot) : undefined;
         await writeAtomic(join(dir, file), JSON.stringify(report, null, 2));
         if (picture)
             await writeAtomic(join(dir, `${id}.png`), picture);
-        entries.unshift(summarise(id, file, report, Boolean(picture)));
+        // `index` rather than the `entries` this call was handed: the two are the
+        // same array unless the walk was replaced under us, and the index is the
+        // one a listing reads.
+        (index ?? entries).unshift(summarise(id, file, report, Boolean(picture)));
         await prune();
         return { id };
     };
@@ -177,6 +201,21 @@ export function fileStore(options) {
             return true;
         },
     };
+}
+/**
+ * The arrival time as the front half of a file name.
+ *
+ * `handleReport` writes `receivedAt` itself, so in the ordinary path this is an
+ * ISO timestamp and the colons and dots are all that need replacing. But
+ * `store` is a function anybody can call with a report from anywhere, and half
+ * a file name is half a path: `../..` in this field would put the report
+ * somewhere the directory does not reach and the listing never looks. Only the
+ * characters a timestamp is made of survive, for the same reason the id is
+ * matched against the UUID shape before it becomes a path.
+ */
+function nameSafe(receivedAt) {
+    const cleaned = receivedAt.replace(/[^0-9A-Za-z]/g, "-").slice(0, 40);
+    return cleaned.replace(/^-+/, "") || "undated";
 }
 /** The strings a list shows, taken from a report once and then kept. */
 function summarise(id, file, report, screenshot) {

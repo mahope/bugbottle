@@ -434,6 +434,12 @@ export function resolveLocale(tag, fallback = en, from = locales) {
     if (!tag)
         return fallback;
     const lower = tag.toLowerCase();
-    return from[lower] ?? from[lower.split("-")[0] ?? ""] ?? fallback;
+    // `Object.hasOwn` rather than a bare bracket read: the tag is usually
+    // `navigator.language`, but it is just as often a `?lang=` off the URL, and
+    // a plain lookup answers `__proto__` with `Object.prototype` and
+    // `constructor` with a function. Neither is a `Locale`, and the panel throws
+    // on `locale.ui.title` at mount instead of falling back to English.
+    const named = (key) => Object.hasOwn(from, key) ? from[key] : undefined;
+    return named(lower) ?? named(lower.split("-")[0] ?? "") ?? fallback;
 }
 //# sourceMappingURL=locales.js.map

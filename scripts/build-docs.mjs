@@ -225,8 +225,10 @@ const TITLE_OVERRIDES = {
    them has to be named here rather than added to the file every page loads:
    /playground.js is a theme editor that twenty-nine pages have no use for. A
    module, because it imports the panel from /dist/. */
+const PLAYGROUND_SLUG = "languages-and-branding";
+
 const PAGE_SCRIPTS = {
-  "languages-and-branding": ["/playground.js"],
+  [PLAYGROUND_SLUG]: ["/playground.js"],
 };
 
 /*
@@ -1091,7 +1093,20 @@ async function main() {
      is the only place that can notice, because the README reads perfectly
      well. */
   const duplicates = [...new Set(found.filter((slug, i) => found.indexOf(slug) !== i))];
-  if (missing.length > 0 || ghosts.length > 0 || twice.length > 0 || duplicates.length > 0) {
+  /* A page-specific script is keyed on a slug, and a slug is a README heading
+     somebody may rename. `PAGE_SCRIPTS[slug] ?? []` answers a renamed one with
+     nothing at all, so the playground would simply stop being on the page —
+     the build green, the section still there, the editor gone, and the theme
+     table's own check silent, because that one only runs on the page it is
+     attached to. A hook with no page to hook onto is a build failure. */
+  const unhooked = Object.keys(PAGE_SCRIPTS).filter((slug) => !found.includes(slug));
+  if (
+    missing.length > 0 ||
+    ghosts.length > 0 ||
+    twice.length > 0 ||
+    duplicates.length > 0 ||
+    unhooked.length > 0
+  ) {
     const lines = [];
     if (missing.length > 0) {
       lines.push(`README sections with no group in scripts/build-docs.mjs: ${missing.join(", ")}`);
@@ -1104,6 +1119,9 @@ async function main() {
     }
     if (duplicates.length > 0) {
       lines.push(`README \`##\` headings sharing one slug: ${duplicates.join(", ")}`);
+    }
+    if (unhooked.length > 0) {
+      lines.push(`Page scripts keyed on a slug no README section has: ${unhooked.join(", ")}`);
     }
     throw new Error(lines.join("\n"));
   }
@@ -1142,7 +1160,7 @@ async function main() {
     marked.use({ renderer: renderer(page, anchors) });
     page.html = marked.parse(page.body);
     /* The one page with something on it that is not README prose. */
-    if (page.slug === "languages-and-branding") {
+    if (page.slug === PLAYGROUND_SLUG) {
       page.html = withPlayground(page.html, page.body);
     }
   }

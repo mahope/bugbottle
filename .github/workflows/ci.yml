@@ -436,6 +436,11 @@ jobs:
   browser:
     name: Browser audits
     runs-on: ubuntu-latest
+    # The three browser scripts drive Chrome through puppeteer, and a Chrome
+    # that never answers is a job that never ends: GitHub's own ceiling is six
+    # hours, which is a wedged runner holding a queue all afternoon rather than
+    # a red tick in ten minutes. A green run takes about three.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
