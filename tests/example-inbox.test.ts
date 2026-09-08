@@ -11,7 +11,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -350,5 +351,293 @@ test("REPORTS_DIR is where the reports go, even when it does not exist yet", asy
   } finally {
     await stop(running);
     await rm(parent, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A small strict XML parser, so "well-formed Atom" is checked rather than
+ * asserted with a substring.
+ *
+ * Node has no XML parser and this repository has no test dependencies, so this
+ * is the sanity check the feed needs: tags must nest and close in order, an
+ * attribute must be quoted, and every `&` in the document must begin a legal
+ * entity. That last rule is the one that catches an unescaped report — a
+ * message containing `&` or `<` makes the parse throw rather than quietly
+ * produce a feed no reader can open.
+ */
+type XmlNode = {
+  name: string;
+  attrs: Record<string, string>;
+  children: XmlNode[];
+  text: string;
+};
+
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+};
+
+function decodeXml(raw: string): string {
+  // A bare `&` is not text in XML; it is the start of an entity or an error.
+  const stray = /&(?![a-zA-Z]+;|#[0-9]+;|#x[0-9a-fA-F]+;)/.exec(raw);
+  if (stray) {
+    throw new Error(`Unescaped & at ${stray.index} in ${JSON.stringify(raw.slice(0, 60))}`);
+  }
+  if (raw.includes("<")) throw new Error("Unescaped < in text");
+  return raw.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g, (whole, body: string) => {
+    if (body.startsWith("#x")) return String.fromCodePoint(parseInt(body.slice(2), 16));
+    if (body.startsWith("#")) return String.fromCodePoint(Number(body.slice(1)));
+    const named = ENTITIES[body];
+    if (named === undefined) throw new Error(`Unknown entity ${whole}`);
+    return named;
+  });
+}
+
+function parseXml(source: string): XmlNode {
+  let i = 0;
+  let root: XmlNode | null = null;
+  const stack: XmlNode[] = [];
+  const isSpace = (ch: string) => ch === " " || ch === "\t" || ch === "\n" || ch === "\r";
+
+  const addText = (raw: string) => {
+    const decoded = decodeXml(raw);
+    const top = stack[stack.length - 1];
+    if (top) top.text += decoded;
+    else if (decoded.trim() !== "") throw new Error(`Text outside the root: ${decoded.trim()}`);
+  };
+
+  while (i < source.length) {
+    const lt = source.indexOf("<", i);
+    if (lt === -1) {
+      addText(source.slice(i));
+      break;
+    }
+    addText(source.slice(i, lt));
+
+    if (source.startsWith("<?", lt)) {
+      const end = source.indexOf("?>", lt);
+      if (end === -1) throw new Error("Unterminated processing instruction");
+      i = end + 2;
+      continue;
+    }
+    if (source.startsWith("<!", lt)) throw new Error("The feed writes no declarations or comments");
+
+    if (source.startsWith("</", lt)) {
+      const end = source.indexOf(">", lt);
+      if (end === -1) throw new Error("Unterminated closing tag");
+      const name = source.slice(lt + 2, end).trim();
+      const open = stack.pop();
+      if (!open || open.name !== name) throw new Error(`</${name}> closes <${open?.name}>`);
+      i = end + 1;
+      continue;
+    }
+
+    // An opening tag, read character by character, so a `>` inside an
+    // attribute value is a failure rather than a lucky escape.
+    let j = lt + 1;
+    while (j < source.length && !isSpace(source[j]!) && source[j] !== ">" && source[j] !== "/") {
+      j += 1;
+    }
+    const name = source.slice(lt + 1, j);
+    if (name === "") throw new Error("A tag with no name");
+    const node: XmlNode = { name, attrs: {}, children: [], text: "" };
+
+    for (;;) {
+      while (j < source.length && isSpace(source[j]!)) j += 1;
+      const ch = source[j];
+      if (ch === undefined) throw new Error(`Unterminated <${name}>`);
+      if (ch === ">" || (ch === "/" && source[j + 1] === ">")) break;
+      let k = j;
+      while (k < source.length && !isSpace(source[k]!) && source[k] !== "=") k += 1;
+      const attr = source.slice(j, k);
+      if (attr === "" || source[k] !== "=") throw new Error(`A bare attribute in <${name}>`);
+      const quote = source[k + 1];
+      if (quote !== '"' && quote !== "'") throw new Error(`An unquoted attribute in <${name}>`);
+      const end = source.indexOf(quote, k + 2);
+      if (end === -1) throw new Error(`Unterminated attribute in <${name}>`);
+      const value = source.slice(k + 2, end);
+      if (value.includes("<")) throw new Error(`Unescaped < in an attribute of <${name}>`);
+      node.attrs[attr] = decodeXml(value);
+      j = end + 1;
+    }
+
+    const parent = stack[stack.length - 1];
+    if (parent) parent.children.push(node);
+    else if (root) throw new Error("A second root element");
+    else root = node;
+
+    if (source[j] === "/") {
+      i = j + 2;
+    } else {
+      stack.push(node);
+      i = j + 1;
+    }
+  }
+
+  if (stack.length > 0) throw new Error(`Unclosed <${stack[stack.length - 1]!.name}>`);
+  if (!root) throw new Error("No root element");
+  return root;
+}
+
+const child = (node: XmlNode, name: string): XmlNode | undefined =>
+  node.children.find((each) => each.name === name);
+
+/** Writes `count` reports straight into a directory, oldest first. */
+async function seed(directory: string, count: number): Promise<string[]> {
+  await mkdir(directory, { recursive: true });
+  const messages: string[] = [];
+  for (let n = 0; n < count; n += 1) {
+    const receivedAt = new Date(Date.UTC(2026, 0, 1, 0, n)).toISOString();
+    const message = `Report number ${n}`;
+    messages.push(message);
+    const report = {
+      type: "bug",
+      message,
+      context: { url: "/checkout", userAgent: "seed", viewport: { width: 800, height: 600 } },
+      console: [],
+      receivedAt,
+    };
+    const stamp = receivedAt.replace(/[:.]/g, "-");
+    await writeFile(join(directory, `${stamp}-${randomUUID()}.json`), JSON.stringify(report));
+  }
+  return messages;
+}
+
+test("the feeds are behind the same password as the inbox", async () => {
+  // A feed URL is pasted into readers, phones and Slack, and a public one
+  // would be the inbox itself — titles, pages, times — at an address with no
+  // password on it.
+  const running = await start();
+  try {
+    for (const path of ["/feed.json", "/feed.xml"]) {
+      const res = await fetch(`${running.origin}${path}`);
+      assert.equal(res.status, 401, `${path} answered ${res.status}`);
+      assert.match(res.headers.get("www-authenticate") ?? "", /^Basic /);
+    }
+  } finally {
+    await stop(running);
+  }
+});
+
+test("the JSON feed is JSON Feed 1.1, newest first", async () => {
+  const running = await start();
+  try {
+    const first = await post(running.origin, "The first report");
+    const second = await post(running.origin, "The second report");
+
+    const response = await fetch(`${running.origin}/feed.json`, {
+      headers: { Authorization: auth },
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /application\/feed\+json/);
+
+    const feed = (await response.json()) as Record<string, unknown>;
+    assert.equal(feed.version, "https://jsonfeed.org/version/1.1");
+    assert.equal(typeof feed.title, "string");
+    assert.equal(feed.feed_url, `${running.origin}/feed.json`);
+    assert.equal(feed.home_page_url, `${running.origin}/`);
+    assert.ok(Array.isArray(feed.items));
+
+    const items = feed.items as Record<string, unknown>[];
+    assert.equal(items.length, 2);
+    const [newest, oldest] = items as [Record<string, unknown>, Record<string, unknown>];
+    assert.equal(newest.title, "The second report", "the newest report is first");
+    assert.equal(oldest.title, "The first report");
+    assert.equal(newest.id, `${running.origin}/r/${second}`);
+    assert.equal(newest.url, `${running.origin}/r/${second}`);
+    assert.equal(oldest.id, `${running.origin}/r/${first}`);
+    assert.deepEqual(newest.tags, ["bug"]);
+    assert.ok(
+      String(newest.content_text).includes("The second report"),
+      "the rendered Markdown is the content",
+    );
+    assert.ok(String(newest.content_text).includes("|"), "the context table came with it");
+    assert.ok(!Number.isNaN(Date.parse(String(newest.date_published))));
+    assert.equal(newest.date_modified, newest.date_published);
+
+    // The picture is a link rather than bytes: a reader would fetch it
+    // without the password anyway, and the feed stays small.
+    assert.ok(!String(newest.content_text).includes("data:image"));
+  } finally {
+    await stop(running);
+  }
+});
+
+test("the Atom feed is well formed and carries every required element", async () => {
+  const running = await start();
+  try {
+    const id = await post(running.origin, 'Breaks on <b>save</b> & "quoted"');
+
+    const response = await fetch(`${running.origin}/feed.xml`, {
+      headers: { Authorization: auth },
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /application\/atom\+xml/);
+    const xml = await response.text();
+
+    // The report is escaped rather than injected; the parse throws otherwise.
+    assert.ok(!xml.includes("<b>save</b>"), "the report's markup reached the feed raw");
+    const feed = parseXml(xml);
+    assert.equal(feed.name, "feed");
+    assert.equal(feed.attrs.xmlns, "http://www.w3.org/2005/Atom");
+
+    for (const required of ["id", "title", "updated"]) {
+      const found = child(feed, required);
+      assert.ok(found, `the feed has no <${required}>`);
+      assert.notEqual(found.text.trim(), "");
+    }
+    assert.ok(!Number.isNaN(Date.parse(child(feed, "updated")!.text)));
+    const self = feed.children.find((each) => each.name === "link" && each.attrs.rel === "self");
+    assert.equal(self?.attrs.href, `${running.origin}/feed.xml`);
+    assert.ok(child(feed, "author"), "the feed has no <author>");
+
+    const entries = feed.children.filter((each) => each.name === "entry");
+    assert.equal(entries.length, 1);
+    const entry = entries[0]!;
+    for (const required of ["id", "title", "updated"]) {
+      const found = child(entry, required);
+      assert.ok(found, `the entry has no <${required}>`);
+      assert.notEqual(found.text.trim(), "");
+    }
+    assert.equal(child(entry, "id")!.text, `${running.origin}/r/${id}`);
+    assert.equal(child(entry, "title")!.text, 'Breaks on <b>save</b> & "quoted"');
+    assert.ok(!Number.isNaN(Date.parse(child(entry, "updated")!.text)));
+    const alternate = entry.children.find((each) => each.name === "link");
+    assert.equal(alternate?.attrs.href, `${running.origin}/r/${id}`);
+    assert.equal(alternate?.attrs.rel, "alternate");
+    assert.equal(child(entry, "category")?.attrs.term, "bug");
+    const content = child(entry, "content");
+    assert.equal(content?.attrs.type, "text");
+    assert.ok(content!.text.includes('Breaks on <b>save</b> & "quoted"'), "the Markdown came back");
+  } finally {
+    await stop(running);
+  }
+});
+
+test("both feeds stop at the newest fifty reports", async () => {
+  // Seeded on disk rather than posted: the endpoint allows thirty reports a
+  // minute, and what is under test is the ceiling on the feed, not the rate.
+  const reports = await mkdtemp(join(tmpdir(), "bugbottle-inbox-"));
+  const messages = await seed(reports, 55);
+  const running = await start({}, reports);
+  try {
+    const feed = (await (
+      await fetch(`${running.origin}/feed.json`, { headers: { Authorization: auth } })
+    ).json()) as { items: { title: string }[] };
+    assert.equal(feed.items.length, 50);
+    assert.equal(feed.items[0]!.title, messages[54], "the newest is first");
+    assert.equal(feed.items[49]!.title, messages[5], "and the fiftieth is where it stops");
+
+    const atom = parseXml(
+      await (await fetch(`${running.origin}/feed.xml`, { headers: { Authorization: auth } })).text(),
+    );
+    const entries = atom.children.filter((each) => each.name === "entry");
+    assert.equal(entries.length, 50);
+    assert.equal(child(entries[0]!, "title")!.text, messages[54]);
+  } finally {
+    await stop(running);
   }
 });

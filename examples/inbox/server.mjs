@@ -361,7 +361,10 @@ function listPage(reports) {
   const body = reports.length
     ? `<ol class="reports">${items}</ol>`
     : "<p>Nothing yet. Send one from <a href=\"/demo.html\">the demo page</a>.</p>";
-  return PAGE("bugbottle inbox", `<h1>Inbox (${reports.length})</h1>${body}`);
+  // Named on the page, because a feed nobody can find is a feed nobody uses.
+  const feeds = `<p class="meta">Feeds: <a href="/feed.json">JSON</a> ·
+    <a href="/feed.xml">Atom</a> — both want the password.</p>`;
+  return PAGE("bugbottle inbox", `<h1>Inbox (${reports.length})</h1>${feeds}${body}`);
 }
 
 function detailPage({ id, report }, hasPicture) {
@@ -389,6 +392,147 @@ ${hasPicture ? `<p><img src="/r/${id}.png" alt="Screenshot sent with the report"
   });
 </script>`,
   );
+}
+
+/**
+ * How many reports a feed carries. A reader polls this every few minutes and
+ * keeps what it has already seen, so the feed only has to cover the gap since
+ * the last poll; fifty reports is a generous gap and a small response.
+ */
+const FEED_LIMIT = 50;
+
+/**
+ * Drops the characters XML 1.0 cannot carry at all — not even escaped: the
+ * control characters other than tab, newline and carriage return. A feed
+ * containing one is a feed every reader refuses, so they go rather than the
+ * report. The validators strip null bytes already; the rest can arrive in a
+ * file written into the directory by something other than this server.
+ */
+function stripControl(text) {
+  let kept = "";
+  for (const character of text) {
+    const code = character.codePointAt(0);
+    if (code === 9 || code === 10 || code === 13 || code >= 32) kept += character;
+  }
+  return kept;
+}
+
+const escapeXml = (value) =>
+  stripControl(String(value ?? ""))
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+/**
+ * The absolute address of this inbox, because a feed's links are read
+ * somewhere else entirely — in a reader, on a phone, in Slack — where a
+ * relative `/r/<id>` means nothing.
+ *
+ * `PUBLIC_URL` wins when it is set; otherwise the request's own `Host` says
+ * where it was reached, with `X-Forwarded-Proto` from the proxy in front. The
+ * header is attacker-controlled in general, but every route that reaches this
+ * has already asked for the password, and the worst it can do is put a wrong
+ * hostname in a feed the operator asked for.
+ */
+function baseUrl(req) {
+  const configured = process.env.PUBLIC_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  const forwarded = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim();
+  const proto = /^https?$/.test(forwarded) ? forwarded : "http";
+  return `${proto}://${req.headers.host ?? `${host}:${port}`}`;
+}
+
+/** An ISO timestamp that a reader can parse, whatever the file said. */
+function when(value) {
+  const parsed = Date.parse(String(value ?? ""));
+  return Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
+}
+
+/**
+ * The newest reports, rendered.
+ *
+ * The list comes from the in-memory index — no directory walk — and only the
+ * fifty files that end up in the feed are read, because `content_text` is the
+ * whole report and the index keeps just its title. The picture is a link
+ * rather than bytes: a reader would fetch it without the password anyway, and
+ * a feed carrying fifty screenshots is a feed nothing will poll twice.
+ */
+async function feedItems(req) {
+  const base = baseUrl(req);
+  const items = [];
+  for (const entry of (await listReports()).slice(0, FEED_LIMIT)) {
+    const report = await readReport(entry);
+    if (!report) continue;
+    items.push({
+      url: `${base}/r/${entry.id}`,
+      title: entry.title || "Report",
+      type: entry.type || "other",
+      published: when(entry.receivedAt),
+      markdown: toMarkdown(report, { headingLevel: 0 }),
+    });
+  }
+  return { base, items };
+}
+
+/** JSON Feed 1.1 — https://jsonfeed.org/version/1.1 */
+function jsonFeed(base, items) {
+  return JSON.stringify(
+    {
+      version: "https://jsonfeed.org/version/1.1",
+      title: "bugbottle inbox",
+      description: "Reports received by this inbox, newest first.",
+      home_page_url: `${base}/`,
+      feed_url: `${base}/feed.json`,
+      items: items.map((item) => ({
+        id: item.url,
+        url: item.url,
+        title: item.title,
+        content_text: item.markdown,
+        date_published: item.published,
+        date_modified: item.published,
+        tags: [item.type],
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * Atom — RFC 4287. Every element the specification requires is here: the
+ * feed's `id`, `title` and `updated`, and the same three on every entry. The
+ * text all comes from a report, so all of it goes through `escapeXml`.
+ */
+function atomFeed(base, items) {
+  const updated = items[0]?.published ?? new Date().toISOString();
+  const entries = items
+    .map(
+      (item) => `  <entry>
+    <id>${escapeXml(item.url)}</id>
+    <title type="text">${escapeXml(item.title)}</title>
+    <updated>${escapeXml(item.published)}</updated>
+    <published>${escapeXml(item.published)}</published>
+    <link rel="alternate" type="text/html" href="${escapeXml(item.url)}" />
+    <category term="${escapeXml(item.type)}" />
+    <content type="text">${escapeXml(item.markdown)}</content>
+  </entry>`,
+    )
+    .join("\n");
+  return `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>${escapeXml(`${base}/feed.xml`)}</id>
+  <title type="text">bugbottle inbox</title>
+  <subtitle type="text">Reports received by this inbox, newest first.</subtitle>
+  <updated>${escapeXml(updated)}</updated>
+  <author><name>bugbottle inbox</name></author>
+  <link rel="self" type="application/atom+xml" href="${escapeXml(`${base}/feed.xml`)}" />
+  <link rel="alternate" type="text/html" href="${escapeXml(`${base}/`)}" />
+  <generator>bugbottle</generator>
+${entries}
+</feed>
+`;
 }
 
 /** Reads the request body, refusing anything over the ceiling. */
@@ -507,6 +651,25 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && path === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(listPage(await listReports()));
+      return;
+    }
+
+    // The same list, for something that is not a browser: a feed reader, a
+    // phone, a Slack RSS app. Behind the password like everything else — the
+    // titles and pages of somebody's application are exactly what the inbox
+    // exists to keep private, and a feed URL travels further than a bookmark.
+    if (req.method === "GET" && (path === "/feed.json" || path === "/feed.xml")) {
+      const { base, items } = await feedItems(req);
+      const atom = path === "/feed.xml";
+      res.writeHead(200, {
+        "Content-Type": atom
+          ? "application/atom+xml; charset=utf-8"
+          : "application/feed+json; charset=utf-8",
+        // A reader that cached a feed would show reports that are gone, and
+        // an intermediary that cached one would hand it to the next request.
+        "Cache-Control": "no-store, private",
+      });
+      res.end(atom ? atomFeed(base, items) : jsonFeed(base, items));
       return;
     }
 
