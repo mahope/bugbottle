@@ -42,10 +42,12 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
 | `src/sign.ts` | `createSigner({ key, header? })` — the `sign` function `sendReport` takes, HMAC-SHA-256 over `<timestamp>.<body>` through WebCrypto, sent as `t=<ms>,v1=<hex>`. Plus `computeSignature` and `hmacHex`, which `src/server/handle.ts` verifies with, so both sides compute the digest the same way. Own entry point; imported by nothing in the core | nothing |
 | `src/global.ts` | Entry for the IIFE `dist/bugbottle.js`: `window.bugbottle` + `data-*` auto-mount. Built by `scripts/build-iife.mjs` (esbuild), excluded from the tsc emit | everything |
-| `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, `createLinearIssue` (GraphQL, so a rejected mutation arrives as a 200 with `errors` and still throws), `sentrySink` (below), the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
+| `src/sinks/` | Server-only delivery: `sendReportEmail` (Resend), `sendReportWebhook` (json/slack/discord), `createGithubIssue`, `createLinearIssue` (GraphQL, so a rejected mutation arrives as a 200 with `errors` and still throws), `jiraSink`, `gitlabSink`, `sentrySink` (all below), the shared `SinkError`. One `fetch` each, keys and URLs are arguments — never `process.env` | markdown, locales, report-core |
 | `src/sinks/chat.ts` | `readReport(raw)` — the handful of things a chat message shows (title, message, facts, five console entries, selector, timestamp), read once out of an untrusted body — plus `clip`, `resolveUrl` and the `ChatSink`/`ChatSinkContext`/`UrlFrom` types the two chat sinks share. A data URL is never a picture address: neither service will fetch one | report-core |
 | `src/sinks/slack.ts` | `slackSink(options)` — a factory returning a `ReportSink` that posts one Block Kit message per report to an incoming webhook: header, escaped `mrkdwn` message, up to ten fields, fenced console, `image`, `context`, an "Open report" button. `buildSlackMessage` builds the body without sending it, and `escapeSlack` is the `&`/`<`/`>` escape. Every limit clips, none fails | chat, error |
 | `src/sinks/discord.ts` | `discordSink(options)` — the same over one embed: title, description, colour by report type, fields, `image`, `url`, `timestamp`, footer. `buildDiscordMessage` builds the body. The 6000-character embed budget is spent on the description last, because the facts are what somebody triages from | chat, error, report-core (types) |
+| `src/sinks/jira.ts` | `jiraSink(options)` — one Jira Cloud issue per report over REST v3, basic auth from `email:apiToken` encoded UTF-8 safe. The only sink that does not send Markdown: v3 takes the Atlassian Document Format, so `buildJiraDescription` builds the node tree — paragraph, bullet list of facts and the element, code block of the console — from the report rather than by parsing `toMarkdown` back. `messageFromJiraBody` joins `errorMessages` and the per-field `errors`, which is how a refused create names the field. No attachments: those are a second multipart request. The comment at the top names the doc date it was checked against | chat, error, report-core |
+| `src/sinks/gitlab.ts` | `gitlabSink(options)` — one GitLab issue per report, the Markdown from `toMarkdown` verbatim, the token in `PRIVATE-TOKEN`. `host` defaults to gitlab.com so self-hosted is one option; a namespaced `projectId` is URL-encoded into the one segment and labels are comma-joined, which is the shape the API takes. `messageFromGitlabBody` reads the flat message, the object keyed by field and `error` alike, because GitLab answers 404 rather than 403 for a project a token cannot see | chat, error, markdown |
 | `src/sinks/sentry.ts` | `sentrySink(options)` — one envelope per report on a DSN's ingest endpoint, Sentry, GlitchTip and Bugsink alike. Takes the DSN apart, builds the event (message, level, tags, `contexts.feedback`, the three recorders as one sorted breadcrumb timeline, elements in `extra`) and the attachment item for the screenshot, then POSTs the bytes with `X-Sentry-Auth`. `buildSentryEvent` and `buildSentryEnvelope` are exported; `SentrySinkError` carries `retryAfter` and `X-Sentry-Rate-Limits`. The comment at the top names the doc version it was written against, and the three places it knowingly departs from it | chat, error, report-core |
 | `site/` | The landing page (EN + DA), static, served by nginx from `site/Dockerfile` on Dokploy. Not part of the npm package | dist (at image build) |
 | `site/fonts/` | The four woff2 faces the site is set in — Newsreader 600, Source Sans 3 400/400i/600, latin only. Taken from Google Fonts and **served from this host**: the footer promises no external request, so a `fonts.googleapis.com` link is not an option. `site/README.md` has the recipe | nothing |
@@ -225,10 +227,17 @@ on main until the review after it corrected the number.
 
 `bugbottle/server` is measured and printed rather than budgeted, because
 everything in it is tree-shaken away from a consumer that imports only the
-validators: that bundle is 529 bytes gzipped with the Sentry sink in the entry,
-unchanged, which is the proof that no sink leaked into the shared path. A
-bundle that does import `sentrySink` weighs 4224 bytes gzipped — the sink, the
-report-core validators it reads the body with, and nothing else.
+validators: that bundle is 528 bytes gzipped with the Sentry, Jira and GitLab
+sinks in the entry, which is the proof that no sink leaked into the shared
+path. Read that number with one caveat: the *emitted* bundle is byte-for-byte
+the same 948 minified bytes whether or not the new sinks are exported, but
+esbuild picks its short identifier letters from the whole module graph, so a
+new module can move the gzipped figure a byte or two without a line of code
+reaching the bundle. Diff the minified output before believing a rise. A bundle
+that does import `sentrySink` weighs 4224 bytes gzipped — the sink, the
+report-core validators it reads the body with, and nothing else; `jiraSink`
+alone weighs 2798, `gitlabSink` alone 4528 (`toMarkdown` is most of it), and
+both together 5613.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

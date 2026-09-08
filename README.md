@@ -1732,7 +1732,7 @@ is the endpoint, the panel and an admin list of what arrived. One activation.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Seven sinks live in
+Storing the report is one thing; seeing it is another. Nine sinks live in
 `bugbottle/server`, each a formatter over one `fetch` call, none with a
 dependency of its own. None of them reads your environment: the key, the URL
 and the token are arguments, so it is visible at the call site where the secret
@@ -1965,7 +1965,99 @@ mutation still comes back with a `200` and puts the reason in an `errors`
 array. The sink reads it and throws `SinkError` anyway, so a mistyped team id
 is a failure you can see rather than an issue that was never created.
 
-All seven throw `SinkError`, carrying the HTTP status and the response body,
+### Jira Cloud
+
+`jiraSink` files the report in a Jira project. It is a factory like the chat
+sinks, so it goes straight into `sinks`, and it is the one sink here that does
+not send Markdown: Jira Cloud's REST v3 takes the Atlassian Document Format in
+`description`, a JSON node tree rather than text. The conversion is built from
+the report and kept to three shapes — a paragraph for the reporter's own words,
+a bullet list for the facts and the element, and a code block for the last
+twenty console entries:
+
+```ts
+import { handleReport, jiraSink } from "bugbottle/server";
+
+export const POST = (req: Request) =>
+  handleReport(req, {
+    screenshot: async (bytes) => await putPrivate(bytes),   // returns a URL
+    store: async (report) => await db.reports.insert(report),
+    sinks: [
+      jiraSink({
+        site: "acme",                          // or acme.atlassian.net, or the full URL
+        email: process.env.JIRA_EMAIL!,        // the account the token belongs to
+        apiToken: process.env.JIRA_API_TOKEN!,
+        projectKey: "SUP",
+        issueType: "Bug",                      // default; must exist in the project
+      }),
+    ],
+    respond: ({ id }) => Response.json({ id }, { status: 201 }),
+  });
+```
+
+The two credentials are the basic auth pair Jira wants, base64-encoded here and
+UTF-8 safe, so a token with an accent in it does not throw on the way out. The
+summary is the report's type and its first line — `Bug: The save button does
+nothing` — clipped to the 255 characters Jira keeps, unless you pass `title`.
+`facts` adds bullets of your own, and `maxConsoleEntries` shortens the code
+block, which Jira renders in full with no way to collapse it.
+
+A refused create names the field: Jira answers with an `errorMessages` list and
+an `errors` object keyed by field, and both are joined into the `SinkError`
+message, so "issuetype: Specify an issue type" is what you read rather than
+"status 400". `buildJiraDescription(report)` returns the document on its own if
+you would rather send it yourself.
+
+Jira cannot take the picture in the create request either — attachments are a
+second, multipart request against the new issue — so the screenshot is stored
+by you first and `screenshotUrl` becomes one of the facts. `handleReport`
+passes the URL its `screenshot` function returned, so the option is only needed
+when you send the report yourself.
+
+### GitLab
+
+`gitlabSink` is the simplest of the issue sinks, because a GitLab description
+is Markdown and `toMarkdown` already produces it: the body goes over verbatim,
+facts table and collapsed console block and all. Self-hosted GitLab is the same
+API on another host, so `host` is an option and defaults to gitlab.com:
+
+```ts
+import { handleReport, gitlabSink } from "bugbottle/server";
+
+export const POST = (req: Request) =>
+  handleReport(req, {
+    screenshot: async (bytes) => await putPrivate(bytes),   // returns a URL
+    store: async (report) => await db.reports.insert(report),
+    sinks: [
+      gitlabSink({
+        host: "https://gitlab.example.com",    // omit for gitlab.com
+        projectId: "acme/app",                 // or the numeric id
+        token: process.env.GITLAB_TOKEN!,      // personal, group or project, `api` scope
+        labels: ["bug", "from-bugbottle"],
+      }),
+    ],
+    respond: ({ id }) => Response.json({ id }, { status: 201 }),
+  });
+```
+
+The token travels in GitLab's own `PRIVATE-TOKEN` header rather than in
+`Authorization`. A namespaced `projectId` is URL-encoded into the one path
+segment, so `acme/app` reaches the API as `acme%2Fapp` instead of being read as
+two segments. Labels are joined with commas, which is the shape the API takes,
+and GitLab creates the ones that do not exist yet.
+
+One thing to know when a report does not arrive: GitLab answers `404` rather
+than `403` for a project the token cannot see, so a wrong project and a
+too-narrow scope look alike from the outside. The `SinkError` message is
+GitLab's own — `404 Project Not Found`, or `title: can't be blank` for a
+validation failure, which arrives as an object keyed by field.
+
+GitLab cannot take the picture in the create request either: an upload is a
+separate request whose answer you then reference from the Markdown. So the
+screenshot is stored by you first and `screenshotUrl` is linked from the facts
+table, the same as for GitHub and Linear.
+
+All nine throw `SinkError`, carrying the HTTP status and the response body,
 when the service answers with anything but success. Catch it around the sink
 rather than around the whole handler: a report you have already stored should
 not be lost to a chat webhook that was revoked last week.
@@ -2283,7 +2375,14 @@ Requires `html-to-image`.
 `normaliseStorage`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
-`createLinearIssue`, `slackSink`, `discordSink`, `buildSlackMessage`,
+`createLinearIssue`, `jiraSink`, `buildJiraDescription`, `jiraBaseUrl`,
+`jiraAuthHeader`, `messageFromJiraBody`, `DEFAULT_JIRA_ISSUE_TYPE`,
+`MAX_JIRA_CONSOLE_ENTRIES`, `MAX_JIRA_SUMMARY`, the `JiraSink`,
+`JiraSinkOptions`, `CreateJiraIssueResult`, `AdfDoc` and `AdfNode` types,
+`gitlabSink`, `messageFromGitlabBody`, `DEFAULT_GITLAB_HOST`,
+`MAX_GITLAB_DESCRIPTION`, `MAX_GITLAB_TITLE`, the `GitlabSink`,
+`GitlabSinkOptions` and `CreateGitlabIssueResult` types,
+`slackSink`, `discordSink`, `buildSlackMessage`,
 `buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `SLACK_MAX_*`
 and `DISCORD_MAX_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `DiscordSinkOptions`, `ChatSink`, `ChatSinkContext` and `UrlFrom` types,

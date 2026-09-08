@@ -78,6 +78,20 @@ cooldownMs }` — and `data-shake` switches it on from the script tag. 685 bytes
 gzipped against a 768-byte budget; the panel pays 94 bytes of wiring and none of
 the module.
 
+**0.7** — `jiraSink` and `gitlabSink`, for the teams on neither GitHub nor
+Linear. Jira is the only sink that does not send Markdown: REST v3 takes the
+Atlassian Document Format, so `buildJiraDescription` renders the report as a
+node tree — a paragraph, a bullet list of facts and the element, a code block
+of the last twenty console entries — and a refused create names the field,
+because Jira's `errorMessages` and its per-field `errors` are both read.
+`gitlabSink` sends the Markdown verbatim, defaults to gitlab.com with `host`
+for a self-hosted instance, URL-encodes a namespaced project id into the one
+segment, and comma-joins the labels. Neither takes an attachment: Jira wants a
+multipart request against the created issue and GitLab a separate upload whose
+answer is then referenced from the description, so both are a later job and the
+screenshot travels as `screenshotUrl` in the meantime. The validator-only
+`bugbottle/server` bundle is unchanged at 528 bytes gzipped.
+
 **0.6** — `report.schema.json` generated from the types by
 `scripts/build-schema.ts`, shipped in the package and served at
 bugbottle.dev/schema/report.json, so a receiver can be built in any language
@@ -186,8 +200,10 @@ bites. No SDK dependency.
 - Optional HMAC signature (WebCrypto) verified by the server helper. Documented
   honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
   see "Already shipped".)
-- More sinks: Jira, GitLab. (Slack, Discord and the Sentry envelope shipped;
-  see "Already shipped". Microsoft Teams is noted there as a later job.)
+- More sinks: Jira, GitLab. (All of them shipped — Slack, Discord, the Sentry
+  envelope, and now `jiraSink` and `gitlabSink`; see "Already shipped".
+  Microsoft Teams and attachments on the two issue trackers are noted there as
+  later jobs.)
 
 ## 1.0 — adoptable
 
