@@ -81,7 +81,10 @@
 
       <figure class="shot">
         <div class="shot-frame">
-          <img src="/panel.png" width="1760" height="1074" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+          <picture>
+            <source media="(max-width: 48rem)" srcset="/panel-narrow.png" width="788" height="950">
+            <img src="/panel.png" width="1352" height="1050" alt="The bugbottle panel open over this page: a message about a save button that does nothing, the element the reporter pointed at, and a send button." loading="eager" decoding="async">
+          </picture>
         </div>
         <figcaption>
           The panel from <code>bugbottle/ui</code>, captured on this page. The button in
@@ -397,10 +400,10 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
     </nav>
     <p>MIT licence. Written and maintained by <a href="https://mahoje.dk">Mahope</a> in Denmark.</p>
     <p>This page sets no cookies, runs no analytics and makes no external request.</p>
-    <nav class="lang lang-footer" aria-label="Language">
+    <div class="lang lang-footer">
       <a href="/" aria-current="page" lang="en" hreflang="en">English</a>
       <a href="/da/" lang="da" hreflang="da">Dansk</a>
-    </nav>
+    </div>
   </div>
 </footer>
 

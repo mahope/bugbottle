@@ -82,7 +82,10 @@
 
       <figure class="shot">
         <div class="shot-frame">
-          <img src="/panel.png" width="1760" height="1074" alt="bugbottle-panelet åbent oven på denne side: en besked om en gem-knap, der ikke gør noget, elementet brugeren har peget på, og en send-knap." loading="eager" decoding="async">
+          <picture>
+            <source media="(max-width: 48rem)" srcset="/panel-narrow.png" width="788" height="950">
+            <img src="/panel.png" width="1352" height="1050" alt="bugbottle-panelet åbent oven på denne side: en besked om en gem-knap, der ikke gør noget, elementet brugeren har peget på, og en send-knap." loading="eager" decoding="async">
+          </picture>
         </div>
         <figcaption>
           Panelet fra <code>bugbottle/ui</code>, taget her på siden. Knappen i hjørnet
@@ -404,10 +407,10 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
     </nav>
     <p>MIT-licens. Skrevet og vedligeholdt af <a href="https://mahoje.dk">Mahope</a> i Danmark.</p>
     <p>Siden sætter ingen cookies, kører ingen statistik og henter ingenting udefra.</p>
-    <nav class="lang lang-footer" aria-label="Sprog">
+    <div class="lang lang-footer">
       <a href="/" lang="en" hreflang="en">English</a>
       <a href="/da/" aria-current="page" lang="da" hreflang="da">Dansk</a>
-    </nav>
+    </div>
   </div>
 </footer>
 

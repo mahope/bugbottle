@@ -439,10 +439,10 @@ function foot(page) {
         ? "Siden sætter ingen cookies, kører ingen statistik og henter ingenting udefra."
         : "This page sets no cookies, runs no analytics and makes no external request."
     }</p>
-    <nav class="lang lang-footer" aria-label="${da ? "Sprog" : "Language"}">
+    <div class="lang lang-footer">
       <a href="${enUrl}" lang="en" hreflang="en"${da ? "" : ' aria-current="page"'}>English</a>
       <a href="${daUrl}" lang="da" hreflang="da"${da ? ' aria-current="page"' : ""}>Dansk</a>
-    </nav>
+    </div>
   </div>
 </footer>
 

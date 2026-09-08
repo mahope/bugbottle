@@ -633,6 +633,12 @@ button.button {
 /* The capture is wider than the frame, and the panel sits at its right edge,
    so the crop comes off the left — where the page behind it is only a texture
    of type too small to read anyway. */
+.shot picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .shot img {
   display: block;
   width: 100%;
@@ -649,12 +655,14 @@ button.button {
   }
 }
 
-/* On a phone the panel is what matters, not the page behind it: the frame
-   crops harder rather than shrinking the whole capture to an illegible
-   strip. */
+/* On a phone the panel is what matters, and cropping the wide capture harder
+   does not help: at 342 points across, the whole of it scaled down leaves the
+   panel too small to read. So the phone gets a second picture — the same
+   capture, clipped to the panel alone — and the frame takes that picture's
+   own proportions, which is a taller box than the desktop one. */
 @media (max-width: 48rem) {
   .shot-frame {
-    aspect-ratio: 5 / 4;
+    aspect-ratio: 394 / 475;
   }
 }
 

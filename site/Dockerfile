@@ -32,7 +32,7 @@ RUN node scripts/build-docs.mjs
 FROM nginx:alpine
 
 COPY site/nginx.conf /etc/nginx/conf.d/default.conf
-COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site/og.png site/panel.png /usr/share/nginx/html/
+COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site/og.png site/panel.png site/panel-narrow.png /usr/share/nginx/html/
 # The two faces the page is set in, served from this host so the footer's
 # promise about external requests stays true.
 COPY site/fonts/ /usr/share/nginx/html/fonts/
