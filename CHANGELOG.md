@@ -57,6 +57,12 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- **Pre-1.0 shape change:** `QueueStorage` is one function, not two. `read` was
+  required of every storage and called from nowhere — every path through the
+  queue goes through `update`, because anything read outside a
+  read-modify-write is stale the moment another tab commits. A custom storage
+  written as an object literal with a `read` on it is now a type error: delete
+  the method, nothing called it. `createIdbStorage()` has lost its own (#88).
 - Nothing is dropped from a queued report on a guess about the quota any more.
   The 1 MB ceiling that took the screenshot off every large report before it
   was ever stored is gone; a picture that fits is kept whole, and the storage

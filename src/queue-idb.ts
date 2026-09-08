@@ -126,18 +126,6 @@ export function createIdbStorage(options: IdbStorageOptions = {}): QueueStorage 
   }
 
   return {
-    async read(): Promise<QueuedReport[]> {
-      try {
-        const stored = await transact("readonly", (store) =>
-          promised<unknown>(store.get(storageKey)),
-        );
-        return Array.isArray(stored) ? (stored as QueuedReport[]) : [];
-      } catch {
-        // A store that cannot be read is a store with nothing in it. The queue
-        // keeps what it holds in memory and goes on sending.
-        return [];
-      }
-    },
     update(change): Promise<QueuedReport[]> {
       // Read and write in one `readwrite` transaction: the browser orders
       // those per database and per tab alike, so the read-modify-write two

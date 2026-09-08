@@ -688,21 +688,25 @@ It is a separate entry point because the default must not pay for it:
 who ask for it. A browser with no IndexedDB at all makes the queue memory-only,
 and the reports are still sent.
 
-Your own storage is two functions:
+Your own storage is one function:
 
 ```ts
 import type { QueueStorage } from "bugbottle/queue";
 
 const storage: QueueStorage = {
-  read: () => readTheArray(),                            // now or later
   update: (change) => writeBack(change(readTheArray())), // throws when refused
 };
 ```
 
 `update` reads, applies `change` and writes the result back as one step, so a
 storage that can be atomic gets to be, and it answers with what is now stored.
-Either function may return a promise. A refused write throws, or rejects, and
-that is what starts the fallback above.
+It may return a promise. A refused write throws, or rejects, and that is what
+starts the fallback above.
+
+There is deliberately no plain `read` beside it: anything read outside a
+read-modify-write is stale the moment another tab commits, so every path
+through the queue — the flush on load included — goes through `update`, even
+the ones that only want to look.
 
 ### Two tabs, one queue
 

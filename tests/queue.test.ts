@@ -503,7 +503,6 @@ test("a storage handed in is used instead of localStorage", () => {
   globals["localStorage"] = unused;
   let stored: QueuedReport[] = [];
   const custom: QueueStorage = {
-    read: () => stored,
     update(change) {
       stored = change(stored);
       return stored;
@@ -523,7 +522,6 @@ test("a storage handed in is used instead of localStorage", () => {
 test("a storage that answers with promises queues, merges and delivers", async () => {
   let stored: QueuedReport[] = [];
   const slow: QueueStorage = {
-    read: async () => stored,
     async update(change) {
       // A real asynchronous storage does not answer in the same turn, and a
       // read-modify-write that spans one is where two commits would collide.
@@ -555,7 +553,6 @@ test("a storage that answers with promises queues, merges and delivers", async (
 test("an asynchronous storage that refuses a write drops the picture too", async () => {
   let stored: QueuedReport[] = [];
   const refusing: QueueStorage = {
-    read: async () => stored,
     async update(change) {
       const next = change(stored);
       if (JSON.stringify(next).length > 200_000) {
@@ -578,4 +575,25 @@ test("an asynchronous storage that refuses a write drops the picture too", async
   assert.equal(stored.length, 1, "the report was kept");
   assert.equal(stored[0]?.body.screenshotDataUrl, undefined, "without the picture");
   assert.deepEqual(stored[0]?.body.notes, [SCREENSHOT_NOTE]);
+});
+
+test("a storage need only implement update", () => {
+  // `read` was in the seam and never called: every path through the queue goes
+  // through `update`, because it is the one that cannot race. A storage that
+  // implements only `update` is a whole storage.
+  let stored: QueuedReport[] = [];
+  const minimal: QueueStorage = {
+    update(change) {
+      stored = change(stored);
+      return stored;
+    },
+  };
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    storage: minimal,
+    fetch: fakeFetch(503).fetch,
+  });
+  queue.enqueue(report("no read anywhere"));
+  assert.equal(queue.size(), 1);
+  assert.equal(stored[0]?.body.message, "no read anywhere");
 });
