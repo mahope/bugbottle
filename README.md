@@ -2325,9 +2325,27 @@ host, reached over the loopback interface, that wants a password anyway. If you
 find yourself setting it for a server somewhere else, the answer is a port that
 does TLS, not the flag.
 
+**The report itself is refused in the clear too, on the ports that carry mail
+across a network.** STARTTLS is advertised in an EHLO reply nothing has
+authenticated yet, so anything on the path can strip it out of the list and the
+conversation carries on unencrypted — with the whole report in it. Where no
+credentials are set, the AUTH refusal above never fires and nothing else would
+notice. So `requireTls` gives up before MAIL FROM when the connection never
+became encrypted. Left unset it is true on the submission port (587) and
+whenever `user` and `pass` are set, and false otherwise, which leaves the relay
+on `localhost:25` working as it did; `allowInsecureAuth` lowers the default
+with it, because it already names a server you decided to trust. Set
+`requireTls: true` on any other port that leaves the machine, and
+`requireTls: false` only for a server you can see from where you are standing.
+
 Credentials never reach a log or an error message: an AUTH failure is reported
 with the server's reply, never with what was sent, because the base64 of an
 AUTH LOGIN step is the password in a thin disguise.
+
+`timeoutMs` is a deadline on every phase, and that includes the writes: a
+server that stops reading closes its TCP window rather than saying anything,
+and without a deadline there the message body would stall for ever. Nothing in
+the conversation can now block longer than one phase's worth.
 
 ### Slack and Discord
 

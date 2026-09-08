@@ -70,6 +70,19 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- `smtpSink` sent the whole report in the clear when something on the path
+  stripped STARTTLS out of the EHLO reply. That reply is not authenticated, so
+  a downgrade is a line removed from a list; the only guard was the refusal to
+  authenticate over an unencrypted connection, which never fires for an account
+  with no `user` and `pass`. The new `requireTls` gives up before MAIL FROM —
+  true by default on the submission port (587) and wherever credentials are
+  set, false for the relay on the same machine, and `allowInsecureAuth` lowers
+  the default with it (#88).
+- `smtpSink` could hang for ever on a server that stopped reading. Every read
+  had a deadline and no write had one, so the message body — the one write big
+  enough to fill a TCP window — waited on a socket that would never drain,
+  taking a direct caller of `sendReportSmtp` with it. `timeoutMs` now bounds
+  the writes as well as the reads (#88).
 - `smtpSink` sent an unroutable `From` when the address carried a non-ASCII
   display name. `foldHeader` encoded the whole value as one RFC 2047 word, so
   `Bjørn Hansen <bugs@example.com>` reached the wire as `=?UTF-8?B?…?=` and

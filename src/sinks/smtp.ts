@@ -74,6 +74,20 @@ export type SmtpSinkOptions = {
    * for a server on the same host, or in a test.
    */
   allowInsecureAuth?: boolean;
+  /**
+   * Refuses to send the report at all over a connection that never became
+   * encrypted. STARTTLS is advertised in a reply nothing has authenticated
+   * yet, so anything on the path can strip it out of the EHLO list and the
+   * client will happily carry on in the clear — and where no credentials are
+   * set, the AUTH refusal above never fires, so nothing else notices.
+   *
+   * Left unset, it is true on the submission port (587) and whenever
+   * credentials are set, and false otherwise — the ports that carry mail
+   * across a network, rather than the relay listening on the same machine.
+   * `allowInsecureAuth` lowers the default with it, because it already names a
+   * server the caller has decided to trust. Set it explicitly either way.
+   */
+  requireTls?: boolean;
   /** The envelope sender and the `From` header: `bugs@example.com`. */
   from: string;
   /** One recipient or several. */
@@ -561,16 +575,30 @@ function createSession(socket: Socket, timeoutMs: number) {
     });
   }
 
-  function write(text: string): Promise<void> {
+  /**
+   * Sends bytes, on the same deadline every other phase gets. A server that
+   * stops reading closes its TCP window rather than saying anything, and the
+   * write then never calls back: without this timer a direct caller of
+   * `sendReportSmtp` waits for ever, since only the reads were bounded.
+   */
+  function write(text: string, phase: string): Promise<void> {
     if (failure) return Promise.reject(failure);
     return new Promise<void>((resolve, reject) => {
-      current.write(text, (error) => (error ? reject(error) : resolve()));
+      const timer = setTimeout(() => {
+        fail(localError(`The SMTP server did not read ${phase} within ${timeoutMs} ms`));
+        reject(failure);
+      }, timeoutMs);
+      current.write(text, (error) => {
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve();
+      });
     });
   }
 
   /** Sends a command and reads the reply it is answered with. */
   async function command(line: string, phase: string): Promise<Reply> {
-    await write(`${line}\r\n`);
+    await write(`${line}\r\n`, phase);
     return read(phase);
   }
 
@@ -702,6 +730,11 @@ export async function sendReportSmtp(
   const secure = options.secure ?? (options.port ?? DEFAULT_SMTP_PORT) === SMTP_TLS_PORT;
   const port = options.port ?? (secure ? SMTP_TLS_PORT : DEFAULT_SMTP_PORT);
   const timeoutMs = options.timeoutMs ?? DEFAULT_SMTP_TIMEOUT_MS;
+  const requireTls =
+    options.requireTls ??
+    (!secure &&
+      !options.allowInsecureAuth &&
+      (port === DEFAULT_SMTP_PORT || Boolean(options.user && options.pass)));
   const recipients = (Array.isArray(options.to) ? options.to : [options.to]).map((address) =>
     headerSafe(address),
   );
@@ -764,13 +797,26 @@ export async function sendReportSmtp(
       offered = capabilities(hello);
     }
 
-    if (options.user && options.pass) {
-      if (!session.secure && !options.allowInsecureAuth) {
+    if (!session.secure) {
+      // The password is the sharper failure, so it is named first: its message
+      // is the one that points at the escape hatch a test or a local relay
+      // needs. The report itself is refused straight after, for the accounts
+      // that set no credentials at all and would otherwise notice nothing.
+      if (options.user && options.pass && !options.allowInsecureAuth) {
         throw localError(
           "The SMTP server offered no STARTTLS, so authenticating would send the password " +
             "in the clear. Use a TLS port, or set allowInsecureAuth for a server you trust.",
         );
       }
+      if (requireTls) {
+        throw localError(
+          "The SMTP server offered no STARTTLS, so the report would travel in the clear. " +
+            "Use a TLS port, or set requireTls: false for a server you trust.",
+        );
+      }
+    }
+
+    if (options.user && options.pass) {
       await authenticate(session, options.user, options.pass, offered);
     }
 
@@ -787,7 +833,7 @@ export async function sendReportSmtp(
     const data = await session.command("DATA", "DATA");
     if (data.code !== 354) throw replyError("DATA", data);
 
-    await session.write(`${dotStuff(toCrlf(message))}\r\n.\r\n`);
+    await session.write(`${dotStuff(toCrlf(message))}\r\n.\r\n`, "the message");
     const accepted = await session.read("the message");
     if (accepted.code !== 250) throw replyError("the message", accepted);
 
