@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.11.0 — 2026-09-08
+
 The tested release. A seeded fuzzer now throws thousands of hostile bodies at
 the validators, the scrubber, the Markdown and `handleReport` on every test
 run, and it earned its keep on the first day: a replay nested a few thousand
