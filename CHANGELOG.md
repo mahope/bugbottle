@@ -7,6 +7,24 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- **The site is set in two typefaces of its own** — Newsreader for the
+  headings, Source Sans 3 for everything else — served from `bugbottle.dev`
+  rather than linked from Google, so the footer's promise that the page makes
+  no external request stays true. Latin only, preloaded, `font-display: swap`,
+  no layout shift. A second design pass came with them: the hero picture fills
+  its column, the screenshot warning is printed on the dark ground the code
+  slabs use, the documentation pages carry the landing page's header instead of
+  one of their own, the topic list collapses on a phone, and the footer has a
+  language switch. Nothing in the library changed.
+- **`npm run a11y` now audits the site as well as the panel.**
+  `scripts/a11y-site.mjs` runs axe over both landing pages, the documentation
+  index, a deep documentation page and the two comparison pages in both colour
+  schemes, and fails on a console message as well as on a violation.
+  `scripts/capture-panel.mjs` and `scripts/render-og.mjs` make the hero and the
+  link preview, which were made by hand before.
+
 ## 0.6.0 — 2026-09-07
 
 The adoptable release: one form state shared by React, Vue and Svelte; a

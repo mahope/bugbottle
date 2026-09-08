@@ -6,8 +6,8 @@ comparison page in both languages at `/compare/` and `/da/sammenlign/`. The
 landing pages are static HTML written by hand; the documentation, the
 comparison, `sitemap.xml` and `robots.txt` are generated when the image is
 built. No framework, no analytics, no
-cookies, and no external request of any kind — the fonts are the system stack
-and the favicon is an inline SVG.
+cookies, and no external request of any kind: the two typefaces are served
+from this host and the favicon is an inline SVG.
 
 | File | Role |
 |---|---|
@@ -16,17 +16,57 @@ and the favicon is an inline SVG.
 | `style.css` | Shared by every page. Colour tokens on `:root`, redefined once for dark mode |
 | `docs.css` | The documentation pages only, loaded after `style.css` and leaning on its tokens |
 | `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
-| `docs.js` | The documentation pages only: copy buttons, and the current heading in "On this page" |
+| `docs.js` | The documentation pages only: copy buttons, the topic list closing on a phone, and the current heading in "On this page" |
+| `fonts/` | The four woff2 faces the page is set in, latin only. See "The typefaces" below |
 | `docs/` | **Generated, never committed.** Written by `scripts/build-docs.mjs`; see "The documentation" below |
 | `compare.md` | The English "Compared with" page, as Markdown. The only prose on the site that is neither the landing page nor the README |
 | `da/sammenlign.md` | The same page in Danish, written for a Danish reader rather than translated |
 | `compare/`, `da/sammenlign/` | **Generated, never committed.** The two pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" below |
 | `sitemap.xml`, `robots.txt` | **Generated, never committed.** Written by the same script; see "The sitemap and robots.txt" below |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
+| `panel-narrow.png` | The same capture clipped to the panel alone, used by the hero below 48rem |
+| `panel-da.png`, `panel-da-narrow.png` | The same pair from `/da/`, where the panel is in Danish |
 | `og.svg` | Source of the OpenGraph picture. Not served |
 | `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
 | `nginx.conf` | Replaces `conf.d/default.conf`: `/health`, caching, gzip |
 | `Dockerfile` | A `node:22-alpine` stage that generates `docs/`, then `nginx:alpine` plus these files and `dist/` |
+
+## The typefaces
+
+Two families, and no more: **Newsreader** at 600 for the headings, the hero
+headline and the table captions, and **Source Sans 3** at 400, 400 italic and
+600 for everything else, including the prose. Code stays in the system
+monospace stack, which is a third family only in the sense that every machine
+already has it.
+
+The files came from Google Fonts and are **served from this host**, not linked
+from `fonts.googleapis.com`. The footer promises that the page makes no
+external request, and a stylesheet fetched from a third party would hand that
+party the address of every reader of a page whose whole argument is that
+nothing sits in the middle. It is also faster: no second connection to open
+before the first line of text can be drawn.
+
+Only the latin cut of each face is kept. `æ`, `ø` and `å` and every mark the
+two languages use live inside `U+0000-00FF`, the `unicode-range` on each
+`@font-face` says so, and a word outside that range falls back to the system
+stack for that word rather than costing 60 kB more font.
+
+To refresh a face, ask the API for it with a browser's user agent, take the
+`/* latin */` block, and save the file it names into `fonts/`:
+
+```bash
+ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+curl -sA "$ua" 'https://fonts.googleapis.com/css2?family=Newsreader:wght@600&display=swap'
+curl -sA "$ua" 'https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap'
+# then curl each latin URL into site/fonts/<family>-<weight>.woff2
+```
+
+Ask for `Newsreader:wght@600` rather than for an optical-size range: the range
+is served as one variable font of 60 kB, the single weight as 24 kB.
+
+`index.html`, `da/index.html` and the shell in `scripts/build-docs.mjs` preload
+the two faces the first screen needs, so `font-display: swap` swaps before the
+page paints and Lighthouse measures no layout shift.
 
 ## The demo
 
@@ -46,20 +86,42 @@ renderer is given and the panel does not offer the checkbox.
 
 ## The hero screenshot
 
-`panel.png` is a real capture, not an illustration: the panel open on this
-page, message filled in, an element pointed at, taken headless at 2x with the
-global `puppeteer-core` and Chrome and saved at `site/panel.png`. It carries
-`width`/`height` on the `<img>` so the hero does not shift while it loads, and
-it must stay under 150 kB.
+`panel.png` is a real capture, not an illustration: the panel open on the
+landing page, message filled in, an element pointed at, taken headless at 2x
+with the global `puppeteer-core` and Chrome. `scripts/capture-panel.mjs` is
+that procedure written down — it serves `site/` with `/dist/` mapped to the
+repository's build, exactly as nginx does, drives the real panel, and clips
+two frames out of one capture:
 
-The `<img>` sits inside a `.shot-frame`, which is what actually reserves the
-space: the frame owns the aspect ratio (16/11 on a desktop, 5/4 on a phone)
-and the picture fills it with `object-fit: cover` anchored to its right edge,
-where the panel is. So the crop comes off the left, which is only the page
-behind the panel at a size nobody can read. A replacement capture should keep
-the panel at the right of the frame or the crop will cut it. Re-capture it whenever the panel's own look changes
-enough that the screenshot stops matching — there is no build step that keeps
-it in sync automatically.
+```bash
+npm run build        # the demo runs the real dist/
+npm run shot:panel
+```
+
+It stands the panel over the **demo section** rather than over the hero. The
+picture ends up in the hero, so capturing there photographs the previous copy
+of itself down the left edge; the demo section is also where the panel
+belongs, and its flat plate keeps the file small. Both pictures carry
+`width`/`height` on the element so the hero does not shift while they load,
+and the script fails if either passes 150 kB.
+
+There are two of them because a phone cannot use the wide one. The `<img>`
+sits inside a `.shot-frame`, which is what reserves the space: on a desktop
+the frame owns the ratio and `panel.png` fills it with `object-fit: cover`
+anchored to its right edge, so the crop comes off the left, where there is
+only page behind the panel at a size nobody can read. At 342 points across,
+that crop leaves the panel too small to read, so below 48rem a `<source>`
+hands the frame `panel-narrow.png` — the same capture clipped to the panel
+alone — and the frame takes that picture's own proportions instead.
+
+There are four files rather than two because the panel on `/da/` is in Danish.
+An English panel in the Danish hero would be a picture of a different product,
+so the script shoots both pages and writes `panel-da.png` and
+`panel-da-narrow.png` beside the English pair.
+
+Re-run the script whenever the panel's own look changes. Nothing keeps the
+pictures in sync automatically, and a hero showing a panel the library no
+longer draws is worse than no hero at all.
 
 ## The OpenGraph picture
 
@@ -68,15 +130,21 @@ colours and the report card cannot drift from the page. It is drawn in the
 light palette — the pale green ground, bottle green ink, seal red on the four
 marks — because a link preview lands in a timeline that has already chosen a
 background, and the light page is the one a first visit gets. The report card
-is the only dark thing in it, exactly as on the page. Edit the SVG and render
-it again with the global `puppeteer-core` and Chrome:
+is the only dark thing in it, exactly as on the page.
 
-```js
-const page = await browser.newPage();
-await page.setViewport({ width: 1200, height: 630 });
-await page.setContent(`<!doctype html><meta charset="utf-8">` + svgSource);
-await page.screenshot({ path: "site/og.png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
+Edit the SVG and render it again:
+
+```bash
+npm run shot:og
 ```
+
+`scripts/render-og.mjs` wraps the SVG in a document that declares the two
+families from `site/fonts/` as data URLs and waits for `document.fonts.ready`
+before the shutter. Without that the render would be a picture of the fallback
+stack, which is not what the site looks like. Note that a family name with a
+digit in it — `Source Sans 3` — has to be quoted inside the `font-family`
+attribute, or the whole declaration is dropped and the text silently comes out
+in Times.
 
 ## The documentation
 
@@ -112,10 +180,18 @@ the page that now holds that anchor, and a relative path becomes a blob URL.
 Images become their alt text, so the footer's promise about external requests
 stays true.
 
-Only two things happen in the browser, both in `docs.js`: the copy buttons, and
-marking the current heading in "On this page". Which page is current, the
-anchors and the pager are written into the HTML, so a reader without JavaScript
-still gets a finished page.
+The sidebar is a `<details>` written **open**, so a reader without JavaScript
+gets the whole list at every width, which is what the page did before there
+was one. On a phone `docs.js` closes it at load and renames its summary after
+the page you are on: twenty-eight links standing between a reader and the
+article they asked for are a wall, not a table of contents.
+
+Three things happen in the browser, all in `docs.js`: the copy buttons, that
+disclosure, and marking the current heading in "On this page". Which page is
+current, the anchors and the pager are written into the HTML, so a reader
+without JavaScript still gets a finished page. The three words the copy button
+says follow `document.documentElement.lang`, because the two comparison pages
+load this same file and one of them is Danish.
 
 To check the pages after a change, serve the image and drive it with the global
 `puppeteer-core` and Chrome: every page should load with no console error, mark
@@ -125,6 +201,30 @@ when its button is pressed. Note that headless Chrome refuses
 falls back to a selection and `execCommand`, which is the path that check
 actually exercises — and that Windows hands the text back with CRLF line
 endings, so compare normalised.
+
+## The accessibility audit
+
+`scripts/a11y-site.mjs` is the check that a stylesheet cannot quietly break.
+It serves `site/` and `dist/` the way nginx does, and runs the pinned
+`axe-core` over both landing pages, the documentation index, one deep
+documentation page and the two comparison pages, in **both colour schemes** —
+twelve runs. It fails on a console message as well as on a violation, because
+a page that logs one is a page that is half-working and nothing else here
+would notice.
+
+```bash
+npm run build && npm run build:docs
+npm run a11y     # the panel audit, then this one
+```
+
+It scrolls each page before it looks, because the landing page reveals its
+sections as the reader arrives at them and axe does not audit what is not
+visible.
+
+The pages must also stay fast: performance on `/` measured 97 on Lighthouse
+mobile with no layout shift, against a floor of 95. Measure it against a
+server that gzips text, as nginx does in the image — against one that does
+not, the same page scores 89 and the difference is entirely `dist/`.
 
 ## The comparison
 
@@ -223,6 +323,8 @@ curl -si localhost:8089/compare/ | head -1
 curl -si localhost:8089/da/sammenlign/ | head -1
 curl -si localhost:8089/sitemap.xml | head -3
 curl -si localhost:8089/robots.txt | head -3
+curl -si localhost:8089/fonts/sourcesans3-400.woff2 | head -1
+curl -si localhost:8089/panel-narrow.png | head -1
 ```
 
 `/health` returns `ok` as `text/plain` and is not logged — it is what the

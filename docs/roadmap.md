@@ -100,6 +100,15 @@ picture" flow over it: a labelled toolbar, the tools as a `radiogroup`, focus
 back to the button that opened it, eight new strings in eight languages,
 `annotate: false` and `data-annotate="off"` to switch it off.
 
+**Alongside** — a second design pass over bugbottle.dev: two typefaces of its
+own (Newsreader and Source Sans 3, served from the site rather than from
+Google, so the page still makes no external request), one grid under the
+landing page, the screenshot warning printed on the dark ground the code slabs
+use, the documentation carrying the landing page's own header with a topic
+list that collapses on a phone, and a language switch in the footer. Audited
+with `scripts/a11y-site.mjs` — six pages, two colour schemes, zero violations
+and no console message — and Lighthouse mobile at 97 with no layout shift.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
