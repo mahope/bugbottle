@@ -1059,6 +1059,50 @@ test("a rate-limit store that throws does not refuse an honest report", async ()
   resetRateLimits();
 });
 
+test("a rate-limit store that answers with a string is reported and fails open", async () => {
+  // `"3" > 30` is false, and so is `NaN > 30`, so a store handing back
+  // anything but a number would switch the limit off and never say a word.
+  // Same shape as the dedupe store's answer being checked before it is
+  // believed: fail open, but tell the operator every time.
+  resetRateLimits();
+  const errors: unknown[] = [];
+  const options = {
+    rateLimit: {
+      limit: 1,
+      windowMs: 60_000,
+      key: () => "one-caller",
+      rateLimitStore: { hit: async () => "3" as unknown as number },
+    },
+    onError: (err: unknown) => errors.push(err),
+  };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal(errors.length, 2);
+  assert.ok(errors[0] instanceof TypeError);
+  assert.match(String(errors[0]), /rateLimitStore\.hit did not answer with a number/);
+  resetRateLimits();
+});
+
+test("a rate-limit store answering with nothing is reported too, not read as zero", async () => {
+  resetRateLimits();
+  const errors: unknown[] = [];
+  const options = {
+    rateLimit: {
+      limit: 1,
+      windowMs: 60_000,
+      key: () => "one-caller",
+      rateLimitStore: { hit: () => undefined as unknown as number },
+    },
+    onError: (err: unknown) => errors.push(err),
+  };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0] instanceof TypeError);
+  resetRateLimits();
+});
+
 test("an injected dedupe store is consulted and written with an expiry", async () => {
   resetDedupe();
   const asked: string[] = [];

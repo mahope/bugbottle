@@ -48,6 +48,23 @@ two files each:
 Deleting a report deletes both. There is no database and nothing to migrate;
 `rm -rf reports/` is the whole retention policy until you write a better one.
 
+The directory does have a ceiling. `MAX_REPORTS` — 2000 by default — is how
+many reports are kept; once a new one takes the count past it, the oldest are
+deleted, JSON and picture together, until it is back inside. Without that the
+disk is the ceiling: thirty reports a minute are allowed and each may carry
+four megabytes of picture, so an inbox left running is eventually a full volume
+and an endpoint that has stopped accepting anything. Set `MAX_REPORTS=0` to
+switch the cap off, and watch the disk yourself.
+
+The list is held in memory. The directory is walked once, at the first request
+that needs it, and after that a write appends to the list and a delete removes
+from it — nothing re-reads the directory, because this process is the only
+thing that writes to it. Only the four strings the list shows are kept, so a
+thousand reports cost a few hundred kilobytes rather than a thousand parsed
+reports; the detail page reads the one file it was asked for. If you point a
+second process at the same `REPORTS_DIR`, neither will see the other's
+reports until it restarts — one process per directory.
+
 The detail page renders `toMarkdown` through a tiny subset — headings,
 paragraphs, tables, fenced code, lists and the two `<details>` lines the
 renderer writes itself. The structure is read from the Markdown and every

@@ -9,6 +9,32 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- `jiraSink` splits a multi-line message into `text` nodes with `hardBreak`
+  between them. The Atlassian Document Format has no newline inside a `text`
+  node — it has a node for a line break — so a report written on two lines was
+  either collapsed onto one or refused outright, and the sink had never been
+  called against a real Jira Cloud site to find out which. A blank line is its
+  breaks and no empty text node, which ADF also rejects. The console code block
+  keeps its newlines, where they are preformatted and belong.
+- `examples/inbox` reads one file for the detail page instead of parsing every
+  stored report on every request, and keeps the list as a small in-memory index
+  refreshed by each write and delete. The directory now has a ceiling as well:
+  `MAX_REPORTS`, 2000 by default, deletes the oldest reports — JSON and picture
+  together — once a new one takes the count past it. Thirty reports a minute at
+  four megabytes each is a full disk soon enough, and a full disk is an inbox
+  that has stopped accepting anything.
+- `npm run build:docs` fails on two README `##` headings that slugify the same
+  way, beside the ungrouped and ghost checks it already had. They used to
+  collapse in a `Map` and the second heading won, so one section's text
+  disappeared from the site while the README still held both — and the README
+  reads perfectly well either way, so the build is the only place that can
+  notice.
+- A `rateLimitStore` whose `hit` answers with anything but a finite number is
+  reported once through `onError` and the request goes through, as it already
+  was for a `dedupeStore` answering with something that is not an entry. A
+  store handing back `"3"` was compared with `>` and — since `"3" > 30` is
+  false, and so is `NaN > 30` — switched the rate limit off for every caller
+  with nothing said.
 - The documentation search told a screen-reader user that a truncated list was
   everything there was: it showed the top eight matches and announced their
   number, so a query with forty hits said "8 results". It now says "8 of 40
@@ -26,6 +52,14 @@ change the API; the changelog says so when they do.
   unfindable, and it dropped README table rows entirely, so options documented
   only in a table — `elementPicker` among them — were invisible to the field.
   Underscores now survive and table cells are indexed as text.
+
+### Changed
+
+- CI now asserts the `bugbottle/server` bundle rather than only printing its
+  size. A bundle of one validator must stay under 1024 bytes gzipped and its
+  minified text must mention none of `document`, `window.`, `navigator` or
+  `localStorage`. "A server bundle must never pull in DOM code" has been a rule
+  since the first release and until now nothing checked it.
 
 ## 0.8.0 — 2026-09-08
 

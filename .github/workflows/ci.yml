@@ -343,6 +343,26 @@ jobs:
             echo "bugbottle/sign is $sign bytes gzipped; the budget is 512" >&2
             exit 1
           fi
+          # `bugbottle/server` here is one validator and nothing else, and
+          # this is the only guard CLAUDE.md's rule has: "a server bundle must
+          # never pull in DOM code". The size is the coarse half — a validator
+          # that started dragging in the capture, the panel or the queue would
+          # pass a kilobyte long before anybody noticed the import — and the
+          # grep is the sharp half, because one DOM reference is what the rule
+          # is actually about, and a single `document` costs far fewer bytes
+          # than a size budget would ever catch. Both read the minified text,
+          # where the comments are gone and only real code is left.
+          server=$(gzip -c out-server.js | wc -c)
+          if [ "$server" -gt 1024 ]; then
+            echo "bugbottle/server is $server bytes gzipped; the budget is 1024" >&2
+            exit 1
+          fi
+          for symbol in 'document' 'window\.' 'navigator' 'localStorage'; do
+            if grep -q "$symbol" out-server.js; then
+              echo "bugbottle/server bundles DOM code: found '$symbol' in out-server.js" >&2
+              exit 1
+            fi
+          done
           # The three adapters are budgeted on what they add, not on what they
           # weigh: a `bugbottle/vue` bundle is about 5.2 kB, and nearly all of
           # it is the capture, the picker and the send that any form pays for

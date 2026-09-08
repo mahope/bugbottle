@@ -1679,7 +1679,10 @@ handleReport(req, {
 **Two of them fail open and one fails closed, and that is deliberate.** A
 `rateLimitStore` that throws lets the report through: refusing an honest
 reporter with a `429` because Redis blinked loses the one report that was worth
-having, and the error reaches `onError` so you find out. A `dedupeStore` that
+having, and the error reaches `onError` so you find out. So does one whose
+`hit` answers with anything but a finite number — `"3"`, `null`, nothing at
+all — because `"3" > 30` is false and so is `NaN > 30`, and a limit switched
+off in silence is worse than one that says so. A `dedupeStore` that
 throws lets it through as well, on both halves — a duplicate costs a row and an
 email, a refusal costs the report — and so does one whose `get` answers with
 something that is not an entry, since a raw unparsed value taken at face value
@@ -2188,7 +2191,9 @@ not send Markdown: Jira Cloud's REST v3 takes the Atlassian Document Format in
 `description`, a JSON node tree rather than text. The conversion is built from
 the report and kept to three shapes — a paragraph for the reporter's own words,
 a bullet list for the facts and the element, and a code block for the last
-twenty console entries:
+twenty console entries. Where the reporter pressed return, the paragraph gets a
+`hardBreak` node, because ADF has no newline inside a text node and a message
+that carried one would be collapsed onto a single line or refused outright:
 
 ```ts
 import { handleReport, jiraSink } from "bugbottle/server";

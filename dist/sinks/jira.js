@@ -73,11 +73,46 @@ export function jiraAuthHeader(email, apiToken) {
     const bytes = new TextEncoder().encode(`${email}:${apiToken}`);
     return `Basic ${btoa(String.fromCharCode(...bytes))}`;
 }
+/**
+ * The inline content of a paragraph: text nodes with a `hardBreak` between
+ * them wherever the reporter pressed return.
+ *
+ * A newline inside a `text` node is not a line break in ADF. The format has a
+ * node for one — `hardBreak`, the document format's `<br/>` — and a `text`
+ * node carrying a raw newline is at best collapsed into a space and at worst
+ * refused by the create. A reporter describing steps to reproduce writes more
+ * than one line more often than not, so this is the ordinary case rather than
+ * the odd one, and getting it wrong turns an ordinary report into a
+ * `SinkError`.
+ *
+ * A blank line contributes its breaks and no text: ADF rejects a `text` node
+ * whose value is the empty string.
+ *
+ * Checked against the Atlassian Document Format structure reference for the
+ * `hardBreak` node on 2026-09-08. Its one attribute, `text`, is optional and
+ * may only be a newline, so it is left off.
+ */
+function inlineText(text) {
+    const nodes = [];
+    const lines = text.split(/\r\n|\r|\n/);
+    for (const [index, line] of lines.entries()) {
+        if (index > 0)
+            nodes.push({ type: "hardBreak" });
+        if (line)
+            nodes.push({ type: "text", text: line });
+    }
+    return nodes;
+}
 /** A paragraph of plain text. Empty text is dropped: ADF rejects an empty node. */
 function paragraph(text) {
     if (!text)
         return undefined;
-    return { type: "paragraph", content: [{ type: "text", text }] };
+    const content = inlineText(text);
+    // Nothing but breaks is nothing to say: a message of blank lines is dropped
+    // exactly as an empty one is, rather than filed as a paragraph of air.
+    if (content.every((node) => node.type === "hardBreak"))
+        return undefined;
+    return { type: "paragraph", content };
 }
 /** One bullet per fact. A `listItem` must hold a block, so each holds a paragraph. */
 function bulletList(lines) {
