@@ -196,11 +196,24 @@ test("a custom header is where the signature is looked for", async () => {
   assert.equal((await handleReport(post(TEXT, signature), options)).status, 401);
 });
 
-/** The smallest Express response that records what the adapter wrote. */
+/**
+ * The smallest Express response that records what the adapter wrote.
+ *
+ * `finished` resolves when the adapter sends, which is the only moment the
+ * recorded status and body are the ones it meant to write. The handler returns
+ * before its work is done — Express is given a response to write, not a
+ * promise to await — so a test that sleeps instead is betting that the work
+ * fits in the nap, and a loaded machine wins that bet.
+ */
 function fakeRes() {
   const state = { status: 0, body: "" };
+  let settle!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
   return {
     state,
+    finished,
     res: {
       status(code: number) {
         state.status = code;
@@ -209,13 +222,14 @@ function fakeRes() {
       setHeader() {},
       send(payload?: unknown) {
         state.body = String(payload ?? "");
+        settle();
       },
     },
   };
 }
 
 test("the Express adapter verifies over the raw body it read", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   const signature = await computeSignature(KEY, TEXT);
   expressHandler({ signature: { key: KEY }, store: async () => ({ id: "rep_9" }) })(
     {
@@ -228,14 +242,14 @@ test("the Express adapter verifies over the raw body it read", async () => {
     },
     res,
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 201);
   assert.deepEqual(JSON.parse(state.body), { id: "rep_9" });
 });
 
 test("a body express.json() already parsed cannot be verified, so it is a 401", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   // The caveat in the adapter, pinned: re-serialising a parsed object gives a
   // different string, so the signed route must be mounted without a parser.
   const signature = await computeSignature(KEY, JSON.stringify({ ...body, extraKey: "x" }));
@@ -248,7 +262,7 @@ test("a body express.json() already parsed cannot be verified, so it is a 401", 
     },
     res,
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 401);
   assert.deepEqual(JSON.parse(state.body), { error: "Bad signature" });
@@ -357,7 +371,7 @@ test("express.json() in front of a signed route says so once, and still answers 
 
   const first = fakeRes();
   handler(request(), first.res);
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await first.finished;
   assert.equal(first.state.status, 401);
   assert.deepEqual(JSON.parse(first.state.body), { error: "Bad signature" });
   assert.equal(errors.length, 1, "the mounting mistake was not reported");
@@ -367,7 +381,7 @@ test("express.json() in front of a signed route says so once, and still answers 
   // way and the log is not told twice.
   const second = fakeRes();
   handler(request(), second.res);
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await second.finished;
   assert.equal(second.state.status, 401);
   assert.equal(errors.length, 1, "the diagnostic repeated itself");
 });
@@ -378,7 +392,7 @@ test("an unsigned report during a rollout is not mistaken for the parser mistake
   // all — parsed body or not. Only a request that would have been verified is
   // refused for arriving as an object.
   const errors: unknown[] = [];
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   expressHandler({
     signature: { key: KEY, require: false },
     onError: (err) => errors.push(err),
@@ -392,7 +406,7 @@ test("an unsigned report during a rollout is not mistaken for the parser mistake
     },
     res,
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 201);
   assert.deepEqual(errors, []);
