@@ -45,7 +45,8 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 1.4 kB gzipped; with the element picker and the React, Vue or
   Svelte adapter, 5.4 kB; the optional ready-made panel, 10 kB; breadcrumbs 1.3 kB; the network log
-  1.3 kB; the offline queue 1 kB; the everything script tag, 17.7 kB. `html-to-image` is only pulled in by the module that
+  1.3 kB; the timings and storage snapshot 1.3 kB; the offline queue 1.3 kB;
+  the everything script tag, 21.7 kB. `html-to-image` is only pulled in by the module that
   imports it, and the scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, or a GitHub issue — server-side helpers over one Markdown
@@ -574,7 +575,7 @@ so it is announced in the reporter's language.
 
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
-that mounts the panel from the tag itself. About 20 kB gzipped:
+that mounts the panel from the tag itself. About 21.7 kB gzipped:
 
 ```html
 <script
@@ -602,6 +603,7 @@ run on your page.
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
 | `data-network` | Present, with any value, records the failed and slow requests. See "What the network did". |
+| `data-perf` | Present, with any value, records the Web Vitals and lists what is in the browser's stores — names and lengths, never values. See "Performance and storage". |
 | `data-sign-key` | Signs the body with this key. A key in the page source is public, so this deters spam rather than authenticating anybody; see [Signing requests](#signing-requests). |
 | `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
@@ -617,7 +619,8 @@ There is no screenshot in this build. A renderer means `html-to-image`, which
 is far larger than everything else here put together, and forcing it on every
 page that only wants the panel is the wrong trade. The bundle exposes the
 building blocks on `window.bugbottle` — `mount` (`mountBugbottle`),
-`initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
+`initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
+`createQueue`,
 `locales`, `resolveLocale`, `scrubReport`, `buildReport`, `sendReport`,
 `pickElement`, `createAnnotator`, `onShortcut`, `onUncaughtError` and
 `version` — so a
@@ -824,6 +827,96 @@ untouched, rejections included; `XMLHttpRequest` is timed with `loadend`, the
 one event that fires for every ending. `getNetwork()` returns a copy of what
 has been recorded, and `resetNetwork()` empties it and puts both globals back
 as it found them.
+
+## Performance and storage
+
+Two questions a report almost never answers and almost always needs to: was it
+slow, and what state was the browser in? `bugbottle/perf` answers both without
+bundling `web-vitals`. It is a separate entry point and opt-in, and it should
+be called as early as your app can manage — ideally in the same module that
+mounts the panel.
+
+```ts
+import { initPerf } from "bugbottle/perf";
+
+const stop = initPerf();
+```
+
+The observers are created with `buffered: true`, so the LCP that was painted
+while your application was still booting is delivered anyway; the browser's
+buffer is finite, which is why "as early as you can" is not a formality.
+
+`report.perf` carries the Web Vitals the browser has already measured, the
+milestones from the navigation entry, the long tasks and — on Chromium only —
+the JS heap. Every field is optional, because every field is a measurement
+that may not have happened, and a figure that was never measured is left out
+rather than sent as a zero.
+
+```jsonc
+{
+  "lcp": 3412,          // milliseconds, the last candidate the browser reported
+  "cls": 0.081,         // cumulative layout shift, three decimals
+  "inp": 210,           // the worst interaction, in milliseconds
+  "ttfb": 128,
+  "domContentLoaded": 641,
+  "load": 1200,
+  "longTasks": { "count": 3, "totalMs": 480 },
+  "memory": { "usedMB": 32, "limitMB": 2048 }
+}
+```
+
+Two simplifications, said plainly because a number in a bug report is only
+worth what its definition is. **CLS** here is the sum of every shift that did
+not follow a recent input, where the Web Vitals definition takes the worst
+session window instead: on a page that shifts repeatedly this reads high
+rather than low, which is the safe direction for evidence. **INP** here is the
+worst interaction, where the real metric is roughly the 98th percentile: on
+the handful of interactions a session usually has these are the same number,
+and on a long session this over-reports rather than hides. `first-input` is
+observed too, so a browser without the `event` type still contributes its FID.
+
+`report.storage` says what was in the browser's stores at the moment the
+report was written — not when `initPerf` ran, because what matters is the
+state the reporter was actually in.
+
+```jsonc
+{
+  "local": [{ "key": "theme", "length": 4 }, { "key": "authToken", "length": 132 }],
+  "session": [{ "key": "cart", "length": 7 }],
+  "cookies": ["session", "consent"],
+  "values": { "tenant": "acme" }
+}
+```
+
+**Key names and value lengths, never values, and cookie names without cookie
+values.** That a key called `authToken` is present and 132 characters long is
+usually the whole answer to "why was I logged out"; its contents are the
+session itself, and a bug report is not a place to put one. The one exception
+is `values`, and it is opt-in per key:
+
+```ts
+initPerf({
+  allowValues: ["tenant", "featureFlags"],  // nothing travels unless it is named here
+  maxKeys: 50,                              // keys listed per store; 50 is also the ceiling
+  storage: false,                           // measure the timings only
+  vitals: false,                            // snapshot the storage only
+});
+```
+
+`allowValues` looks each name up in `localStorage` first and then
+`sessionStorage`, and clips what it finds to 200 characters. A cookie value is
+never included, whatever the allow-list says. Run `scrubReport` over the report
+as well if the allow-listed keys can hold anything written by a person: the
+scrubber redacts `storage.values` and the cookie names, and leaves the key
+names and lengths alone, since those are the shape of the store and the point
+of the snapshot.
+
+`buildReport` attaches both blocks on its own while `initPerf` is measuring, as
+`perf` and `storage`; pass `includePerf: false` to leave them out of one
+report. `toMarkdown` renders a "Performance" table and a collapsed "Storage"
+block. `initPerf` returns the `stop()` that disconnects the observers and
+unregisters both — the same thing `resetPerf()` does. In the one-script-tag
+build it is `data-perf` on the script tag.
 
 ## Feeding reports to an agent
 
@@ -1624,7 +1717,8 @@ validators below, and the shared types and limits — including the `StackFrame`
 type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 
 **`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
-`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `createQueue`,
+`mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
+`createQueue`,
 `locales`,
 `resolveLocale`, `scrubReport`, `createSigner`, `buildReport`, `sendReport`,
 `pickElement`,
@@ -1644,6 +1738,10 @@ post type with an admin list, and emails them if you want. One activation.
 
 **`bugbottle/network`** — `initNetwork`, `getNetwork`, `resetNetwork`,
 `isNetworkActive`, and the `NetworkOptions` and `NetworkEntry` types.
+
+**`bugbottle/perf`** — `initPerf`, `getPerf`, `getStorageSnapshot`,
+`resetPerf`, `isPerfActive`, and the `PerfOptions`, `PerfSnapshot`,
+`StorageSnapshot` and `StorageKeyRef` types. See "Performance and storage".
 
 **`bugbottle/queue`** — `createQueue`, and the `Queue`, `QueueOptions` and
 `QueuedReport` types. See "When the network is down".
@@ -1686,7 +1784,8 @@ Requires `html-to-image`.
 `resetDedupe`, `resetSignatures`, `fingerprint`, `stableHash`,
 `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
-`normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
+`normaliseBreadcrumbs`, `normaliseNetwork`, `normalisePerf`,
+`normaliseStorage`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
 `createLinearIssue`, `slackSink`, `discordSink`, `buildSlackMessage`,

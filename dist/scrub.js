@@ -220,6 +220,30 @@ export function scrubReport(report, options = {}) {
         if (Array.isArray(out.breadcrumbs)) {
             out.breadcrumbs = out.breadcrumbs.map((entry) => scrubBreadcrumb(entry, p));
         }
+        // The allow-listed storage values and the cookie names. The values are
+        // there because somebody named the key, which says the key is interesting,
+        // not that everything inside it is safe: a feature-flag blob can still
+        // carry the email address it was keyed by. Cookie names are scrubbed for
+        // the same reason — applications habitually name a cookie after the user
+        // it belongs to. Key names and lengths are left alone: they are the shape
+        // of the store, and redacting them costs the reader the whole point of the
+        // snapshot. `perf` holds nothing but numbers, so there is nothing there to
+        // redact.
+        if (isObject(out.storage)) {
+            const storage = { ...out.storage };
+            if (isObject(storage.values)) {
+                const values = { ...storage.values };
+                for (const [key, value] of Object.entries(values)) {
+                    if (typeof value === "string")
+                        values[key] = scrubString(value, p, false);
+                }
+                storage.values = values;
+            }
+            if (Array.isArray(storage.cookies)) {
+                storage.cookies = storage.cookies.map((name) => typeof name === "string" ? scrubString(name, p, false) : name);
+            }
+            out.storage = storage;
+        }
         return out;
     }
     catch {

@@ -44,6 +44,26 @@ export const MAX_BREADCRUMBS = 30;
 export const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 /** How many recorded requests a report may carry. Oldest are dropped first. */
 export const MAX_NETWORK_ENTRIES = 30;
+/** How many keys of one web storage a report may carry. */
+export const MAX_STORAGE_KEYS = 50;
+/** How many cookie names a report may carry. */
+export const MAX_COOKIE_NAMES = 100;
+/** Longest a storage key or a cookie name may be before it is clipped. */
+export const MAX_STORAGE_KEY_LENGTH = 100;
+/**
+ * Longest an allow-listed storage value may be. Short on purpose: the
+ * allow-list exists for a feature flag or a tenant id, not for a serialised
+ * session that happens to be interesting.
+ */
+export const MAX_STORAGE_VALUE_LENGTH = 200;
+/** How many allow-listed values a report may carry. */
+export const MAX_STORAGE_VALUES = 20;
+/**
+ * The largest duration any performance figure may claim, in milliseconds. An
+ * hour is longer than any real page load and short enough that a row cannot be
+ * bloated by a browser — or an attacker — sending 1e300.
+ */
+export const MAX_PERF_MS = 3_600_000;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 export const BREADCRUMB_KINDS = ["click", "navigation", "submit", "visibility"];
@@ -286,6 +306,122 @@ export function normaliseNetwork(raw, options = {}) {
         out.push(entry);
     }
     return out.length > maxEntries ? out.slice(-maxEntries) : out;
+}
+/**
+ * Validates the performance snapshot a report arrived with.
+ *
+ * Every field is optional and every field is a number, so the rule is the same
+ * throughout: a finite number in range is kept and rounded, anything else is
+ * left out. A snapshot with nothing usable in it is not a snapshot, and null
+ * says so — a report carrying `perf: {}` claims a measurement it does not
+ * have. Never throws: a malformed section means "not measured", not a failed
+ * report.
+ */
+export function normalisePerf(raw) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+        return null;
+    const o = raw;
+    const out = {};
+    /** A whole number, never negative, never past `max`. */
+    const whole = (v, max) => {
+        if (typeof v !== "number" || !Number.isFinite(v) || v < 0)
+            return null;
+        return Math.min(Math.round(v), max);
+    };
+    for (const key of ["lcp", "inp", "ttfb", "domContentLoaded", "load"]) {
+        const value = whole(o[key], MAX_PERF_MS);
+        if (value !== null)
+            out[key] = value;
+    }
+    // Layout shift is a unitless score, and three decimals is what the Web
+    // Vitals reports print. A page that shifted a thousand times over is already
+    // as bad as the number can usefully say.
+    if (typeof o.cls === "number" && Number.isFinite(o.cls) && o.cls >= 0) {
+        out.cls = Math.min(Math.round(o.cls * 1000) / 1000, 1000);
+    }
+    if (typeof o.longTasks === "object" && o.longTasks !== null) {
+        const lt = o.longTasks;
+        const count = whole(lt.count, 100_000);
+        const totalMs = whole(lt.totalMs, MAX_PERF_MS);
+        if (count !== null || totalMs !== null) {
+            out.longTasks = { count: count ?? 0, totalMs: totalMs ?? 0 };
+        }
+    }
+    if (typeof o.memory === "object" && o.memory !== null) {
+        const mem = o.memory;
+        const usedMB = whole(mem.usedMB, 1_000_000);
+        const limitMB = whole(mem.limitMB, 1_000_000);
+        if (usedMB !== null || limitMB !== null) {
+            out.memory = { usedMB: usedMB ?? 0, limitMB: limitMB ?? 0 };
+        }
+    }
+    return Object.keys(out).length > 0 ? out : null;
+}
+/**
+ * Validates the storage snapshot a report arrived with.
+ *
+ * The caps are the point of this one: a browser can hold megabytes in
+ * `localStorage`, and a report that carried all of it would be a denial of
+ * service with a bug attached. Keys are clipped, the lists are cut to
+ * `MAX_STORAGE_KEYS` and `MAX_COOKIE_NAMES`, and the allow-listed values are
+ * clipped hard. Empty sections are left out rather than sent as empty arrays,
+ * so a reader can tell "nothing stored" from "not measured". Never throws.
+ */
+export function normaliseStorage(raw) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+        return null;
+    const o = raw;
+    const out = {};
+    const keyList = (value) => {
+        if (!Array.isArray(value))
+            return [];
+        const list = [];
+        for (const item of value) {
+            if (list.length >= MAX_STORAGE_KEYS)
+                break;
+            if (typeof item !== "object" || item === null)
+                continue;
+            const entry = item;
+            if (typeof entry.key !== "string")
+                continue;
+            const length = typeof entry.length === "number" && Number.isFinite(entry.length) && entry.length > 0
+                ? Math.min(Math.round(entry.length), 100_000_000)
+                : 0;
+            list.push({ key: stripNullBytes(entry.key).slice(0, MAX_STORAGE_KEY_LENGTH), length });
+        }
+        return list;
+    };
+    const local = keyList(o.local);
+    if (local.length > 0)
+        out.local = local;
+    const session = keyList(o.session);
+    if (session.length > 0)
+        out.session = session;
+    if (Array.isArray(o.cookies)) {
+        const cookies = [];
+        for (const name of o.cookies) {
+            if (cookies.length >= MAX_COOKIE_NAMES)
+                break;
+            if (typeof name !== "string")
+                continue;
+            cookies.push(stripNullBytes(name).slice(0, MAX_STORAGE_KEY_LENGTH));
+        }
+        if (cookies.length > 0)
+            out.cookies = cookies;
+    }
+    if (typeof o.values === "object" && o.values !== null && !Array.isArray(o.values)) {
+        const values = {};
+        for (const [key, value] of Object.entries(o.values)) {
+            if (Object.keys(values).length >= MAX_STORAGE_VALUES)
+                break;
+            if (typeof value !== "string")
+                continue;
+            values[stripNullBytes(key).slice(0, MAX_STORAGE_KEY_LENGTH)] = stripNullBytes(value).slice(0, MAX_STORAGE_VALUE_LENGTH);
+        }
+        if (Object.keys(values).length > 0)
+            out.values = values;
+    }
+    return Object.keys(out).length > 0 ? out : null;
 }
 export class InvalidScreenshotError extends Error {
     constructor(message) {

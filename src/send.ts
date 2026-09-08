@@ -8,7 +8,7 @@
 
 import { collectContext } from "./capture.ts";
 import { getConsoleBuffer } from "./console-buffer.ts";
-import { readBreadcrumbs, readNetwork } from "./registry.ts";
+import { readBreadcrumbs, readNetwork, readPerf, readStorage } from "./registry.ts";
 import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
 
 export type BuildReportInput = {
@@ -32,6 +32,13 @@ export type BuildReportInput = {
    * option.
    */
   includeNetwork?: boolean;
+  /**
+   * Attach the timings and the storage snapshot. Default true, which means
+   * "whenever `initPerf` from `bugbottle/perf` is measuring" — an application
+   * that never imports that module has nothing to attach and pays nothing for
+   * the option.
+   */
+  includePerf?: boolean;
   /** Elements the reporter pointed at, from `pickElement`. */
   elements?: ElementRef[];
   /**
@@ -72,6 +79,12 @@ export function buildReport(input: BuildReportInput): BugReport & Record<string,
   if (input.includeNetwork ?? true) {
     const requests = readNetwork();
     if (requests && requests.length > 0) report.network = requests;
+  }
+  if (input.includePerf ?? true) {
+    const perf = readPerf();
+    if (perf) report.perf = perf;
+    const storage = readStorage();
+    if (storage) report.storage = storage;
   }
   if (input.screenshotDataUrl) report.screenshotDataUrl = input.screenshotDataUrl;
   const body = { ...input.extra, ...report };

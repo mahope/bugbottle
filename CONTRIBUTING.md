@@ -30,18 +30,25 @@ need Node 18.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
   `bugbottle/react` 5.5 kB, `bugbottle/ui` 12 kB, `bugbottle/annotate` 2048
   bytes, `bugbottle/breadcrumbs`
-  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/queue` 1330 bytes,
+  1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
+  `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/sign` 512 bytes,
   `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 21 kB. The
+  are small; the core they share is not), `dist/bugbottle.js` 22 kB. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
   picture annotator, which the panel imports whether or not `annotate: false`
   hides its button: 1441 bytes for `src/annotate.ts`, about 300 for the toolbar
   and the editor state, and the eight new locale strings in eight languages on
-  top of that in the script-tag build. Every budget rise is argued in a comment
+  top of that in the script-tag build. `bugbottle/perf` then took the script
+  tag past 21 kB: the timings and the storage snapshot are opt-in behind
+  `data-perf` at run time, but the script tag carries every recorder it can
+  switch on. The bare core moved 1272 → 1310 bytes for it, which is the two
+  registry reads in `buildReport` and nothing else — the observers, the store
+  walk and the cookie parse are only ever bundled by an application that
+  imports `bugbottle/perf`. Every budget rise is argued in a comment
   beside it in `.github/workflows/ci.yml`; a new one needs the same.
   `bugbottle/server` is measured and printed rather than budgeted: it is a
   server entry, and everything in it — the sinks included — is tree-shaken away

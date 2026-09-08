@@ -114,6 +114,7 @@ const GROUPS = [
       "pointing-at-the-element",
       "what-happened-before",
       "what-the-network-did",
+      "performance-and-storage",
       "screenshots",
     ],
   },

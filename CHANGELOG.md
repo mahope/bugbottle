@@ -9,6 +9,26 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `bugbottle/perf`: `initPerf(options?)`, a fifth recorder that answers "was it
+  slow?" and "what state was the browser in?" without bundling `web-vitals`.
+  `report.perf` carries LCP, CLS, INP, TTFB, DOM content loaded, load, the
+  count and total of long tasks and — on Chromium — the JS heap, read from
+  `PerformanceObserver` with `buffered: true` so a paint from before the call
+  still counts. Two simplifications are documented rather than hidden: CLS is
+  the sum of the shifts without recent input rather than the worst session
+  window, and INP is the worst interaction rather than the 98th percentile.
+  `report.storage` lists `localStorage` and `sessionStorage` key names with
+  value lengths and cookie names — never values, and never a cookie value at
+  all — with `allowValues` as an opt-in per key, clipped to 200 characters.
+  It registers through `src/registry.ts` like breadcrumbs and the network log,
+  so the core carries two reads and none of the module: 1236 bytes gzipped
+  against a 1280-byte budget, and the core moved 1272 → 1310.
+  `normalisePerf` and `normaliseStorage` validate both blocks server-side with
+  the same caps, `handleReport` puts them on `ValidatedReport`, the schema
+  publishes the ceilings, `toMarkdown` renders a "Performance" table and a
+  collapsed "Storage" block, and `scrubReport` runs over `storage.values` and
+  the cookie names. `data-perf` switches it on in the script-tag build, which
+  grew from 21.1 kB to 21.7 kB gzipped.
 - `bugbottle/server`: `slackSink` and `discordSink`, two incoming-webhook sinks
   that post one structured message per report rather than a wall of Markdown.
   Slack gets a Block Kit message — a header, the message as escaped `mrkdwn`, a

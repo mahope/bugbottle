@@ -60,9 +60,14 @@ jobs:
           # one of them a sentence, because it is where the annotator's keys
           # are said to a screen reader. Neither half can be dropped without
           # dropping the feature or its accessible names. Signing (#37) landed
-          # beside it and the two together measure 21043, so the budget is 21504.
-          if [ "$iife" -gt 21504 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 21504" >&2
+          # beside it and the two together measure 21043, so the budget was
+          # 21504. `bugbottle/perf` (#42) then added about 1.08 kB — the whole
+          # module, since the script tag carries every recorder it can switch
+          # on — and the file measures 22160, so the budget is 22528. The
+          # snapshot is still opt-in at run time behind `data-perf`: the cost
+          # here is carrying the code, exactly as it is for the network log.
+          if [ "$iife" -gt 22528 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 22528" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -81,6 +86,7 @@ jobs:
           echo 'import { createAnnotator } from "bugbottle/annotate"; export { createAnnotator };' > annotate.js
           echo 'import { initBreadcrumbs } from "bugbottle/breadcrumbs"; initBreadcrumbs();' > breadcrumbs.js
           echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
+          echo 'import { initPerf } from "bugbottle/perf"; initPerf();' > perf.js
           echo 'import { createQueue } from "bugbottle/queue"; export { createQueue };' > queue.js
           echo 'import { onShortcut, onUncaughtError } from "bugbottle/triggers"; export { onShortcut, onUncaughtError };' > triggers.js
           echo 'import { createSigner } from "bugbottle/sign"; export { createSigner };' > sign.js
@@ -98,10 +104,11 @@ jobs:
           npx esbuild annotate.js --bundle --minify --format=esm --outfile=out-annotate.js
           npx esbuild breadcrumbs.js --bundle --minify --format=esm --outfile=out-breadcrumbs.js
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
+          npx esbuild perf.js --bundle --minify --format=esm --outfile=out-perf.js
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
-          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-queue out-triggers out-sign; do
+          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-sign; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -116,6 +123,12 @@ jobs:
           # smaller, because `console-buffer.ts` is itself part of this entry;
           # it keeps the parsing out of `report-core.ts`, which the server
           # imports. Both are on by default, so the budget carries them.
+          # #42 added 38 bytes to this number and not one byte more: the core
+          # entry gained the two registry reads that pick up a perf and a
+          # storage snapshot (1272 → 1310), and carries none of
+          # `src/perf.ts` — the observers, the store walk and the cookie parse
+          # are in `bugbottle/perf` and are bundled only by an application that
+          # imports it. That is the seam this budget exists to guard.
           if [ "$core" -gt 1536 ]; then
             echo "bugbottle is $core bytes gzipped; the budget is 1536" >&2
             exit 1
@@ -180,6 +193,16 @@ jobs:
           network=$(gzip -c out-network.js | wc -c)
           if [ "$network" -gt 1330 ]; then
             echo "bugbottle/network is $network bytes gzipped; the budget is 1330" >&2
+            exit 1
+          fi
+          # The timings and the storage snapshot. It imports nothing but four
+          # constants from report-core, so this number is very nearly the
+          # module itself: five observers, the navigation entry, two store
+          # walks and a cookie parse. 1236 bytes gzipped when it landed,
+          # against the 1280-byte budget the issue set for it.
+          perf=$(gzip -c out-perf.js | wc -c)
+          if [ "$perf" -gt 1280 ]; then
+            echo "bugbottle/perf is $perf bytes gzipped; the budget is 1280" >&2
             exit 1
           fi
           # The queue imports nothing but a type, so this number is the module

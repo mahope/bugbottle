@@ -45,6 +45,26 @@ export declare const MAX_BREADCRUMBS = 30;
 export declare const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 /** How many recorded requests a report may carry. Oldest are dropped first. */
 export declare const MAX_NETWORK_ENTRIES = 30;
+/** How many keys of one web storage a report may carry. */
+export declare const MAX_STORAGE_KEYS = 50;
+/** How many cookie names a report may carry. */
+export declare const MAX_COOKIE_NAMES = 100;
+/** Longest a storage key or a cookie name may be before it is clipped. */
+export declare const MAX_STORAGE_KEY_LENGTH = 100;
+/**
+ * Longest an allow-listed storage value may be. Short on purpose: the
+ * allow-list exists for a feature flag or a tenant id, not for a serialised
+ * session that happens to be interesting.
+ */
+export declare const MAX_STORAGE_VALUE_LENGTH = 200;
+/** How many allow-listed values a report may carry. */
+export declare const MAX_STORAGE_VALUES = 20;
+/**
+ * The largest duration any performance figure may claim, in milliseconds. An
+ * hour is longer than any real page load and short enough that a row cannot be
+ * bloated by a browser — or an attacker — sending 1e300.
+ */
+export declare const MAX_PERF_MS = 3600000;
 export type ConsoleLevel = "error" | "warn";
 /**
  * One line of a parsed stack: where the code was, never what it said. Source
@@ -157,6 +177,64 @@ export type NetworkEntry = {
     /** True when the request failed before a status — offline, CORS, aborted. */
     error?: boolean;
 };
+/**
+ * What the page cost the reporter, measured by `bugbottle/perf`.
+ *
+ * Every field is optional because every field is a measurement that may not
+ * have happened: a browser without `PerformanceObserver`, a page nobody
+ * interacted with, a runtime that does not expose the heap. Milliseconds are
+ * whole numbers and `cls` is rounded to three decimals — this is evidence for
+ * a reader, not a benchmark.
+ */
+export type PerfSnapshot = {
+    /** Largest Contentful Paint, in milliseconds from navigation start. */
+    lcp?: number;
+    /** Cumulative Layout Shift, excluding shifts that followed a recent input. */
+    cls?: number;
+    /** Interaction to Next Paint: the worst interaction, in milliseconds. */
+    inp?: number;
+    /** Time to First Byte, in milliseconds from navigation start. */
+    ttfb?: number;
+    /** When `DOMContentLoaded` finished, in milliseconds from navigation start. */
+    domContentLoaded?: number;
+    /** When the load event finished, in milliseconds from navigation start. */
+    load?: number;
+    /** Tasks that blocked the main thread for over 50 ms. */
+    longTasks?: {
+        count: number;
+        totalMs: number;
+    };
+    /** The JS heap, where the browser exposes it. Chromium only. */
+    memory?: {
+        usedMB: number;
+        limitMB: number;
+    };
+};
+/** One key of a web storage: its name and how long its value was. Never the value. */
+export type StorageKeyRef = {
+    /** The key, clipped. */
+    key: string;
+    /** How many characters the value had. */
+    length: number;
+};
+/**
+ * What was in the browser's stores when the report was written.
+ *
+ * Names and lengths, never values — a key called `authToken` says the state
+ * the page was in, and its value says rather more than a bug report should.
+ * `values` is the one exception and it is opt-in per key: `initPerf` copies a
+ * value in only when the integrator named that key in `allowValues`.
+ */
+export type StorageSnapshot = {
+    /** `localStorage` keys, in the order the browser lists them. */
+    local?: StorageKeyRef[];
+    /** `sessionStorage` keys, in the order the browser lists them. */
+    session?: StorageKeyRef[];
+    /** Cookie names. Never cookie values, allow-list or not. */
+    cookies?: string[];
+    /** Values of the allow-listed keys, clipped. */
+    values?: Record<string, string>;
+};
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
     type: ReportType;
@@ -169,6 +247,10 @@ export type BugReport = {
     breadcrumbs?: Breadcrumb[];
     /** Requests that failed or were slow before the report, oldest first. */
     network?: NetworkEntry[];
+    /** What the page cost, when `bugbottle/perf` was measuring. */
+    perf?: PerfSnapshot;
+    /** What was in the browser's stores, when `bugbottle/perf` was measuring. */
+    storage?: StorageSnapshot;
     screenshotDataUrl?: string;
 };
 export declare function isReportType(value: unknown): value is ReportType;
@@ -229,6 +311,28 @@ export declare function normaliseBreadcrumbs(raw: unknown, options?: {
 export declare function normaliseNetwork(raw: unknown, options?: {
     maxEntries?: number;
 }): NetworkEntry[];
+/**
+ * Validates the performance snapshot a report arrived with.
+ *
+ * Every field is optional and every field is a number, so the rule is the same
+ * throughout: a finite number in range is kept and rounded, anything else is
+ * left out. A snapshot with nothing usable in it is not a snapshot, and null
+ * says so — a report carrying `perf: {}` claims a measurement it does not
+ * have. Never throws: a malformed section means "not measured", not a failed
+ * report.
+ */
+export declare function normalisePerf(raw: unknown): PerfSnapshot | null;
+/**
+ * Validates the storage snapshot a report arrived with.
+ *
+ * The caps are the point of this one: a browser can hold megabytes in
+ * `localStorage`, and a report that carried all of it would be a denial of
+ * service with a bug attached. Keys are clipped, the lists are cut to
+ * `MAX_STORAGE_KEYS` and `MAX_COOKIE_NAMES`, and the allow-listed values are
+ * clipped hard. Empty sections are left out rather than sent as empty arrays,
+ * so a reader can tell "nothing stored" from "not measured". Never throws.
+ */
+export declare function normaliseStorage(raw: unknown): StorageSnapshot | null;
 export declare class InvalidScreenshotError extends Error {
     constructor(message: string);
 }

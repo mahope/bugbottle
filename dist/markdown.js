@@ -8,7 +8,7 @@
  * long). Every value goes through `normalise*` first, so this accepts the raw
  * body from the request as well as a validated report.
  */
-import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, } from "./report-core.js";
+import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
 /**
  * How many frames of a stack are printed under a console entry. Ten are kept
@@ -69,6 +69,60 @@ function requestRow(entry) {
     return `| ${cell(entry.method)} | \`${cell(entry.url)}\` | ${status} | ${entry.ms} |`;
 }
 /**
+ * The performance facts that are present, in the order a reader wants them:
+ * what the page felt like first, then what it cost. A figure the browser never
+ * measured is left out rather than printed as a zero, which would read as
+ * "instant" instead of "unknown".
+ */
+function perfRows(perf) {
+    const rows = [];
+    if (perf.lcp !== undefined)
+        rows.push(["Largest contentful paint", `${perf.lcp} ms`]);
+    if (perf.cls !== undefined)
+        rows.push(["Cumulative layout shift", String(perf.cls)]);
+    if (perf.inp !== undefined)
+        rows.push(["Interaction to next paint", `${perf.inp} ms`]);
+    if (perf.ttfb !== undefined)
+        rows.push(["Time to first byte", `${perf.ttfb} ms`]);
+    if (perf.domContentLoaded !== undefined) {
+        rows.push(["DOM content loaded", `${perf.domContentLoaded} ms`]);
+    }
+    if (perf.load !== undefined)
+        rows.push(["Load", `${perf.load} ms`]);
+    if (perf.longTasks) {
+        rows.push([
+            "Long tasks",
+            `${perf.longTasks.count} (${perf.longTasks.totalMs} ms total)`,
+        ]);
+    }
+    if (perf.memory) {
+        rows.push(["JS heap", `${perf.memory.usedMB} MB of ${perf.memory.limitMB} MB`]);
+    }
+    return rows;
+}
+/**
+ * The storage snapshot as lines. Key names with their value lengths, cookie
+ * names, and the allow-listed values — which are the only values here, and are
+ * only ever the ones an integrator named.
+ */
+function storageLines(storage) {
+    const lines = [];
+    const keys = (label, list) => {
+        if (!list || list.length === 0)
+            return;
+        lines.push(`${label}: ${list.map((e) => `\`${e.key}\` (${e.length})`).join(", ")}`);
+    };
+    keys("localStorage", storage.local);
+    keys("sessionStorage", storage.session);
+    if (storage.cookies && storage.cookies.length > 0) {
+        lines.push(`Cookies: ${storage.cookies.map((name) => `\`${name}\``).join(", ")}`);
+    }
+    for (const [key, value] of Object.entries(storage.values ?? {})) {
+        lines.push(`\`${key}\` = ${value}`);
+    }
+    return lines;
+}
+/**
  * Renders a report (raw request body or validated) as Markdown. Never throws
  * on malformed input: missing sections are left out.
  */
@@ -80,6 +134,8 @@ export function toMarkdown(raw, options = {}) {
     const elements = normaliseElements(r.elements);
     const breadcrumbs = normaliseBreadcrumbs(r.breadcrumbs);
     const network = normaliseNetwork(r.network);
+    const perf = normalisePerf(r.perf);
+    const storage = normaliseStorage(r.storage);
     const consoleEntries = normaliseConsole(r.console, {
         maxEntries: options.maxConsoleEntries,
     });
@@ -149,6 +205,27 @@ export function toMarkdown(raw, options = {}) {
         for (const entry of network)
             out.push(requestRow(entry));
         out.push("");
+    }
+    if (perf) {
+        const rows = perfRows(perf);
+        if (rows.length > 0) {
+            out.push("### Performance", "", "| | |", "|---|---|");
+            for (const [k, v] of rows)
+                out.push(`| ${cell(k)} | ${cell(v)} |`);
+            out.push("");
+        }
+    }
+    if (storage) {
+        const lines = storageLines(storage);
+        if (lines.length > 0) {
+            const body = lines.map((line) => `- ${line}`);
+            if (options.collapseStorage ?? true) {
+                out.push("<details><summary>Storage</summary>", "", ...body, "", "</details>", "");
+            }
+            else {
+                out.push("### Storage", "", ...body, "");
+            }
+        }
     }
     if (consoleEntries.length > 0) {
         const lines = [];

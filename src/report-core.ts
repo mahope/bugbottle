@@ -60,6 +60,32 @@ export const MAX_BREADCRUMB_TEXT_LENGTH = 40;
 /** How many recorded requests a report may carry. Oldest are dropped first. */
 export const MAX_NETWORK_ENTRIES = 30;
 
+/** How many keys of one web storage a report may carry. */
+export const MAX_STORAGE_KEYS = 50;
+
+/** How many cookie names a report may carry. */
+export const MAX_COOKIE_NAMES = 100;
+
+/** Longest a storage key or a cookie name may be before it is clipped. */
+export const MAX_STORAGE_KEY_LENGTH = 100;
+
+/**
+ * Longest an allow-listed storage value may be. Short on purpose: the
+ * allow-list exists for a feature flag or a tenant id, not for a serialised
+ * session that happens to be interesting.
+ */
+export const MAX_STORAGE_VALUE_LENGTH = 200;
+
+/** How many allow-listed values a report may carry. */
+export const MAX_STORAGE_VALUES = 20;
+
+/**
+ * The largest duration any performance figure may claim, in milliseconds. An
+ * hour is longer than any real page load and short enough that a row cannot be
+ * bloated by a browser — or an attacker — sending 1e300.
+ */
+export const MAX_PERF_MS = 3_600_000;
+
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -178,6 +204,61 @@ export type NetworkEntry = {
   error?: boolean;
 };
 
+/**
+ * What the page cost the reporter, measured by `bugbottle/perf`.
+ *
+ * Every field is optional because every field is a measurement that may not
+ * have happened: a browser without `PerformanceObserver`, a page nobody
+ * interacted with, a runtime that does not expose the heap. Milliseconds are
+ * whole numbers and `cls` is rounded to three decimals — this is evidence for
+ * a reader, not a benchmark.
+ */
+export type PerfSnapshot = {
+  /** Largest Contentful Paint, in milliseconds from navigation start. */
+  lcp?: number;
+  /** Cumulative Layout Shift, excluding shifts that followed a recent input. */
+  cls?: number;
+  /** Interaction to Next Paint: the worst interaction, in milliseconds. */
+  inp?: number;
+  /** Time to First Byte, in milliseconds from navigation start. */
+  ttfb?: number;
+  /** When `DOMContentLoaded` finished, in milliseconds from navigation start. */
+  domContentLoaded?: number;
+  /** When the load event finished, in milliseconds from navigation start. */
+  load?: number;
+  /** Tasks that blocked the main thread for over 50 ms. */
+  longTasks?: { count: number; totalMs: number };
+  /** The JS heap, where the browser exposes it. Chromium only. */
+  memory?: { usedMB: number; limitMB: number };
+};
+
+/** One key of a web storage: its name and how long its value was. Never the value. */
+export type StorageKeyRef = {
+  /** The key, clipped. */
+  key: string;
+  /** How many characters the value had. */
+  length: number;
+};
+
+/**
+ * What was in the browser's stores when the report was written.
+ *
+ * Names and lengths, never values — a key called `authToken` says the state
+ * the page was in, and its value says rather more than a bug report should.
+ * `values` is the one exception and it is opt-in per key: `initPerf` copies a
+ * value in only when the integrator named that key in `allowValues`.
+ */
+export type StorageSnapshot = {
+  /** `localStorage` keys, in the order the browser lists them. */
+  local?: StorageKeyRef[];
+  /** `sessionStorage` keys, in the order the browser lists them. */
+  session?: StorageKeyRef[];
+  /** Cookie names. Never cookie values, allow-list or not. */
+  cookies?: string[];
+  /** Values of the allow-listed keys, clipped. */
+  values?: Record<string, string>;
+};
+
 /** The JSON body a report is sent as. Extra fields may be added by the client. */
 export type BugReport = {
   type: ReportType;
@@ -190,6 +271,10 @@ export type BugReport = {
   breadcrumbs?: Breadcrumb[];
   /** Requests that failed or were slow before the report, oldest first. */
   network?: NetworkEntry[];
+  /** What the page cost, when `bugbottle/perf` was measuring. */
+  perf?: PerfSnapshot;
+  /** What was in the browser's stores, when `bugbottle/perf` was measuring. */
+  storage?: StorageSnapshot;
   screenshotDataUrl?: string;
 };
 
@@ -431,6 +516,118 @@ export function normaliseNetwork(
     out.push(entry);
   }
   return out.length > maxEntries ? out.slice(-maxEntries) : out;
+}
+
+/**
+ * Validates the performance snapshot a report arrived with.
+ *
+ * Every field is optional and every field is a number, so the rule is the same
+ * throughout: a finite number in range is kept and rounded, anything else is
+ * left out. A snapshot with nothing usable in it is not a snapshot, and null
+ * says so — a report carrying `perf: {}` claims a measurement it does not
+ * have. Never throws: a malformed section means "not measured", not a failed
+ * report.
+ */
+export function normalisePerf(raw: unknown): PerfSnapshot | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const out: PerfSnapshot = {};
+
+  /** A whole number, never negative, never past `max`. */
+  const whole = (v: unknown, max: number): number | null => {
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return null;
+    return Math.min(Math.round(v), max);
+  };
+  for (const key of ["lcp", "inp", "ttfb", "domContentLoaded", "load"] as const) {
+    const value = whole(o[key], MAX_PERF_MS);
+    if (value !== null) out[key] = value;
+  }
+  // Layout shift is a unitless score, and three decimals is what the Web
+  // Vitals reports print. A page that shifted a thousand times over is already
+  // as bad as the number can usefully say.
+  if (typeof o.cls === "number" && Number.isFinite(o.cls) && o.cls >= 0) {
+    out.cls = Math.min(Math.round(o.cls * 1000) / 1000, 1000);
+  }
+  if (typeof o.longTasks === "object" && o.longTasks !== null) {
+    const lt = o.longTasks as Record<string, unknown>;
+    const count = whole(lt.count, 100_000);
+    const totalMs = whole(lt.totalMs, MAX_PERF_MS);
+    if (count !== null || totalMs !== null) {
+      out.longTasks = { count: count ?? 0, totalMs: totalMs ?? 0 };
+    }
+  }
+  if (typeof o.memory === "object" && o.memory !== null) {
+    const mem = o.memory as Record<string, unknown>;
+    const usedMB = whole(mem.usedMB, 1_000_000);
+    const limitMB = whole(mem.limitMB, 1_000_000);
+    if (usedMB !== null || limitMB !== null) {
+      out.memory = { usedMB: usedMB ?? 0, limitMB: limitMB ?? 0 };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Validates the storage snapshot a report arrived with.
+ *
+ * The caps are the point of this one: a browser can hold megabytes in
+ * `localStorage`, and a report that carried all of it would be a denial of
+ * service with a bug attached. Keys are clipped, the lists are cut to
+ * `MAX_STORAGE_KEYS` and `MAX_COOKIE_NAMES`, and the allow-listed values are
+ * clipped hard. Empty sections are left out rather than sent as empty arrays,
+ * so a reader can tell "nothing stored" from "not measured". Never throws.
+ */
+export function normaliseStorage(raw: unknown): StorageSnapshot | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const out: StorageSnapshot = {};
+
+  const keyList = (value: unknown): StorageKeyRef[] => {
+    if (!Array.isArray(value)) return [];
+    const list: StorageKeyRef[] = [];
+    for (const item of value) {
+      if (list.length >= MAX_STORAGE_KEYS) break;
+      if (typeof item !== "object" || item === null) continue;
+      const entry = item as Record<string, unknown>;
+      if (typeof entry.key !== "string") continue;
+      const length =
+        typeof entry.length === "number" && Number.isFinite(entry.length) && entry.length > 0
+          ? Math.min(Math.round(entry.length), 100_000_000)
+          : 0;
+      list.push({ key: stripNullBytes(entry.key).slice(0, MAX_STORAGE_KEY_LENGTH), length });
+    }
+    return list;
+  };
+
+  const local = keyList(o.local);
+  if (local.length > 0) out.local = local;
+  const session = keyList(o.session);
+  if (session.length > 0) out.session = session;
+
+  if (Array.isArray(o.cookies)) {
+    const cookies: string[] = [];
+    for (const name of o.cookies) {
+      if (cookies.length >= MAX_COOKIE_NAMES) break;
+      if (typeof name !== "string") continue;
+      cookies.push(stripNullBytes(name).slice(0, MAX_STORAGE_KEY_LENGTH));
+    }
+    if (cookies.length > 0) out.cookies = cookies;
+  }
+
+  if (typeof o.values === "object" && o.values !== null && !Array.isArray(o.values)) {
+    const values: Record<string, string> = {};
+    for (const [key, value] of Object.entries(o.values as Record<string, unknown>)) {
+      if (Object.keys(values).length >= MAX_STORAGE_VALUES) break;
+      if (typeof value !== "string") continue;
+      values[stripNullBytes(key).slice(0, MAX_STORAGE_KEY_LENGTH)] = stripNullBytes(value).slice(
+        0,
+        MAX_STORAGE_VALUE_LENGTH,
+      );
+    }
+    if (Object.keys(values).length > 0) out.values = values;
+  }
+
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 export class InvalidScreenshotError extends Error {

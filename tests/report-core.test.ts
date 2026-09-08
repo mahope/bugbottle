@@ -7,12 +7,19 @@ import {
   normaliseConsole,
   normaliseContext,
   normaliseMessage,
+  normalisePerf,
+  normaliseStorage,
   MAX_CONSOLE_ENTRIES,
   MAX_CONSOLE_MESSAGE_LENGTH,
   MAX_CONTEXT_LENGTHS,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
   MAX_MESSAGE_LENGTH,
+  MAX_COOKIE_NAMES,
+  MAX_STORAGE_KEYS,
+  MAX_STORAGE_KEY_LENGTH,
+  MAX_STORAGE_VALUE_LENGTH,
+  MAX_PERF_MS,
   MAX_SCREENSHOT_BYTES,
   REPORT_TYPES,
 } from "../src/report-core.ts";
@@ -244,4 +251,80 @@ test("a missing or nonsense console section is an empty list, never a throw", ()
   for (const bad of [undefined, null, "x", 1, {}, [{}]]) {
     assert.deepEqual(normaliseConsole(bad), []);
   }
+});
+
+test("a performance snapshot keeps the figures it can use and rounds them", () => {
+  assert.deepEqual(
+    normalisePerf({
+      lcp: 3412.6,
+      cls: 0.0812349,
+      inp: 210,
+      ttfb: 128.4,
+      domContentLoaded: 641,
+      load: 1200,
+      longTasks: { count: 3.4, totalMs: 480.9 },
+      memory: { usedMB: 32, limitMB: 2048 },
+    }),
+    {
+      lcp: 3413,
+      cls: 0.081,
+      inp: 210,
+      ttfb: 128,
+      domContentLoaded: 641,
+      load: 1200,
+      longTasks: { count: 3, totalMs: 481 },
+      memory: { usedMB: 32, limitMB: 2048 },
+    },
+  );
+});
+
+test("a malformed performance snapshot is no snapshot at all, never a throw", () => {
+  for (const bad of [undefined, null, "3.4s", 42, [], {}, { lcp: "fast" }, { cls: -1 }]) {
+    assert.equal(normalisePerf(bad), null, `${JSON.stringify(bad)} is not a snapshot`);
+  }
+  // A figure nobody could have measured is dropped rather than believed, and
+  // one that could be is clamped: a row is not somewhere to write 1e300.
+  assert.deepEqual(normalisePerf({ lcp: Number.NaN, load: 1e300 }), { load: MAX_PERF_MS });
+  assert.deepEqual(normalisePerf({ longTasks: { count: 2 } }), {
+    longTasks: { count: 2, totalMs: 0 },
+  });
+  assert.deepEqual(normalisePerf({ memory: "lots" }), null);
+});
+
+test("a storage snapshot is capped, clipped and never given empty sections", () => {
+  const many = Array.from({ length: 200 }, (_, i) => ({ key: `k${i}`, length: i }));
+  const snapshot = normaliseStorage({
+    local: many,
+    session: [{ key: "a".repeat(300), length: -4 }],
+    cookies: Array.from({ length: 300 }, (_, i) => `c${i}`),
+    values: { flag: "x".repeat(900) },
+  });
+  assert.equal(snapshot?.local?.length, MAX_STORAGE_KEYS);
+  assert.equal(snapshot?.session?.[0]?.key.length, MAX_STORAGE_KEY_LENGTH);
+  assert.equal(snapshot?.session?.[0]?.length, 0, "a negative length is not a length");
+  assert.equal(snapshot?.cookies?.length, MAX_COOKIE_NAMES);
+  assert.equal(snapshot?.values?.flag?.length, MAX_STORAGE_VALUE_LENGTH);
+});
+
+test("a malformed storage snapshot is left out rather than half kept", () => {
+  for (const bad of [undefined, null, "keys", 7, [], {}, { local: "theme" }, { local: [] }]) {
+    assert.equal(normaliseStorage(bad), null, `${JSON.stringify(bad)} is not a snapshot`);
+  }
+  assert.deepEqual(normaliseStorage({ local: [{ length: 4 }, { key: "theme", length: 4 }] }), {
+    local: [{ key: "theme", length: 4 }],
+  });
+  assert.deepEqual(normaliseStorage({ cookies: [1, {}, "session"] }), { cookies: ["session"] });
+  assert.deepEqual(normaliseStorage({ values: { a: 1, b: "two" } }), { values: { b: "two" } });
+});
+
+test("null bytes never survive a storage snapshot, whichever field they arrive in", () => {
+  const nul = String.fromCharCode(0);
+  const snapshot = normaliseStorage({
+    local: [{ key: `the${nul}me`, length: 4 }],
+    cookies: [`ses${nul}sion`],
+    values: { k: `va${nul}lue` },
+  });
+  assert.equal(snapshot?.local?.[0]?.key, "theme");
+  assert.equal(snapshot?.cookies?.[0], "session");
+  assert.equal(snapshot?.values?.k, "value");
 });

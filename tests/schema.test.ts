@@ -23,6 +23,10 @@ import {
   MAX_SCREENSHOT_DATA_URL_LENGTH,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
+  MAX_COOKIE_NAMES,
+  MAX_STORAGE_KEYS,
+  MAX_STORAGE_KEY_LENGTH,
+  MAX_STORAGE_VALUE_LENGTH,
 } from "../src/report-core.ts";
 import { fullReportBody, reportBody } from "./report-fixtures.ts";
 
@@ -119,4 +123,30 @@ test("two builds of the same types serialise to the same bytes", () => {
   // dist/ is committed, so an unstable key order would show up as a diff on
   // every build and the CI dist guard would fail for no reason.
   assert.equal(serialiseSchema(buildReportSchema()), serialiseSchema(schema));
+});
+
+test("the storage ceilings the validator enforces are published in the schema", () => {
+  const defs = schema.$defs as Record<string, Record<string, Record<string, Record<string, unknown>>>>;
+  const storage = defs.StorageSnapshot!.properties!;
+  assert.equal(storage.local?.maxItems, MAX_STORAGE_KEYS);
+  assert.equal(storage.session?.maxItems, MAX_STORAGE_KEYS);
+  assert.equal(storage.cookies?.maxItems, MAX_COOKIE_NAMES);
+  const cookieItems = storage.cookies?.items as Record<string, unknown> | undefined;
+  assert.equal(cookieItems?.maxLength, MAX_STORAGE_KEY_LENGTH);
+  const value = storage.values?.additionalProperties as Record<string, unknown> | undefined;
+  assert.equal(value?.maxLength, MAX_STORAGE_VALUE_LENGTH);
+  assert.equal(defs.StorageKeyRef!.properties!.key?.maxLength, MAX_STORAGE_KEY_LENGTH);
+});
+
+test("a report whose storage is over the published caps is rejected by the schema", () => {
+  const tooMany = {
+    ...reportBody,
+    storage: { local: Array.from({ length: 60 }, (_, i) => ({ key: `k${i}`, length: 1 })) },
+  };
+  assert.equal(validate(tooMany), false, "51 keys is past the cap the validator clips at");
+});
+
+test("a perf block of the wrong shape is rejected by the schema", () => {
+  assert.equal(validate({ ...reportBody, perf: { lcp: "fast" } }), false);
+  assert.equal(validate({ ...reportBody, perf: { lcp: 3412 } }), true, errors());
 });

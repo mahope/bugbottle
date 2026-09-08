@@ -125,3 +125,44 @@ test("a message containing a code fence does not break the console block", () =>
   });
   assert.match(md, /````text\n\[error\] ```\ninjected\n```\n````/);
 });
+
+test("the performance group prints only what was measured", () => {
+  const md = toMarkdown({
+    type: "bug",
+    message: "Slow",
+    perf: { lcp: 3412, ttfb: 128, memory: { usedMB: 32, limitMB: 2048 } },
+  });
+  assert.match(md, /### Performance/);
+  assert.match(md, /\| Largest contentful paint \| 3412 ms \|/);
+  assert.match(md, /\| Time to first byte \| 128 ms \|/);
+  assert.match(md, /\| JS heap \| 32 MB of 2048 MB \|/);
+  assert.doesNotMatch(md, /Cumulative layout shift/);
+  assert.doesNotMatch(md, /Long tasks/);
+});
+
+test("the storage block collapses by default and can be opened out", () => {
+  const storage = {
+    local: [{ key: "theme", length: 4 }],
+    session: [{ key: "cart", length: 7 }],
+    cookies: ["session"],
+    values: { tenant: "acme" },
+  };
+  const md = toMarkdown({ type: "bug", message: "x", storage });
+  assert.match(md, /<details><summary>Storage<\/summary>/);
+  assert.match(md, /- localStorage: `theme` \(4\)/);
+  assert.match(md, /- sessionStorage: `cart` \(7\)/);
+  assert.match(md, /- Cookies: `session`/);
+  assert.match(md, /- `tenant` = acme/);
+
+  const open = toMarkdown({ type: "bug", message: "x", storage }, { collapseStorage: false });
+  assert.match(open, /### Storage/);
+  assert.doesNotMatch(open, /<details><summary>Storage/);
+});
+
+test("a nonsense perf or storage section renders nothing and never throws", () => {
+  for (const bad of ["fast", 42, [], {}, null]) {
+    const md = toMarkdown({ type: "bug", message: "x", perf: bad, storage: bad });
+    assert.doesNotMatch(md, /### Performance/);
+    assert.doesNotMatch(md, /Storage/);
+  }
+});

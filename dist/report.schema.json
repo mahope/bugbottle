@@ -84,10 +84,18 @@
           "maxItems": 30,
           "type": "array"
         },
+        "perf": {
+          "$ref": "#/$defs/PerfSnapshot",
+          "description": "What the page cost, when `bugbottle/perf` was measuring."
+        },
         "screenshotDataUrl": {
           "maxLength": 2900000,
           "pattern": "^data:image/png;base64,",
           "type": "string"
+        },
+        "storage": {
+          "$ref": "#/$defs/StorageSnapshot",
+          "description": "What was in the browser's stores, when `bugbottle/perf` was measuring."
         },
         "type": {
           "$ref": "#/$defs/ReportType"
@@ -141,6 +149,7 @@
       "properties": {
         "attributes": {
           "additionalProperties": {
+            "maxLength": 200,
             "type": "string"
           },
           "description": "id, name, role, type, href, aria-label, placeholder, title and data-* — never data-bugbottle*.",
@@ -227,6 +236,68 @@
         "status",
         "ms"
       ],
+      "type": "object"
+    },
+    "PerfSnapshot": {
+      "description": "What the page cost the reporter, measured by `bugbottle/perf`.\n\nEvery field is optional because every field is a measurement that may not have happened: a browser without `PerformanceObserver`, a page nobody interacted with, a runtime that does not expose the heap. Milliseconds are whole numbers and `cls` is rounded to three decimals — this is evidence for a reader, not a benchmark.",
+      "properties": {
+        "cls": {
+          "description": "Cumulative Layout Shift, excluding shifts that followed a recent input.",
+          "type": "number"
+        },
+        "domContentLoaded": {
+          "description": "When `DOMContentLoaded` finished, in milliseconds from navigation start.",
+          "type": "number"
+        },
+        "inp": {
+          "description": "Interaction to Next Paint: the worst interaction, in milliseconds.",
+          "type": "number"
+        },
+        "lcp": {
+          "description": "Largest Contentful Paint, in milliseconds from navigation start.",
+          "type": "number"
+        },
+        "load": {
+          "description": "When the load event finished, in milliseconds from navigation start.",
+          "type": "number"
+        },
+        "longTasks": {
+          "description": "Tasks that blocked the main thread for over 50 ms.",
+          "properties": {
+            "count": {
+              "type": "number"
+            },
+            "totalMs": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "count",
+            "totalMs"
+          ],
+          "type": "object"
+        },
+        "memory": {
+          "description": "The JS heap, where the browser exposes it. Chromium only.",
+          "properties": {
+            "limitMB": {
+              "type": "number"
+            },
+            "usedMB": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "usedMB",
+            "limitMB"
+          ],
+          "type": "object"
+        },
+        "ttfb": {
+          "description": "Time to First Byte, in milliseconds from navigation start.",
+          "type": "number"
+        }
+      },
       "type": "object"
     },
     "ReportContext": {
@@ -318,6 +389,64 @@
         "line",
         "col"
       ],
+      "type": "object"
+    },
+    "StorageKeyRef": {
+      "description": "One key of a web storage: its name and how long its value was. Never the value.",
+      "properties": {
+        "key": {
+          "description": "The key, clipped.",
+          "maxLength": 100,
+          "type": "string"
+        },
+        "length": {
+          "description": "How many characters the value had.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "key",
+        "length"
+      ],
+      "type": "object"
+    },
+    "StorageSnapshot": {
+      "description": "What was in the browser's stores when the report was written.\n\nNames and lengths, never values — a key called `authToken` says the state the page was in, and its value says rather more than a bug report should. `values` is the one exception and it is opt-in per key: `initPerf` copies a value in only when the integrator named that key in `allowValues`.",
+      "properties": {
+        "cookies": {
+          "description": "Cookie names. Never cookie values, allow-list or not.",
+          "items": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "local": {
+          "description": "`localStorage` keys, in the order the browser lists them.",
+          "items": {
+            "$ref": "#/$defs/StorageKeyRef"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        "session": {
+          "description": "`sessionStorage` keys, in the order the browser lists them.",
+          "items": {
+            "$ref": "#/$defs/StorageKeyRef"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        "values": {
+          "additionalProperties": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "description": "Values of the allow-listed keys, clipped.",
+          "type": "object"
+        }
+      },
       "type": "object"
     }
   },
