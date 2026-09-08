@@ -48,6 +48,13 @@ was not.
   by filling the cache with unrelated traffic. It is still one instance's
   memory: give `signature.replayStore` a shared store (Redis, a table with a
   TTL) when several instances answer the same endpoint.
+- The rate limit and the dedupe have the same seam —
+  `rateLimit.rateLimitStore` and `dedupe.dedupeStore` — and the opposite
+  failure mode on purpose: a replay store that throws answers 500, because an
+  unchecked signature is the replay it exists to stop, while those two fail
+  open, because an honest report must not be refused when a shared store
+  blinks. A rate limit is a defence in depth beside `authorize`, never the
+  thing that keeps a report safe.
 - No cookies, no identifiers, no third-party calls. A report goes to the
   endpoint you configure and nowhere else.
 - `scrubReport` redacts email addresses, bearer tokens, JWTs, Luhn-valid card

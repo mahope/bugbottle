@@ -9,6 +9,20 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `rateLimit.rateLimitStore` and `dedupe.dedupeStore` on `handleReport`, shaped
+  like the `replayStore` seam beside them: a fleet behind a load balancer can
+  now share one rate limit and one dedupe answer instead of one per instance.
+  `RateLimitStore` is a single `hit(key, windowMs)` that increments and returns
+  the count — an `INCR` and a `PEXPIRE` in Redis — and `DedupeStore` is
+  `get(key)` and `set(key, entry, expiresAt)`, where expiry is the store's job,
+  so anything `get` answers with is a duplicate. Either half may be
+  synchronous. Nothing is bundled and nothing is depended on; the README shows
+  all three seams together under *Running more than one instance*. Without a
+  store the in-memory maps and their eviction are exactly what they were.
+  Both new stores fail **open** — a `hit` or a `get` or a `set` that throws
+  reaches `onError` and the report is accepted — because an honest report must
+  not be refused, or lost, because a shared store blinked. `replayStore` still
+  fails closed, since an unchecked signature is the replay it exists to stop.
 - Two more places a report can land, for teams on neither GitHub nor Linear.
   `jiraSink({ site, email, apiToken, projectKey, issueType? })` files a Jira
   Cloud issue over REST v3. It is the only sink that does not send Markdown:

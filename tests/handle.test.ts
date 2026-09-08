@@ -957,3 +957,159 @@ test("the markdown a sink is handed carries the performance figures", async () =
   assert.match(markdown, /Largest contentful paint/);
   assert.match(markdown, /<details><summary>Storage<\/summary>/);
 });
+
+test("an injected rate-limit store is counted instead of the buckets", async () => {
+  resetRateLimits();
+  const asked: [string, number][] = [];
+  const counts = new Map<string, number>();
+  const options = {
+    rateLimit: {
+      limit: 2,
+      windowMs: 60_000,
+      key: () => "one-caller",
+      rateLimitStore: {
+        hit: async (key: string, windowMs: number) => {
+          asked.push([key, windowMs]);
+          const count = (counts.get(key) ?? 0) + 1;
+          counts.set(key, count);
+          return count;
+        },
+      },
+    },
+  };
+
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  const third = await handleReport(post(body), options);
+  assert.equal(third.status, 429);
+  assert.deepEqual(await third.json(), { error: "Too many reports" });
+  assert.deepEqual(asked, [
+    ["one-caller", 60_000],
+    ["one-caller", 60_000],
+    ["one-caller", 60_000],
+  ]);
+
+  // Nothing was counted in the in-memory buckets while the store was in
+  // charge: the same caller has its whole allowance at a handler without one.
+  const local = { rateLimit: { limit: 1, windowMs: 60_000, key: () => "one-caller" } };
+  assert.equal((await handleReport(post(body), local)).status, 202);
+  resetRateLimits();
+});
+
+test("a rate-limit store that throws does not refuse an honest report", async () => {
+  resetRateLimits();
+  const errors: unknown[] = [];
+  const options = {
+    rateLimit: {
+      limit: 1,
+      windowMs: 60_000,
+      key: () => "one-caller",
+      rateLimitStore: {
+        hit: async () => {
+          throw new Error("redis is down");
+        },
+      },
+    },
+    onError: (err: unknown) => errors.push(err),
+  };
+
+  // Twice, so this is not the first request happening to be under the limit.
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal((await handleReport(post(body), options)).status, 202);
+  assert.equal(errors.length, 2, "and the operator is told each time");
+  resetRateLimits();
+});
+
+test("an injected dedupe store is consulted and written with an expiry", async () => {
+  resetDedupe();
+  const asked: string[] = [];
+  const written: [string, { id?: string }, number][] = [];
+  const kept = new Map<string, { id?: string }>();
+  const windowMs = 60_000;
+  const stored: string[] = [];
+  const options = {
+    dedupe: {
+      windowMs,
+      dedupeStore: {
+        get: async (key: string) => {
+          asked.push(key);
+          return kept.get(key);
+        },
+        set: async (key: string, entry: { id?: string }, expiresAt: number) => {
+          written.push([key, entry, expiresAt]);
+          kept.set(key, entry);
+        },
+      },
+    },
+    store: async () => {
+      stored.push("row");
+      return { id: "rep_9" };
+    },
+  };
+
+  const before = Date.now();
+  const first = await handleReport(post(body), options);
+  assert.equal(first.status, 201);
+  assert.deepEqual(await first.json(), { id: "rep_9" });
+  assert.equal(asked.length, 1);
+  assert.equal(written.length, 1);
+  const [key, entry, expiresAt] = written[0]!;
+  assert.equal(key, asked[0]);
+  assert.deepEqual(entry, { id: "rep_9" });
+  // The expiry is the end of the window, which is exactly how long a shared
+  // store has to keep the answer.
+  assert.ok(expiresAt >= before + windowMs && expiresAt <= Date.now() + windowMs);
+
+  const second = await handleReport(post(body), options);
+  assert.equal(second.status, 200);
+  assert.deepEqual(await second.json(), { id: "rep_9", duplicate: true });
+  assert.deepEqual(stored, ["row"], "the second copy is not written");
+  assert.equal(written.length, 1, "and a duplicate is not remembered again");
+
+  // Nothing reached the in-memory map while the store was in charge.
+  const local = { dedupe: { windowMs } };
+  assert.equal((await handleReport(post(body), local)).status, 202);
+  resetDedupe();
+});
+
+test("a dedupe store that throws lets the report through", async () => {
+  resetDedupe();
+  const errors: unknown[] = [];
+  const stored: string[] = [];
+  const delivered: string[] = [];
+  const options = {
+    dedupe: {
+      windowMs: 60_000,
+      dedupeStore: {
+        get: async () => {
+          throw new Error("redis is down");
+        },
+        set: async () => {
+          throw new Error("redis is still down");
+        },
+      },
+    },
+    store: async () => {
+      stored.push("row");
+      return { id: "rep_10" };
+    },
+    sinks: [
+      async () => {
+        delivered.push("sink");
+      },
+    ],
+    onError: (err: unknown) => errors.push(err),
+  };
+
+  // A duplicate costs a row; a refusal costs the report. Both throws are
+  // survived, and the second copy is answered as new rather than lost.
+  const first = await handleReport(post(body), options);
+  assert.equal(first.status, 201);
+  assert.deepEqual(await first.json(), { id: "rep_10" });
+  const second = await handleReport(post(body), options);
+  assert.equal(second.status, 201);
+  assert.deepEqual(stored, ["row", "row"]);
+  assert.deepEqual(delivered, ["sink", "sink"]);
+  assert.equal(errors.length, 4, "each failed get and set reaches onError");
+  resetDedupe();
+});

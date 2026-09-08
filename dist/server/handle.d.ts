@@ -92,7 +92,7 @@ export type HandleReportResult = {
     /** One entry per sink that threw, in the order the sinks were listed. */
     sinkErrors: unknown[];
 };
-/** How much traffic one key may send. In memory, so per instance. */
+/** How much traffic one key may send. In memory by default, so per instance. */
 export type RateLimitOptions = {
     limit: number;
     windowMs: number;
@@ -102,14 +102,50 @@ export type RateLimitOptions = {
      * because the key is a map entry an attacker would otherwise size.
      */
     key?: (request: Request) => string;
+    /**
+     * Where the counting happens. The default is the in-memory buckets described
+     * above: per instance, capped at 10 000 keys. Two instances behind a load
+     * balancer each hand out the whole allowance, and a serverless isolate that
+     * has just started hands out a fresh one, so a deployment that wants one
+     * limit across all of them hands in its own store — Redis, Memcached, a
+     * table with a TTL.
+     */
+    rateLimitStore?: RateLimitStore;
+};
+/**
+ * The seam between `handleReport` and wherever the counting happens. One
+ * method, because a limit needs exactly one thing: increment and tell me the
+ * total. It may be synchronous — the in-memory default is — so a store that
+ * needs no network costs no promise.
+ *
+ * ```ts
+ * const rateLimitStore = {
+ *   hit: async (key, windowMs) => {
+ *     const count = await redis.incr(`bb:rl:${key}`);
+ *     if (count === 1) await redis.pexpire(`bb:rl:${key}`, windowMs);
+ *     return count;
+ *   },
+ * };
+ * ```
+ *
+ * A store that throws fails the request *open*: the report is accepted and the
+ * error reaches `onError`. An honest report is not refused because a shared
+ * store blinked.
+ */
+export type RateLimitStore = {
+    /**
+     * Counts this request against `key` and answers how many have arrived inside
+     * the window, this one included. More than `limit` is answered with 429.
+     */
+    hit(key: string, windowMs: number): number | Promise<number>;
 };
 /** Longest key kept for a bucket: a header is not allowed to size the map. */
 export declare const MAX_RATE_LIMIT_KEY_LENGTH = 64;
 /** Hard ceiling on the bucket map, whatever the traffic looks like. */
 export declare const MAX_RATE_LIMIT_BUCKETS = 10000;
 /**
- * Answering the same report twice as if it were new. In memory, so per
- * instance — the same caveat as the rate limit, and for the same reason.
+ * Answering the same report twice as if it were new. In memory by default, so
+ * per instance — the same caveat as the rate limit, and for the same reason.
  */
 export type DedupeOptions = {
     /** How long a repeat of the same report is answered as a duplicate. */
@@ -121,6 +157,44 @@ export type DedupeOptions = {
      * deduplicates agree.
      */
     key?: (report: ValidatedReport) => string;
+    /**
+     * Where the fingerprints are remembered. The default is the in-memory map
+     * described above: per instance, capped at 10 000 entries. Two instances
+     * behind a load balancer store the same crash twice, so a deployment that
+     * wants one answer across all of them hands in its own store.
+     */
+    dedupeStore?: DedupeStore;
+};
+/** What a dedupe store keeps: the id the first copy was stored under, if any. */
+export type DedupeEntry = {
+    id?: string;
+};
+/**
+ * The seam between `handleReport` and wherever the fingerprints are
+ * remembered. Shaped like `ReplayStore`, and like it either half may be
+ * synchronous.
+ *
+ * ```ts
+ * const dedupeStore = {
+ *   get: async (key) => {
+ *     const value = await redis.get(`bb:dup:${key}`);
+ *     return value === null ? undefined : (JSON.parse(value) as { id?: string });
+ *   },
+ *   set: (key, entry, expiresAt) =>
+ *     redis.set(`bb:dup:${key}`, JSON.stringify(entry), "PXAT", expiresAt),
+ * };
+ * ```
+ *
+ * Expiry is the store's job — that is what `expiresAt` is for — so anything
+ * `get` answers with counts as a duplicate. A store that throws fails open on
+ * both halves: a duplicate report costs a row, and refusing one costs the
+ * report.
+ */
+export type DedupeStore = {
+    /** What was answered for this key before, or nothing when it is new. */
+    get(key: string): DedupeEntry | undefined | Promise<DedupeEntry | undefined>;
+    /** Remembers the answer until `expiresAt`, an epoch millisecond. */
+    set(key: string, entry: DedupeEntry, expiresAt: number): void | Promise<void>;
 };
 /** Hard ceiling on the fingerprint map. */
 export declare const MAX_DEDUPE_ENTRIES = 10000;
@@ -255,11 +329,15 @@ export type HandleReportOptions = {
     respond?: (result: HandleReportResult) => Response;
     /** `true` for `*`, or the one origin you allow. Also answers `OPTIONS`. */
     cors?: string | boolean;
-    /** In-memory, per instance. Fine per serverless isolate, not shared. */
+    /**
+     * In memory and per instance by default: fine per serverless isolate, not
+     * shared. `rateLimit.rateLimitStore` is the seam for a shared count.
+     */
     rateLimit?: RateLimitOptions;
     /**
      * Answer a repeat of the same report with 200 `{ id, duplicate: true }`
-     * instead of storing and delivering it again. In memory, per instance.
+     * instead of storing and delivering it again. In memory and per instance by
+     * default; `dedupe.dedupeStore` is the seam for one answer across a fleet.
      */
     dedupe?: DedupeOptions;
     /** Passed through to `toMarkdown` — extra facts, a heading level. */
