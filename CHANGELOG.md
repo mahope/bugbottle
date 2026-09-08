@@ -9,6 +9,11 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- `SendOptions.onError` is the new name for `onFailure`, which is what
+  `MountOptions` and `HandleReportOptions` have always called the same idea.
+  `onFailure` still works, is marked `@deprecated`, and goes in 1.0 (#63);
+  given both names, `onError` is the one that runs.
+
 - `initConsoleBuffer`, `initBreadcrumbs` and `initNetwork` return their stop —
   `resetConsoleBuffer`, `resetBreadcrumbs` and `resetNetwork` — the way
   `initPerf` and `attachRrweb` already did. A caller can undo what it started

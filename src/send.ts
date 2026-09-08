@@ -163,13 +163,22 @@ export type SendOptions = {
    *
    * ```ts
    * const queue = createQueue({ endpoint });
-   * sendReport(endpoint, report, { onFailure: (r) => queue.enqueue(r) });
+   * sendReport(endpoint, report, { onError: (r) => queue.enqueue(r) });
    * ```
    *
    * It runs before the error is rethrown, and it is awaited so a queue that
    * writes to storage has finished by the time the caller sees the failure.
    * An error thrown here is swallowed: the original failure is the one worth
    * reporting.
+   */
+  onError?: (
+    report: BugReport & Record<string, unknown>,
+    error: unknown,
+  ) => void | Promise<void>;
+  /**
+   * @deprecated Renamed to `onError` in 0.9, which is what `MountOptions` and
+   * `HandleReportOptions` have always called the same idea. Removed in 1.0
+   * (#63). Given both, `onError` is the one that runs.
    */
   onFailure?: (
     report: BugReport & Record<string, unknown>,
@@ -316,9 +325,12 @@ export async function sendReport(
   } catch (err) {
     const failure =
       err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
-    if (options.onFailure) {
+    // One handler runs, never both: two spellings of one option are a mistake
+    // to make loudly rather than a thing to guess about.
+    const onError = options.onError ?? options.onFailure;
+    if (onError) {
       try {
-        await options.onFailure(payload, failure);
+        await onError(payload, failure);
       } catch {
         // A queue that cannot write must not replace the error that says the
         // report never arrived. The send failed either way.

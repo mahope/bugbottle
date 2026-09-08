@@ -668,14 +668,17 @@ report going out during unload, not for one with a screenshot attached. For
 anything larger, the queue is the answer.
 
 Below the two integrations, `SendOptions` has the seam they are built on:
-`onFailure(report, error)` runs after a failed send, before the error reaches
+`onError(report, error)` runs after a failed send, before the error reaches
 you, and is awaited.
 
 ```ts
 await sendReport("/api/feedback", report, {
-  onFailure: (failed) => queue.enqueue(failed),
+  onError: (failed) => queue.enqueue(failed),
 });
 ```
+
+It was called `onFailure` until 0.9. That name still works and is deprecated;
+it goes in 1.0, and where both are given `onError` is the one that runs.
 
 ## The ready-made panel
 
