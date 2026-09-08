@@ -2078,9 +2078,9 @@ is the endpoint, the panel and an admin list of what arrived. One activation.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Ten sinks live in
-`bugbottle/server`, each a formatter over one `fetch` call, none with a
-dependency of its own. None of them reads your environment: the key, the URL
+Storing the report is one thing; seeing it is another. Eleven sinks live in
+`bugbottle/server`, ten of them a formatter over one `fetch` call and the
+eleventh a small SMTP client, none with a dependency of its own. None of them reads your environment: the key, the URL
 and the token are arguments, so it is visible at the call site where the secret
 came from — and so nothing can drift into a browser bundle.
 
@@ -2145,6 +2145,74 @@ The address was `url` until 0.9, where everything else in the package calls it
 `endpoint`. That name still works and is deprecated; it goes in 1.0. A vendor's
 own address keeps the vendor's own word — `webhookUrl` for the Slack, Discord
 and Teams sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
+
+### Your own SMTP server
+
+`smtpSink` is the same email without Resend. Most people running their own
+endpoint already have an SMTP account — their host's, Postmark's, Mailgun's, a
+Postfix or Stalwart box on the same machine — and no reason to sign up for
+anything to send one message a day. It speaks the protocol itself over
+`node:net` and `node:tls`: EHLO, STARTTLS when the server offers it, AUTH,
+one message, QUIT. Zero dependencies, like everything else here, and Node-only
+— it is the one sink that needs those two modules, and nothing else in
+`bugbottle/server` imports it, so a worker runtime is unaffected until you ask
+for it by name.
+
+```ts
+import { handleReport, smtpSink } from "bugbottle/server";
+
+export async function POST(req: Request) {
+  return handleReport(req, {
+    sinks: [
+      smtpSink({
+        host: "smtp.example.com",          // your account, your configuration
+        port: 587,                         // 465 for implicit TLS, 587 for STARTTLS
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+        from: "bugs@example.com",
+        to: ["team@example.com", "ops@example.com"],
+        timeoutMs: 10_000,                 // per phase, not for the whole conversation
+      }),
+    ],
+  });
+}
+```
+
+The subject, the intro and the `Reply-To` work exactly as they do for Resend:
+the subject comes from the report's title and the locale unless you pass
+`subject`, and a `contact` line that looks like an address becomes the
+`Reply-To` so answering the mail answers the person who wrote the report.
+`replyTo` overrides it and `replyTo: false` sends none. The body is a
+`multipart/alternative` of the report as plain text and the same report
+labelled `text/markdown`, so a mail client shows the readable half and a script
+that fetches the mailbox back out gets the Markdown with its tables intact.
+There are no attachments: store the screenshot yourself and pass
+`screenshotUrl`, which is linked from the facts table.
+
+`port` decides the rest. Left unset it is 587, and `secure` follows it: true
+for 465, where TLS starts with the first byte, and false otherwise, where the
+connection upgrades itself as soon as the server advertises STARTTLS. `tls`
+is handed to `tls.connect`, for a self-signed certificate on a box you run
+(`tls: { rejectUnauthorized: false }`) or a pinned CA. A refusal throws
+`SinkError` with the server's own reply code and line — `550 5.1.1 …
+Recipient address rejected` reaches your log as it was said — and a failure
+that never got a reply, such as a hang or a refused connection, throws one with
+a status of `0`.
+
+**AUTH is refused over a connection that is not encrypted.** If the server
+offers no STARTTLS and you did not connect on an implicit-TLS port, the
+password would go to the wire in base64, which is not encryption: every hop
+between you and the mail server could read it, and one of those hops is
+whatever else runs on the network. So the sink throws before sending anything
+rather than authenticating in the clear. `allowInsecureAuth: true` switches
+that off, and it is meant for exactly one case — a mail server on the same
+host, reached over the loopback interface, that wants a password anyway. If you
+find yourself setting it for a server somewhere else, the answer is a port that
+does TLS, not the flag.
+
+Credentials never reach a log or an error message: an AUTH failure is reported
+with the server's reply, never with what was sent, because the base64 of an
+AUTH LOGIN step is the password in a thin disguise.
 
 ### Slack and Discord
 
@@ -2851,7 +2919,10 @@ imports this entry, so a site that does not ask for it never carries it.
 `normaliseStorage`, `normaliseReplay`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
-`createLinearIssue`, `jiraSink`, `buildJiraDescription`, `jiraBaseUrl`,
+`createLinearIssue`, `smtpSink`, `sendReportSmtp`, `buildMessage`,
+`foldHeader`, `dotStuff`, `DEFAULT_SMTP_PORT`, `DEFAULT_SMTP_TIMEOUT_MS`,
+`SMTP_TLS_PORT`, `SMTP_NO_REPLY`, the `SmtpSink`, `SmtpSinkOptions` and
+`SendReportSmtpResult` types, `jiraSink`, `buildJiraDescription`, `jiraBaseUrl`,
 `jiraAuthHeader`, `messageFromJiraBody`, `DEFAULT_JIRA_ISSUE_TYPE`,
 `MAX_JIRA_CONSOLE_ENTRIES`, `MAX_JIRA_SUMMARY`, the `JiraSink`,
 `JiraSinkOptions`, `CreateJiraIssueResult`, `AdfDoc` and `AdfNode` types,

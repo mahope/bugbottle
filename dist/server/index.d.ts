@@ -17,6 +17,7 @@ export { fileStore, DEFAULT_MAX_REPORTS, type FileStore, type FileStoreOptions, 
 export { expressHandler, type ExpressRequestLike, type ExpressResponseLike, } from "./express.ts";
 export { SinkError, type FetchLike } from "../sinks/error.ts";
 export { sendReportEmail, type SendReportEmailOptions, type SendReportEmailResult, } from "../sinks/resend.ts";
+export { smtpSink, sendReportSmtp, buildMessage, foldHeader, dotStuff, DEFAULT_SMTP_PORT, DEFAULT_SMTP_TIMEOUT_MS, SMTP_TLS_PORT, SMTP_NO_REPLY, type SmtpSink, type SmtpSinkOptions, type SendReportSmtpResult, } from "../sinks/smtp.ts";
 export { sendReportWebhook, MAX_DISCORD_CONTENT, DISCORD_MAX_CONTENT, type SendReportWebhookOptions, type SendReportWebhookTarget, type SendReportWebhookResult, type WebhookFormat, } from "../sinks/webhook.ts";
 export { createGithubIssue, type CreateGithubIssueOptions, type CreateGithubIssueResult, } from "../sinks/github.ts";
 export { createLinearIssue, type CreateLinearIssueOptions, type CreateLinearIssueResult, } from "../sinks/linear.ts";

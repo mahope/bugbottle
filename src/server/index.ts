@@ -90,6 +90,25 @@ export {
   type SendReportEmailResult,
 } from "../sinks/resend.ts";
 
+// The only sink that speaks a protocol rather than an HTTP API, and the only
+// one that is Node-only: it imports `node:net` and `node:tls`. Nothing else in
+// this entry imports it, so a runtime without those modules is fine until
+// somebody asks for `smtpSink` by name.
+export {
+  smtpSink,
+  sendReportSmtp,
+  buildMessage,
+  foldHeader,
+  dotStuff,
+  DEFAULT_SMTP_PORT,
+  DEFAULT_SMTP_TIMEOUT_MS,
+  SMTP_TLS_PORT,
+  SMTP_NO_REPLY,
+  type SmtpSink,
+  type SmtpSinkOptions,
+  type SendReportSmtpResult,
+} from "../sinks/smtp.ts";
+
 export {
   sendReportWebhook,
   MAX_DISCORD_CONTENT,
