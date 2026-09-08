@@ -92,7 +92,12 @@ export function readOptions(data: DOMStringMap, endpoint: string): MountOptions 
   initBreadcrumbs();
   // Any value turns the offline queue on, the same way `data-scrub` does. The
   // queue also flushes whatever an earlier visit left behind as it is created.
-  if (data.queue !== undefined) options.queue = createQueue({ endpoint });
+  // The signer goes with it, because the queue POSTs with a `fetch` of its own
+  // and would otherwise deliver unsigned to an endpoint that requires a
+  // signature — losing precisely the reports the queue was turned on for.
+  if (data.queue !== undefined) {
+    options.queue = createQueue({ endpoint, ...(options.sign ? { sign: options.sign } : {}) });
+  }
   return options;
 }
 

@@ -160,7 +160,7 @@ export function jsonByteLength(payload) {
 export function buildTeamsMessage(report, options, ctx = {}) {
     const r = readReport(report);
     const screenshot = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl ?? ctx.screenshotUrl);
-    const link = resolveUrl(options.reportUrl, report);
+    const link = resolveUrl(options.reportUrlFrom, report, options.reportUrl);
     const footnoteParts = [];
     if (r.timestamp)
         footnoteParts.push(r.timestamp);

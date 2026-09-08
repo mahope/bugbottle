@@ -254,7 +254,7 @@ test("the stored screenshot url from the handler is used when no function is giv
 test("a report url becomes an actions block, and there is none without one", () => {
   const payload = buildSlackMessage(report, {
     webhookUrl: SLACK_URL,
-    reportUrl: () => "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/7",
     buttonText: "See the report",
   });
   const actions = blockOfType(payload, "actions");
@@ -268,6 +268,22 @@ test("a report url becomes an actions block, and there is none without one", () 
 
   const plain = buildSlackMessage(report, { webhookUrl: SLACK_URL });
   assert.equal(blockOfType(plain, "actions"), undefined);
+
+  // `reportUrl` is the address you already have; `reportUrlFrom` reads one out
+  // of the report and wins where both are given, exactly as the picture does.
+  const buttonUrl = (payload: Record<string, unknown>) =>
+    (blockOfType(payload, "actions")?.elements as { url: string }[])[0]?.url;
+  const flat = buildSlackMessage(report, {
+    webhookUrl: SLACK_URL,
+    reportUrl: "https://app.example.com/reports/7",
+  });
+  assert.equal(buttonUrl(flat), "https://app.example.com/reports/7");
+  const both = buildSlackMessage(report, {
+    webhookUrl: SLACK_URL,
+    reportUrl: "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/8",
+  });
+  assert.equal(buttonUrl(both), "https://app.example.com/reports/8");
 });
 
 test("channel, username and icon are sent only when configured", () => {
@@ -402,7 +418,7 @@ test("a screenshot url becomes the embed image and a report url its link", () =>
   const payload = buildDiscordMessage(report, {
     webhookUrl: DISCORD_URL,
     screenshotUrlFrom: () => "https://files.example.com/a.png",
-    reportUrl: () => "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/7",
   });
   const embed = embedOf(payload);
   assert.deepEqual(embed.image, { url: "https://files.example.com/a.png" });
@@ -411,7 +427,7 @@ test("a screenshot url becomes the embed image and a report url its link", () =>
   const bare = buildDiscordMessage(report, {
     webhookUrl: DISCORD_URL,
     screenshotUrlFrom: () => undefined,
-    reportUrl: () => undefined,
+    reportUrlFrom: () => undefined,
   });
   assert.equal("image" in embedOf(bare), false);
   assert.equal("url" in embedOf(bare), false);
@@ -421,6 +437,19 @@ test("a screenshot url becomes the embed image and a report url its link", () =>
     screenshotUrlFrom: () => "data:image/png;base64,AAAA",
   });
   assert.equal("image" in embedOf(dataUrl), false, "discord cannot fetch a data url");
+
+  // The string form, and the function winning over it.
+  const flat = buildDiscordMessage(report, {
+    webhookUrl: DISCORD_URL,
+    reportUrl: "https://app.example.com/reports/7",
+  });
+  assert.equal(embedOf(flat).url, "https://app.example.com/reports/7");
+  const both = buildDiscordMessage(report, {
+    webhookUrl: DISCORD_URL,
+    reportUrl: "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/8",
+  });
+  assert.equal(embedOf(both).url, "https://app.example.com/reports/8");
 });
 
 test("username and avatar are sent only when configured", () => {

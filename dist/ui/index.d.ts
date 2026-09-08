@@ -188,6 +188,12 @@ export type MountOptions = {
      * `bugbottle/queue` and the reporter is thanked with the `queued` message
      * rather than shown an error; the report is delivered when the browser is
      * online again. A 4xx is never queued — the server has already refused it.
+     *
+     * The queue arrives already built, so the panel cannot hand it anything:
+     * a signed endpoint needs the same `sign` function given to
+     * `createQueue({ endpoint, sign })` as well as here, or the queued reports
+     * are delivered unsigned. The script tag does that wiring itself from
+     * `data-sign-key`.
      */
     queue?: Queue;
     onSent?: (id: string | undefined) => void;

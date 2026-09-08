@@ -515,7 +515,7 @@ function notifySinks() {
   const webhookUrl = process.env.NOTIFY_WEBHOOK;
   if (webhookUrl) {
     const kind = webhookKind(webhookUrl);
-    const options = { webhookUrl, reportUrl, screenshotUrlFrom: screenshotUrl };
+    const options = { webhookUrl, reportUrlFrom: reportUrl, screenshotUrlFrom: screenshotUrl };
     if (kind === "slack") sinks.push(slackSink(options));
     else if (kind === "discord") sinks.push(discordSink(options));
     else if (kind === "teams") sinks.push(teamsSink(options));

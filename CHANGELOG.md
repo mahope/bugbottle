@@ -25,8 +25,8 @@ the README's API section and `CLAUDE.md` stop agreeing; and the seven naming
 rules in `CLAUDE.md` are the contract the next name is chosen by rather than a
 style preference.
 
-Every migration in one table. All seven are mechanical, and nobody has to read
-a value to make one:
+Every migration in one table. All of them are mechanical, and nobody has to
+read a value to make one:
 
 | Was | Is | Where |
 |---|---|---|
@@ -39,16 +39,20 @@ a value to make one:
 | `SendReportWebhookOptions.url` | `SendReportWebhookOptions.endpoint` | `sendReportWebhook`, `toWebhook` |
 | `import { normalise*, toMarkdown } from "bugbottle"` | `… from "bugbottle/server"` | the core entry |
 | `slackSink({ screenshotUrl: (r) => … })` | `slackSink({ screenshotUrlFrom: (r) => … })` | Slack, Discord, Teams |
+| `slackSink({ reportUrl: (r) => … })` | `slackSink({ reportUrlFrom: (r) => … })` | Slack, Discord, Teams |
 
 The wire format is unchanged: a 0.15 browser and a 1.0 server understand each
 other in both directions, and so do the schema, the OpenAPI document and the
 GitHub Action.
 
-Sizes moved by single-digit bytes and no budget moved with them. Measured
+Sizes moved by single-digit bytes and no budget moved with them, apart from
+what #98 cost the queue. Measured
 against 0.15.0 with the same recipe: `bugbottle/react` −4, `bugbottle/vue` −5,
 `bugbottle/svelte` −6, `bugbottle/solid` −5, `bugbottle/ui` −6,
-`bugbottle/queue` 1545 → 1539, `bugbottle/server` −2, `dist/bugbottle.js` −14
-and `dist/bugbottle.slim.js` −12. The core rose three bytes, which is the
+`bugbottle/queue` 1545 → 1539 → 1565 (the signer seam; the budget stays at
+1600), `bugbottle/server` −2, `dist/bugbottle.js` −14 then +51
+and `dist/bugbottle.slim.js` −12 then +50, both still inside 25088 and 21504.
+The core rose three bytes, which is the
 compressor rather than the code: everything #68 took off the entry was already
 tree-shaken out of a bundle that never called it, which is why that issue was
 about what the entry says it is and not about bytes.
@@ -91,6 +95,56 @@ about what the entry says it is and not about bytes.
   same way, since no service will fetch one, and all eleven now let an option
   set on the sink win over the address `handleReport` stored — `toGithub` and
   `toLinear` had it the other way round.
+- **The link to the full report takes the same pair of shapes** (#69's shape,
+  applied to the one option it had missed). `slackSink`, `discordSink` and
+  `teamsSink` took a function of the report under `reportUrl`, which is the
+  name every other address in the package uses for a plain string. `reportUrl`
+  is now that string — the address you already have — and `reportUrlFrom` is
+  the function, winning where both are given:
+
+  ```diff
+   slackSink({
+     webhookUrl: process.env.SLACK_WEBHOOK,
+  -  reportUrl: (report) => `https://app.acme.com/reports/${idOf(report)}`,
+  +  reportUrlFrom: (report) => `https://app.acme.com/reports/${idOf(report)}`,
+   });
+  ```
+
+  There is no alias: 1.0 is where a rename like this is free, and after it a
+  rename costs a major version. `examples/inbox` passes the function and moved
+  with it.
+
+### Fixed
+
+- **The offline queue delivers signed** (#98). `createQueue` had no `sign`
+  seam, so the script tag's own auto-mount built `createQueue({ endpoint })`
+  even with `data-sign-key` set: a report that went through the queue arrived
+  without `X-Bugbottle-Signature`, and a `handleReport` with
+  `signature.require` refused exactly the reports the queue exists to save.
+  The README presented that as a design decision — "signing and queueing do
+  not go together; pick one per endpoint" — and it was not one; the WordPress
+  plugin had to work around it with a `fetch` wrapper (shipped in its 0.6.1,
+  and now removable).
+
+  `createQueue({ endpoint, headers, sign })` takes the same signer
+  `sendReport` takes and signs the serialised body **at delivery time**, once
+  per attempt rather than once per report. That is the part that matters: a
+  signature carries the timestamp it was made at, the server checks it against
+  a skew window of minutes, and a report signed while the network was down
+  would be hours stale by the time it left. Every attempt — including every
+  retry after a backoff — signs the bytes it is about to send with a fresh
+  timestamp. A signer that throws leaves the report queued and schedules the
+  retry, like any other failed delivery.
+
+  The auto-mount passes the signer whenever `data-sign-key` is set, so the
+  script tag needs no wiring. `mountBugbottle` cannot: it is handed a queue
+  that is already built, so a signed endpoint needs `sign` given to
+  `createQueue` as well as to the panel — the README says so where the
+  "pick one" paragraph used to be. A queue built without `sign` posts
+  unsigned, exactly as before.
+
+  `bugbottle/queue` 1539 → 1565 bytes gzipped against its 1600 budget, and the
+  two script-tag builds about fifty bytes each.
 
 ### Removed
 

@@ -70,7 +70,9 @@ export type TeamsSinkOptions = {
     /** Picks the screenshot address out of the report, when it travels there. */
     screenshotUrlFrom?: UrlFrom;
     /** A link to the full report in your own tool, shown as an `Action.OpenUrl`. */
-    reportUrl?: UrlFrom;
+    reportUrl?: string;
+    /** Picks that link out of the report. Wins over `reportUrl`. */
+    reportUrlFrom?: UrlFrom;
     /** The text on that button. Default "Open report". */
     buttonText?: string;
     /** Injected `fetch`, for tests or a runtime with its own client. */

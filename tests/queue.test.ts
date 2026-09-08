@@ -8,6 +8,12 @@ import {
   type QueueStorage,
 } from "../src/queue.ts";
 import type { BugReport } from "../src/report-core.ts";
+import {
+  computeSignature,
+  createSigner,
+  DEFAULT_SIGNATURE_HEADER,
+  hmacHex,
+} from "../src/sign.ts";
 
 /**
  * The queue talks to two things it does not own: `localStorage` and `fetch`.
@@ -577,4 +583,79 @@ test("a storage need only implement update", () => {
   queue.enqueue(report("no read anywhere"));
   assert.equal(queue.size(), 1);
   assert.equal(stored[0]?.body.message, "no read anywhere");
+});
+
+/**
+ * A fetch that records the headers and the body text of every attempt before
+ * handing the call on. The queue signs the serialised body it is about to
+ * send, so both halves have to be seen exactly as they left.
+ */
+function watchHeaders(inner: typeof globalThis.fetch) {
+  const seen: { headers: Record<string, string>; body: string }[] = [];
+  const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    seen.push({
+      headers: { ...(init?.headers as Record<string, string>) },
+      body: String(init?.body),
+    });
+    return inner(url, init);
+  }) as typeof globalThis.fetch;
+  return { fetch, seen };
+}
+
+const SIGN_KEY = "the-key-your-server-knows";
+
+test("a queued report is delivered with a signature over the bytes that were sent", async () => {
+  const { fetch, seen } = watchHeaders(fakeFetch(200).fetch);
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    fetch,
+    sign: createSigner({ key: SIGN_KEY }),
+  });
+  queue.enqueue(report("signed on the way out"));
+  await queue.flush();
+
+  assert.equal(seen.length, 1);
+  const header = seen[0]?.headers[DEFAULT_SIGNATURE_HEADER];
+  assert.ok(header, "the queue delivered without a signature header");
+  const match = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(header);
+  assert.ok(match, `the header is not in the t=…,v1=… shape: ${header}`);
+  // Recomputed over the exact text that was POSTed rather than over a fresh
+  // serialisation of the report: that is the whole promise the header makes.
+  assert.equal(match[2], await hmacHex(SIGN_KEY, `${match[1]}.${seen[0]?.body}`));
+});
+
+test("a retry after the backoff signs again, with a fresh timestamp", async () => {
+  // The first attempt fails, the queue's own timer runs the second a second
+  // later, and the two headers must differ: a signature minted when the report
+  // was written would be outside the server's skew window by the time the
+  // network came back, which is every report the queue exists to save.
+  const { fetch, seen } = watchHeaders(fakeFetch(503, 200).fetch);
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    fetch,
+    sign: createSigner({ key: SIGN_KEY }),
+  });
+  queue.enqueue(report("the outage it describes"));
+  await queue.flush();
+  assert.equal(seen.length, 1);
+
+  await until(() => seen.length === 2, 5_000);
+  assert.equal(seen.length, 2, "the backoff retry never ran");
+  await until(() => queue.size() === 0);
+  assert.equal(queue.size(), 0, "the second attempt was accepted");
+  const first = /^t=(\d+),/.exec(seen[0]!.headers[DEFAULT_SIGNATURE_HEADER]!)?.[1];
+  const retry = seen[1]!.headers[DEFAULT_SIGNATURE_HEADER]!;
+  const second = /^t=(\d+),/.exec(retry)?.[1];
+  assert.ok(Number(second) > Number(first), "the retry reused the first attempt's timestamp");
+  // And the retry's signature is valid for its own timestamp, not merely new.
+  assert.equal(retry, await computeSignature(SIGN_KEY, seen[1]!.body, Number(second)));
+});
+
+test("a queue without a signer sends no signature header", async () => {
+  const { fetch, seen } = watchHeaders(fakeFetch(200).fetch);
+  const queue = makeQueue({ endpoint: "/api/feedback", fetch });
+  queue.enqueue(report("unsigned, as before"));
+  await queue.flush();
+  assert.equal(seen[0]?.headers[DEFAULT_SIGNATURE_HEADER], undefined);
+  assert.equal(seen[0]?.headers["Content-Type"], "application/json");
 });

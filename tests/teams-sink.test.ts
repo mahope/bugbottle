@@ -224,7 +224,7 @@ test("the stored screenshot url from the handler is used when no function is giv
 test("a report url becomes an Action.OpenUrl, and there is none without one", () => {
   const payload = buildTeamsMessage(report, {
     webhookUrl: TEAMS_URL,
-    reportUrl: () => "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/7",
   });
   assert.deepEqual(cardOf(payload).actions, [
     {
@@ -236,13 +236,34 @@ test("a report url becomes an Action.OpenUrl, and there is none without one", ()
 
   const named = buildTeamsMessage(report, {
     webhookUrl: TEAMS_URL,
-    reportUrl: () => "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/7",
     buttonText: "See the report",
   });
   assert.equal((cardOf(named).actions as { title: string }[])[0]?.title, "See the report");
 
-  const plain = buildTeamsMessage(report, { webhookUrl: TEAMS_URL, reportUrl: () => undefined });
+  const plain = buildTeamsMessage(report, {
+    webhookUrl: TEAMS_URL,
+    reportUrlFrom: () => undefined,
+  });
   assert.equal("actions" in cardOf(plain), false);
+
+  // `reportUrl` is the address you already have; `reportUrlFrom` reads one out
+  // of the report and wins where both are given, exactly as the picture does.
+  const actionUrl = (payload: Record<string, unknown>) =>
+    (cardOf(payload).actions as { url: string }[])[0]?.url;
+
+  const flat = buildTeamsMessage(report, {
+    webhookUrl: TEAMS_URL,
+    reportUrl: "https://app.example.com/reports/7",
+  });
+  assert.equal(actionUrl(flat), "https://app.example.com/reports/7");
+
+  const both = buildTeamsMessage(report, {
+    webhookUrl: TEAMS_URL,
+    reportUrl: "https://app.example.com/reports/7",
+    reportUrlFrom: () => "https://app.example.com/reports/8",
+  });
+  assert.equal(actionUrl(both), "https://app.example.com/reports/8");
 });
 
 test("a malformed report still posts, with a fallback title and no facts", () => {
@@ -372,7 +393,7 @@ test("an address too long to fit is dropped rather than sent over the cap", () =
   const payload = buildTeamsMessage(maxedOut, {
     webhookUrl: TEAMS_URL,
     screenshotUrlFrom: () => `https://files.example.com/${"a".repeat(40000)}.png`,
-    reportUrl: () => `https://inbox.example.com/${"b".repeat(40000)}`,
+    reportUrlFrom: () => `https://inbox.example.com/${"b".repeat(40000)}`,
   });
 
   assert.ok(

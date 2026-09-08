@@ -49,7 +49,7 @@ function fixedCost(title, fields, footer) {
 export function buildDiscordMessage(report, options, ctx = {}) {
     const r = readReport(report);
     const screenshot = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl ?? ctx.screenshotUrl);
-    const link = resolveUrl(options.reportUrl, report);
+    const link = resolveUrl(options.reportUrlFrom, report, options.reportUrl);
     const title = clip(r.title, MAX_DISCORD_EMBED_TITLE);
     const fields = r.facts
         .slice(0, MAX_DISCORD_EMBED_FIELDS)

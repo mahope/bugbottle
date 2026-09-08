@@ -620,6 +620,7 @@ const queue = createQueue({
   maxEntries: 5,                 // the oldest is evicted first
   maxAgeMs: 7 * 24 * 60 * 60 * 1000,
   headers: { Authorization: `Bearer ${token}` },
+  sign: createSigner({ key: SIGN_KEY }), // for a signed endpoint; see below
 });
 
 queue.size();          // how many are waiting
@@ -928,7 +929,7 @@ works in the slim build; that is the trade it makes.
 | `data-network` | Present, with any value, records the failed and slow requests. The same switch as the panel's `network` option. See "What the network did". |
 | `data-perf` | Present, with any value, records the Web Vitals and lists what is in the browser's stores — names and lengths, never values. The same switch as the panel's `perf` option. See "Performance and storage". |
 | `data-sign-key` | Signs the body with this key. A key in the page source is public, so this deters spam rather than authenticating anybody; see [Signing requests](#signing-requests). |
-| `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
+| `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. With `data-sign-key` the queued reports are signed at delivery too. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
 | `data-mask="off"` | Stops masking the screenshot. Only matters once you give `mount` a renderer; see [Masking](#masking). |
 | `data-annotate="off"` | Leaves out "Edit picture" and its rectangle, arrow and blur. This build carries the annotator, so the attribute only switches it off; it does not make the file smaller. Only matters once you give `mount` a renderer; see [Marking the picture](#marking-the-picture). |
@@ -1961,10 +1962,19 @@ Two things will surprise you if nobody says them:
   server with `require` on refuses it. Set `require: false` while you find out
   whether that is anybody, and note that a signature which *is* present is
   verified whatever `require` says — a wrong one is a claim, not an omission.
-- **The offline queue posts unsigned.** `bugbottle/queue` re-POSTs a finished
-  body with its own `fetch` and no signer, and a report written during an
-  outage is delivered long after any sensible skew window anyway. Signing and
-  queueing do not go together; pick one per endpoint.
+- **The offline queue signs at delivery, not at enqueue.** `bugbottle/queue`
+  re-POSTs a finished body with a `fetch` of its own, so it needs the signer
+  too: `createQueue({ endpoint, sign })`, the same function you give the form.
+  Every attempt — the first one and every retry after a backoff — signs the
+  bytes it is about to send with a timestamp made at that moment, so a report
+  written during an hour-long outage arrives inside the skew window rather
+  than an hour outside it. A queue built without `sign` still posts unsigned,
+  and a server with `require` on refuses exactly the reports the queue existed
+  to save; that was the shape before 1.0.0 and it is why this is now wired.
+  The script tag does the wiring itself: `data-sign-key` beside `data-queue`
+  signs the queued reports as well. `mountBugbottle` cannot, because it is
+  handed a queue that is already built — pass `sign` to `createQueue` and to
+  `mountBugbottle` both.
 
 With Express, mount the signed route **without** a body parser:
 
@@ -2575,15 +2585,17 @@ export const POST = (req: Request) =>
         webhookUrl: process.env.SLACK_WEBHOOK_URL!,   // the URL is the credential
         username: "bugbottle",
         iconEmoji: ":beetle:",
-        // Both are optional. `screenshotUrlFrom` is a function of the report,
-        // so the address can be built from whatever you stored; pass
-        // `screenshotUrl` instead when you already have it.
+        // All optional, and the link to the full report takes the same pair of
+        // shapes as the picture: `screenshotUrlFrom` and `reportUrlFrom` are
+        // functions of the report, so the address can be built from whatever
+        // you stored; pass the plain `screenshotUrl` or `reportUrl` string
+        // instead when you already have it.
         screenshotUrlFrom: (r) => signedUrlFor(r),
-        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        reportUrlFrom: (r) => `https://app.acme.com/reports/${idOf(r)}`,
       }),
       discordSink({
         webhookUrl: process.env.DISCORD_WEBHOOK_URL!,
-        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        reportUrlFrom: (r) => `https://app.acme.com/reports/${idOf(r)}`,
       }),
     ],
   });
@@ -2634,11 +2646,13 @@ export const POST = (req: Request) =>
     sinks: [
       teamsSink({
         webhookUrl: process.env.TEAMS_WEBHOOK_URL!,   // the URL is the credential
-        // Both are optional. `screenshotUrlFrom` is a function of the report,
-        // so the address can be built from whatever you stored; pass
-        // `screenshotUrl` instead when you already have it.
+        // All optional, and the link to the full report takes the same pair of
+        // shapes as the picture: `screenshotUrlFrom` and `reportUrlFrom` are
+        // functions of the report, so the address can be built from whatever
+        // you stored; pass the plain `screenshotUrl` or `reportUrl` string
+        // instead when you already have it.
         screenshotUrlFrom: (r) => signedUrlFor(r),
-        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        reportUrlFrom: (r) => `https://app.acme.com/reports/${idOf(r)}`,
         buttonText: "Open report",                    // the default
       }),
     ],
@@ -2649,7 +2663,8 @@ export const POST = (req: Request) =>
 The card is schema 1.5: a bold title, the message as a wrapping `TextBlock`,
 the facts as a `FactSet`, the last five console entries in a monospace block,
 an `Image` when there is a URL to fetch, a subtle line with the time and the
-selector, and an `Action.OpenUrl` when you give a `reportUrl`. A `TextBlock`
+selector, and an `Action.OpenUrl` when you give a `reportUrl` or a
+`reportUrlFrom`. A `TextBlock`
 renders a subset of Markdown, so every string is escaped into plain text first
 — `*.tsx` stays `*.tsx` rather than turning half the card italic. There are no
 inputs and no `Action.Submit`: a webhook has nowhere to send an answer.

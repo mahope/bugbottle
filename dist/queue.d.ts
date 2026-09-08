@@ -11,6 +11,12 @@
  *     const queue = createQueue({ endpoint: "/api/feedback" });
  *     useBugReport({ endpoint: "/api/feedback", queue });
  *
+ * A signed endpoint is signed here too: hand `createQueue` the same `sign`
+ * function you hand `sendReport`, and every delivery attempt signs the bytes
+ * it is about to send with a timestamp made at that moment. Signing when the
+ * report was written instead would put the report outside the server's skew
+ * window by the time the network came back.
+ *
  * It is its own entry point, and it does not import `send.ts`: that module
  * reaches for the console buffer and the page context, which a queue that only
  * re-POSTs a finished body has no use for. The one `fetch` below is the whole
@@ -111,6 +117,23 @@ export type QueueOptions = {
     credentials?: RequestCredentials;
     /** Replace the global `fetch`, mostly for tests. */
     fetch?: typeof globalThis.fetch;
+    /**
+     * Signs the body on its way out, the same function `sendReport` takes:
+     * `createSigner({ key })` from `bugbottle/sign`.
+     *
+     * It is called once per delivery attempt rather than once per report, and
+     * that is the whole point of the seam being here instead of at enqueue. A
+     * signature carries the timestamp it was made at, and the server checks that
+     * timestamp against a skew window of a few minutes; a report signed when it
+     * was written and delivered after an hour offline would be refused for being
+     * old, which is exactly the report the queue exists to save. Signing at
+     * delivery time gives every attempt — including every retry after a backoff
+     * — a fresh timestamp over the bytes actually being sent.
+     *
+     * A signer that throws leaves the report queued and schedules the retry,
+     * like any other failed delivery.
+     */
+    sign?: (body: string) => Promise<Record<string, string>>;
     /**
      * Where the reports are kept. `localStorage` by default, and
      * `createIdbStorage()` from `bugbottle/queue-idb` when a screenshot has to
