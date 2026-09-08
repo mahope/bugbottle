@@ -29,26 +29,13 @@
 
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { execSync } from "node:child_process";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findChrome, loadPuppeteer } from "./chrome.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const site = join(root, "site");
-const chromePath =
-  process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
-
-/** puppeteer-core may be installed globally rather than in this repository. */
-function loadPuppeteer() {
-  const here = createRequire(import.meta.url);
-  try {
-    return here("puppeteer-core");
-  } catch {
-    const globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
-    return createRequire(join(globalRoot, "noop.js"))("puppeteer-core");
-  }
-}
+const chromePath = findChrome();
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",

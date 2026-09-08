@@ -275,6 +275,17 @@ npm run build && npm run build:docs
 npm run a11y     # the panel audit, then this one
 ```
 
+CI runs exactly that. The `browser` job in `.github/workflows/ci.yml` builds,
+generates the pages and runs `npm run a11y` and `npm run smoke:annotate` in the
+Chrome the `ubuntu-latest` image ships, so a stylesheet or a header that breaks
+a page is caught on the pull request rather than by whoever remembers. The axe
+reports are uploaded as an artifact when the job fails. Chrome is found by
+`scripts/chrome.mjs` — `CHROME_BIN`, `CHROME_PATH`, then the usual Linux, macOS
+and Windows paths — which is why the same command works on the runner and on a
+desktop. The checkout is deep (`fetch-depth: 0`) because `npm run build:docs`
+dates each page from the last commit that touched its source, and the sitemap's
+`<lastmod>` is built out of those dates.
+
 It scrolls each page before it looks, because the landing page reveals its
 sections as the reader arrives at them and axe does not audit what is not
 visible.

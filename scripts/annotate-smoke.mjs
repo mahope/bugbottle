@@ -22,31 +22,19 @@
  *     npm run build
  *     node scripts/annotate-smoke.mjs
  *
- * Chrome is found at CHROME_PATH or the usual Windows location; puppeteer-core
- * may be installed globally rather than in this repository, which is why it is
- * resolved by hand. The same procedure as `scripts/a11y-audit.mjs`.
+ * Chrome and `puppeteer-core` are both found by `scripts/chrome.mjs`:
+ * CHROME_BIN or CHROME_PATH, then the usual Linux, macOS and Windows
+ * locations, and puppeteer-core from this repository or the global root. The same procedure as `scripts/a11y-audit.mjs`.
  */
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { execSync } from "node:child_process";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findChrome, loadPuppeteer } from "./chrome.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const chromePath =
-  process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
-
-function loadPuppeteer() {
-  const here = createRequire(import.meta.url);
-  try {
-    return here("puppeteer-core");
-  } catch {
-    const globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
-    return createRequire(join(globalRoot, "noop.js"))("puppeteer-core");
-  }
-}
+const chromePath = findChrome();
 
 const TYPES = { ".js": "text/javascript", ".json": "application/json", ".map": "application/json" };
 

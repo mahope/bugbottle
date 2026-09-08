@@ -104,11 +104,36 @@ need Node 18.
   bundled language. The locale test fails on a missing key. A new control in
   `src/ui/` also has an accessible name, and that name is a locale string too.
 - A change to `src/ui/` keeps `node scripts/a11y-audit.mjs` at zero axe
-  violations, over all five states. A change to `src/annotate.ts` also keeps
+  violations, over all seven states, and a change to `site/` keeps
+  `node scripts/a11y-site.mjs` at zero over its fourteen page-and-scheme runs —
+  a console message counts there too. A change to `src/annotate.ts` also keeps
   `node scripts/annotate-smoke.mjs` green, which is the only place the blur is
-  proved to destroy pixels rather than to cover them. Both need Chrome and
-  `puppeteer-core`, so neither is part of `npm run check`; run them by hand.
+  proved to destroy pixels rather than to cover them. All three need Chrome and
+  `puppeteer-core`, so none of them is part of `npm run check` — but the
+  `browser` job runs them on every push and pull request, so a violation is
+  caught whether or not anybody remembered. Run them by hand to see a failure
+  before CI does.
 - `CHANGELOG.md` has a line under *Unreleased*.
+
+## What CI runs
+
+`.github/workflows/ci.yml` has three jobs, and a pull request needs all three:
+
+- **Node 22 / Node 24** — `npm run typecheck`, `npm test`, `npm run build`,
+  `npm run build:docs`, the check that the committed `dist/` matches the build,
+  and `npm pack --dry-run`.
+- **Bundles without html-to-image** — packs the tarball, installs it in a
+  scratch project that has no `html-to-image`, bundles every entry point with
+  esbuild and weighs each against its budget, and greps the server bundle for
+  DOM globals.
+- **Browser audits** — builds, generates the site, then runs `npm run a11y`
+  (axe over the panel's seven states and the site's fourteen page-and-scheme
+  runs, with the real security headers served) and `npm run smoke:annotate`
+  (the blur destroyed the pixels it covered) in the Chrome the runner image
+  ships. `puppeteer-core` is installed globally there and downloads no browser;
+  `scripts/chrome.mjs` finds the executable through `CHROME_BIN`, `CHROME_PATH`
+  or the usual paths, which is the same lookup a local run uses. The axe
+  reports are uploaded as an artifact when the job fails, and only then.
 
 ## What fits
 

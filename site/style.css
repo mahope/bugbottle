@@ -800,6 +800,13 @@ li code,
 dd code,
 td code {
   background: var(--rule-soft);
+  /* The ink rather than the inherited colour: in a muted paragraph the grey is
+     tuned against the page background, and this span moves it onto the soft
+     rule colour at 0.875em, where it measured 3.86:1 — under the 4.5 that size
+     needs. The name of a file or an export is the part of a muted sentence a
+     reader is looking for, so it is the wrong thing to lighten.
+     `scripts/a11y-site.mjs` found this on the English landing page. */
+  color: var(--ink);
   border-radius: 3px;
   padding: 0.08em 0.32em;
   font-size: 0.875em;
