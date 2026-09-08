@@ -73,6 +73,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time), chrome |
 | `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time), chrome |
 | `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate`, and the last step of CI's `browser` job | dist (at run time), chrome |
+| `scripts/measure-sinks.mjs` | The "Server bundle" column of the README's sinks table: packs the package, installs the tarball in a scratch project with the pinned esbuild, bundles one entry per sink with the recipe from `ci.yml` (`--bundle --minify --format=esm --platform=node`) and gzips each. Prints the rows and the date. Dev-only and deliberately outside `npm run check` — it wants the network and about a minute; run it after `npm run build` when a sink changes | dist (packed at run time) |
 | `tests/` | `node:test`, run on the TypeScript source directly. `tests/report-fixtures.ts` holds the payloads shared by `handle.test.ts` and `schema.test.ts`. `tests/fuzz.test.ts` is "the server trusts nothing" as a test: a seeded, hand-rolled generator (no dependency) pushes thousands of hostile reports through every `normalise*`, `validateReport`, `collectExtra`, `scrubReport`, `toMarkdown` and `handleReport`, asserting that nothing throws, every output is inside its `MAX_*`, no output carries a null byte or a prototype the sender chose, and `handleReport` answers 400/413 rather than 500. `FUZZ_ITERATIONS` (2000) and `FUZZ_SEED` are the two knobs; a failure prints both, and the case it found is written up beside it as a named regression test | |
 | `action/` | GitHub Action (`mahope/bugbottle@v0`) validating exported JSON reports. Zero deps, rules inlined from report-core; `tests/action.test.ts` pins them together | nothing |
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
@@ -166,6 +167,7 @@ npm run a11y        # axe-core over the panel and over the site pages, in a real
 npm run shot:panel  # re-capture the hero pictures from the current panel
 npm run shot:og     # re-render site/og.png from site/og.svg
 npm run smoke:annotate  # the blur really pixelates, in a real Chrome; needs a build first
+node scripts/measure-sinks.mjs  # the README's sink sizes; needs a build and the network
 npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 ```
 

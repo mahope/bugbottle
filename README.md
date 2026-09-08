@@ -2084,6 +2084,31 @@ eleventh a small SMTP client, none with a dependency of its own. None of them re
 and the token are arguments, so it is visible at the call site where the secret
 came from — and so nothing can drift into a browser bundle.
 
+The eleven at a glance, before the prose walks through them one by one:
+
+| Sink | Export | What you need | The picture | Self-hosted | One report becomes | Server bundle |
+|---|---|---|---|---|---|---|
+| Resend | `sendReportEmail` | An API key and a verified sender | Attached as `screenshot.png`, from the bytes you pass | No | An email | 5.6 kB |
+| SMTP | `smtpSink`, `sendReportSmtp` | A host, a port and an account | A link, from `screenshotUrl` | Yes — any mail server you can reach | An email | 7.8 kB |
+| Webhook | `sendReportWebhook` | A URL, and headers if it wants them | Whatever the report carried: `json` passes it through untouched | Yes — the endpoint is yours | A POST of the report plus its Markdown | 4.5 kB |
+| Slack | `slackSink` | An incoming-webhook URL | A link, in an `image` block | No | A Block Kit message | 2.4 kB |
+| Discord | `discordSink` | A webhook URL | A link, as the embed's image | No | One embed, coloured by report type | 2.4 kB |
+| Teams | `teamsSink` | A Workflows webhook URL | A link, in an `Image` element | No | An Adaptive Card | 2.7 kB |
+| GitHub | `createGithubIssue` | A fine-grained token with issues write | A link from the body | No — github.com only | An issue | 4.7 kB |
+| GitLab | `gitlabSink` | A token with `api` scope and a project id | A link from the facts table | Yes — pass `host` | An issue | 4.9 kB |
+| Jira | `jiraSink` | A site, the account email, an API token and a project key | A link, as a fact | No — Jira Cloud's v3 API | An issue | 2.9 kB |
+| Linear | `createLinearIssue` | An API key and the team's UUID | A link from the description | No | An issue | 4.8 kB |
+| Sentry | `sentrySink` | A DSN | Attached, in the same envelope | Yes — GlitchTip and Bugsink speak the same protocol | An event, or a feedback item | 4.2 kB |
+
+The sizes are a server bundle that imports that one export and nothing else,
+minified and gzipped: `node scripts/measure-sinks.mjs` reproduces them, and
+these were measured on 8 September 2026 with esbuild 0.24.0. The four small
+ones build their own structure — blocks, an embed, a card, a node tree — while
+the rest render the report with `toMarkdown`, which is most of the difference.
+None of the numbers is a budget CI enforces; they are here so the cost of a
+sink is known before it is imported, and every one of them is dwarfed by the
+framework already in a server bundle.
+
 `sendReportEmail` posts to Resend. It renders the report with `toMarkdown`,
 attaches the decoded screenshot as `screenshot.png` when you pass the bytes,
 and returns the message id:
@@ -2551,8 +2576,9 @@ separate request whose answer you then reference from the Markdown. So the
 screenshot is stored by you first and `screenshotUrl` is linked from the facts
 table, the same as for GitHub and Linear.
 
-All ten throw `SinkError`, carrying the HTTP status and the response body,
-when the service answers with anything but success. Catch it around the sink
+All eleven throw `SinkError`, carrying the HTTP status and the response body —
+or, for SMTP, the reply code and the server's own line — when the service
+answers with anything but success. Catch it around the sink
 rather than around the whole handler: a report you have already stored should
 not be lost to a chat webhook that was revoked last week.
 
