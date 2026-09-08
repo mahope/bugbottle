@@ -2188,7 +2188,9 @@ not send Markdown: Jira Cloud's REST v3 takes the Atlassian Document Format in
 `description`, a JSON node tree rather than text. The conversion is built from
 the report and kept to three shapes — a paragraph for the reporter's own words,
 a bullet list for the facts and the element, and a code block for the last
-twenty console entries:
+twenty console entries. Where the reporter pressed return, the paragraph gets a
+`hardBreak` node, because ADF has no newline inside a text node and a message
+that carried one would be collapsed onto a single line or refused outright:
 
 ```ts
 import { handleReport, jiraSink } from "bugbottle/server";

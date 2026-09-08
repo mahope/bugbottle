@@ -315,3 +315,68 @@ test("a report with no contact line has no contact fact", () => {
   const facts = (firstNode(doc, "bulletList")?.content ?? []).map(textOf);
   assert.ok(!facts.some((line) => line.startsWith("Contact:")));
 });
+
+test("a two-line message is text, hardBreak, text", () => {
+  // ADF has no newline inside a `text` node: the format's line break is its
+  // own inline node. A message that ran to two lines used to be sent as one
+  // text node carrying a raw newline, which Jira collapses at best and refuses
+  // at worst — and a reporter writing steps to reproduce writes two lines far
+  // more often than one.
+  const doc = buildJiraDescription({
+    type: "bug",
+    message: "The save button does nothing\nIt spins forever",
+  });
+
+  const words = doc.content[0];
+  assert.equal(words?.type, "paragraph");
+  assert.deepEqual(words?.content, [
+    { type: "text", text: "The save button does nothing" },
+    { type: "hardBreak" },
+    { type: "text", text: "It spins forever" },
+  ]);
+});
+
+test("a blank line is breaks alone, never an empty text node", () => {
+  const doc = buildJiraDescription({
+    type: "bug",
+    message: "First paragraph\n\nSecond paragraph",
+  });
+
+  assert.deepEqual(doc.content[0]?.content, [
+    { type: "text", text: "First paragraph" },
+    { type: "hardBreak" },
+    { type: "hardBreak" },
+    { type: "text", text: "Second paragraph" },
+  ]);
+});
+
+test("a Windows line ending is one break, not two", () => {
+  const doc = buildJiraDescription({ type: "bug", message: "One\r\nTwo" });
+  assert.deepEqual(doc.content[0]?.content, [
+    { type: "text", text: "One" },
+    { type: "hardBreak" },
+    { type: "text", text: "Two" },
+  ]);
+});
+
+test("a message of nothing but newlines is dropped rather than filed as air", () => {
+  const doc = buildJiraDescription({ type: "bug", message: "\n\n", context: { url: "/x" } });
+  assert.equal(doc.content[0]?.type, "bulletList", "the facts are the first block");
+});
+
+test("the console code block keeps its newlines, which is where they belong", () => {
+  // A `codeBlock` is the one place ADF does carry newlines in its text: the
+  // content is preformatted, so splitting the entries into breaks there would
+  // put the whole console back on one line.
+  const doc = buildJiraDescription({
+    type: "bug",
+    message: "x",
+    console: [
+      { level: "error", message: "first" },
+      { level: "warn", message: "second" },
+    ],
+  });
+  const code = firstNode(doc, "codeBlock");
+  assert.equal(code?.content?.length, 1);
+  assert.equal(code?.content?.[0]?.text, "[error] first\n[warn] second");
+});

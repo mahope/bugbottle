@@ -15,6 +15,16 @@ change the API; the changelog says so when they do.
   `localStorage`. "A server bundle must never pull in DOM code" has been a rule
   since the first release and until now nothing checked it.
 
+### Fixed
+
+- `jiraSink` splits a multi-line message into `text` nodes with `hardBreak`
+  between them. The Atlassian Document Format has no newline inside a `text`
+  node — it has a node for a line break — so a report written on two lines was
+  either collapsed onto one or refused outright, and the sink had never been
+  called against a real Jira Cloud site to find out which. A blank line is its
+  breaks and no empty text node, which ADF also rejects. The console code block
+  keeps its newlines, where they are preformatted and belong.
+
 ## 0.8.0 — 2026-09-08
 
 The reachable release: the report can carry how to answer the person who
