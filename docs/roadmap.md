@@ -191,6 +191,14 @@ and no console message — and Lighthouse mobile at 97 with no layout shift.
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
 
+**Alongside** — `examples/inbox`: a dependency-free Node server that receives
+reports with `handleReport`, writes each one to disk as JSON beside its PNG,
+and serves a read-only inbox — list, detail with the rendered Markdown and the
+picture, copy as Markdown, delete — behind one password from `INBOX_PASSWORD`,
+which it refuses to start without. The smallest honest answer to the thing the
+comparison page says bugbottle lacks: a place the report lands. An example, not
+a product, and never a hosted one — no accounts, no search, no assignment.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
@@ -237,3 +245,5 @@ bites. No SDK dependency.
 ## Explicitly not planned
 
 A hosted backend, a dashboard, or a full session-replay engine in the core.
+`examples/inbox` is as far as the second one goes, and it is an example you
+copy and own rather than anything this project runs for you.

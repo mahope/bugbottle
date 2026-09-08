@@ -2543,6 +2543,24 @@ node server.mjs
 Open http://localhost:8787, write a message, send, and watch the server print
 the validated report.
 
+`examples/inbox` is the next step: the same round trip, but the reports stay.
+A dependency-free Node server that receives them with `handleReport`, writes
+each one to disk as JSON beside its PNG, and serves a read-only inbox — a
+list, a detail page with the rendered Markdown and the picture, copy as
+Markdown, delete — behind one password from `INBOX_PASSWORD`, which it refuses
+to start without. Small enough to run one per client site on a €4 VPS behind
+Caddy, and honest about being an example rather than a product: no accounts,
+no search, no assignment.
+
+```bash
+npm run build
+INBOX_PASSWORD=$(openssl rand -base64 24) node examples/inbox/server.mjs
+```
+
+Read `examples/inbox/README.md` before you put one on the internet — the
+screenshots are on disk, so the disk is the bucket the privacy section above
+is about.
+
 ## GitHub Action
 
 Validate bug reports collected by the widget inside CI — useful when your
