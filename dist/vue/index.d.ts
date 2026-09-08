@@ -27,6 +27,9 @@ export declare function useBugReport(options: UseBugReportOptions): {
     setType: (next: import("./index.ts").ReportType) => void;
     message: import("vue").WritableComputedRef<string, string>;
     setMessage: (next: string) => void;
+    /** Writable, so `v-model` works on a contact field the same way. */
+    contact: import("vue").WritableComputedRef<string, string>;
+    setContact: (next: string) => void;
     /** Whether a renderer was supplied, so the form can hide the checkbox. */
     canScreenshot: import("vue").ComputedRef<boolean>;
     screenshot: import("vue").ComputedRef<string | null>;

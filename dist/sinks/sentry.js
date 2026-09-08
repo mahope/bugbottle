@@ -46,7 +46,7 @@
  *
  * No SDK dependency: one `fetch` and a formatter, the same as the others.
  */
-import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, } from "../report-core.js";
+import { decodeScreenshotDataUrl, isReportType, looksLikeEmail, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, } from "../report-core.js";
 import { messageFromBody, readBody, SinkError } from "./error.js";
 import { clip } from "./chat.js";
 /** The library name Sentry shows on the event, in `sdk` and in the auth header. */
@@ -292,7 +292,12 @@ export function buildSentryEvent(report, options, ctx = {}) {
     };
     if (context.url)
         feedback.url = context.url;
-    const contactEmail = options.contactEmail?.(report);
+    // The report's own contact line is the default, but only when it is an
+    // address: Sentry puts `contact_email` behind a mail link, and "call me on
+    // 12345678" behind one is worse than nothing. The whole line still travels
+    // in `extra.contact`, so a phone number is not lost, only not linked.
+    const contact = normaliseContact(raw.contact);
+    const contactEmail = options.contactEmail?.(report) ?? (looksLikeEmail(contact) ? contact : undefined);
     if (contactEmail)
         feedback.contact_email = contactEmail;
     const contactName = options.contactName?.(report);
@@ -314,6 +319,8 @@ export function buildSentryEvent(report, options, ctx = {}) {
     if (Object.keys(device).length > 0)
         contexts.device = device;
     const extra = {};
+    if (contact)
+        extra.contact = contact;
     if (elements.length > 0)
         extra.elements = elements;
     if (context.language)

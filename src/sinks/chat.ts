@@ -14,6 +14,7 @@
 import {
   isReportType,
   normaliseConsole,
+  normaliseContact,
   normaliseContext,
   normaliseElements,
   normaliseMessage,
@@ -58,7 +59,7 @@ export type ChatReport = {
   title: string;
   /** The reporter's own words, unescaped. */
   message: string;
-  /** Page, Viewport, Browser and whichever optional context facts are set. */
+  /** Contact, Page, Viewport, Browser and whichever optional context facts are set. */
   facts: [string, string][];
   /** The last few console entries, one per line, or nothing. */
   consoleText: string | undefined;
@@ -110,6 +111,10 @@ export function readReport(raw: unknown): ChatReport {
   const title = `${TYPE_LABEL[type]}: ${clip(firstLine, MAX_TITLE_LENGTH) || TYPE_LABEL[type]}`;
 
   const facts: [string, string][] = [];
+  // First, and before the page: a channel is where somebody decides who picks
+  // a report up, and whether the reporter can be answered is part of that.
+  const contact = normaliseContact(r.contact);
+  if (contact) facts.push(["Contact", contact]);
   if (context.url) facts.push(["Page", context.url]);
   if (context.viewport) facts.push(["Viewport", context.viewport]);
   if (context.userAgent) facts.push(["Browser", context.userAgent]);

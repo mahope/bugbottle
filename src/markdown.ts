@@ -13,6 +13,7 @@ import {
   isReportType,
   normaliseBreadcrumbs,
   normaliseConsole,
+  normaliseContact,
   normaliseContext,
   normaliseElements,
   normaliseMessage,
@@ -183,6 +184,10 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   if (message) out.push(message, "");
 
   const facts: [string, string][] = [["Type", TYPE_LABEL[type] ?? type]];
+  // Directly under the type, because a reader deciding what to do with a
+  // report wants to know whether they can answer it before anything else.
+  const contact = normaliseContact(r.contact);
+  if (contact) facts.push(["Contact", contact]);
   if (context.url) facts.push(["Page", `\`${context.url}\``]);
   if (context.viewport) facts.push(["Viewport", context.viewport]);
   if (context.screen) facts.push(["Screen", context.screen]);

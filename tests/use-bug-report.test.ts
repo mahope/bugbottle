@@ -257,6 +257,44 @@ test("a successful submit reports the id, clears the form and calls onSent", asy
   cleanup();
 });
 
+test("a contact line reaches the posted body and is cleared with the form", async () => {
+  const fetchStub = stubFetch(() => json({ id: "rep_c" }));
+  const { result, unmount } = renderHook(() => useBugReport({ endpoint: ENDPOINT }));
+
+  assert.equal(result.current.contact, "", "the field starts empty and is never sent empty");
+  await act(async () => {
+    result.current.setMessage("The save button does nothing");
+    result.current.setContact("  anna@example.com  ");
+  });
+  assert.equal(result.current.contact, "  anna@example.com  ", "the state is what was typed");
+  await act(async () => {
+    await result.current.submit();
+  });
+
+  const body = fetchStub.seen[0]?.body as Record<string, unknown>;
+  assert.equal(body["contact"], "anna@example.com", "trimmed on the way out");
+  assert.equal(result.current.contact, "");
+  fetchStub.restore();
+  unmount();
+  cleanup();
+});
+
+test("a report without a contact line carries no contact key at all", async () => {
+  const fetchStub = stubFetch(() => json({ id: "rep_d" }));
+  const { result, unmount } = renderHook(() => useBugReport({ endpoint: ENDPOINT }));
+  await act(async () => {
+    result.current.setMessage("No way to reach me");
+  });
+  await act(async () => {
+    await result.current.submit();
+  });
+  const body = fetchStub.seen[0]?.body as Record<string, unknown>;
+  assert.equal("contact" in body, false);
+  fetchStub.restore();
+  unmount();
+  cleanup();
+});
+
 test("a rejected report surfaces the server's own message", async () => {
   const fetchStub = stubFetch(() => json({ error: "Reports are closed for this project" }, 500));
   const { result, unmount } = renderHook(() => useBugReport({ endpoint: ENDPOINT }));

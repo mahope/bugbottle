@@ -50,6 +50,12 @@ export declare const TOO_LARGE_ERROR = "Report is too large";
 export type ValidatedReport = {
     type: ReportType;
     message: string;
+    /**
+     * How to reach the reporter, when the form asked and they answered. Absent
+     * when they did not, so a row never carries an empty contact line — and
+     * personal data when it is there: see the privacy section of the README.
+     */
+    contact?: string;
     context: ReportContext;
     console: ConsoleEntry[];
     elements: ElementRef[];

@@ -234,3 +234,18 @@ test("onFailure runs for a rejected response too, and its own error is swallowed
     (err: unknown) => err instanceof SendFailedError && err.status === 500,
   );
 });
+
+test("a contact line is trimmed onto the report, and an empty one is left out", () => {
+  const withContact = buildReport({
+    type: "bug",
+    message: "x",
+    contact: "  anna@example.com  ",
+    includeConsole: false,
+  });
+  assert.equal(withContact.contact, "anna@example.com");
+
+  for (const contact of ["", "   ", null, undefined]) {
+    const report = buildReport({ type: "bug", message: "x", contact, includeConsole: false });
+    assert.equal("contact" in report, false, `${JSON.stringify(contact)} adds no key`);
+  }
+});

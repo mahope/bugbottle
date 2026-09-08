@@ -11,6 +11,7 @@
  * the browser is a key that has been given away.
  */
 
+import { looksLikeEmail, normaliseContact } from "../report-core.ts";
 import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { en, type Locale } from "../locales.ts";
 import { messageFromBody, readBody, SinkError, type FetchLike } from "./error.ts";
@@ -26,6 +27,12 @@ export type SendReportEmailOptions = {
   to: string | string[];
   /** Overrides the subject built from the locale and the report title. */
   subject?: string;
+  /**
+   * Overrides the reply address. Without it, the report's own `contact` field
+   * is used when it looks like an email — so hitting reply answers the person
+   * who wrote the report. Pass `false` to send no `reply_to` at all.
+   */
+  replyTo?: string | string[] | false;
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
   /** Decoded PNG bytes from `decodeScreenshotDataUrl`, attached as a file. */
@@ -100,6 +107,15 @@ export async function sendReportEmail(
     text: `${intro}\n\n${markdown}`,
     html: `<p>${escapeHtml(intro)}</p>\n<pre>${escapeHtml(markdown)}</pre>`,
   };
+  // A contact line that is an address is what somebody replies to; one that
+  // says "call me on 12345678" is not, and Resend would refuse the whole send
+  // rather than ignore it. Either way the line is in the body, as a fact row.
+  const contact = normaliseContact((report as { contact?: unknown } | null)?.contact);
+  const replyTo =
+    options.replyTo === false
+      ? undefined
+      : (options.replyTo ?? (looksLikeEmail(contact) ? contact : undefined));
+  if (replyTo) payload.reply_to = replyTo;
   if (options.screenshot && options.screenshot.length > 0) {
     payload.attachments = [
       { filename: "screenshot.png", content: bytesToBase64(options.screenshot) },

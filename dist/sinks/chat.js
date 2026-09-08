@@ -10,7 +10,7 @@
  * `normalise*` functions in report-core first, so a half-built body still
  * reaches the channel where somebody can see that something is wrong.
  */
-import { isReportType, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, } from "../report-core.js";
+import { isReportType, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, } from "../report-core.js";
 /**
  * How many console entries travel to chat. The rest is in the stored report:
  * a channel is where somebody notices a problem, not where they read fifty
@@ -60,6 +60,11 @@ export function readReport(raw) {
     const firstLine = message.split(/\r?\n/)[0]?.trim() ?? "";
     const title = `${TYPE_LABEL[type]}: ${clip(firstLine, MAX_TITLE_LENGTH) || TYPE_LABEL[type]}`;
     const facts = [];
+    // First, and before the page: a channel is where somebody decides who picks
+    // a report up, and whether the reporter can be answered is part of that.
+    const contact = normaliseContact(r.contact);
+    if (contact)
+        facts.push(["Contact", contact]);
     if (context.url)
         facts.push(["Page", context.url]);
     if (context.viewport)

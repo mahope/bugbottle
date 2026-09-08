@@ -25,7 +25,7 @@ export function useBugReport(options) {
     // `true` asks Vue not to warn when there is no scope: a composable called
     // outside one is the caller's to clean up, and `destroy` is returned for it.
     onScopeDispose(destroy, true);
-    const { setType, setMessage, ...rest } = store.actions;
+    const { setType, setMessage, setContact, ...rest } = store.actions;
     const status = computed(() => state.value.status);
     return {
         types: REPORT_TYPES,
@@ -33,6 +33,9 @@ export function useBugReport(options) {
         setType,
         message: computed({ get: () => state.value.message, set: setMessage }),
         setMessage,
+        /** Writable, so `v-model` works on a contact field the same way. */
+        contact: computed({ get: () => state.value.contact, set: setContact }),
+        setContact,
         /** Whether a renderer was supplied, so the form can hide the checkbox. */
         canScreenshot: computed(() => state.value.canScreenshot),
         screenshot: computed(() => state.value.screenshot),

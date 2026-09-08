@@ -21,6 +21,7 @@ export declare function useBugReport(options: UseBugReportOptions): {
     statusMessage: string;
     setType: (next: import("./index.ts").ReportType) => void;
     setMessage: (next: string) => void;
+    setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
     pickElement: () => Promise<import("./index.ts").ElementRef | null>;
@@ -31,6 +32,7 @@ export declare function useBugReport(options: UseBugReportOptions): {
     reset: () => void;
     type: import("./index.ts").ReportType;
     message: string;
+    contact: string;
     screenshot: string | null;
     includeScreenshot: boolean;
     canScreenshot: boolean;

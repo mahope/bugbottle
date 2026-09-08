@@ -26,6 +26,7 @@ export declare function createBugReport(options: UseBugReportOptions): {
     destroy: () => void;
     setType: (next: ReportType) => void;
     setMessage: (next: string) => void;
+    setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
     pickElement: () => Promise<import("./index.ts").ElementRef | null>;

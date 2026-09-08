@@ -5,9 +5,10 @@
  * and the accessibility tree can only be checked in a real browser. This
  * serves `dist/` on a scratch page, mounts the panel with everything showing —
  * the screenshot row, an attached element and its remove button — and runs
- * axe-core over five states: closed, open in the light scheme, open in the
- * dark one, and the picture annotator open in each scheme. It exits non-zero
- * on any violation.
+ * axe-core over seven states: closed, open in the light scheme, open in the
+ * dark one, the picture annotator open in each scheme, and the panel with the
+ * optional contact field on in each scheme. It exits non-zero on any
+ * violation.
  *
  *     npm run build
  *     node scripts/a11y-audit.mjs --out <directory>
@@ -47,7 +48,7 @@ function loadPuppeteer() {
 const TYPES = { ".js": "text/javascript", ".json": "application/json", ".map": "application/json" };
 
 /** The scratch page: a landmarked document with the panel mounted into it. */
-function page(scheme) {
+function page(scheme, contact) {
   const dark = scheme === "dark";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>bugbottle accessibility scratch page</title>
@@ -80,6 +81,9 @@ function page(scheme) {
     theme: { scheme: ${JSON.stringify(scheme)} },
     screenshot: async () => picture,
     screenshotFor: () => false,
+    // Off unless the state under audit asked for it, exactly as an application
+    // has to. "required" audits the label, the hint and the required marking.
+    contact: ${contact ? '"required"' : "false"},
     // The panel takes the annotator as a function, so the audit has to ask for
     // it: without this the editor is not on the page to be audited at all.
     annotate: createAnnotator,
@@ -93,7 +97,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(page(url.searchParams.get("scheme") ?? "light"));
+    res.end(page(url.searchParams.get("scheme") ?? "light", url.searchParams.has("contact")));
     return;
   }
   const file = join(root, normalize(url.pathname).replace(/^[\\/]+/, ""));
@@ -119,10 +123,10 @@ const browser = await puppeteer.launch({ executablePath: chromePath, headless: "
 await mkdir(outDir, { recursive: true });
 
 /** Runs axe over the whole document, shadow roots included, and saves the report. */
-async function audit(name, scheme, prepare) {
+async function audit(name, scheme, prepare, query = "") {
   const tab = await browser.newPage();
   await tab.emulateMediaFeatures([{ name: "prefers-color-scheme", value: scheme }]);
-  await tab.goto(`${origin}/?scheme=${scheme}`, { waitUntil: "networkidle0" });
+  await tab.goto(`${origin}/?scheme=${scheme}${query}`, { waitUntil: "networkidle0" });
   await tab.waitForSelector("[data-bugbottle=ui]");
   if (prepare) await prepare(tab);
   await tab.evaluate(axeSource);
@@ -176,6 +180,10 @@ failures += await audit("open-light", "light", openWithEverything);
 failures += await audit("open-dark", "dark", openWithEverything);
 failures += await audit("annotate-light", "light", openAnnotator);
 failures += await audit("annotate-dark", "dark", openAnnotator);
+// The optional contact field, which is a labelled input with a hint of its own
+// and is rendered nowhere else.
+failures += await audit("contact-light", "light", openWithEverything, "&contact=1");
+failures += await audit("contact-dark", "dark", openWithEverything, "&contact=1");
 
 await browser.close();
 server.close();

@@ -55,7 +55,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, the optional HMAC `signature` check over the raw text, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers. The replay cache is bucketed by the *signed second* and bounded inside each one (128 digests, 640 seconds), because the signing key is public: a flood of valid signatures must not be able to evict an honest digest dated any other second. `signature.replayStore` (`has`/`add(digest, expiresAt)`) replaces it with a shared one; `t=` is `/^\d{1,16}$/` and the digest is verified over the timestamp as it was sent | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express`. A signed route mounted behind `express.json()` cannot be verified at all, so it calls `onError` once per handler naming the parser and answers the same 401 | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
-| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over five states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
+| `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over seven states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
 | `scripts/a11y-site.mjs` | The same audit aimed at the pages rather than the widget: both landing pages, the documentation index, one deep documentation page and the two comparison pages, in both colour schemes, failing on a console message as well as on a violation. The second half of `npm run a11y`; needs `npm run build:docs` first | site, dist (at run time) |
 | `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time) |
 | `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time) |
@@ -121,7 +121,14 @@ not closed and a branch is not merged with the docs lagging.
   announces: it is a locale string or it is not said. The panel is a dialog
   with a focus trap, so a control added outside `panel` is unreachable while
   it is open; check `tests/ui-a11y.test.ts` and re-run
-  `node scripts/a11y-audit.mjs` (zero axe violations, five states).
+  `node scripts/a11y-audit.mjs` (zero axe violations, seven states).
+- **The contact field is off by default, everywhere.** `contact` on a report is
+  personal data the application asked for, so nothing switches it on for
+  anybody: not the panel, not the script tag, not an adapter. It is free text
+  and no code validates it — only the Resend reply-to and Sentry's
+  `contact_email` ask whether it looks like an address, and a line that does
+  not is still delivered as a fact. `scrubReport` redacts it only when asked,
+  and then whole.
 - **Source files must not contain literal null bytes.** Use `\u0000` in code
   and `String.fromCharCode(0)` in tests. A literal NUL breaks tooling.
 
@@ -142,9 +149,9 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 5632 bytes gzipped and `bugbottle/ui` under 12 kB (CI enforces both;
-about 5.4 kB and 12.0 kB with masking, the queued state, the triggers, the
-accessibility pass, the 0.6 evidence and the annotator), and the bare core
+stay under 5632 bytes gzipped and `bugbottle/ui` under 11776 bytes (CI enforces
+both; about 5.5 kB and 11.3 kB with masking, the queued state, the triggers,
+the accessibility pass, the 0.6 evidence and the contact field), and the bare core
 under 1536 bytes
 (about 1.4 kB). The core budget was 1 kB and 0.8 kB measured until 0.6: the
 stack parser costs about 250 bytes gzipped and the six optional context facts
@@ -221,7 +228,13 @@ everything, so it imports the annotator itself, hands it to the panel through
 of them a sentence because it is where the annotator says its keys to a screen
 reader. Measure before you write a budget down: #36 recorded 11971 and 20450
 for files that measured 12126 and 21042 with the pinned esbuild, and CI was red
-on main until the review after it corrected the number.
+on main until the review after it corrected the number. #51 then took the panel
+from 11 086 to 11 342 bytes and the IIFE from 23 072 to 23 839, with the
+budgets at 11776 and 24576: the optional contact field is an input, its label,
+its hint and the required check (about 256 bytes) plus three locale strings,
+which the script tag carries in eight languages. It is off by default and its
+markup is static, so every panel pays those bytes; a second entry point for one
+input would cost more than it saved.
 
 `bugbottle/server` is measured and printed rather than budgeted, because
 everything in it is tree-shaken away from a consumer that imports only the
@@ -235,7 +248,8 @@ in `node:test`. Serve `dist/` from a scratch page, drive it with the global
 `puppeteer-core` and Chrome, and check the posted body.
 `scripts/a11y-audit.mjs` is that procedure written down: it serves `dist/`,
 mounts the panel with everything showing and runs the pinned `axe-core` over
-five states (closed, open light, open dark, annotator light, annotator dark),
+seven states (closed, open light, open dark, annotator light, annotator dark,
+contact light, contact dark),
 exiting non-zero on a violation. `scripts/a11y-site.mjs` is the same procedure
 aimed at `site/`: six pages in two colour schemes, and a console message counts
 as a failure there too. Site changes also carry a performance floor —

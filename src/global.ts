@@ -135,6 +135,12 @@ function autoMount(data: DOMStringMap): void {
   if (data.openOnError !== undefined) {
     options.openOnError = data.openOnError === "prefill" ? { prefill: true } : true;
   }
+  // Off by default like everywhere else, so any value asks for the field and
+  // `data-contact="required"` is the one value that also refuses to send
+  // without it.
+  if (data.contact !== undefined) {
+    options.contact = data.contact === "required" ? "required" : true;
+  }
   // Masking is on by default, so the attribute only exists to switch it off:
   // a page that wants the screenshot exactly as the reporter sees it says so.
   if (data.mask === "off") options.mask = false;

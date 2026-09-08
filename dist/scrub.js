@@ -192,6 +192,10 @@ export function scrubReport(report, options = {}) {
         const p = plan(options);
         const out = { ...report };
         scrubField(out, "message", p);
+        // Asked for explicitly, and then taken whole: see `ScrubOptions.contact`.
+        if (options.contact === true && typeof out.contact === "string" && out.contact) {
+            out.contact = p.replacement;
+        }
         if (isObject(out.context)) {
             const context = { ...out.context };
             scrubField(context, "url", p, true);

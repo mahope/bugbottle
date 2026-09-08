@@ -18,6 +18,7 @@ import {
 } from "../scripts/build-schema.ts";
 import {
   MAX_CONSOLE_ENTRIES,
+  MAX_CONTACT_LENGTH,
   MAX_CONTEXT_LENGTHS,
   MAX_MESSAGE_LENGTH,
   MAX_SCREENSHOT_DATA_URL_LENGTH,
@@ -83,7 +84,12 @@ test("the MAX_ limits travel with the schema, so another language can enforce th
   assert.equal(properties.console?.maxItems, MAX_CONSOLE_ENTRIES);
   assert.equal(properties.screenshotDataUrl?.maxLength, MAX_SCREENSHOT_DATA_URL_LENGTH);
 
+  assert.equal(properties.contact?.maxLength, MAX_CONTACT_LENGTH);
+
   assert.equal(validate({ ...reportBody, message: "x".repeat(MAX_MESSAGE_LENGTH + 1) }), false);
+  assert.equal(validate({ ...reportBody, contact: "anna@example.com" }), true, errors());
+  assert.equal(validate({ ...reportBody, contact: "x".repeat(MAX_CONTACT_LENGTH + 1) }), false);
+  assert.equal(validate({ ...reportBody, contact: 42 }), false, "a contact line is text");
 });
 
 test("the stack and context ceilings travel with the schema too", () => {

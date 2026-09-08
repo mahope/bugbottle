@@ -22,6 +22,12 @@ export type SendReportEmailOptions = {
     to: string | string[];
     /** Overrides the subject built from the locale and the report title. */
     subject?: string;
+    /**
+     * Overrides the reply address. Without it, the report's own `contact` field
+     * is used when it looks like an email — so hitting reply answers the person
+     * who wrote the report. Pass `false` to send no `reply_to` at all.
+     */
+    replyTo?: string | string[] | false;
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
     /** Decoded PNG bytes from `decodeScreenshotDataUrl`, attached as a file. */

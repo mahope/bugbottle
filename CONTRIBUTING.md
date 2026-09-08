@@ -28,7 +28,7 @@ need Node 18.
 - The client entry points stayed small. Pack, install the tarball in a scratch
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
-  `bugbottle/react` 5.5 kB, `bugbottle/ui` 11 kB, `bugbottle/annotate` 2048
+  `bugbottle/react` 5.5 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 2048
   bytes, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
   `bugbottle/queue` 1330 bytes,
@@ -36,7 +36,7 @@ need Node 18.
   `bugbottle/sign` 512 bytes,
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 23 kB. The
+  are small; the core they share is not), `dist/bugbottle.js` 24 kB. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
@@ -64,7 +64,13 @@ need Node 18.
   to carry. It measures 685 bytes, adds 94 to the panel (the wiring, not the
   module — `shake` is a function you hand in) and 572 to the script tag, which
   carries everything and must also expose `requestShakePermission`, since a page
-  with no bundler has no other way to ask iOS.
+  with no bundler has no other way to ask iOS. The optional contact field then
+  took the panel from 11 086 to 11 342 bytes and the script tag from 23 072 to
+  23 839, so the budgets are 11776 and 24576: one input, its label, its hint and
+  the required check are about 256 bytes, and three locale strings in eight
+  languages are most of the rest. The field is off by default and its markup is
+  static, so those bytes are paid by every panel — a second entry point for one
+  input would cost more than it saved.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a
   file is added.

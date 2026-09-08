@@ -122,6 +122,12 @@ export type UseBugReportOptions = {
 export type ReportState = {
   type: ReportType;
   message: string;
+  /**
+   * How to reach the reporter, when your form asks for it. Empty unless
+   * something calls `setContact`, and left out of the report when it is empty,
+   * so a form without a contact field costs nothing and sends nothing.
+   */
+  contact: string;
   screenshot: string | null;
   includeScreenshot: boolean;
   /** Whether a renderer was supplied, so the form can hide the checkbox. */
@@ -134,6 +140,8 @@ export type ReportState = {
 export type ReportActions = {
   setType: (next: ReportType) => void;
   setMessage: (next: string) => void;
+  /** The reporter's own contact line. Nothing here validates it. */
+  setContact: (next: string) => void;
   toggleScreenshot: (checked: boolean) => void;
   recapture: () => Promise<void>;
   pickElement: () => Promise<ElementRef | null>;
@@ -180,6 +188,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
   let state: ReportState = {
     type: firstType(),
     message: "",
+    contact: "",
     screenshot: null,
     includeScreenshot: canShoot() && armedFor(firstType()),
     canScreenshot: canShoot(),
@@ -233,6 +242,10 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
 
     setMessage(next) {
       set({ message: next });
+    },
+
+    setContact(next) {
+      set({ contact: next });
     },
 
     toggleScreenshot(checked) {
@@ -289,6 +302,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       set({
         type,
         message: "",
+        contact: "",
         screenshot: null,
         elements: [],
         includeScreenshot: canShoot() && armedFor(type),
@@ -308,6 +322,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       const clearForm = () =>
         set({
           message: "",
+          contact: "",
           screenshot: null,
           elements: [],
           includeScreenshot: canShoot() && armedFor(state.type),
@@ -319,6 +334,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
         report = buildReport({
           type: state.type,
           message: state.message,
+          contact: state.contact,
           screenshotDataUrl: state.includeScreenshot ? state.screenshot : null,
           includeConsole: (opts.consoleFor ?? bugsOnly)(state.type),
           elements: state.elements,

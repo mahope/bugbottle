@@ -111,6 +111,12 @@ export type UseBugReportOptions = {
 export type ReportState = {
     type: ReportType;
     message: string;
+    /**
+     * How to reach the reporter, when your form asks for it. Empty unless
+     * something calls `setContact`, and left out of the report when it is empty,
+     * so a form without a contact field costs nothing and sends nothing.
+     */
+    contact: string;
     screenshot: string | null;
     includeScreenshot: boolean;
     /** Whether a renderer was supplied, so the form can hide the checkbox. */
@@ -122,6 +128,8 @@ export type ReportState = {
 export type ReportActions = {
     setType: (next: ReportType) => void;
     setMessage: (next: string) => void;
+    /** The reporter's own contact line. Nothing here validates it. */
+    setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
     pickElement: () => Promise<ElementRef | null>;

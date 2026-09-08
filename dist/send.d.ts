@@ -9,6 +9,13 @@ import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
 export type BuildReportInput = {
     type: ReportType;
     message: string;
+    /**
+     * How to reach the reporter, when your form asked for it. Trimmed, and left
+     * out of the body entirely when it is empty — a report never carries an
+     * empty contact line. Nothing here checks its shape: an address, a phone
+     * number and a handle are all valid answers.
+     */
+    contact?: string | null;
     /** A PNG data URL from `captureScreenshot`, or nothing. */
     screenshotDataUrl?: string | null;
     /** Attach the recorded console errors. Default true. */

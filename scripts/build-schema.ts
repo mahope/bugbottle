@@ -30,6 +30,7 @@ import {
   MAX_BREADCRUMB_TEXT_LENGTH,
   MAX_CONSOLE_ENTRIES,
   MAX_CONSOLE_MESSAGE_LENGTH,
+  MAX_CONTACT_LENGTH,
   MAX_COOKIE_NAMES,
   MAX_ELEMENTS,
   MAX_ELEMENT_TEXT_LENGTH,
@@ -116,6 +117,7 @@ export function buildReportSchema(): Json {
 
   const report = at(defs, ["BugReport", "properties"]);
   at(report, ["message"]).maxLength = MAX_MESSAGE_LENGTH;
+  at(report, ["contact"]).maxLength = MAX_CONTACT_LENGTH;
   at(report, ["console"]).maxItems = MAX_CONSOLE_ENTRIES;
   at(report, ["elements"]).maxItems = MAX_ELEMENTS;
   at(report, ["breadcrumbs"]).maxItems = MAX_BREADCRUMBS;

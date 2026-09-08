@@ -17,6 +17,7 @@ export declare function createBugReport(options: UseBugReportOptions): {
     destroy: () => void;
     setType: (next: import("./index.ts").ReportType) => void;
     setMessage: (next: string) => void;
+    setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
     pickElement: () => Promise<import("./index.ts").ElementRef | null>;
@@ -28,6 +29,8 @@ export declare function createBugReport(options: UseBugReportOptions): {
     types: readonly ["bug", "idea", "other"];
     type: () => "bug" | "idea" | "other";
     message: () => string;
+    /** The contact line, when your form asks for one. Empty otherwise. */
+    contact: () => string;
     /** Whether a renderer was supplied, so the form can hide the checkbox. */
     canScreenshot: () => boolean;
     screenshot: () => string | null;
