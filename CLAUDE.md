@@ -171,7 +171,10 @@ and five new locale strings are the rest — in the IIFE, times eight languages.
 `bugbottle/annotate` is budgeted at
 2048 bytes and measures 1441: a canvas, three tools and an undo stack, with
 nothing imported. #36 then took the panel budget from 10 kB to 12 kB and the
-IIFE from 18432 to 20992 bytes (measured 11971 and 20450). The panel imports
+IIFE from 18432 bytes to 20992 — which was 50 bytes short of the file it
+shipped, so CI was red on main until the review after it raised the IIFE to
+21504. Measure before you write a budget down: the panel is 12126 bytes and
+`dist/bugbottle.js` 21042, not the 11971 and 20450 that were recorded. The panel imports
 the annotator unconditionally, so those 1441 bytes are paid by every
 application that mounts the panel — `annotate: false` hides the button, it does
 not shrink the bundle, and a dynamic import would only move the cost onto a
