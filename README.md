@@ -54,7 +54,7 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
   webhook, an issue in GitHub, GitLab, Jira or Linear, or an event in Sentry —
-  nine server-side sinks over one Markdown rendering, keys never in the
+  ten server-side sinks over one Markdown rendering, keys never in the
   browser.
 - **Your language, your brand.** Eight bundled locales, every string
   overridable, and a panel themed with a handful of CSS variables.
@@ -2021,7 +2021,7 @@ is the endpoint, the panel and an admin list of what arrived. One activation.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Nine sinks live in
+Storing the report is one thing; seeing it is another. Ten sinks live in
 `bugbottle/server`, each a formatter over one `fetch` call, none with a
 dependency of its own. None of them reads your environment: the key, the URL
 and the token are arguments, so it is visible at the call site where the secret
@@ -2086,8 +2086,8 @@ await sendReportWebhook(payload, {
 
 The address was `url` until 0.9, where everything else in the package calls it
 `endpoint`. That name still works and is deprecated; it goes in 1.0. A vendor's
-own address keeps the vendor's own word — `webhookUrl` for the Slack and
-Discord sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
+own address keeps the vendor's own word — `webhookUrl` for the Slack, Discord
+and Teams sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
 
 ### Slack and Discord
 
@@ -2149,6 +2149,64 @@ and both use the `AbortSignal` `handleReport` hands them, so `sinkTimeoutMs`
 really does end the request. If you would rather post the message yourself —
 through a bot token, into a thread — `buildSlackMessage(report, options)` and
 `buildDiscordMessage(report, options)` return the body without sending it.
+
+### Microsoft Teams
+
+`teamsSink` is the same idea for a Teams channel, with one wrinkle: the Office
+365 connector webhooks that used to take a card are retired. The way in now is
+a **Workflows** webhook — in the channel menu, *Workflows* → "Post to a channel
+when a webhook request is received" — which gives you a URL that expects a Bot
+Framework message with an Adaptive Card attached. The sink builds both:
+
+```ts
+import { handleReport, teamsSink } from "bugbottle/server";
+
+export const POST = (req: Request) =>
+  handleReport(req, {
+    screenshot: async (bytes) => await putPrivate(bytes),   // returns a URL
+    store: async (report) => await db.reports.insert(report),
+    sinks: [
+      teamsSink({
+        webhookUrl: process.env.TEAMS_WEBHOOK_URL!,   // the URL is the credential
+        // Both are optional, and both are functions of the report, so the URL
+        // can be built from whatever you stored.
+        screenshotUrl: (r) => signedUrlFor(r),
+        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        buttonText: "Open report",                    // the default
+      }),
+    ],
+    respond: ({ id }) => Response.json({ id }, { status: 201 }),
+  });
+```
+
+The card is schema 1.5: a bold title, the message as a wrapping `TextBlock`,
+the facts as a `FactSet`, the last five console entries in a monospace block,
+an `Image` when there is a URL to fetch, a subtle line with the time and the
+selector, and an `Action.OpenUrl` when you give a `reportUrl`. A `TextBlock`
+renders a subset of Markdown, so every string is escaped into plain text first
+— `*.tsx` stays `*.tsx` rather than turning half the card italic. There are no
+inputs and no `Action.Submit`: a webhook has nowhere to send an answer.
+
+Workflows replies `202 Accepted` with an empty body, so the sink treats every
+2xx as success. That 202 means the flow was queued and not that the card
+rendered — if nothing appears in the channel, look at the flow's run history in
+Power Automate rather than at the status code.
+
+A Workflows message is capped at **28 kB**, and Teams refuses a larger one
+outright rather than clipping it for you. No report can reach that on its own —
+report-core has already clipped the message to 4000 characters, the page and
+the user agent to 500, and five console entries to 500 each — but a screenshot
+address is whatever your storage hands back, and a long enough one leaves no
+room. So the card is measured before it is sent and, while it is over,
+the console goes first, then the facts from the back, then the reporter's own
+words: the console is in the stored report in full, and a truncated sentence
+still says what went wrong.
+
+Teams fetches the picture itself, so a data URL is ignored here too, and "Please
+read this part" applies with more force than anywhere else in this section: a
+channel is the widest audience a report gets. `buildTeamsMessage(report,
+options)` returns the message without sending it, if you would rather post it
+through a bot.
 
 ### Sentry, GlitchTip and Bugsink
 
@@ -2368,7 +2426,7 @@ separate request whose answer you then reference from the Markdown. So the
 screenshot is stored by you first and `screenshotUrl` is linked from the facts
 table, the same as for GitHub and Linear.
 
-All nine throw `SinkError`, carrying the HTTP status and the response body,
+All ten throw `SinkError`, carrying the HTTP status and the response body,
 when the service answers with anything but success. Catch it around the sink
 rather than around the whole handler: a report you have already stored should
 not be lost to a chat webhook that was revoked last week.
@@ -2741,11 +2799,15 @@ imports this entry, so a site that does not ask for it never carries it.
 `gitlabSink`, `messageFromGitlabBody`, `DEFAULT_GITLAB_HOST`,
 `MAX_GITLAB_DESCRIPTION`, `MAX_GITLAB_TITLE`, the `GitlabSink`,
 `GitlabSinkOptions` and `CreateGitlabIssueResult` types,
-`slackSink`, `discordSink`, `buildSlackMessage`,
-`buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `MAX_SLACK_*`
-and `MAX_DISCORD_*` limits (the vendor-first `SLACK_MAX_*` and `DISCORD_MAX_*`
+`slackSink`, `discordSink`, `teamsSink`, `buildSlackMessage`,
+`buildDiscordMessage`, `buildTeamsMessage`, `escapeSlack`, `escapeTeams`,
+`DISCORD_COLOURS`, `TEAMS_CARD_SCHEMA`, `TEAMS_CARD_VERSION`,
+`TEAMS_CARD_CONTENT_TYPE`, the `MAX_SLACK_*`,
+`MAX_DISCORD_*` and `MAX_TEAMS_*` limits (the vendor-first `SLACK_MAX_*` and
+`DISCORD_MAX_*`
 spellings still exist, deprecated, and go in 1.0), `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
-`DiscordSinkOptions`, `ChatSink`, `ChatSinkContext` and `UrlFrom` types,
+`DiscordSinkOptions`, `TeamsSinkOptions`, `ChatSink`, `ChatSinkContext` and
+`UrlFrom` types,
 `sentrySink`, `buildSentryEvent`, `buildSentryEnvelope`, `parseSentryDsn`,
 `sentryAuthHeader`, `clipBytes`, `SentrySinkError`, `SENTRY_CLIENT`,
 `SENTRY_CLIENT_NAME`, `SENTRY_CLIENT_VERSION`, `SENTRY_VERSION`,

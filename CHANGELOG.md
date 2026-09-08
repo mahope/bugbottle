@@ -9,6 +9,40 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `teamsSink({ webhookUrl, screenshotUrl?, reportUrl?, buttonText?, fetch? })`
+  in `bugbottle/server`: one Adaptive Card per report in a Microsoft Teams
+  channel. The tenth sink and the third chat one, built on the same
+  `src/sinks/chat.ts` helpers as `slackSink` and `discordSink`. The Office 365
+  connector webhooks are retired, so the target is a **Workflows** webhook
+  ("post to a channel when a webhook request is received"), which takes a Bot
+  Framework message — `{ type: "message", attachments: [{ contentType:
+  "application/vnd.microsoft.card.adaptive", content }] }` — rather than the
+  card on its own. The card is schema 1.5: a bold title, the message as a
+  wrapping `TextBlock`, the facts as a `FactSet`, the last five console entries
+  in a monospace `TextBlock`, an `Image` when there is a URL to fetch, a subtle
+  line with the time and the selector, and an `Action.OpenUrl` when a
+  `reportUrl` is given. No inputs and no `Action.Submit`: a webhook has nowhere
+  to send an answer. A `TextBlock` renders a subset of Markdown, so
+  `escapeTeams` turns every string into plain text first — emphasis, code,
+  links and the line-start list and heading forms — and it runs after the
+  clipping, never before, so a clip cannot leave a stray backslash on screen.
+  Workflows replies `202 Accepted` with an empty body, so every 2xx is a
+  success and anything else is a `SinkError` carrying the status and the body.
+  A Workflows message is capped at 28 kB and Teams refuses a larger one rather
+  than clipping it, so the card is measured before it is sent: while it is
+  over, the console goes first, then the facts from the back, then the
+  reporter's own words. No report can reach that cap on its own — every string
+  is already clipped by report-core — but a stored screenshot's address is
+  whatever your storage hands back, and a long enough one leaves no room.
+  `buildTeamsMessage(report, options)` returns the message without sending it.
+  Server-only: a `bugbottle/server` bundle that imports only the validators is
+  still the same 1025 minified bytes and measures 584 gzipped against a 1024
+  budget, the two-byte move being esbuild renaming identifiers across a larger
+  module graph rather than a line of the sink reaching the bundle. Schema and
+  limits checked on
+  2026-09-08 against the Adaptive Cards documentation hub and Microsoft Learn;
+  the date is in the file header.
+  Closes #78.
 - Two feeds in the inbox example, behind the same password as the list:
   `GET /feed.json` is JSON Feed 1.1 and `GET /feed.xml` is Atom, both carrying
   the newest 50 reports with the title, the rendered Markdown as
