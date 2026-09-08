@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.15.0 — 2026-09-08
+
 The observable release. `handleReport` says what it decided: `onDecision`
 fires once per request with the status, one of eleven reason words, the
 address the rate limit keyed on and the report's id, routed through the one

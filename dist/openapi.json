@@ -585,7 +585,7 @@
     },
     "summary": "The endpoint a bugbottle client POSTs a report to.",
     "title": "bugbottle report endpoint",
-    "version": "0.14.0"
+    "version": "0.15.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
