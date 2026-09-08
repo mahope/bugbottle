@@ -616,6 +616,41 @@ async function runSink(sink, report, ctx, timeoutMs) {
  */
 export async function handleReport(request, options = {}) {
     const cors = options.cors;
+    // Resolved the same way the rate limit resolves it, and resolved once: a
+    // decision that named a different address from the bucket it was counted
+    // against would be an audit line that lies about who called.
+    let resolvedAddress;
+    const address = () => (resolvedAddress ??= clientAddress(request, options.remoteAddress, options.trustProxy));
+    // The report's identity, computed once the report is valid and only for a
+    // hook that is listening. `dedupe` computes a key of its own, which may be
+    // a `dedupe.key` of the caller's and therefore not a fingerprint at all.
+    let reportFingerprint;
+    /**
+     * The one way out of this function. Every answer below is `decide(...)`, so
+     * a status added later cannot skip the hook: the alternative — a hook call
+     * next to each `return` — is a list that a new branch silently falls off.
+     */
+    const decide = (response, reason, id) => {
+        const hook = options.onDecision;
+        if (!hook)
+            return response;
+        try {
+            hook({
+                ...(id === undefined ? {} : { id }),
+                status: response.status,
+                reason,
+                address: address(),
+                ...(reportFingerprint === undefined ? {} : { fingerprint: reportFingerprint }),
+                at: Date.now(),
+            });
+        }
+        catch (err) {
+            // The answer is already decided. A hook that throws is the operator's
+            // bug to read, never the reporter's 500.
+            options.onError?.(err);
+        }
+        return response;
+    };
     try {
         if (request.method === "OPTIONS" && cors) {
             // Reflecting what was asked for is what lets a client send its own
@@ -634,16 +669,15 @@ export async function handleReport(request, options = {}) {
         // Only a POST carries a report. Anything else is a misrouted request, and
         // answering it here is cheaper than validating a body that cannot exist.
         if (request.method !== "POST") {
-            return json({ error: "Method not allowed" }, 405, cors);
+            return decide(json({ error: "Method not allowed" }, 405, cors), "not-post");
         }
         if (options.rateLimit) {
-            const address = clientAddress(request, options.remoteAddress, options.trustProxy);
-            if (await overRateLimit(request, address, options.rateLimit, options.onError)) {
-                return json({ error: "Too many reports" }, 429, cors);
+            if (await overRateLimit(request, address(), options.rateLimit, options.onError)) {
+                return decide(json({ error: "Too many reports" }, 429, cors), "rate-limited");
             }
         }
         if (options.authorize && !(await options.authorize(request))) {
-            return json({ error: "Not allowed" }, 401, cors);
+            return decide(json({ error: "Not allowed" }, 401, cors), "unauthorised");
         }
         const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
         const bodyTimeoutMs = options.bodyTimeoutMs ?? DEFAULT_BODY_TIMEOUT_MS;
@@ -653,28 +687,28 @@ export async function handleReport(request, options = {}) {
         }
         catch (err) {
             if (err instanceof BodyTooLargeError) {
-                return json({ error: TOO_LARGE_ERROR }, 413, cors);
+                return decide(json({ error: TOO_LARGE_ERROR }, 413, cors), "too-large");
             }
             if (err instanceof BodyTimeoutError) {
-                return json({ error: "Report took too long to arrive" }, 408, cors);
+                return decide(json({ error: "Report took too long to arrive" }, 408, cors), "timeout");
             }
             throw err;
         }
         // Verified over the text that arrived, before anything parses it, and
         // before a body nobody signed reaches a validator.
         if (options.signature && !(await verifySignature(request, text, options.signature))) {
-            return json({ error: BAD_SIGNATURE_ERROR }, 401, cors);
+            return decide(json({ error: BAD_SIGNATURE_ERROR }, 401, cors), "bad-signature");
         }
         let payload;
         try {
             payload = JSON.parse(text);
         }
         catch {
-            return json({ error: "Malformed JSON" }, 400, cors);
+            return decide(json({ error: "Malformed JSON" }, 400, cors), "invalid");
         }
         let report = validateReport(payload);
         if (!report)
-            return json({ error: EMPTY_MESSAGE_ERROR }, 400, cors);
+            return decide(json({ error: EMPTY_MESSAGE_ERROR }, 400, cors), "invalid");
         // Dropped before scrubbing, deduplicating, storing or rendering, so a
         // deployment that says no to replays never has one in memory a moment
         // longer than the parse took.
@@ -683,6 +717,10 @@ export async function handleReport(request, options = {}) {
         if (options.scrub) {
             report = scrubReport(report, options.scrub === true ? {} : options.scrub);
         }
+        // After scrubbing, so the identity in an audit line is the identity of the
+        // report that was actually stored, and only when somebody is listening.
+        if (options.onDecision)
+            reportFingerprint = fingerprint(report);
         // Deduplicated after scrubbing, so two reports that only differ in what was
         // redacted are one report, and before anything is stored or delivered: the
         // whole point is that the second copy costs a row and an email less.
@@ -722,7 +760,7 @@ export async function handleReport(request, options = {}) {
             if (seen) {
                 // 200 rather than 201: nothing was created. The reporter is still told
                 // it arrived, because it did — the first time.
-                return json(seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true }, 200, cors);
+                return decide(json(seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true }, 200, cors), "duplicate", seen.id);
             }
             if (!dedupeStore)
                 evictDedupe(now, options.dedupe.windowMs);
@@ -803,14 +841,17 @@ export async function handleReport(request, options = {}) {
             }
         }
         const result = { report, id, screenshot, screenshotUrl, markdown, sinkErrors };
+        // A custom `respond` picks the status, so the decision reads it back off
+        // the response it built rather than assuming the 201 or 202 it replaced.
+        const reason = id === undefined ? "accepted" : "stored";
         if (options.respond)
-            return withCors(options.respond(result), cors);
-        return id === undefined ? json({}, 202, cors) : json({ id }, 201, cors);
+            return decide(withCors(options.respond(result), cors), reason, id);
+        return decide(id === undefined ? json({}, 202, cors) : json({ id }, 201, cors), reason, id);
     }
     catch (err) {
         options.onError?.(err);
         // Whatever broke, its message is ours and not the reporter's to read.
-        return json({ error: "Could not store the report" }, 500, cors);
+        return decide(json({ error: "Could not store the report" }, 500, cors), "error");
     }
 }
 /** Sends every report on to Resend. The screenshot is attached when it was kept. */

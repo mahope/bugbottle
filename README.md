@@ -1701,6 +1701,64 @@ is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
 answers `413` and calls `req.destroy()` rather than buffering the rest of a
 body it has already refused.
 
+### Knowing what it decided
+
+An endpoint that refuses a report says so to the browser and to nobody else.
+`onDecision` is the other half: one call per request, with what was decided and
+why, so an audit line or a metric costs no response parsing.
+
+```ts
+handleReport(request, {
+  store,
+  onDecision: (decision) => {
+    console.log(JSON.stringify({ event: "bugbottle.decision", ...decision }));
+  },
+});
+```
+
+```json
+{"event":"bugbottle.decision","id":"9d1c…","status":201,"reason":"stored",
+ "address":"203.0.113.7","fingerprint":"a41f…","at":1757260800000}
+```
+
+The `reason` is one closed set of words, and it is what the handler actually
+answers rather than a catalogue of HTTP:
+
+| `reason` | Status | What happened |
+|---|---|---|
+| `stored` | 201 | The report went through and `store` gave it an id. |
+| `accepted` | 202 | It went through with no `store` to name it. |
+| `duplicate` | 200 | The same fingerprint, inside the `dedupe` window. |
+| `not-post` | 405 | Something that was never a report. |
+| `rate-limited` | 429 | The caller over its `rateLimit`. |
+| `unauthorised` | 401 | `authorize` said no. |
+| `too-large` | 413 | A body over `maxBodyBytes`. |
+| `timeout` | 408 | A body that stopped arriving inside `bodyTimeoutMs`. |
+| `bad-signature` | 401 | The `signature` check did not verify. |
+| `invalid` | 400 | Malformed JSON, or a report with nothing written in it. |
+| `error` | 500 | Something unexpected. `onError` has already seen it. |
+
+Every answer goes through it, a `respond` of your own included — the `status`
+is read back off the response that went out, so a custom `204` is logged as
+`204` and not as the `201` it replaced. The one request it says nothing about
+is the CORS preflight, which decides nothing about a report.
+
+`address` is the caller as `trustProxy` resolves it, which is the same address
+the rate limit counted against: the connection by default, the trusted
+forwarding header when you have said one may name the caller, and `"unknown"`
+when nothing could establish either. `fingerprint` is there once there is a
+valid report to fingerprint — the same `fingerprint(report)` the client and
+`dedupe` compute — so two lines about the same report tie together.
+
+**A decision carries no report.** No message, no contact line, no picture, no
+console. That is deliberate: an audit line is written where logs are kept and
+copied where logs are shipped, and a bug report is somebody's data. If you want
+the report in a second place, that is what `store` and the sinks are for.
+
+A hook that throws is caught, passed to `onError` and forgotten. The answer is
+already decided by then, and an audit sink being down is not the reporter
+losing their report.
+
 ### A directory of files
 
 `store` is a function you write, and for a great many deployments the function
@@ -3321,8 +3379,9 @@ so the hook can default without dragging eight languages in), and the `Locale`,
 `localesExtra`, the five optional languages in the same `Locale` shape. Nothing
 imports this entry, so a site that does not ask for it never carries it.
 
-**`bugbottle/server`** — `handleReport` (with `clientAddress` and the
-`TrustProxyOptions` type), `expressHandler`, `fileStore`
+**`bugbottle/server`** — `handleReport` (with `clientAddress`, the
+`TrustProxyOptions` type, and the `ReportDecision` and `DecisionReason`
+types `onDecision` is handed), `expressHandler`, `fileStore`
 (whose store answers `store`, `list`, `read`, `remove`, `prune` and `refresh`,
 with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `StoredReport` and `StoredReportFile` types), `toResend`,

@@ -166,6 +166,62 @@ export type HandleReportResult = {
 };
 
 /**
+ * Why the handler answered the way it did — one word per answer it can give.
+ *
+ * The list is closed on purpose, and it is the handler's real set rather than
+ * a catalogue of HTTP: every `respond` inside `handleReport` names one of
+ * these, so an operator can count them without parsing bodies or guessing
+ * what a 401 meant.
+ *
+ * - `stored` — 201, a report the `store` gave an id to.
+ * - `accepted` — 202, a report that went through with no `store` to name it.
+ * - `duplicate` — 200, a fingerprint seen inside the dedupe window.
+ * - `not-post` — 405, something that was never a report.
+ * - `rate-limited` — 429, the caller over its limit.
+ * - `unauthorised` — 401 from `authorize`.
+ * - `too-large` — 413, a body over `maxBodyBytes`.
+ * - `timeout` — 408, a body that stopped arriving.
+ * - `bad-signature` — 401 from the `signature` check.
+ * - `invalid` — 400, malformed JSON or a report with no message.
+ * - `error` — 500, something unexpected, already passed to `onError`.
+ */
+export type DecisionReason =
+  | "stored"
+  | "accepted"
+  | "duplicate"
+  | "not-post"
+  | "rate-limited"
+  | "unauthorised"
+  | "too-large"
+  | "timeout"
+  | "bad-signature"
+  | "invalid"
+  | "error";
+
+/**
+ * What the handler decided about one request, and nothing else about it.
+ *
+ * Deliberately not the report: an audit line is written where logs are kept,
+ * and a message, a contact address or a picture written there is a copy of
+ * somebody's data in a second place nobody is watching. The fingerprint is
+ * the identity that lets two decisions be tied together without either.
+ */
+export type ReportDecision = {
+  /** The id `store` returned, when the report got that far and got one. */
+  id?: string;
+  /** The HTTP status that went back, including a custom `respond`'s own. */
+  status: number;
+  /** Which of the handler's answers this was. */
+  reason: DecisionReason;
+  /** The caller, resolved exactly as the rate limit resolves it: `trustProxy`. */
+  address: string;
+  /** The report's fingerprint, once there is a valid report to fingerprint. */
+  fingerprint?: string;
+  /** When the answer was decided, `Date.now()`. */
+  at: number;
+};
+
+/**
  * Which address the rate limit counts against.
  *
  * A web `Request` carries no peer address, so the connection address is handed
@@ -523,6 +579,17 @@ export type HandleReportOptions = {
   onSinkError?: (error: unknown, index: number) => void;
   /** Called for anything unexpected, before the 500 goes out. */
   onError?: (error: unknown) => void;
+  /**
+   * Called once per request with what was decided and why — an audit line or
+   * a metric without parsing responses.
+   *
+   * Every answer goes through it, including a custom `respond`'s. The one
+   * request it says nothing about is the CORS preflight, which decides
+   * nothing about a report. A hook that throws is reported through `onError`
+   * and changes no answer: an audit sink being down is not the reporter
+   * losing their report.
+   */
+  onDecision?: (decision: ReportDecision) => void;
   /** Replaces the default reply — 201 `{ id }`, or 202 `{}` without one. */
   respond?: (result: HandleReportResult) => Response;
   /** `true` for `*`, or the one origin you allow. Also answers `OPTIONS`. */
@@ -1062,6 +1129,41 @@ export async function handleReport(
   options: HandleReportOptions = {},
 ): Promise<Response> {
   const cors = options.cors;
+  // Resolved the same way the rate limit resolves it, and resolved once: a
+  // decision that named a different address from the bucket it was counted
+  // against would be an audit line that lies about who called.
+  let resolvedAddress: string | undefined;
+  const address = (): string =>
+    (resolvedAddress ??= clientAddress(request, options.remoteAddress, options.trustProxy));
+  // The report's identity, computed once the report is valid and only for a
+  // hook that is listening. `dedupe` computes a key of its own, which may be
+  // a `dedupe.key` of the caller's and therefore not a fingerprint at all.
+  let reportFingerprint: string | undefined;
+
+  /**
+   * The one way out of this function. Every answer below is `decide(...)`, so
+   * a status added later cannot skip the hook: the alternative — a hook call
+   * next to each `return` — is a list that a new branch silently falls off.
+   */
+  const decide = (response: Response, reason: DecisionReason, id?: string): Response => {
+    const hook = options.onDecision;
+    if (!hook) return response;
+    try {
+      hook({
+        ...(id === undefined ? {} : { id }),
+        status: response.status,
+        reason,
+        address: address(),
+        ...(reportFingerprint === undefined ? {} : { fingerprint: reportFingerprint }),
+        at: Date.now(),
+      });
+    } catch (err) {
+      // The answer is already decided. A hook that throws is the operator's
+      // bug to read, never the reporter's 500.
+      options.onError?.(err);
+    }
+    return response;
+  };
 
   try {
     if (request.method === "OPTIONS" && cors) {
@@ -1082,18 +1184,17 @@ export async function handleReport(
     // Only a POST carries a report. Anything else is a misrouted request, and
     // answering it here is cheaper than validating a body that cannot exist.
     if (request.method !== "POST") {
-      return json({ error: "Method not allowed" }, 405, cors);
+      return decide(json({ error: "Method not allowed" }, 405, cors), "not-post");
     }
 
     if (options.rateLimit) {
-      const address = clientAddress(request, options.remoteAddress, options.trustProxy);
-      if (await overRateLimit(request, address, options.rateLimit, options.onError)) {
-        return json({ error: "Too many reports" }, 429, cors);
+      if (await overRateLimit(request, address(), options.rateLimit, options.onError)) {
+        return decide(json({ error: "Too many reports" }, 429, cors), "rate-limited");
       }
     }
 
     if (options.authorize && !(await options.authorize(request))) {
-      return json({ error: "Not allowed" }, 401, cors);
+      return decide(json({ error: "Not allowed" }, 401, cors), "unauthorised");
     }
 
     const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
@@ -1103,10 +1204,10 @@ export async function handleReport(
       text = await readBoundedText(request, maxBodyBytes, bodyTimeoutMs);
     } catch (err) {
       if (err instanceof BodyTooLargeError) {
-        return json({ error: TOO_LARGE_ERROR }, 413, cors);
+        return decide(json({ error: TOO_LARGE_ERROR }, 413, cors), "too-large");
       }
       if (err instanceof BodyTimeoutError) {
-        return json({ error: "Report took too long to arrive" }, 408, cors);
+        return decide(json({ error: "Report took too long to arrive" }, 408, cors), "timeout");
       }
       throw err;
     }
@@ -1114,18 +1215,18 @@ export async function handleReport(
     // Verified over the text that arrived, before anything parses it, and
     // before a body nobody signed reaches a validator.
     if (options.signature && !(await verifySignature(request, text, options.signature))) {
-      return json({ error: BAD_SIGNATURE_ERROR }, 401, cors);
+      return decide(json({ error: BAD_SIGNATURE_ERROR }, 401, cors), "bad-signature");
     }
 
     let payload: unknown;
     try {
       payload = JSON.parse(text) as unknown;
     } catch {
-      return json({ error: "Malformed JSON" }, 400, cors);
+      return decide(json({ error: "Malformed JSON" }, 400, cors), "invalid");
     }
 
     let report = validateReport(payload);
-    if (!report) return json({ error: EMPTY_MESSAGE_ERROR }, 400, cors);
+    if (!report) return decide(json({ error: EMPTY_MESSAGE_ERROR }, 400, cors), "invalid");
 
     // Dropped before scrubbing, deduplicating, storing or rendering, so a
     // deployment that says no to replays never has one in memory a moment
@@ -1135,6 +1236,10 @@ export async function handleReport(
     if (options.scrub) {
       report = scrubReport(report, options.scrub === true ? {} : options.scrub);
     }
+
+    // After scrubbing, so the identity in an audit line is the identity of the
+    // report that was actually stored, and only when somebody is listening.
+    if (options.onDecision) reportFingerprint = fingerprint(report);
 
     // Deduplicated after scrubbing, so two reports that only differ in what was
     // redacted are one report, and before anything is stored or delivered: the
@@ -1170,10 +1275,14 @@ export async function handleReport(
       if (seen) {
         // 200 rather than 201: nothing was created. The reporter is still told
         // it arrived, because it did — the first time.
-        return json(
-          seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true },
-          200,
-          cors,
+        return decide(
+          json(
+            seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true },
+            200,
+            cors,
+          ),
+          "duplicate",
+          seen.id,
         );
       }
       if (!dedupeStore) evictDedupe(now, options.dedupe.windowMs);
@@ -1252,12 +1361,15 @@ export async function handleReport(
     }
 
     const result: HandleReportResult = { report, id, screenshot, screenshotUrl, markdown, sinkErrors };
-    if (options.respond) return withCors(options.respond(result), cors);
-    return id === undefined ? json({}, 202, cors) : json({ id }, 201, cors);
+    // A custom `respond` picks the status, so the decision reads it back off
+    // the response it built rather than assuming the 201 or 202 it replaced.
+    const reason: DecisionReason = id === undefined ? "accepted" : "stored";
+    if (options.respond) return decide(withCors(options.respond(result), cors), reason, id);
+    return decide(id === undefined ? json({}, 202, cors) : json({ id }, 201, cors), reason, id);
   } catch (err) {
     options.onError?.(err);
     // Whatever broke, its message is ours and not the reporter's to read.
-    return json({ error: "Could not store the report" }, 500, cors);
+    return decide(json({ error: "Could not store the report" }, 500, cors), "error");
   }
 }
 

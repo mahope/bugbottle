@@ -296,7 +296,29 @@ is true: any caller can then pick their own bucket and never meet the limit.
 | `PUBLIC_URL` | The address the feeds and the notifications link to, when the request's own host is not it |
 | `TRUST_PROXY` | Unset by default: the socket, which behind a proxy is the proxy. `true` for the last `X-Forwarded-For` entry, a number for that many hops in from the right, or a header name. As above |
 | `ALLOWED_ORIGIN`, `MAX_REPORTS`, `RETENTION_DAYS` | As above. *What is deleted, and when* for the last two |
+| `AUDIT_LOG` | `1` prints one JSON line per decision to stdout — what was decided, why, for whom and when, and nothing out of the report itself. *An audit line per report* below |
 | `NOTIFY_WEBHOOK`, `NOTIFY_KIND`, `NOTIFY_SMTP_*` | Who is told about a new report, and how. *Be told about new reports* above |
+
+### An audit line per report
+
+`AUDIT_LOG=1` and the inbox prints one JSON line for every answer the endpoint
+gives, on stdout, which is where Docker keeps logs:
+
+```json
+{"event":"bugbottle.decision","id":"9d1c…","status":201,"reason":"stored",
+ "address":"203.0.113.7","fingerprint":"a41f…","at":1757260800000}
+```
+
+That is `handleReport`'s `onDecision` hook and nothing else — *Knowing what it
+decided* in the main README has the eleven `reason` words. `address` is the
+caller as `TRUST_PROXY` resolves it, so it is the same address the rate limit
+counted against.
+
+It is off by default because a line per report is a second place somebody's
+data could end up, and this one deliberately carries none of it: no message, no
+contact line, no picture. The fingerprint is how two lines about the same
+report tie together without either of them quoting it.
+
 
 On **Dokploy**, in eight lines:
 

@@ -7,6 +7,31 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- **`onDecision`: one hook per request saying what `handleReport` decided and
+  why** (#94). An endpoint that refuses a report says so to the browser and to
+  nobody else; the hook is called once per request with
+  `{ id?, status, reason, address, fingerprint?, at }`, so an audit line or a
+  metric costs no response parsing. The `reason` is one closed set of eleven
+  words — `stored`, `accepted`, `duplicate`, `not-post`, `rate-limited`,
+  `unauthorised`, `too-large`, `timeout`, `bad-signature`, `invalid`, `error` —
+  and they are the handler's real answers rather than a catalogue of HTTP.
+  Every `respond` inside `handleReport` now goes through one `decide` function,
+  which is what says a status added later cannot skip the hook; the CORS
+  preflight is the one request it says nothing about, because it decides
+  nothing about a report. A custom `respond`'s status is read back off the
+  response it built, so a `204` is logged as `204`. `address` is the caller as
+  `trustProxy` resolves it, which is the same address the rate limit counted
+  against, and `fingerprint` is there once there is a valid report to
+  fingerprint. A decision deliberately carries no message, no contact line and
+  no picture: an audit line is written where logs are kept and shipped where
+  logs are shipped. A hook that throws reaches `onError` and changes no answer.
+  `examples/inbox` prints one JSON line per decision behind `AUDIT_LOG=1`.
+  Sixteen tests, one per answer; the validator-only `bugbottle/server` bundle
+  is unmoved at 584 bytes, since none of this is on a validator's path.
+
+
 ## 0.14.0 — 2026-09-08
 
 The accountable release. The rate limit used to key on the first entry of
