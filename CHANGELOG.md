@@ -7,6 +7,19 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Documentation
+
+- A third content pass over the two landing pages, which still described the
+  0.6 library. Both now carry a band naming all eleven places a report can
+  land, linking the sinks table in the documentation; the "what it does" list
+  gains the offline queue and what it does when the storage quota runs out,
+  and the privacy checklist; the install section points at `examples/inbox`,
+  one container and one password; and the branding item links the theme
+  playground. The version line and the size table are untouched — they are
+  stamped at release. `site/README.md` gains "The sections of the landing
+  pages", which writes down the order, the alternating grounds and the rule
+  that the eleven sink names follow the README's own table.
+
 ## 0.14.0 — 2026-09-08
 
 The accountable release. The rate limit used to key on the first entry of

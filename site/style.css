@@ -419,6 +419,7 @@ main > section:first-child {
 }
 
 #start,
+#sinks,
 #colophon {
   background: var(--surface);
 }
@@ -1051,6 +1052,37 @@ td code {
 
 #privacy li {
   margin-bottom: var(--s-3);
+}
+
+/* ----------------------------------------------------------------- sinks */
+
+/* Eleven names, and the page has to print all eleven: the question a reader
+   arrives with is "does it reach the tracker we already use", and the answer
+   is a name they can see, not a number. A wrapping row of terms rather than a
+   bulleted list, because here the eleven really are equal and none of them is
+   a sentence. */
+
+.sinks {
+  list-style: none;
+  margin: 0 0 var(--s-5);
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  /* The same measure as the paragraphs above and below it, so the eleven sit
+     in the column the section already has rather than running past it. */
+  max-width: var(--measure);
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.sinks li {
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 /* -------------------------------------------------------------- colophon */
