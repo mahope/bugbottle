@@ -33,6 +33,22 @@ Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
 
 ### Added
 
+- The demo on bugbottle.dev has a picture, so the annotator can be tried
+  without installing anything. `site/demo.js` hands `mountBugbottle` a
+  `screenshot` renderer of its own that *draws* a simplified picture of the
+  demo section onto a canvas — the header band, a heading, some text bars, the
+  button and the code slab, in the page's own colour tokens — and
+  `annotate: createAnnotator` from `dist/annotate.js` alongside it. So "Attach
+  the drawn picture", "Edit picture", the rectangle, the arrow, the blur and
+  Done all work on `/` and `/da/`, and the report still never leaves the
+  browser: the canvas export is a `data:` URL, which `img-src 'self' data:`
+  already allowed. `html-to-image` is still not loaded on the site and the
+  picture is not a capture — both pages say so, and the checkbox and its note
+  are relabelled rather than left saying "the picture shows this page as you
+  see it now". `scripts/a11y-site.mjs` gained the state that proves it: the
+  landing page with the panel open and the editor over the drawn picture, in
+  both colour schemes, at zero violations.
+  Closes #75.
 - Five more languages, in their own entry point: `bugbottle/locales-extra`
   ships Italian, Polish, Portuguese, Finnish and Ukrainian in the same `Locale`
   shape as the eight bundled ones, with every key present and reviewed line by

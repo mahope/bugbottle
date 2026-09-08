@@ -3,9 +3,10 @@
  *
  * `scripts/a11y-audit.mjs` mounts `bugbottle/ui` on a scratch page and audits
  * the widget. This one audits the site: the two landing pages, the
- * documentation index, one deep documentation page, the index again with the
- * search field open on results, the two comparison pages and the changelog, in
- * both colour schemes, with the pinned `axe-core`. Contrast, heading
+ * documentation index, one deep documentation page, the English landing page
+ * again with the demo's panel open and the picture editor over it, the index
+ * again with the search field open on results, the two comparison pages and
+ * the changelog, in both colour schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
  * without breaking a test.
@@ -119,6 +120,7 @@ await mkdir(outDir, { recursive: true });
 const PAGES = [
   ["landing-en", "/"],
   ["landing-da", "/da/"],
+  ["landing-annotate", "/", "annotate"],
   ["docs-index", "/docs/"],
   ["docs-panel", "/docs/the-ready-made-panel/"],
   ["docs-search", "/docs/", "search"],
@@ -180,6 +182,34 @@ async function audit(name, path, scheme, state) {
       () => document.querySelectorAll(".docs-search-results li a").length > 0,
       { timeout: 5000 },
     );
+  }
+
+  /* The panel with the picture editor open over the landing page.
+     `scripts/a11y-audit.mjs` audits the same editor on a scratch page, but the
+     site wires it differently — the page's own renderer draws the picture and
+     the page's colours theme the editor — so the state is worth auditing
+     where it actually ships. */
+  if (state === "annotate") {
+    await tab.evaluate(async () => {
+      const panel = document.querySelector("[data-bugbottle=ui]").shadowRoot;
+      panel.querySelector(".trigger").click();
+      const box = panel.querySelector(".check input");
+      box.checked = true;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await tab.waitForFunction(() => {
+      const panel = document.querySelector("[data-bugbottle=ui]").shadowRoot;
+      const edit = panel.querySelector(".edit");
+      return edit && !edit.hidden;
+    });
+    await tab.evaluate(() =>
+      document.querySelector("[data-bugbottle=ui]").shadowRoot.querySelector(".edit").click(),
+    );
+    await tab.waitForFunction(() => {
+      const panel = document.querySelector("[data-bugbottle=ui]").shadowRoot;
+      const editor = panel.querySelector(".editor");
+      return editor && !editor.hidden && panel.querySelector("canvas").width > 0;
+    });
   }
 
   await tab.evaluate(axeSource);

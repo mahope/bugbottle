@@ -343,8 +343,15 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
               <code>fetch</code>, gemmer den rapport, der ville være blevet sendt, og
               viser den her med <code>toMarkdown</code> fra <code>bugbottle/server</code>,
               som er den samme funktion, du ville bruge til teksten i en sag.
-              Skærmbilleder er slået fra her, fordi demoen ikke har noget privat sted at
-              lægge dem.
+            </p>
+            <p>
+              Billedet er tegnet, ikke taget. Et rigtigt skærmbillede tegnes af siden med
+              <code>bugbottle/html-to-image</code>, og denne side har ikke noget privat
+              sted at lægge et, så demoen giver panelet en funktion, der maler et
+              forenklet billede af dette afsnit på et lærred — et farvebånd øverst, nogle
+              tekstbjælker og knappen. Vedhæft det, så dukker "Rediger billedet" op: det
+              er den rigtige editor fra <code>bugbottle/annotate</code> med rektanglet,
+              pilen og sløringen.
             </p>
             <p><button type="button" class="button primary" id="demo-open">Åbn panelet</button></p>
           </div>
@@ -357,6 +364,7 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
             <p class="demo-note">
               Der bliver ikke sendt noget. Der findes ingen server bag siden: rapporten
               bliver bygget og vist i din egen browser, og lukker du fanen, er den væk.
+              Det billede, siden tegnede, og det du måtte markere på det, går samme vej.
             </p>
           </div>
         </div>

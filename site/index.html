@@ -338,8 +338,16 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
               <code>fetch</code> of its own, keeps the body that would have been posted,
               and renders it here with <code>toMarkdown</code> from
               <code>bugbottle/server</code>, which is the same function you would use for
-              an issue body. Screenshots are off here, since the demo has nowhere
-              private to put one.
+              an issue body.
+            </p>
+            <p>
+              The picture is drawn, not captured. A real screenshot renders the page
+              through <code>bugbottle/html-to-image</code>, and this page has nowhere
+              private to put one, so the demo hands the panel a renderer that paints a
+              simplified picture of this section onto a canvas — a header band, some
+              text bars and the button. Attach it and "Edit picture" appears: that is
+              the real editor from <code>bugbottle/annotate</code>, with the rectangle,
+              the arrow and the blur.
             </p>
             <p><button type="button" class="button primary" id="demo-open">Open the panel</button></p>
           </div>
@@ -351,7 +359,8 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
             </div>
             <p class="demo-note">
               Nothing is sent. There is no endpoint on this host: the report is built
-              and rendered in your browser, and closing the tab is the end of it.
+              and rendered in your browser, and closing the tab is the end of it. The
+              picture the page drew, and whatever you mark on it, go the same way.
             </p>
           </div>
         </div>
