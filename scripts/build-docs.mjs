@@ -127,6 +127,7 @@ const GROUPS = [
     blurb: "Receiving a report, checking it, and sending it onward.",
     slugs: [
       "receiving-a-report",
+      "recipes",
       "sending-it-somewhere",
       "the-payload",
       "feeding-reports-to-an-agent",

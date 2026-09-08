@@ -29,6 +29,17 @@ change the API; the changelog says so when they do.
   allowed to match nothing, since a source export and a git worktree both
   arrive without a usable repository — the script then dates every page today.
 
+### Added
+
+- A "Recipes" section in the README: one route handler per framework — Next.js
+  App Router, SvelteKit, Nuxt, Astro, React Router 7 (and Remix) and Hono —
+  with the file path each expects, the one framework-specific line that
+  matters, whether the raw body survives for signing, and where the client
+  mounts. Every snippet was type-checked against the framework's current
+  release beside a packed `bugbottle`; the versions are named at the top of the
+  section. WordPress points at the plugin, and Deno, Bun and Workers are said
+  to need no recipe at all.
+
 ## 0.7.0 — 2026-09-08
 
 The evidence release: the reporter can mark the picture before it leaves, a
