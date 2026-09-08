@@ -16,6 +16,11 @@ FROM node:22-alpine AS docs
 
 WORKDIR /build
 
+# For the `<lastmod>` dates in the sitemap, which come from the commit that
+# last touched each source file. Builder stage only; nothing of it reaches the
+# image that is served.
+RUN apk add --no-cache git
+
 # The lockfile first, so the install layer survives a README edit.
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -26,12 +31,27 @@ COPY scripts/build-docs.mjs ./scripts/
 # the same run writes sitemap.xml and robots.txt.
 COPY site/compare.md ./site/
 COPY site/da/sammenlign.md ./site/da/
+# The history, for the sitemap's dates. Last, because it changes with every
+# commit and would otherwise invalidate everything below it.
+#
+# The pattern is `.git*` rather than `.git`, and .dockerignore rides along in
+# front of it, because a `COPY` whose sources match nothing is an error and
+# this one has to be allowed to match nothing: a source export has no
+# repository, and a git worktree has a `.git` file pointing at one it cannot
+# reach from in here. A wildcard needs at least one match to be legal, and
+# .dockerignore is the cheapest file that always exists. GIT_DIR then points
+# the script's `git log` at whatever arrived; when that is not a repository,
+# git fails, the script catches it and dates every page today.
+ENV GIT_DIR=/build/gitdir
+COPY .dockerignore .git* ./gitdir/
 RUN node scripts/build-docs.mjs
 
 
 FROM nginx:alpine
 
 COPY site/nginx.conf /etc/nginx/conf.d/default.conf
+# The one copy of the security headers, included by every block in nginx.conf.
+COPY site/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site/og.png site/panel.png site/panel-narrow.png site/panel-da.png site/panel-da-narrow.png /usr/share/nginx/html/
 # The two faces the page is set in, served from this host so the footer's
 # promise about external requests stays true.

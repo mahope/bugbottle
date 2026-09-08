@@ -29,6 +29,7 @@ from this host and the favicon is an inline SVG.
 | `og.svg` | Source of the OpenGraph picture. Not served |
 | `og.png` | 1200x630, rendered from `og.svg`; `og:image` on both pages |
 | `nginx.conf` | Replaces `conf.d/default.conf`: `/health`, caching, gzip |
+| `security-headers.conf` | The security headers, in one file because nginx does not merge them. Copied to `/etc/nginx/snippets/` and included by every block in `nginx.conf`; see "The security headers" below |
 | `Dockerfile` | A `node:22-alpine` stage that generates `docs/`, then `nginx:alpine` plus these files and `dist/` |
 
 ## The typefaces
@@ -265,10 +266,61 @@ exist in both languages — the landing pages, and the two comparison pages —
 carry `xhtml:link` alternates for `en`, `da` and `x-default` in both
 directions; the documentation exists in English only and carries none.
 
+Every `<url>` carries a `<lastmod>`, and the date is the date of the commit
+that last touched the file the page is generated from — `git log -1
+--format=%cs -- <file>`, which prints exactly the `YYYY-MM-DD` the element
+wants. The landing pages are dated by their own HTML, the comparison pages by
+their own Markdown, and the documentation index and all thirty documentation
+pages by `README.md`, since that is the only source they have. Never file
+mtimes: a checkout resets every one of them, so mtimes would tell a crawler
+that the whole site changed on the day it was last deployed.
+
+That is why `.git` reaches the builder stage. It used to be excluded from the
+context — it is about ten megabytes — but the docs stage now installs `git` and
+copies the history in last, after the install and the sources, so a new commit
+does not invalidate the layers above it. Neither the history nor `git` survives
+into the `nginx:alpine` stage. The copy is written as
+`COPY .dockerignore .git* ./gitdir/` with `ENV GIT_DIR=/build/gitdir`, because
+a `COPY` whose sources match nothing is an error and this one has to be allowed
+to match nothing: a wildcard needs one match to be legal, and `.dockerignore`
+is the cheapest file that always exists to give it one. Where what arrives is
+not a repository — a source export, a git worktree whose `.git` is a pointer
+file to a directory outside the context — git fails, the script catches it, and
+every page is dated today rather than losing the element, which is truthful for
+a build that has just happened. A shallow clone is the one case that is neither:
+it answers with its own tip commit for every file, so the whole site is dated
+the day it was cloned.
+
+The alternative was a JSON of precomputed dates, committed and read by the
+build. It is the larger change and the worse one: a generated file in the tree
+is a step someone has to remember, and the dates go stale the moment they
+forget.
+
 `robots.txt` allows everything and names the sitemap. nginx has a location for
 each: the sitemap is served as `application/xml` (its `types { }` block empties
 the MIME map so `default_type` wins over nginx's own `text/xml`), the robots
 file as `text/plain` and unlogged.
+
+## The security headers
+
+Two headers, `X-Content-Type-Options: nosniff` and `Referrer-Policy:
+no-referrer`, and they live in `site/security-headers.conf` rather than in
+`nginx.conf`, because nginx does not merge `add_header` down the block chain.
+A block inherits the enclosing set only for as long as it adds no header of its
+own; the moment a `location` sets a `Cache-Control`, it replaces the
+server-level set entirely. Every location on this site sets a cache header, so
+until this file existed every location but `/health` served its files without
+`Referrer-Policy` — `/robots.txt`, `/sitemap.xml`, `/dist/`, `/fonts/`,
+`/style.css`, `/demo.js` and the pages themselves.
+
+The Dockerfile copies the file to `/etc/nginx/snippets/security-headers.conf`
+and every block in `nginx.conf` — the server block and each location inside it,
+`/health` included — opens with `include snippets/security-headers.conf;`.
+A header added to that file therefore reaches all of them. The one remaining
+way to lose a header is to add a location that forgets the include, which is
+why the include is the first line of every block rather than buried in one:
+a missing first line is visible where a missing header is not. The check is in
+"Building and running" below: `curl -sI` every kind of URL and compare.
 
 ## The copy buttons
 
@@ -329,6 +381,19 @@ curl -si localhost:8089/panel-narrow.png | head -1
 
 `/health` returns `ok` as `text/plain` and is not logged — it is what the
 container platform polls.
+
+And that every one of them carries the same two security headers, which is the
+thing an `add_header` in a `location` quietly takes away:
+
+```bash
+for p in / /robots.txt /sitemap.xml /dist/bugbottle.js /style.css /docs/          /fonts/sourcesans3-400.woff2 /health; do
+  echo "== $p"
+  curl -sI "localhost:8089$p" | grep -i -E 'x-content-type-options|referrer-policy'
+done
+```
+
+Two lines under every path, or something in `nginx.conf` has stopped including
+the snippet.
 
 ## Deploying
 
