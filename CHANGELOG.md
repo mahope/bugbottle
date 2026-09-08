@@ -7,6 +7,27 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The self-hosted release. Two things that used to need a service now need
+only what you already have: `smtpSink` speaks SMTP itself — EHLO, STARTTLS,
+AUTH PLAIN or LOGIN, one folded and dot-stuffed message, a deadline on every
+phase — so any mail account is an email sink; and `fileStore` is the inbox
+example's storage lifted into `bugbottle/server` — a JSON file per report with
+the PNG beside it, atomic writes, ids checked before a path is built, an
+oldest-first cap — for the deployments that want a directory before they want
+a database. CI now asserts from both sides that the validator-only server
+bundle carries neither DOM nor disk. One fix: the site demo imported
+`toMarkdown` from the server entry, which the file store made Node-only, and
+the browser audit in CI caught the broken demo on the merge.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`bugbottle/shake` 0.7 kB, `bugbottle/sign` 0.4 kB, `bugbottle/rrweb` 0.7 kB,
+`bugbottle/locales-extra` 4.7 kB, `dist/bugbottle.js` 24.2 kB,
+`dist/bugbottle.slim.js` 20.6 kB, `bugbottle/server` validators 0.6 kB.
+
 ### Fixed
 
 - The landing-page demo imported `toMarkdown` from the server entry, which since
