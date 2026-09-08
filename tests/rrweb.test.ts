@@ -149,6 +149,16 @@ test("a single group larger than the cap is not sent at all", () => {
   assert.equal(getReplay(), null);
 });
 
+test("the buffer is measured in UTF-8 bytes, not in code units", () => {
+  const fake = fakeRecord();
+  attachRrweb(fake.record, { maxBytes: 500, seconds: 3600 });
+  const t0 = 4_500_000;
+  // 200 code units, 600 bytes: under the cap counted wrongly, over it counted
+  // honestly, and the whole group is therefore too large to send.
+  fake.emit({ type: 2, timestamp: t0, data: { s: "漢".repeat(200) } }, true);
+  assert.equal(getReplay(), null);
+});
+
 test("an event that is not an object is ignored", () => {
   const fake = fakeRecord();
   attachRrweb(fake.record);
@@ -289,6 +299,21 @@ test("an oversized replay is dropped whole, like an oversized screenshot", () =>
   for (let i = 0; i < 1000; i += 1) events.push({ type: 3, timestamp: 1000 + i, data: big });
   const serialised = JSON.stringify(events).length;
   assert.ok(serialised > MAX_REPLAY_BYTES);
+  assert.equal(normaliseReplay({ events }), null);
+});
+
+test("a replay is measured in UTF-8 bytes, not in code units", () => {
+  // Three bytes each in UTF-8, one code unit each in the string: a payload
+  // that is comfortably under the cap by `length` and well over it by size.
+  const cjk = "漢".repeat(500);
+  const events = [];
+  for (let i = 0; i < 800; i += 1) events.push({ type: 3, timestamp: 1000 + i, data: cjk });
+  const serialised = JSON.stringify(events);
+  assert.ok(serialised.length < MAX_REPLAY_BYTES, "under the cap counted wrongly");
+  assert.ok(
+    new TextEncoder().encode(serialised).byteLength > MAX_REPLAY_BYTES,
+    "over the cap counted honestly",
+  );
   assert.equal(normaliseReplay({ events }), null);
 });
 

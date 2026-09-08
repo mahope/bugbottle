@@ -80,6 +80,15 @@ export declare const MAX_PERF_MS = 3600000;
  */
 export declare const MAX_REPLAY_BYTES: number;
 /**
+ * How many bytes a string costs once it is sent, stored or emailed. A
+ * JavaScript string is measured in UTF-16 code units, and every character
+ * outside Latin-1 costs more than one byte in UTF-8: a megabyte of `length`
+ * is up to three megabytes on the wire for a page written in Chinese or full
+ * of emoji. `TextEncoder` exists in every browser this library runs in and in
+ * Node, so the client and the server count the same way.
+ */
+export declare function utf8Length(text: string): number;
+/**
  * How many replay events one report may carry. The byte cap is the real
  * bound; this one stops a body of a million tiny objects from costing a
  * million iterations before the byte cap is reached.

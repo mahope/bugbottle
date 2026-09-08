@@ -1218,7 +1218,9 @@ empties the buffer and unregisters it — the same thing `resetRrweb()` does.
 On the server, `normaliseReplay` keeps the events that are objects with a
 numeric `type` and `timestamp`, strips null bytes, recomputes `seconds` from
 what survived, and drops the whole replay when it serialises to more than
-`MAX_REPLAY_BYTES` (1 MB). `toMarkdown` prints one line — `Replay: 240 events
+`MAX_REPLAY_BYTES` (1 MB). That cap and `maxBytes` are both UTF-8 bytes, not
+characters: a recording of a page written in Chinese weighs up to three times
+its length. `toMarkdown` prints one line — `Replay: 240 events
 over 32 s (attached)` — because the events are for a player and not for a
 reader. `store` writes them with the rest of the report; no sink uploads them
 anywhere.

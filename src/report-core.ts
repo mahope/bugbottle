@@ -102,6 +102,20 @@ export const MAX_PERF_MS = 3_600_000;
  */
 export const MAX_REPLAY_BYTES = 1024 * 1024;
 
+const replayEncoder = new TextEncoder();
+
+/**
+ * How many bytes a string costs once it is sent, stored or emailed. A
+ * JavaScript string is measured in UTF-16 code units, and every character
+ * outside Latin-1 costs more than one byte in UTF-8: a megabyte of `length`
+ * is up to three megabytes on the wire for a page written in Chinese or full
+ * of emoji. `TextEncoder` exists in every browser this library runs in and in
+ * Node, so the client and the server count the same way.
+ */
+export function utf8Length(text: string): number {
+  return replayEncoder.encode(text).byteLength;
+}
+
 /**
  * How many replay events one report may carry. The byte cap is the real
  * bound; this one stops a body of a million tiny objects from costing a
@@ -766,7 +780,7 @@ export function normaliseReplay(raw: unknown): ReplayCapture | null {
     // stored and it is certainly not an rrweb recording.
     return null;
   }
-  if (serialised.length > MAX_REPLAY_BYTES) return null;
+  if (utf8Length(serialised) > MAX_REPLAY_BYTES) return null;
 
   // `JSON.stringify` writes a null byte as the six characters `\u0000`, so
   // that is what has to be matched here: the serialised text never holds a

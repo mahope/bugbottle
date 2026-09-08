@@ -180,6 +180,10 @@ change the API; the changelog says so when they do.
   two headers now live in `site/security-headers.conf`, copied to
   `/etc/nginx/snippets/` by the Dockerfile and included by the server block and
   by every location inside it, so adding a header reaches all of them.
+- A replay was measured in UTF-16 code units rather than in UTF-8 bytes, on the
+  server and in the rolling buffer alike, so a recording of a page written in
+  Chinese or full of emoji passed a "1 MB" cap at up to three megabytes on the
+  wire. Both count with `TextEncoder` now.
 
 ### Changed
 

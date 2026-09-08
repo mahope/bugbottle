@@ -27,7 +27,7 @@
  * is in the recording.
  */
 import { registerReplaySource } from "./registry.js";
-import { MAX_REPLAY_BYTES } from "./report-core.js";
+import { MAX_REPLAY_BYTES, utf8Length, } from "./report-core.js";
 /** How much of the recent past the buffer keeps, in seconds. */
 export const DEFAULT_REPLAY_SECONDS = 30;
 /** How large the serialised buffer may grow before the oldest group goes. */
@@ -57,11 +57,13 @@ let attached = false;
  * What one event costs, near enough. `JSON.stringify` on every event is the
  * honest measure and it is what the cap is really about; the alternative is
  * measuring the whole buffer on every emit, which is the same work multiplied
- * by the number of events already in it.
+ * by the number of events already in it. UTF-8 bytes rather than code units,
+ * because that is what a recording of a page written in Chinese really weighs
+ * on the wire — up to three times its `length`.
  */
 function sizeOf(event) {
     try {
-        return JSON.stringify(event).length + 1;
+        return utf8Length(JSON.stringify(event)) + 1;
     }
     catch {
         // A circular event is not one rrweb produces, and it is certainly not one
