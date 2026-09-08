@@ -655,6 +655,20 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
+/* A table wider than its column scrolls inside a wrapper; axe (and a keyboard
+   user) require such a region to be focusable, so the wrapper carries a
+   tabindex and a name. Applied to every Marked instance as a post-process. */
+const TABLE_HOOK = {
+  hooks: {
+    postprocess(html) {
+      return html.replace(
+        /<table>[sS]*?</table>/g,
+        (table) => `<div class="table-wrap" tabindex="0" role="region" aria-label="Table">${table}</div>`,
+      );
+    },
+  },
+};
+
 function renderer(page, anchors) {
   return {
     /* The section heading became the page's h1, so everything below it moves
@@ -1232,6 +1246,8 @@ async function main() {
 
   for (const page of pages) {
     const marked = new Marked({ gfm: true, breaks: false });
+
+    marked.use(TABLE_HOOK);
     marked.use({ renderer: renderer(page, anchors) });
     page.html = marked.parse(page.body);
     /* The one page with something on it that is not README prose. */
@@ -1271,6 +1287,8 @@ async function main() {
   for (const entry of STANDALONE) {
     const body = (await readFile(join(root, entry.source), "utf8")).replace(/\r\n/g, "\n").trim();
     const marked = new Marked({ gfm: true, breaks: false });
+
+    marked.use(TABLE_HOOK);
     marked.use({ renderer: renderer(entry, new Map()) });
     const en = entry.lang === "en" ? entry.url : entry.otherUrl;
     const da = entry.lang === "da" ? entry.url : entry.otherUrl;
@@ -1325,6 +1343,8 @@ async function main() {
        before 1400 lines of prose. */
     const first = releases[0];
     const marked = new Marked({ gfm: true, breaks: false });
+
+    marked.use(TABLE_HOOK);
     marked.use({ renderer: changelogRenderer(CHANGELOG) });
     const lede = marked.parse(lines.slice(0, first ? first.line : lines.length).join("\n").trim());
     const rest = first ? marked.parse(lines.slice(first.line).join("\n").trim()) : "";

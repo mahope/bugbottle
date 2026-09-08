@@ -299,10 +299,15 @@ h3:hover > .anchor,
   text-transform: uppercase;
 }
 
-/* A wide table must scroll inside itself rather than push the page sideways. */
-.docs-body > table {
-  display: block;
+/* A wide table must scroll inside its wrapper rather than push the page
+   sideways; the wrapper is focusable so a keyboard can scroll it. */
+.docs-body .table-wrap {
   overflow-x: auto;
+}
+
+.docs-body .table-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .docs-body details {
@@ -529,9 +534,7 @@ h3:hover > .anchor,
   max-width: none;
 }
 
-.docs-standalone .docs-body > table {
-  display: block;
-  overflow-x: auto;
+.docs-standalone .docs-body .table-wrap {
   width: 100%;
 }
 

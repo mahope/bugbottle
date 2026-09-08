@@ -116,6 +116,9 @@ about what the entry says it is and not about bytes.
 
 ### Fixed
 
+- Every table on the documentation pages sits in a focusable, named scroll
+  region, so a table wider than its column can be scrolled from the keyboard;
+  the browser audit in CI caught the migration table on the changelog page.
 - **The offline queue delivers signed** (#98). `createQueue` had no `sign`
   seam, so the script tag's own auto-mount built `createQueue({ endpoint })`
   even with `data-sign-key` set: a report that went through the queue arrived
