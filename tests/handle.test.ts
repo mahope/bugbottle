@@ -490,15 +490,28 @@ test("toResend attaches the kept screenshot bytes", async () => {
   assert.equal(attachments?.[0]?.filename, "screenshot.png");
 });
 
-/** The smallest Express response that records what the adapter wrote. */
+/**
+ * The smallest Express response that records what the adapter wrote.
+ *
+ * `finished` resolves when the adapter sends, which is the only moment the
+ * recorded status, headers and body are the ones it meant to write. The
+ * handler returns before its work is done — Express is given a response to
+ * write, not a promise to await — so a test that sleeps instead is betting
+ * that the work fits in the nap, and a loaded machine wins that bet.
+ */
 function fakeRes() {
   const state: { status: number; headers: Record<string, string>; body: string } = {
     status: 0,
     headers: {},
     body: "",
   };
+  let settle!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
   return {
     state,
+    finished,
     res: {
       status(code: number) {
         state.status = code;
@@ -509,13 +522,14 @@ function fakeRes() {
       },
       send(payload?: unknown) {
         state.body = String(payload ?? "");
+        settle();
       },
     },
   };
 }
 
 test("the Express adapter round-trips a parsed body", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   let stored: ValidatedReport | undefined;
   const handler = expressHandler({
     cors: true,
@@ -535,8 +549,8 @@ test("the Express adapter round-trips a parsed body", async () => {
     res,
   );
   // The handler is deliberately synchronous in the Express sense; wait for the
-  // promise it started before reading what it wrote.
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // write it eventually makes rather than for a fixed stretch of time.
+  await finished;
 
   assert.equal(state.status, 201);
   assert.deepEqual(JSON.parse(state.body), { id: "rep_5" });
@@ -545,7 +559,7 @@ test("the Express adapter round-trips a parsed body", async () => {
 });
 
 test("the Express adapter reads a raw body when no parser ran", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   const text = JSON.stringify(body);
   const req = {
     method: "POST",
@@ -557,14 +571,14 @@ test("the Express adapter reads a raw body when no parser ran", async () => {
   };
 
   expressHandler({ store: async () => ({ id: "rep_6" }) })(req, res);
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 201);
   assert.deepEqual(JSON.parse(state.body), { id: "rep_6" });
 });
 
 test("the Express adapter answers 400 for an empty body", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   // What `express.json()` actually leaves behind: an empty object, and a
   // stream it has already drained, which iterates zero chunks and reads as "".
   expressHandler({})(
@@ -577,19 +591,19 @@ test("the Express adapter answers 400 for an empty body", async () => {
     },
     res,
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 400);
   assert.deepEqual(JSON.parse(state.body), { error: "Write a message first" });
 });
 
 test("the Express adapter answers a CORS preflight", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   expressHandler({ cors: true })(
     { method: "OPTIONS", url: "/api/bug-report", headers: { host: "app.example.com" } },
     res,
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 204);
   assert.equal(state.headers["access-control-allow-origin"], "*");
@@ -818,7 +832,7 @@ test("the bucket map is capped, and the oldest key is evicted to make room", asy
 });
 
 test("the Express adapter caps a raw stream, hangs up, and answers 413", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   let destroyed = false;
   let yielded = 0;
   const req = {
@@ -837,7 +851,7 @@ test("the Express adapter caps a raw stream, hangs up, and answers 413", async (
   };
 
   expressHandler({ maxBodyBytes: 500 })(req, res);
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 413);
   assert.deepEqual(JSON.parse(state.body), { error: "Report is too large" });
@@ -847,7 +861,7 @@ test("the Express adapter caps a raw stream, hangs up, and answers 413", async (
 });
 
 test("a multi-byte character split across two chunks survives the raw read", async () => {
-  const { state, res } = fakeRes();
+  const { state, res, finished } = fakeRes();
   let stored: ValidatedReport | undefined;
   const message = "den grønne knap gør ingenting (æøå)";
   const bytes = new TextEncoder().encode(JSON.stringify({ ...body, message }));
@@ -867,7 +881,7 @@ test("a multi-byte character split across two chunks survives the raw read", asy
   };
 
   expressHandler({ store: async (report) => void (stored = report) })(req, res);
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await finished;
 
   assert.equal(state.status, 202);
   assert.equal(stored?.message, message);
