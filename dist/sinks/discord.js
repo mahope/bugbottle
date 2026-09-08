@@ -17,14 +17,14 @@
 import { messageFromBody, readBody, SinkError } from "./error.js";
 import { clip, readReport, resolveUrl, } from "./chat.js";
 /** Per-part limits Discord enforces on an embed. */
-export const DISCORD_MAX_EMBED_TITLE = 256;
-export const DISCORD_MAX_EMBED_DESCRIPTION = 4096;
-export const DISCORD_MAX_EMBED_FIELDS = 25;
-export const DISCORD_MAX_FIELD_NAME = 256;
-export const DISCORD_MAX_FIELD_VALUE = 1024;
-export const DISCORD_MAX_FOOTER_TEXT = 2048;
+export const MAX_DISCORD_EMBED_TITLE = 256;
+export const MAX_DISCORD_EMBED_DESCRIPTION = 4096;
+export const MAX_DISCORD_EMBED_FIELDS = 25;
+export const MAX_DISCORD_FIELD_NAME = 256;
+export const MAX_DISCORD_FIELD_VALUE = 1024;
+export const MAX_DISCORD_FOOTER_TEXT = 2048;
 /** And the one across all of them at once. */
-export const DISCORD_MAX_EMBED_TOTAL = 6000;
+export const MAX_DISCORD_EMBED_TOTAL = 6000;
 /**
  * Colour down the left edge of the embed, so the type is legible before a
  * word is read. Red for a bug, green for an idea, grey for anything else.
@@ -50,27 +50,27 @@ export function buildDiscordMessage(report, options, ctx = {}) {
     const r = readReport(report);
     const screenshot = resolveUrl(options.screenshotUrl, report, ctx.screenshotUrl);
     const link = resolveUrl(options.reportUrl, report);
-    const title = clip(r.title, DISCORD_MAX_EMBED_TITLE);
+    const title = clip(r.title, MAX_DISCORD_EMBED_TITLE);
     const fields = r.facts
-        .slice(0, DISCORD_MAX_EMBED_FIELDS)
+        .slice(0, MAX_DISCORD_EMBED_FIELDS)
         .map(([name, value]) => ({
-        name: clip(name, DISCORD_MAX_FIELD_NAME),
-        value: clip(value, DISCORD_MAX_FIELD_VALUE),
+        name: clip(name, MAX_DISCORD_FIELD_NAME),
+        value: clip(value, MAX_DISCORD_FIELD_VALUE),
         inline: true,
     }));
-    if (r.consoleText && fields.length < DISCORD_MAX_EMBED_FIELDS) {
+    if (r.consoleText && fields.length < MAX_DISCORD_EMBED_FIELDS) {
         // The fence counts towards the 1024, so the entries are clipped to what is
         // left once it is paid for.
         const fence = "```";
-        const body = clip(r.consoleText, DISCORD_MAX_FIELD_VALUE - 2 * fence.length - 2);
+        const body = clip(r.consoleText, MAX_DISCORD_FIELD_VALUE - 2 * fence.length - 2);
         fields.push({ name: "Console", value: `${fence}\n${body}\n${fence}` });
     }
-    const footer = r.selector ? clip(r.selector, DISCORD_MAX_FOOTER_TEXT) : undefined;
+    const footer = r.selector ? clip(r.selector, MAX_DISCORD_FOOTER_TEXT) : undefined;
     // Whatever is left of the 6000 after the parts that carry the facts. The
     // description is the reporter's own words, which is the one part that can be
     // read in a truncated form and still make sense.
-    const room = Math.max(0, DISCORD_MAX_EMBED_TOTAL - fixedCost(title, fields, footer));
-    const description = clip(r.message, Math.min(DISCORD_MAX_EMBED_DESCRIPTION, room));
+    const room = Math.max(0, MAX_DISCORD_EMBED_TOTAL - fixedCost(title, fields, footer));
+    const description = clip(r.message, Math.min(MAX_DISCORD_EMBED_DESCRIPTION, room));
     const embed = {
         title,
         color: DISCORD_COLOURS[r.type],
@@ -120,4 +120,39 @@ export function discordSink(options) {
         }
     };
 }
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_TITLE` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_EMBED_TITLE = MAX_DISCORD_EMBED_TITLE;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_DESCRIPTION` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_EMBED_DESCRIPTION = MAX_DISCORD_EMBED_DESCRIPTION;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_FIELDS` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_EMBED_FIELDS = MAX_DISCORD_EMBED_FIELDS;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_FIELD_NAME` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_FIELD_NAME = MAX_DISCORD_FIELD_NAME;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_FIELD_VALUE` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_FIELD_VALUE = MAX_DISCORD_FIELD_VALUE;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_FOOTER_TEXT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_FOOTER_TEXT = MAX_DISCORD_FOOTER_TEXT;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_TOTAL` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_EMBED_TOTAL = MAX_DISCORD_EMBED_TOTAL;
 //# sourceMappingURL=discord.js.map

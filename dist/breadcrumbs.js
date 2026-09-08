@@ -148,13 +148,18 @@ function resolveMaxEntries(requested) {
  * here throws in a server-rendered pass: without a `document` there is simply
  * nothing to listen to. `maxEntries: 0` records nothing: no listeners are
  * attached at all, since a buffer that throws every crumb away is pure cost.
+ *
+ * Returns the stop, `resetBreadcrumbs`, so a caller can undo what it started
+ * without importing a second name. Every `init*` in the package returns its
+ * own; the one that recorded nothing returns it too, and calling it is
+ * harmless.
  */
 export function initBreadcrumbs(options = {}) {
     if (initialised)
-        return;
+        return resetBreadcrumbs;
     const cap = resolveMaxEntries(options.maxEntries);
     if (cap === 0)
-        return;
+        return resetBreadcrumbs;
     initialised = true;
     maxEntries = cap;
     beforeBreadcrumb = options.beforeBreadcrumb ?? null;
@@ -197,6 +202,7 @@ export function initBreadcrumbs(options = {}) {
         }
     }
     registerBreadcrumbSource(getBreadcrumbs);
+    return resetBreadcrumbs;
 }
 /** A copy of what has been recorded so far, oldest first. */
 export function getBreadcrumbs() {

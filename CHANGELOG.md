@@ -9,6 +9,17 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- `docs/api-audit-1.0.md`: the whole public API read once before 1.0 freezes it
+  — 412 exported bindings under 315 names across the eighteen entry points,
+  with a verdict each, the naming rules it settled (now in CLAUDE.md's
+  Conventions) and the eight issues it opened. Nothing was removed; every
+  rename below kept the old name working.
+- `tests/exports.test.ts` pins `package.json#exports` to the documentation: an
+  entry point added or dropped without the README's API section and CLAUDE.md's
+  count following it fails the suite.
+- The thirty-five exports the README never named are named — the payload and
+  option types on `bugbottle`, each sink's options and result on
+  `bugbottle/server`, and `enMessages` on `bugbottle/locales`.
 - The site answers with a `Content-Security-Policy`: `default-src 'self'`, so
   the footer's promise that the page makes no external request is now something
   the browser refuses to break rather than a claim, plus `object-src 'none'`,
@@ -72,6 +83,43 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- `sendReportWebhook` and `toWebhook` take `endpoint`, the word the rest of the
+  package uses for the address it POSTs to. `url` still works, is marked
+  `@deprecated`, and goes in 1.0 (#67); giving both is a type error rather than
+  a guess. A vendor's own address keeps the vendor's own word — `webhookUrl`,
+  `host`, `site`, `dsn`.
+
+- `handleReport`'s three pluggable stores are all called `store` now:
+  `rateLimit: { store }`, `dedupe: { store }` and `signature: { store }`.
+  Inside the option object the prefix said nothing the key did not, and the
+  three of them spelled it three ways. `rateLimitStore`, `dedupeStore` and
+  `replayStore` still work, are marked `@deprecated`, and go in 1.0 (#66);
+  given both, `store` is the one that is asked. The two `TypeError`s a store
+  that answers with nonsense produces now name `rateLimit.store.hit` and
+  `dedupe.store.get`.
+
+- The thirteen Slack and Discord ceilings are `MAX_SLACK_*` and
+  `MAX_DISCORD_*`, so every limit in the package starts with `MAX_` — Jira,
+  GitLab, Sentry and report-core already did. The vendor-first `SLACK_MAX_*`
+  and `DISCORD_MAX_*` names are the same numbers, marked `@deprecated`, and go
+  in 1.0 (#65).
+
+- `QueueOptions.maxEntries` is the new name for `maxItems`. The console buffer,
+  the breadcrumbs and the network log all cap their ring buffer with
+  `maxEntries`; the queue was the one that did not. `maxItems` still works, is
+  marked `@deprecated`, and goes in 1.0 (#64).
+
+- `SendOptions.onError` is the new name for `onFailure`, which is what
+  `MountOptions` and `HandleReportOptions` have always called the same idea.
+  `onFailure` still works, is marked `@deprecated`, and goes in 1.0 (#63);
+  given both names, `onError` is the one that runs.
+
+- `initConsoleBuffer`, `initBreadcrumbs` and `initNetwork` return their stop —
+  `resetConsoleBuffer`, `resetBreadcrumbs` and `resetNetwork` — the way
+  `initPerf` and `attachRrweb` already did. A caller can undo what it started
+  without importing a second name, and a call that recorded nothing (a second
+  `init`, or `maxEntries: 0`) returns the stop as well, where calling it is
+  harmless. Nothing changed for the callers that ignore the return value.
 - CI now asserts the `bugbottle/server` bundle rather than only printing its
   size. A bundle of one validator must stay under 1024 bytes gzipped and its
   minified text must mention none of `document`, `window.`, `navigator` or

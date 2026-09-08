@@ -4,19 +4,19 @@ import {
   slackSink,
   buildSlackMessage,
   escapeSlack,
-  SLACK_MAX_BLOCKS,
-  SLACK_MAX_TEXT,
-  SLACK_MAX_HEADER_TEXT,
-  SLACK_MAX_FIELDS,
+  MAX_SLACK_BLOCKS,
+  MAX_SLACK_TEXT,
+  MAX_SLACK_HEADER_TEXT,
+  MAX_SLACK_FIELDS,
 } from "../src/sinks/slack.ts";
 import {
   discordSink,
   buildDiscordMessage,
   DISCORD_COLOURS,
-  DISCORD_MAX_EMBED_TITLE,
-  DISCORD_MAX_EMBED_FIELDS,
-  DISCORD_MAX_FIELD_VALUE,
-  DISCORD_MAX_EMBED_TOTAL,
+  MAX_DISCORD_EMBED_TITLE,
+  MAX_DISCORD_EMBED_FIELDS,
+  MAX_DISCORD_FIELD_VALUE,
+  MAX_DISCORD_EMBED_TOTAL,
 } from "../src/sinks/discord.ts";
 import { MAX_CHAT_CONSOLE_ENTRIES } from "../src/sinks/chat.ts";
 import { SinkError } from "../src/sinks/error.ts";
@@ -257,9 +257,9 @@ test("the header is clipped to 150 characters and the message to 3000", () => {
   );
   const blocks = blocksOf(payload);
   const header = (blocks[0]?.text as { text: string }).text;
-  assert.ok(header.length <= SLACK_MAX_HEADER_TEXT);
+  assert.ok(header.length <= MAX_SLACK_HEADER_TEXT);
   const message = (blocks[1]?.text as { text: string }).text;
-  assert.equal(message.length, SLACK_MAX_TEXT);
+  assert.equal(message.length, MAX_SLACK_TEXT);
   assert.ok(message.endsWith("…"), "a clipped text object ends in an ellipsis");
 });
 
@@ -280,8 +280,8 @@ test("no more than ten fields go in a section, and no more than fifty blocks are
   };
   const payload = buildSlackMessage(everyFact, { webhookUrl: SLACK_URL });
   const fields = blocksOf(payload).find((b) => "fields" in b)?.fields as unknown[];
-  assert.ok(fields.length <= SLACK_MAX_FIELDS, `${fields.length} fields is within the limit`);
-  assert.ok(blocksOf(payload).length <= SLACK_MAX_BLOCKS);
+  assert.ok(fields.length <= MAX_SLACK_FIELDS, `${fields.length} fields is within the limit`);
+  assert.ok(blocksOf(payload).length <= MAX_SLACK_BLOCKS);
 });
 
 test("a malformed report still posts, with a fallback title and no facts", () => {
@@ -417,17 +417,17 @@ test("the title stays under 256 and the whole embed under 6000", () => {
   const embed = embedOf(buildDiscordMessage(long, { webhookUrl: DISCORD_URL }));
   // The shared reader already clips a title to the first 80 characters of the
   // first line, so Discord's 256 is a backstop rather than the binding limit.
-  assert.ok(String(embed.title).length <= DISCORD_MAX_EMBED_TITLE);
+  assert.ok(String(embed.title).length <= MAX_DISCORD_EMBED_TITLE);
   assert.ok(String(embed.title).endsWith("…"));
 
   const fields = embed.fields as { name: string; value: string }[];
-  for (const f of fields) assert.ok(f.value.length <= DISCORD_MAX_FIELD_VALUE);
-  assert.equal(fields.at(-1)?.value.length, DISCORD_MAX_FIELD_VALUE, "the console field is full");
+  for (const f of fields) assert.ok(f.value.length <= MAX_DISCORD_FIELD_VALUE);
+  assert.equal(fields.at(-1)?.value.length, MAX_DISCORD_FIELD_VALUE, "the console field is full");
 
   let total = String(embed.title).length + String(embed.description ?? "").length;
   total += (embed.footer as { text: string } | undefined)?.text.length ?? 0;
   for (const f of fields) total += f.name.length + f.value.length;
-  assert.ok(total <= DISCORD_MAX_EMBED_TOTAL, `${total} characters is within the budget`);
+  assert.ok(total <= MAX_DISCORD_EMBED_TOTAL, `${total} characters is within the budget`);
 
   // The description is what gave way, not the facts: Page and Browser are
   // still the full 500 characters report-core allows them.
@@ -453,7 +453,7 @@ test("no more than twenty-five fields go on an embed", () => {
   };
   const embed = embedOf(buildDiscordMessage(everyFact, { webhookUrl: DISCORD_URL }));
   const fields = embed.fields as unknown[];
-  assert.ok(fields.length <= DISCORD_MAX_EMBED_FIELDS, `${fields.length} fields`);
+  assert.ok(fields.length <= MAX_DISCORD_EMBED_FIELDS, `${fields.length} fields`);
   assert.equal(fields.length, 10, "nine context facts and the console block");
 });
 
@@ -494,4 +494,23 @@ test("the discord sink hands its abort signal to fetch", async () => {
   const controller = new AbortController();
   await discordSink({ webhookUrl: DISCORD_URL, fetch })(report, { signal: controller.signal });
   assert.equal(calls[0]?.init.signal, controller.signal);
+});
+
+test("the vendor-first limit names are the same numbers as the MAX_ ones", async () => {
+  const slack = await import("../src/sinks/slack.ts");
+  const discord = await import("../src/sinks/discord.ts");
+  const webhook = await import("../src/sinks/webhook.ts");
+  assert.equal(slack.SLACK_MAX_BLOCKS, slack.MAX_SLACK_BLOCKS);
+  assert.equal(slack.SLACK_MAX_TEXT, slack.MAX_SLACK_TEXT);
+  assert.equal(slack.SLACK_MAX_HEADER_TEXT, slack.MAX_SLACK_HEADER_TEXT);
+  assert.equal(slack.SLACK_MAX_FIELDS, slack.MAX_SLACK_FIELDS);
+  assert.equal(slack.SLACK_MAX_FIELD_TEXT, slack.MAX_SLACK_FIELD_TEXT);
+  assert.equal(discord.DISCORD_MAX_EMBED_TITLE, discord.MAX_DISCORD_EMBED_TITLE);
+  assert.equal(discord.DISCORD_MAX_EMBED_DESCRIPTION, discord.MAX_DISCORD_EMBED_DESCRIPTION);
+  assert.equal(discord.DISCORD_MAX_EMBED_FIELDS, discord.MAX_DISCORD_EMBED_FIELDS);
+  assert.equal(discord.DISCORD_MAX_FIELD_NAME, discord.MAX_DISCORD_FIELD_NAME);
+  assert.equal(discord.DISCORD_MAX_FIELD_VALUE, discord.MAX_DISCORD_FIELD_VALUE);
+  assert.equal(discord.DISCORD_MAX_FOOTER_TEXT, discord.MAX_DISCORD_FOOTER_TEXT);
+  assert.equal(discord.DISCORD_MAX_EMBED_TOTAL, discord.MAX_DISCORD_EMBED_TOTAL);
+  assert.equal(webhook.DISCORD_MAX_CONTENT, webhook.MAX_DISCORD_CONTENT);
 });

@@ -38,7 +38,7 @@
  * the report up 30 seconds later.
  */
 const DEFAULT_STORAGE_KEY = "bugbottle:queue";
-const DEFAULT_MAX_ITEMS = 5;
+const DEFAULT_MAX_ENTRIES = 5;
 const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 300_000;
@@ -67,7 +67,7 @@ function newId() {
  */
 export function createQueue(options) {
     const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
-    const maxItems = options.maxItems ?? DEFAULT_MAX_ITEMS;
+    const maxEntries = options.maxEntries ?? options.maxItems ?? DEFAULT_MAX_ENTRIES;
     const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
     const storage = openStorage();
     let items = [];
@@ -108,7 +108,7 @@ export function createQueue(options) {
         return list
             .filter((item) => item.at > oldest)
             .sort((a, b) => a.at - b.at)
-            .slice(-maxItems);
+            .slice(-maxEntries);
     }
     /**
      * Re-reads the queue, lets `change` add, update or remove the ids it means to

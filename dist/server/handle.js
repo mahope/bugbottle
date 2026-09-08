@@ -90,7 +90,7 @@ export const MAX_SIGNATURE_ENTRIES_PER_SECOND = 128;
  * How many signed seconds are remembered at once. The default window spans 601
  * of them — five minutes on either side of our clock — so honest traffic never
  * reaches this. A `maxSkewMs` wider than this many seconds cannot be held in
- * memory in full; give such a deployment a `replayStore` instead.
+ * memory in full; give such a deployment a `signature.store` instead.
  */
 export const MAX_SIGNATURE_SECONDS = 640;
 /** Hard ceiling on the replay cache: the two bounds above, multiplied. */
@@ -149,7 +149,7 @@ function evictDedupe(now, windowMs) {
  * one instance remembers its own traffic, and two instances behind a load
  * balancer do not share a cache. It stops a captured body being replayed at
  * the instance that saw it, which is where a replay of a browser's own request
- * lands anyway; `signature.replayStore` is the seam for the deployments that
+ * lands anyway; `signature.store` is the seam for the deployments that
  * need one answer across all of them.
  */
 const seenSignatures = new Map();
@@ -301,8 +301,8 @@ async function verifySignature(request, body, options) {
     // Only a signature that verified is remembered, so nobody can fill the cache
     // with digests of their own choosing — though a public key means they can
     // still mint digests that do verify, which is why the in-memory store bounds
-    // itself per signed second and why `replayStore` exists at all.
-    const store = options.replayStore;
+    // itself per signed second and why `signature.store` exists at all.
+    const store = options.store ?? options.replayStore;
     if (store) {
         // A store that throws propagates: `handleReport` answers 500 rather than
         // accept a signature it could not check against what it has already seen.
@@ -343,7 +343,7 @@ async function overRateLimit(request, options, onError) {
     // The key is attacker-controlled by default: a forwarded address is a header.
     // Clipping it bounds one entry, and the ceiling below bounds the whole map.
     const key = (options.key ?? defaultRateLimitKey)(request).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
-    const store = options.rateLimitStore;
+    const store = options.store ?? options.rateLimitStore;
     if (store) {
         try {
             // The count is checked before it is compared, for the same reason the
@@ -353,7 +353,7 @@ async function overRateLimit(request, options, onError) {
             // caller would be under their allowance for ever with nothing said.
             const count = await store.hit(key, options.windowMs);
             if (typeof count !== "number" || !Number.isFinite(count)) {
-                throw new TypeError("rateLimitStore.hit did not answer with a number");
+                throw new TypeError("rateLimit.store.hit did not answer with a number");
             }
             return count > options.limit;
         }
@@ -645,7 +645,7 @@ export async function handleReport(request, options = {}) {
         let dedupeKey;
         if (options.dedupe) {
             const now = Date.now();
-            const dedupeStore = options.dedupe.dedupeStore;
+            const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
             dedupeKey = (options.dedupe.key ?? fingerprint)(report);
             let seen;
             if (dedupeStore) {
@@ -660,7 +660,7 @@ export async function handleReport(request, options = {}) {
                         if (isDedupeEntry(answer))
                             seen = answer;
                         else
-                            throw new TypeError("dedupeStore.get did not answer with a dedupe entry");
+                            throw new TypeError("dedupe.store.get did not answer with a dedupe entry");
                     }
                 }
                 catch (err) {
@@ -722,7 +722,7 @@ export async function handleReport(request, options = {}) {
         // Recorded once the report is stored, so a `store` that threw does not
         // leave a fingerprint that swallows the retry.
         if (dedupeKey !== undefined && options.dedupe) {
-            const dedupeStore = options.dedupe.dedupeStore;
+            const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
             if (dedupeStore) {
                 try {
                     await dedupeStore.set(dedupeKey, { id }, Date.now() + options.dedupe.windowMs);

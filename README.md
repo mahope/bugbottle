@@ -97,6 +97,14 @@ frames; the browser gives none.
 In a server-rendered app, make sure this runs in the browser only — it patches
 whichever `console` it finds.
 
+Every recorder in the package returns its own stop, so a hot-reloaded module or
+a test can undo what it started without importing a second name:
+
+```ts
+const stop = initConsoleBuffer();
+stop(); // the real console back, the buffer empty
+```
+
 ## The form (React)
 
 ```tsx
@@ -609,7 +617,7 @@ retrying it would only fail again more quietly — nothing is ever queued on a
 const queue = createQueue({
   endpoint: "/api/feedback",
   storageKey: "bugbottle:queue", // where in localStorage
-  maxItems: 5,                   // the oldest is evicted first
+  maxEntries: 5,                 // the oldest is evicted first
   maxAgeMs: 7 * 24 * 60 * 60 * 1000,
   headers: { Authorization: `Bearer ${token}` },
 });
@@ -619,6 +627,9 @@ await queue.flush();   // resolves with how many are still waiting
 queue.clear();         // throw them away
 queue.destroy();       // remove the listeners; the reports stay in storage
 ```
+
+The cap was called `maxItems` until 0.9, the one recorder that did not call it
+`maxEntries`. That name still works and is deprecated; it goes in 1.0.
 
 A report is at most a few hundred bytes without its picture and a megabyte or
 two with one, so a queued item that would not fit — over 1 MB serialised —
@@ -660,14 +671,17 @@ report going out during unload, not for one with a screenshot attached. For
 anything larger, the queue is the answer.
 
 Below the two integrations, `SendOptions` has the seam they are built on:
-`onFailure(report, error)` runs after a failed send, before the error reaches
+`onError(report, error)` runs after a failed send, before the error reaches
 you, and is awaited.
 
 ```ts
 await sendReport("/api/feedback", report, {
-  onFailure: (failed) => queue.enqueue(failed),
+  onError: (failed) => queue.enqueue(failed),
 });
 ```
+
+It was called `onFailure` until 0.9. That name still works and is deprecated;
+it goes in 1.0, and where both are given `onError` is the one that runs.
 
 ## The ready-made panel
 
@@ -991,6 +1005,8 @@ initBreadcrumbs({
 
 `getBreadcrumbs()` returns a copy of the timeline, and `resetBreadcrumbs()`
 empties it, removes the listeners and puts `history` back as it found it.
+`initBreadcrumbs` returns that same function as its `stop()`, so a caller that
+started the recorder can undo it without importing a second name.
 
 ## What the network did
 
@@ -1054,7 +1070,7 @@ The patched `fetch` always calls the original and hands back its result
 untouched, rejections included; `XMLHttpRequest` is timed with `loadend`, the
 one event that fires for every ending. `getNetwork()` returns a copy of what
 has been recorded, and `resetNetwork()` empties it and puts both globals back
-as it found them.
+as it found them. `initNetwork` returns that same function as its `stop()`.
 
 ## Performance and storage
 
@@ -1486,7 +1502,7 @@ import { expressHandler, toWebhook } from "bugbottle/server";
 app.post(
   "/api/bug-report",
   express.json({ limit: "5mb" }),
-  expressHandler({ sinks: [toWebhook({ url: process.env.SLACK_WEBHOOK_URL!, format: "slack" })] }),
+  expressHandler({ sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })] }),
 );
 ```
 
@@ -1556,7 +1572,7 @@ signature: {
   header: "X-Sig",         // default X-Bugbottle-Signature
   maxSkewMs: 5 * 60_000,   // default; the clock may be wrong in either direction
   require: true,           // default whenever `signature` is set
-  replayStore,             // optional; the default is in memory, per instance
+  store,                   // optional; the default is in memory, per instance
 }
 ```
 
@@ -1585,7 +1601,7 @@ only within the window, and only at that one instance. Two instances behind a
 load balancer do not share the cache, and a serverless isolate that has just
 started has an empty one.
 
-Hand in a `replayStore` when that is not enough — several instances, or a
+Hand in a `signature.store` when that is not enough — several instances, or a
 window wider than 640 seconds. It is one of the three seams in *Running more
 than one instance* below, and the only one that fails **closed**: a store that
 throws answers 500 rather than accept a signature nobody managed to check.
@@ -1642,7 +1658,7 @@ handleReport(req, {
   rateLimit: {
     limit: 20,
     windowMs: 60_000,
-    rateLimitStore: {
+    store: {
       // Count this request and answer with the total inside the window.
       hit: async (key, windowMs) => {
         const count = await redis.incr(`bb:rl:${key}`);
@@ -1653,7 +1669,7 @@ handleReport(req, {
   },
   dedupe: {
     windowMs: 60_000,
-    dedupeStore: {
+    store: {
       // Anything `get` answers with is a duplicate; expiry is the store's job.
       get: async (key) => {
         const value = await redis.get(`bb:dup:${key}`);
@@ -1665,7 +1681,7 @@ handleReport(req, {
   },
   signature: {
     key: process.env.BUGBOTTLE_SIGN_KEY!,
-    replayStore: {
+    store: {
       has: async (digest) => (await redis.exists(`bb:sig:${digest}`)) === 1,
       // `expiresAt` is the epoch millisecond the signature stops being
       // acceptable anyway, so it is exactly how long the row needs to live.
@@ -1676,17 +1692,21 @@ handleReport(req, {
 });
 ```
 
+All three are called `store`, inside `rateLimit`, `dedupe` and `signature`.
+They were `rateLimitStore`, `dedupeStore` and `replayStore` until 0.9; those
+names still work, are deprecated, and go in 1.0.
+
 **Two of them fail open and one fails closed, and that is deliberate.** A
-`rateLimitStore` that throws lets the report through: refusing an honest
+rate-limit store that throws lets the report through: refusing an honest
 reporter with a `429` because Redis blinked loses the one report that was worth
 having, and the error reaches `onError` so you find out. So does one whose
 `hit` answers with anything but a finite number — `"3"`, `null`, nothing at
 all — because `"3" > 30` is false and so is `NaN > 30`, and a limit switched
-off in silence is worse than one that says so. A `dedupeStore` that
+off in silence is worse than one that says so. A dedupe store that
 throws lets it through as well, on both halves — a duplicate costs a row and an
 email, a refusal costs the report — and so does one whose `get` answers with
 something that is not an entry, since a raw unparsed value taken at face value
-would make every report a duplicate. A `replayStore` that throws answers `500`,
+would make every report a duplicate. A signature store that throws answers `500`,
 because the alternative is accepting a signature nobody managed to check
 against what has already been seen, which is exactly the replay the cache
 exists to stop.
@@ -1812,7 +1832,7 @@ import { handleReport, toWebhook } from "bugbottle/server";
 export const POST: RequestHandler = ({ request }) =>
   handleReport(request, {
     maxBodyBytes: 4 * 1024 * 1024,
-    sinks: [toWebhook({ url: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
+    sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
   });
 ```
 
@@ -1921,7 +1941,7 @@ const app = new Hono<{ Bindings: { SLACK_WEBHOOK_URL: string } }>();
 app.post("/api/feedback", (c) =>
   handleReport(c.req.raw, {
     maxBodyBytes: 4 * 1024 * 1024,
-    sinks: [toWebhook({ url: c.env.SLACK_WEBHOOK_URL, format: "slack" })],
+    sinks: [toWebhook({ endpoint: c.env.SLACK_WEBHOOK_URL, format: "slack" })],
   }),
 );
 
@@ -1992,13 +2012,24 @@ clipped to the 2000 characters Discord accepts:
 ```ts
 import { sendReportWebhook } from "bugbottle/server";
 
-await sendReportWebhook(payload, { url: process.env.SLACK_WEBHOOK_URL!, format: "slack" });
-await sendReportWebhook(payload, { url: process.env.DISCORD_WEBHOOK_URL!, format: "discord" });
 await sendReportWebhook(payload, {
-  url: process.env.INTAKE_URL!,
+  endpoint: process.env.SLACK_WEBHOOK_URL!,
+  format: "slack",
+});
+await sendReportWebhook(payload, {
+  endpoint: process.env.DISCORD_WEBHOOK_URL!,
+  format: "discord",
+});
+await sendReportWebhook(payload, {
+  endpoint: process.env.INTAKE_URL!,
   headers: { "X-Token": process.env.INTAKE_TOKEN! },
 });
 ```
+
+The address was `url` until 0.9, where everything else in the package calls it
+`endpoint`. That name still works and is deprecated; it goes in 1.0. A vendor's
+own address keeps the vendor's own word — `webhookUrl` for the Slack and
+Discord sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
 
 ### Slack and Discord
 
@@ -2527,10 +2558,22 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `collectContext`, `pickElement`, `describeElement`, `buildSelector`,
 `buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
 `fingerprint`, `stableHash`,
-`ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
+`ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`,
+`toMarkdown` (with `MarkdownOptions`; it and the validators live in
+`bugbottle/server` as well, which is where they belong — see
+`docs/api-audit-1.0.md`), the server
 validators below, and the shared types and limits — including the `StackFrame`
 type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
 `MAX_CONTEXT_LENGTHS`.
+
+The option and payload types come with them: `BugReport`, `ReportContext`,
+`ReportType`, `ConsoleEntry`, `ConsoleLevel`, `ElementRef`, `Breadcrumb`,
+`BreadcrumbKind`, `NetworkEntry`, `PerfSnapshot`, `StorageSnapshot`,
+`StorageKeyRef`, `ReplayCapture`, `ReplayEvent`, `BuildReportInput`,
+`SendOptions`, `SendResult`, `CaptureOptions`, `ConsoleBufferOptions`,
+`PickOptions`, `ScrubOptions`, `Scrubber`, `ScrubberName`, `FingerprintInput`,
+and the two defaults `DEFAULT_SEND_TIMEOUT_MS` (15 s) and `DEFAULT_REPLACEMENT`
+(what a scrubber writes in place of what it found).
 
 **`dist/bugbottle.js`** — the everything script-tag build: `window.bugbottle` with
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
@@ -2614,8 +2657,9 @@ Requires `html-to-image`.
 `Theme`, `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,
-`locales`, `resolveLocale`, and the `Locale`, `Messages`, `UiTexts`,
-`EmailTexts` types.
+`locales`, `resolveLocale`, `enMessages` (the English `messages` on their own,
+so the hook can default without dragging eight languages in), and the `Locale`,
+`Messages`, `UiTexts`, `EmailTexts` types.
 
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
@@ -2635,8 +2679,9 @@ Requires `html-to-image`.
 `MAX_GITLAB_DESCRIPTION`, `MAX_GITLAB_TITLE`, the `GitlabSink`,
 `GitlabSinkOptions` and `CreateGitlabIssueResult` types,
 `slackSink`, `discordSink`, `buildSlackMessage`,
-`buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `SLACK_MAX_*`
-and `DISCORD_MAX_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
+`buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `MAX_SLACK_*`
+and `MAX_DISCORD_*` limits (the vendor-first `SLACK_MAX_*` and `DISCORD_MAX_*`
+spellings still exist, deprecated, and go in 1.0), `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `DiscordSinkOptions`, `ChatSink`, `ChatSinkContext` and `UrlFrom` types,
 `sentrySink`, `buildSentryEvent`, `buildSentryEnvelope`, `parseSentryDsn`,
 `sentryAuthHeader`, `clipBytes`, `SentrySinkError`, `SENTRY_CLIENT`,
@@ -2653,8 +2698,20 @@ the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `SinkContext` and `ReplayStore` types, `DEFAULT_SIGNATURE_SKEW_MS`,
 `MAX_SIGNATURE_ENTRIES`, `MAX_SIGNATURE_ENTRIES_PER_SECOND`,
 `MAX_SIGNATURE_SECONDS`,
-`BAD_SIGNATURE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
-`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+`BAD_SIGNATURE_ERROR`, the two refusal messages `EMPTY_MESSAGE_ERROR` and
+`TOO_LARGE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
+`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTEXT_LENGTHS`,
+`MAX_EXTRA_KEYS`, `MAX_EXTRA_STRING_LENGTH`, `MAX_DEDUPE_ENTRIES`,
+`MAX_RATE_LIMIT_BUCKETS` and `MAX_RATE_LIMIT_KEY_LENGTH`.
+
+Each sink's options and result travel with it: `SendReportEmailOptions` and
+`SendReportEmailResult`, `SendReportWebhookOptions` (and its
+`SendReportWebhookTarget` and `WebhookFormat`) with `SendReportWebhookResult`,
+`CreateGithubIssueOptions` with `CreateGithubIssueResult`,
+`CreateLinearIssueOptions` with `CreateLinearIssueResult`, and the `FetchLike`
+every one of them takes as `fetch`. `expressHandler` brings the two structural
+types it reads an Express request and response through, `ExpressRequestLike`
+and `ExpressResponseLike`.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
 served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).

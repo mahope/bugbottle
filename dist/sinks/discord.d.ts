@@ -18,14 +18,14 @@ import { type FetchLike } from "./error.ts";
 import { type ChatSink, type ChatSinkContext, type UrlFrom } from "./chat.ts";
 import type { ReportType } from "../report-core.ts";
 /** Per-part limits Discord enforces on an embed. */
-export declare const DISCORD_MAX_EMBED_TITLE = 256;
-export declare const DISCORD_MAX_EMBED_DESCRIPTION = 4096;
-export declare const DISCORD_MAX_EMBED_FIELDS = 25;
-export declare const DISCORD_MAX_FIELD_NAME = 256;
-export declare const DISCORD_MAX_FIELD_VALUE = 1024;
-export declare const DISCORD_MAX_FOOTER_TEXT = 2048;
+export declare const MAX_DISCORD_EMBED_TITLE = 256;
+export declare const MAX_DISCORD_EMBED_DESCRIPTION = 4096;
+export declare const MAX_DISCORD_EMBED_FIELDS = 25;
+export declare const MAX_DISCORD_FIELD_NAME = 256;
+export declare const MAX_DISCORD_FIELD_VALUE = 1024;
+export declare const MAX_DISCORD_FOOTER_TEXT = 2048;
 /** And the one across all of them at once. */
-export declare const DISCORD_MAX_EMBED_TOTAL = 6000;
+export declare const MAX_DISCORD_EMBED_TOTAL = 6000;
 /**
  * Colour down the left edge of the embed, so the type is legible before a
  * word is read. Red for a bug, green for an idea, grey for anything else.
@@ -66,4 +66,39 @@ export declare function buildDiscordMessage(report: unknown, options: DiscordSin
  * ```
  */
 export declare function discordSink(options: DiscordSinkOptions): ChatSink;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_TITLE` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_EMBED_TITLE = 256;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_DESCRIPTION` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_EMBED_DESCRIPTION = 4096;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_FIELDS` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_EMBED_FIELDS = 25;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_FIELD_NAME` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_FIELD_NAME = 256;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_FIELD_VALUE` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_FIELD_VALUE = 1024;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_FOOTER_TEXT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_FOOTER_TEXT = 2048;
+/**
+ * @deprecated Renamed to `MAX_DISCORD_EMBED_TOTAL` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export declare const DISCORD_MAX_EMBED_TOTAL = 6000;
 //# sourceMappingURL=discord.d.ts.map

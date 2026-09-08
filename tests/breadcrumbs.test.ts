@@ -477,3 +477,24 @@ test("a maxEntries that is not a number falls back to the default bound", () => 
   });
   assert.equal(getBreadcrumbs().length, MAX_BREADCRUMBS, "NaN must not remove the bound");
 });
+
+test("initBreadcrumbs returns the stop, and it is resetBreadcrumbs", () => {
+  withBrowser(({ doc }) => {
+    const stop = initBreadcrumbs();
+    assert.equal(stop, resetBreadcrumbs, "the same function under both names");
+    doc.dispatch("click", { target: element("button", { id: "save" }) });
+    assert.equal(getBreadcrumbs().length, 1);
+    stop();
+    assert.equal(isBreadcrumbsActive(), false, "the stop detaches the listeners");
+    doc.dispatch("click", { target: element("button", { id: "after" }) });
+    assert.equal(getBreadcrumbs().length, 0, "and nothing is recorded afterwards");
+  });
+});
+
+test("the stop comes back from a second call and from maxEntries: 0", () => {
+  withBrowser(() => {
+    assert.equal(initBreadcrumbs({ maxEntries: 0 }), resetBreadcrumbs);
+    initBreadcrumbs();
+    assert.equal(initBreadcrumbs(), resetBreadcrumbs);
+  });
+});

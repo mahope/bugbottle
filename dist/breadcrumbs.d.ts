@@ -38,8 +38,13 @@ export type BreadcrumbsOptions = {
  * here throws in a server-rendered pass: without a `document` there is simply
  * nothing to listen to. `maxEntries: 0` records nothing: no listeners are
  * attached at all, since a buffer that throws every crumb away is pure cost.
+ *
+ * Returns the stop, `resetBreadcrumbs`, so a caller can undo what it started
+ * without importing a second name. Every `init*` in the package returns its
+ * own; the one that recorded nothing returns it too, and calling it is
+ * harmless.
  */
-export declare function initBreadcrumbs(options?: BreadcrumbsOptions): void;
+export declare function initBreadcrumbs(options?: BreadcrumbsOptions): () => void;
 /** A copy of what has been recorded so far, oldest first. */
 export declare function getBreadcrumbs(): Breadcrumb[];
 /** Whether `initBreadcrumbs` has run and not been reset since. */

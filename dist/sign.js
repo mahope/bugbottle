@@ -55,7 +55,7 @@ export async function computeSignature(key, body, timestamp = Date.now()) {
  * When `crypto.subtle` is missing — a very old browser, or any page served
  * over plain HTTP, where WebCrypto is not exposed — this returns no headers
  * and the report is sent unsigned rather than not at all. Nothing fails, and
- * `onFailure` is not involved. A server with `require` left on then answers
+ * `onError` is not involved. A server with `require` left on then answers
  * 401, which is the trade the option is asking for: those reporters lose their
  * report, and a signature that could be skipped by dropping a header would not
  * be worth having.

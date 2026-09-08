@@ -57,7 +57,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `site/docs/` | **Generated, never committed.** One page per README section, written by `scripts/build-docs.mjs` (marked, pinned) in the Dockerfile's `node:22-alpine` builder stage, plus `search.json`, the index the sidebar's search field fetches on first focus. The README is the only copy of that text; a new `##` section must be placed in the script's `GROUPS` or the build fails, and so does a heading that slugifies to the same name as another one, which used to lose a whole section to `new Map` without a word | README.md (at image build) |
 | `site/compare/`, `site/da/sammenlign/`, `site/sitemap.xml`, `site/robots.txt` | **Generated, never committed**, by the same `scripts/build-docs.mjs` run. The comparison pages come from `site/compare.md` and `site/da/sammenlign.md` — every vendor claim links its source and the figures are dated; the sitemap lists every URL with `hreflang` alternates on the two bilingual pairs | site/compare.md, site/da/sammenlign.md (at image build) |
 | `src/server/` | Re-exports of report-core, markdown and the sinks for `bugbottle/server` | report-core, markdown, sinks |
-| `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, the optional HMAC `signature` check over the raw text, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers. The replay cache is bucketed by the *signed second* and bounded inside each one (128 digests, 640 seconds), because the signing key is public: a flood of valid signatures must not be able to evict an honest digest dated any other second. `signature.replayStore` (`has`/`add(digest, expiresAt)`) replaces it with a shared one; `t=` is `/^\d{1,16}$/` and the digest is verified over the timestamp as it was sent. The same seam twice more, for the fleet that wants one answer: `rateLimit.rateLimitStore` (`hit(key, windowMs)` → the count) and `dedupe.dedupeStore` (`get`/`set(key, entry, expiresAt)`, expiry the store's job). Both check what the store answered with before believing it — a finite number from `hit`, an entry shape from `get` — because a raw `"3"` or a bare string compared with `>` or read as an entry would switch the limit off, or make every report a duplicate, without a word. Both fail **open** through `onError` — an honest report is never refused because a shared store blinked — where the replay store fails closed | report-core, markdown, scrub, sinks |
+| `src/server/handle.ts` | `handleReport(request, options)` — `Request` in, `Response` out: 405 for anything but POST, authorise, body cap and body deadline, the optional HMAC `signature` check over the raw text, every validator, `extra`, scrub, screenshot policy, `store`, ordered sinks under a per-sink deadline. Plus `ValidatedReport` and the `toResend`/`toWebhook`/`toGithub`/`toLinear` sink helpers. The replay cache is bucketed by the *signed second* and bounded inside each one (128 digests, 640 seconds), because the signing key is public: a flood of valid signatures must not be able to evict an honest digest dated any other second. `signature.store` (`has`/`add(digest, expiresAt)`) replaces it with a shared one; `t=` is `/^\d{1,16}$/` and the digest is verified over the timestamp as it was sent. The same seam twice more, for the fleet that wants one answer: `rateLimit.store` (`hit(key, windowMs)` → the count) and `dedupe.store` (`get`/`set(key, entry, expiresAt)`, expiry the store's job). Both check what the store answered with before believing it — a finite number from `hit`, an entry shape from `get` — because a raw `"3"` or a bare string compared with `>` or read as an entry would switch the limit off, or make every report a duplicate, without a word. Both fail **open** through `onError` — an honest report is never refused because a shared store blinked — where the replay store fails closed | report-core, markdown, scrub, sinks |
 | `src/server/express.ts` | `expressHandler(options)` — builds a web `Request` from an Express `req` and writes the `Response` back, counting and streaming-decoding a raw body itself. Structural types, no `@types/express`. A signed route mounted behind `express.json()` cannot be verified at all, so it calls `onError` once per handler naming the parser and answers the same 401 | server/handle |
 | `scripts/build-schema.ts` | Generates `dist/report.schema.json` from `BugReport` with ts-json-schema-generator, switches the dialect to 2020-12, applies the `MAX_*` limits, and serialises with sorted keys so the committed dist is stable. Run by `npm run build` after tsc; `tests/schema.test.ts` imports it rather than reading the built file | report-core |
 | `scripts/a11y-audit.mjs` | Serves `dist/` on a scratch page, mounts the panel and runs the pinned `axe-core` over seven states through `puppeteer-core`. The first half of `npm run a11y`; not part of `npm run check`, because it needs a browser | dist (at run time) |
@@ -75,7 +75,9 @@ Eighteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./solid`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
 `./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign`,
-`./rrweb` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
+`./rrweb` — plus `./report.schema.json`, which is data rather than code.
+`tests/exports.test.ts` pins that count: an entry added here without the
+README's API section and this paragraph following it fails the suite. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. CI enforces the first half: it bundles
 `bugbottle/server` down to one validator and fails if that bundle passes 1024
@@ -266,6 +268,14 @@ the panel's own annotator toolbar, which is a static import. Moving the shared
 `data-*` reading into `src/global-shared.ts` cost the full build 52 bytes
 (23 937 → 23 989) and left its budget at 24576.
 
+#62 then cost both files a little over a hundred bytes — 23 989 → 24 128 and
+20 460 → 20 576 — and the client entries a few dozen each: the core 1335 →
+1384, `bugbottle/breadcrumbs` 1321, `bugbottle/network` 1250,
+`bugbottle/queue` 1296, `bugbottle/react` 5657, `bugbottle/ui` 11 433. The
+whole rise is one rule: `initConsoleBuffer`, `initBreadcrumbs` and
+`initNetwork` return their `reset*`, so the stop is reachable from the start
+and a bundler can no longer drop it from a page that never calls it.
+
 `bugbottle/server` is budgeted at 1024 bytes gzipped, and CI greps the same
 minified bundle for `document`, `window.`, `navigator` and `localStorage`,
 failing on any of them. Everything else in the entry is tree-shaken away from a
@@ -312,6 +322,28 @@ canvas can say whether the blur destroyed what it covered.
 - Tests describe behaviour in plain language: `test("a very long message is clipped")`.
 - Every exported function that touches browser input gets a test for the
   malformed case, not just the happy path.
+- **Naming, settled by the pre-1.0 audit** (`docs/api-audit-1.0.md`, #62):
+  - A function is a verb (`captureScreenshot`, `buildReport`, `resolveLocale`);
+    a value is a noun (`locales`, `DISCORD_COLOURS`).
+  - Every `init*` returns its `stop()` — the matching `reset*` — and so does
+    every `on*` and `attach*`.
+  - An optional capability is handed in, never imported by the module that uses
+    it: `screenshot`, `annotate`, `shake`, `scrub`, `sign`, `queue`.
+  - One name per idea in an option object: `endpoint` for the address we POST
+    to, `headers`, `credentials`, `fetch`, `signal`, `timeoutMs` for the
+    request, `onError` for a failure handed back, `maxEntries` for a ring
+    buffer's length, `maxBytes` for a payload's size, `store` for a pluggable
+    backing store, `before*` for a last look. A third party's address and
+    credentials keep the vendor's own words (`webhookUrl`, `host`, `site`,
+    `dsn`, `token`, `apiKey`, `apiToken`).
+  - A ceiling is `MAX_<what>`, a default is `DEFAULT_<what>`, and the vendor
+    goes after the prefix: `MAX_SLACK_TEXT`, never `SLACK_MAX_TEXT`.
+  - Every `data-*` attribute is a mount option of the same name.
+  - Nothing is exported without being named in the README's API section; a
+    group line ("the `MAX_*` limits") covers a family.
+  - A rename never removes: add the new name, keep the old one working with an
+    `@deprecated` JSDoc naming the version and the removal issue, test both,
+    and let the new name win where both are given.
 
 ## Releasing
 
@@ -331,3 +363,6 @@ green — `prepublishOnly` enforces the second.
 `docs/roadmap.md` is the short version. `docs/research-alternatives.md` and
 `docs/research-features.md` are the September 2026 landscape and feature
 research this roadmap came from. Read them before proposing a feature.
+`docs/api-audit-1.0.md` is the whole public surface read once before the API
+freezes, with a verdict per export and the naming rules above; read it before
+adding an export or an option, and before renaming one.

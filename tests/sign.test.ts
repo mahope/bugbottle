@@ -297,7 +297,7 @@ test("an injected replay store is consulted and written with an expiry", async (
   const asked: string[] = [];
   const written: [string, number][] = [];
   const kept = new Set<string>();
-  const replayStore = {
+  const store = {
     has: async (digest: string) => {
       asked.push(digest);
       return kept.has(digest);
@@ -312,7 +312,7 @@ test("an injected replay store is consulted and written with an expiry", async (
   const signature = await computeSignature(KEY, TEXT, timestamp);
   const digest = signature.slice(signature.indexOf("v1=") + 3);
   const options = {
-    signature: { key: KEY, maxSkewMs, replayStore },
+    signature: { key: KEY, maxSkewMs, store },
     store: () => ({ id: "rep_1" }),
   };
 

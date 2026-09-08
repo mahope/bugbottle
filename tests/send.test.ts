@@ -203,7 +203,7 @@ test("keepalive is asked for on a small body and skipped on a large one", async 
   assert.equal(large.calls[0]?.init.keepalive, undefined, "too large to keep alive");
 });
 
-test("onFailure sees the report and the error, and the error still reaches the caller", async () => {
+test("onError sees the report and the error, and the error still reaches the caller", async () => {
   const seen: { message: string; error: unknown }[] = [];
   const failing = async () => {
     throw new TypeError("Failed to fetch");
@@ -212,7 +212,7 @@ test("onFailure sees the report and the error, and the error still reaches the c
   await assert.rejects(
     sendReport("/api/feedback", report, {
       fetch: failing as typeof globalThis.fetch,
-      onFailure: (r, error) => void seen.push({ message: r.message, error }),
+      onError: (r, error) => void seen.push({ message: r.message, error }),
     }),
     /Failed to fetch/,
   );
@@ -221,13 +221,13 @@ test("onFailure sees the report and the error, and the error still reaches the c
   assert.ok(seen[0]?.error instanceof TypeError);
 });
 
-test("onFailure runs for a rejected response too, and its own error is swallowed", async () => {
+test("onError runs for a rejected response too, and its own error is swallowed", async () => {
   const { fetch } = fakeFetch(500, { error: "nope" });
   const report = buildReport({ type: "bug", message: "x", includeConsole: false });
   await assert.rejects(
     sendReport("/api/feedback", report, {
       fetch,
-      onFailure: () => {
+      onError: () => {
         throw new Error("the queue is broken as well");
       },
     }),
@@ -248,4 +248,37 @@ test("a contact line is trimmed onto the report, and an empty one is left out", 
     const report = buildReport({ type: "bug", message: "x", contact, includeConsole: false });
     assert.equal("contact" in report, false, `${JSON.stringify(contact)} adds no key`);
   }
+});
+
+test("the deprecated onFailure still runs when it is the only one given", async () => {
+  const seen: unknown[] = [];
+  const failing = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+  const report = buildReport({ type: "bug", message: "offline", includeConsole: false });
+  await assert.rejects(
+    sendReport("/api/feedback", report, {
+      fetch: failing as typeof globalThis.fetch,
+      onFailure: (r) => void seen.push(r.message),
+    }),
+    /Failed to fetch/,
+  );
+  assert.deepEqual(seen, ["offline"]);
+});
+
+test("given both names, onError runs and onFailure does not", async () => {
+  const seen: string[] = [];
+  const failing = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+  const report = buildReport({ type: "bug", message: "offline", includeConsole: false });
+  await assert.rejects(
+    sendReport("/api/feedback", report, {
+      fetch: failing as typeof globalThis.fetch,
+      onError: () => void seen.push("onError"),
+      onFailure: () => void seen.push("onFailure"),
+    }),
+    /Failed to fetch/,
+  );
+  assert.deepEqual(seen, ["onError"], "one handler runs, never both");
 });

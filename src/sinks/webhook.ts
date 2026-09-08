@@ -13,13 +13,29 @@ import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { messageFromBody, readBody, SinkError, type FetchLike } from "./error.ts";
 
 /** Discord rejects a longer `content` outright, so we clip before it does. */
-export const DISCORD_MAX_CONTENT = 2000;
+export const MAX_DISCORD_CONTENT = 2000;
 
 export type WebhookFormat = "json" | "slack" | "discord";
 
-export type SendReportWebhookOptions = {
-  /** The webhook URL. Treat it as a secret: anyone holding it can post. */
-  url: string;
+/**
+ * Where the report goes. `endpoint` is the name everything else in the package
+ * uses for the address it POSTs to; `url` is what this sink called it until
+ * 0.9 and is accepted in its place until 1.0 (#67). One of the two is
+ * required, and giving both is a type error rather than a guess.
+ */
+export type SendReportWebhookTarget =
+  | {
+      /** The webhook URL. Treat it as a secret: anyone holding it can post. */
+      endpoint: string;
+      url?: never;
+    }
+  | {
+      /** @deprecated Renamed to `endpoint` in 0.9. Removed in 1.0 (#67). */
+      url: string;
+      endpoint?: never;
+    };
+
+export type SendReportWebhookOptions = SendReportWebhookTarget & {
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
   /** Extra request headers — a shared token an intake endpoint expects. */
@@ -43,7 +59,7 @@ function clip(text: string, max: number): string {
 
 function bodyFor(report: unknown, format: WebhookFormat, markdown: string): unknown {
   if (format === "slack") return { text: markdown };
-  if (format === "discord") return { content: clip(markdown, DISCORD_MAX_CONTENT) };
+  if (format === "discord") return { content: clip(markdown, MAX_DISCORD_CONTENT) };
   const base = typeof report === "object" && report !== null ? report : {};
   return { ...(base as Record<string, unknown>), markdown };
 }
@@ -65,7 +81,7 @@ export async function sendReportWebhook(
   const markdown = toMarkdown(report, options.markdown ?? {});
 
   const doFetch = options.fetch ?? globalThis.fetch;
-  const response = await doFetch(options.url, {
+  const response = await doFetch(options.endpoint ?? options.url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...options.headers },
     body: JSON.stringify(bodyFor(report, format, markdown)),
@@ -79,3 +95,9 @@ export async function sendReportWebhook(
 
   return { status: response.status };
 }
+
+/**
+ * @deprecated Renamed to `MAX_DISCORD_CONTENT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_CONTENT = MAX_DISCORD_CONTENT;
