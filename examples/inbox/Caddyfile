@@ -1,0 +1,29 @@
+# The proxy in front of the inbox: TLS and nothing else.
+#
+#   caddy run --config examples/inbox/Caddyfile
+#
+# Caddy gets the certificate and renews it; the password stays the
+# application's, because the inbox compares it in constant time and because a
+# second password in the proxy would be one more place to rotate it. Do not add
+# `basic_auth` here — `POST /api/feedback` is public by design, and a proxy
+# password in front of it would lock the reporters out of the one route they
+# need.
+
+bugs.example.com {
+    # The container's published port. With compose above that is loopback on
+    # the host; on Dokploy or Coolify it is the service name instead —
+    # `reverse_proxy inbox:8788`.
+    reverse_proxy 127.0.0.1:8788
+
+    # A report may carry a four-megabyte picture, and a proxy that refuses it
+    # refuses it before the server has seen a byte.
+    request_body {
+        max_size 5MB
+    }
+
+    # The reports are on disk behind this address; access logs are the one
+    # place their addresses accumulate.
+    log {
+        output file /var/log/caddy/bugs.example.com.log
+    }
+}

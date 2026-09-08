@@ -33,8 +33,9 @@ it was indexed.
 | `GET /r/<id>.png` | The screenshot |
 | `POST /r/<id>/delete` | Removes both files. Same-origin only: see below |
 | `GET /demo.html` | A page with the ready-made panel mounted against this server |
+| `GET /health` | `ok`, and nothing else. Public, for the platform's check |
 
-Everything except the endpoint and the demo page is behind
+Everything except the endpoint, the demo page and the health route is behind
 `Authorization: Basic`, compared against `INBOX_PASSWORD` in constant time.
 The username is ignored.
 
@@ -80,8 +81,19 @@ terminating proxy in front of it and never expose port 8788 itself:
 ```caddy
 bugs.example.com {
     reverse_proxy 127.0.0.1:8788
+
+    # A report may carry a four-megabyte picture.
+    request_body {
+        max_size 5MB
+    }
 }
 ```
+
+`Caddyfile` beside this README is that block with its comments, ready to copy.
+TLS is Caddy's and the password stays the application's: do not put
+`basic_auth` in front of this, because `POST /api/feedback` is public by
+design and a proxy password would lock the reporters out of the one route
+they need.
 
 nginx is the same shape — `proxy_pass http://127.0.0.1:8788;` inside a
 `server` block with a certificate — plus `client_max_body_size 5m;`, or the
@@ -99,6 +111,56 @@ A site on another origin needs the endpoint to say so: start the server with
 is deliberately one name rather than a wildcard — `*` lets any page on the
 internet fill this disk, and the disk is where the pictures are. A report is
 not a login, so nothing sends credentials.
+
+## Deploy it
+
+`Dockerfile` and `compose.yml` are here because the people this example is for
+run Dokploy, Coolify or a VPS with Caddy, not `node server.mjs` in a terminal:
+
+```bash
+npm run build                              # dist/ is copied into the image
+cp examples/inbox/.env.example examples/inbox/.env   # and set INBOX_PASSWORD
+docker compose -f examples/inbox/compose.yml up --build
+```
+
+The image is `node:22-alpine`, runs as the `node` user, and keeps nothing of
+its own: `package.json`, `dist/` and the two files of this example. There is no
+`npm install` in it, because the library has no runtime dependencies and the
+example self-references it — which is also why the build context is the
+repository root. `npm pack`ing the library in would work as well; it is bigger
+and one step longer, since the tarball carries the same `dist/` and `npm
+install` then unpacks a second copy of it under `node_modules/`.
+
+Reports go to `/data`, and `/data` is the volume. Everything else in the
+container is replaceable; that directory is not, and it is as sensitive as the
+screenshots in it.
+
+| | |
+|---|---|
+| `INBOX_PASSWORD` | Required. No password, no inbox |
+| `REPORTS_DIR` | `/data` in the image, `./reports` otherwise |
+| `PORT` | 8788 |
+| `HOST` | `127.0.0.1` by default; the image sets `0.0.0.0`, because in a container the proxy is on the other side of the boundary |
+| `ALLOWED_ORIGIN`, `MAX_REPORTS` | As above |
+
+On **Dokploy**, in eight lines:
+
+1. **Create → Compose**, and point it at your fork of this repository.
+2. Set **Compose Path** to `examples/inbox/compose.yml`.
+3. Under **Environment**, add `INBOX_PASSWORD` — `openssl rand -base64 24`.
+4. Delete the `ports:` block from the compose file, or your inbox is on the
+   host's port 8788 in plain HTTP as well as behind the proxy.
+5. Under **Domains**, add `bugs.example.com`, service `inbox`, port `8788`,
+   HTTPS on, certificate Let's Encrypt.
+6. **Advanced → Health Check**: `GET /health`, which is the one public route
+   and answers `ok` before anybody has the password.
+7. **Deploy**, then open the domain and sign in with any username and that
+   password.
+8. The `reports` volume is created by compose and survives every redeploy;
+   back it up like a database, because that is what it is.
+
+Coolify is the same list with different menu names. A bare VPS is
+`docker compose up -d` plus the `Caddyfile` above.
 
 ## Please read this part
 

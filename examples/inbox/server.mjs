@@ -23,6 +23,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "..", "dist");
 const reportsDir = process.env.REPORTS_DIR ?? join(here, "reports");
 const port = Number(process.env.PORT ?? 8788);
+/**
+ * Loopback by default, because an inbox reached over plain HTTP hands its
+ * password to the network. Inside a container there is no proxy on the same
+ * loopback, so the image sets `HOST=0.0.0.0` and the proxy is the platform's.
+ */
+const host = process.env.HOST ?? "127.0.0.1";
 
 /**
  * No password, no inbox. Refusing to start is the only safe default: an inbox
@@ -435,6 +441,17 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
 
   try {
+    // Public, and deliberately empty of news: the platform's check runs before
+    // anybody has the password, and what it needs to know is that the process
+    // is answering. Anything about the inbox itself — how many reports, how
+    // much disk — would be a fact about somebody's application, given away at
+    // an address with no password on it.
+    if (req.method === "GET" && path === "/health") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("ok\n");
+      return;
+    }
+
     if (req.method === "POST" && path === "/api/feedback") {
       const raw = await readBody(req, res);
       if (raw === null) return;
@@ -574,8 +591,12 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
+server.listen(port, host, () => {
   const { port: bound } = server.address();
-  console.log(`Inbox on http://127.0.0.1:${bound} — reports in ${reportsDir}`);
-  console.log(`Send one from http://127.0.0.1:${bound}/demo.html`);
+  // A wildcard address is not one anybody can open, so the line names the
+  // address they can: the port is either mapped to their machine or in front
+  // of a proxy that is.
+  const shown = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  console.log(`Inbox on http://${shown}:${bound} — reports in ${reportsDir}`);
+  console.log(`Send one from http://${shown}:${bound}/demo.html`);
 });
