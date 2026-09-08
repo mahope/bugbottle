@@ -7,6 +7,28 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The accountable release. The rate limit used to key on the first entry of
+`X-Forwarded-For`, which is the one the caller writes, so a fresh header bought
+a fresh allowance; `trustProxy` now says which address to believe, the Express
+adapter and the inbox pass the socket in, and the default trusts no header at
+all. `fileStore` gained `maxAgeDays` and `prune()`, the inbox runs it hourly
+from `RETENTION_DAYS`, and a privacy checklist — in English on the docs and in
+Danish at /da/privatliv/ — lists every field of a report, whether it is on by
+default, whether it can hold personal data, the switch that turns it off and
+where it ends up, with a test that a new field cannot be left off the list.
+The panel now holds up under Windows High Contrast, proved by two more audit
+states and a pixel check.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.6 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.5 kB, `bugbottle/queue-idb` 0.7 kB,
+`bugbottle/triggers` 1.3 kB, `bugbottle/shake` 0.7 kB, `bugbottle/sign` 0.4 kB,
+`bugbottle/rrweb` 0.7 kB, `bugbottle/locales-extra` 4.7 kB,
+`dist/bugbottle.js` 24.6 kB, `dist/bugbottle.slim.js` 21.0 kB,
+`bugbottle/server` validators 0.6 kB.
+
 ### Changed
 
 - **`handleReport` no longer reads `X-Forwarded-For` or `CF-Connecting-IP` by
