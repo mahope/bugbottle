@@ -142,6 +142,15 @@ browser bundle nothing. Microsoft Teams is the same shape over Adaptive Cards
 and is a later job: its incoming webhooks are being retired in favour of
 Workflows, so the connector to write against is not the one to write today.
 
+**0.7** — `rateLimit.rateLimitStore` and `dedupe.dedupeStore` beside
+`signature.replayStore`, so all three things `handleReport` remembers between
+requests are seams rather than a `Map` in one process, and a fleet behind a
+load balancer answers as one endpoint. `hit(key, windowMs)` for the limit,
+`get`/`set(key, entry, expiresAt)` for the dedupe, sync or async, no dependency
+and nothing bundled — the README shows a Redis-shaped example of each under
+*Running more than one instance*. Both fail open, where the replay store fails
+closed: an honest report is never refused because a shared store blinked.
+
 **Alongside** — a second design pass over bugbottle.dev: two typefaces of its
 own (Newsreader and Source Sans 3, served from the site rather than from
 Google, so the page still makes no external request), one grid under the

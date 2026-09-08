@@ -326,10 +326,23 @@ function evictBuckets(now) {
     }
 }
 /** True when this caller is over its allowance. Prunes as it goes. */
-function overRateLimit(request, options) {
+async function overRateLimit(request, options, onError) {
     // The key is attacker-controlled by default: a forwarded address is a header.
     // Clipping it bounds one entry, and the ceiling below bounds the whole map.
     const key = (options.key ?? defaultRateLimitKey)(request).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
+    const store = options.rateLimitStore;
+    if (store) {
+        try {
+            return (await store.hit(key, options.windowMs)) > options.limit;
+        }
+        catch (err) {
+            // Fails open, unlike the replay store: a rate limit exists to stop a
+            // flood, and answering 429 to an honest reporter because Redis blinked
+            // loses the one report that was worth having.
+            onError?.(err);
+            return false;
+        }
+    }
     const now = Date.now();
     const bucket = buckets.get(key);
     if (bucket && bucket.resetAt > now) {
@@ -555,7 +568,7 @@ export async function handleReport(request, options = {}) {
         if (request.method !== "POST") {
             return json({ error: "Method not allowed" }, 405, cors);
         }
-        if (options.rateLimit && overRateLimit(request, options.rateLimit)) {
+        if (options.rateLimit && (await overRateLimit(request, options.rateLimit, options.onError))) {
             return json({ error: "Too many reports" }, 429, cors);
         }
         if (options.authorize && !(await options.authorize(request))) {
@@ -600,14 +613,33 @@ export async function handleReport(request, options = {}) {
         let dedupeKey;
         if (options.dedupe) {
             const now = Date.now();
+            const dedupeStore = options.dedupe.dedupeStore;
             dedupeKey = (options.dedupe.key ?? fingerprint)(report);
-            const seen = seenReports.get(dedupeKey);
-            if (seen && seen.at + options.dedupe.windowMs > now) {
+            let seen;
+            if (dedupeStore) {
+                try {
+                    // Whatever a store answers with is a duplicate: expiring the entry
+                    // when the window closes is what `expiresAt` asked it to do.
+                    seen = await dedupeStore.get(dedupeKey);
+                }
+                catch (err) {
+                    // Fails open. A duplicate costs a row and an email; a store that is
+                    // down must not cost the report itself.
+                    options.onError?.(err);
+                }
+            }
+            else {
+                const remembered = seenReports.get(dedupeKey);
+                if (remembered && remembered.at + options.dedupe.windowMs > now)
+                    seen = remembered;
+            }
+            if (seen) {
                 // 200 rather than 201: nothing was created. The reporter is still told
                 // it arrived, because it did — the first time.
                 return json(seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true }, 200, cors);
             }
-            evictDedupe(now, options.dedupe.windowMs);
+            if (!dedupeStore)
+                evictDedupe(now, options.dedupe.windowMs);
         }
         // A rejected picture is not a rejected report: the message is the valuable
         // part, and the reporter is not the one who broke the encoding.
@@ -647,8 +679,22 @@ export async function handleReport(request, options = {}) {
         }
         // Recorded once the report is stored, so a `store` that threw does not
         // leave a fingerprint that swallows the retry.
-        if (dedupeKey !== undefined)
-            seenReports.set(dedupeKey, { id, at: Date.now() });
+        if (dedupeKey !== undefined && options.dedupe) {
+            const dedupeStore = options.dedupe.dedupeStore;
+            if (dedupeStore) {
+                try {
+                    await dedupeStore.set(dedupeKey, { id }, Date.now() + options.dedupe.windowMs);
+                }
+                catch (err) {
+                    // The report is stored and about to be delivered. A store that could
+                    // not remember it only means the next copy is answered as new.
+                    options.onError?.(err);
+                }
+            }
+            else {
+                seenReports.set(dedupeKey, { id, at: Date.now() });
+            }
+        }
         const markdown = toMarkdown(report, {
             ...options.markdown,
             ...(screenshotUrl ? { screenshotUrl } : {}),

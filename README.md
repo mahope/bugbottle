@@ -1293,8 +1293,9 @@ and attached. A rejected picture never fails the report, and neither does a
 storage bucket that is down: a `screenshot` function that throws reaches
 `onError` and the report is stored and delivered without a `screenshotUrl`.
 
-`rateLimit` counts in memory, so it is per instance: fine per serverless
-isolate against one looping browser, and not a shared limit across a fleet.
+`rateLimit` counts in memory by default, so it is per instance: fine per
+serverless isolate against one looping browser, and not a shared limit across a
+fleet — see *Running more than one instance* below when it has to be.
 The default key is the first entry of `x-forwarded-for`, falling back to
 `cf-connecting-ip` — **both are headers, which means both are things the
 caller can write**. It is only a limit if a proxy you control overwrites
@@ -1319,9 +1320,10 @@ the message and the first console error, hashed. The client computes it the
 same way from the same function, so a fingerprint written down by a sink means
 the same thing on both sides. It is compared after scrubbing, so two reports
 that differ only in what was redacted are one report. Pass `key` to decide for
-yourself. Like the rate limit it is in memory, so it is per instance: it stops
-one browser sending the same crash forty times, not two instances behind a load
-balancer storing it twice.
+yourself. Like the rate limit it is in memory by default, so it is per
+instance: it stops one browser sending the same crash forty times, not two
+instances behind a load balancer storing it twice. *Running more than one
+instance* is how you make it the second thing.
 
 For Express, `expressHandler` builds the `Request` and writes the `Response`
 back:
@@ -1433,26 +1435,11 @@ load balancer do not share the cache, and a serverless isolate that has just
 started has an empty one.
 
 Hand in a `replayStore` when that is not enough — several instances, or a
-window wider than 640 seconds:
-
-```ts
-// Any store with these two methods. Nothing is bundled; this is your client.
-signature: {
-  key: process.env.BUGBOTTLE_SIGN_KEY!,
-  replayStore: {
-    has: async (digest) => (await redis.exists(`bb:sig:${digest}`)) === 1,
-    // `expiresAt` is the epoch millisecond the signature stops being
-    // acceptable anyway, so it is exactly how long the row needs to live.
-    add: async (digest, expiresAt) =>
-      void (await redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt)),
-  },
-}
-```
-
-`has` and `add` may be synchronous or return promises. Only a signature that
-already verified is ever written, so nobody can fill your store with digests of
-their own choosing — and a store that throws fails the request closed: 500,
-rather than a signature nobody managed to check.
+window wider than 640 seconds. It is one of the three seams in *Running more
+than one instance* below, and the only one that fails **closed**: a store that
+throws answers 500 rather than accept a signature nobody managed to check.
+Only a signature that already verified is ever written, so nobody can fill your
+store with digests of their own choosing.
 
 Two things will surprise you if nobody says them:
 
@@ -1484,6 +1471,74 @@ a forged one. So the adapter says so: the first such request calls `onError`
 with a line naming `express.json()`, once per handler, and still answers the
 same 401. Give `expressHandler` an `onError` — it is where the explanation
 goes.
+
+### Running more than one instance
+
+Three things `handleReport` remembers between requests are a `Map` in the
+process: the rate-limit buckets, the dedupe fingerprints and the replay cache.
+That is honest and it is per instance. Two containers behind a load balancer
+each hand out the whole allowance, store the same crash twice and keep separate
+replay caches, and a serverless isolate that has just started remembers
+nothing at all.
+
+Each of them is a seam, and nothing is bundled: the store is your client, and
+its methods may be synchronous or return promises.
+
+```ts
+// Redis-shaped, but any key-value store with a TTL does. `redis` here is
+// whatever client you already have; bugbottle does not depend on one.
+handleReport(req, {
+  rateLimit: {
+    limit: 20,
+    windowMs: 60_000,
+    rateLimitStore: {
+      // Count this request and answer with the total inside the window.
+      hit: async (key, windowMs) => {
+        const count = await redis.incr(`bb:rl:${key}`);
+        if (count === 1) await redis.pexpire(`bb:rl:${key}`, windowMs);
+        return count;
+      },
+    },
+  },
+  dedupe: {
+    windowMs: 60_000,
+    dedupeStore: {
+      // Anything `get` answers with is a duplicate; expiry is the store's job.
+      get: async (key) => {
+        const value = await redis.get(`bb:dup:${key}`);
+        return value === null ? undefined : (JSON.parse(value) as { id?: string });
+      },
+      set: async (key, entry, expiresAt) =>
+        void (await redis.set(`bb:dup:${key}`, JSON.stringify(entry), "PXAT", expiresAt)),
+    },
+  },
+  signature: {
+    key: process.env.BUGBOTTLE_SIGN_KEY!,
+    replayStore: {
+      has: async (digest) => (await redis.exists(`bb:sig:${digest}`)) === 1,
+      // `expiresAt` is the epoch millisecond the signature stops being
+      // acceptable anyway, so it is exactly how long the row needs to live.
+      add: async (digest, expiresAt) =>
+        void (await redis.set(`bb:sig:${digest}`, "1", "PXAT", expiresAt)),
+    },
+  },
+});
+```
+
+**Two of them fail open and one fails closed, and that is deliberate.** A
+`rateLimitStore` that throws lets the report through: refusing an honest
+reporter with a `429` because Redis blinked loses the one report that was worth
+having, and the error reaches `onError` so you find out. A `dedupeStore` that
+throws lets it through as well, on both halves — a duplicate costs a row and an
+email, a refusal costs the report. A `replayStore` that throws answers `500`,
+because the alternative is accepting a signature nobody managed to check
+against what has already been seen, which is exactly the replay the cache
+exists to stop.
+
+Nothing else in `handleReport` keeps state between requests, so with all three
+handed in, a fleet answers as one endpoint. Give each of them a key prefix of
+its own, as above, and let the store expire the rows: every write says when it
+stops mattering.
 
 ### The manual path
 
@@ -2296,7 +2351,8 @@ and `DISCORD_MAX_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,
-`HandleReportOptions`, `HandleReportResult`, `DedupeOptions`,
+`HandleReportOptions`, `HandleReportResult`, `RateLimitOptions`,
+`RateLimitStore`, `DedupeOptions`, `DedupeStore`, `DedupeEntry`,
 `SignatureOptions`, `ReportSink` and
 `SinkContext` and `ReplayStore` types, `DEFAULT_SIGNATURE_SKEW_MS`,
 `MAX_SIGNATURE_ENTRIES`, `MAX_SIGNATURE_ENTRIES_PER_SECOND`,
