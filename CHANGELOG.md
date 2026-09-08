@@ -9,6 +9,23 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- Two feeds in the inbox example, behind the same password as the list:
+  `GET /feed.json` is JSON Feed 1.1 and `GET /feed.xml` is Atom, both carrying
+  the newest 50 reports with the title, the rendered Markdown as
+  `content_text`, the detail URL, the arrival time and the report's type as its
+  one tag. A new report can then arrive in a reader, a phone or a Slack RSS app
+  without a sink, an account or a webhook. They are behind the password
+  because a feed URL travels further than a bookmark and the titles and page
+  addresses in it are facts about somebody's application: subscribe with
+  `https://inbox:PASSWORD@bugs.example.com/feed.xml`, which every reader worth
+  using accepts. The list comes from the in-memory index — no directory walk —
+  and only the fifty files that reach the feed are read; the screenshot stays a
+  link. Every string in the Atom document is escaped, and the control
+  characters XML cannot carry at all are dropped rather than emitted; the tests
+  parse the document with a strict XML reader rather than matching substrings.
+  Links are absolute, from `Host` and `X-Forwarded-Proto` or from a new
+  `PUBLIC_URL`.
+  Closes #80.
 - A Danish getting-started page on the site, `/da/kom-i-gang/`. The panel
   speaks Danish and the landing page is Danish; the documentation is English
   only, and most of the people who will install this from the owner's network

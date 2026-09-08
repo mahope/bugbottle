@@ -29,6 +29,8 @@ it was indexed.
 | `POST /api/feedback` | The endpoint the browser posts to. Public, rate-limited to 30 reports a minute, deduplicated for a minute, capped at 4 MB |
 | `GET /` | The list, newest first: title, type, page, time |
 | `GET /r/<id>` | One report as rendered Markdown, with the picture, *Copy as Markdown* and *Delete* |
+| `GET /feed.json` | The newest 50 reports as JSON Feed 1.1 |
+| `GET /feed.xml` | The same 50 as Atom |
 | `GET /r/<id>.json` | The stored JSON, exactly as it is on disk |
 | `GET /r/<id>.png` | The screenshot |
 | `POST /r/<id>/delete` | Removes both files. Same-origin only: see below |
@@ -72,6 +74,52 @@ renderer writes itself. The structure is read from the Markdown and every
 piece of text is escaped before it reaches the page, so a report whose message
 is `<img src=x onerror=…>` is *shown*, never run. Report text is
 attacker-controlled input; treat any inbox you write the same way.
+
+## Subscribe to it
+
+The list is also a feed, so a new report can arrive in the place you already
+look rather than in a browser tab you have to remember to open:
+
+| | |
+|---|---|
+| `/feed.json` | [JSON Feed 1.1](https://jsonfeed.org/version/1.1) |
+| `/feed.xml` | Atom ([RFC 4287](https://www.rfc-editor.org/rfc/rfc4287)) |
+
+Both carry the newest 50 reports, newest first: the title, the whole report as
+rendered Markdown in `content_text` (Atom's `<content type="text">`), a link to
+the detail page, the time it arrived, and the report's type as its one tag or
+`<category>`. The screenshot is a link on that page, never bytes in the feed —
+a feed carrying fifty pictures is one nothing will poll twice.
+
+**Both want the password**, exactly as the list does, and that is the point:
+titles, page addresses and console lines are the same facts about somebody's
+application that the inbox exists to keep private, and a feed URL travels
+further than a bookmark — into a reader's sync service, a phone, a shared
+Slack channel. There is no unguarded token URL to leak instead.
+
+Most readers accept the credentials in the URL, which is how you subscribe:
+
+```
+https://inbox:PASSWORD@bugs.example.com/feed.xml
+```
+
+NetNewsWire, Reeder, Miniflux, FreshRSS, Feedbin and Slack's RSS app all take
+that form, and several have a separate username and password field as well —
+prefer the fields when they are there, because a URL with a password in it is
+copied, synced and logged like any other. The username is ignored; only the
+password after the colon is checked. `curl -u inbox:PASSWORD
+https://bugs.example.com/feed.json` is the same request from a script.
+
+The links in a feed are absolute, because they are read somewhere else
+entirely. The address comes from the request — `Host`, and
+`X-Forwarded-Proto` from the proxy — so behind Caddy or Traefik it is already
+right. Set `PUBLIC_URL=https://bugs.example.com` when it is not: a proxy that
+rewrites the host, or a reader that shows `http://` links you clicked from a
+`https://` page.
+
+Neither feed is cached: `no-store, private`, so a reader shows the reports
+that are there rather than the ones that were, and nothing in between keeps a
+copy of the list.
 
 ## Behind TLS
 
@@ -141,6 +189,7 @@ screenshots in it.
 | `REPORTS_DIR` | `/data` in the image, `./reports` otherwise |
 | `PORT` | 8788 |
 | `HOST` | `127.0.0.1` by default; the image sets `0.0.0.0`, because in a container the proxy is on the other side of the boundary |
+| `PUBLIC_URL` | The address the feeds link to, when the request's own host is not it |
 | `ALLOWED_ORIGIN`, `MAX_REPORTS` | As above |
 
 On **Dokploy**, in eight lines:
