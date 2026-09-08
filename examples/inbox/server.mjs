@@ -17,7 +17,16 @@ import { readFile } from "node:fs/promises";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize } from "node:path";
-import { fileStore, handleReport, toMarkdown } from "bugbottle/server";
+import {
+  discordSink,
+  fileStore,
+  handleReport,
+  sendReportWebhook,
+  slackSink,
+  smtpSink,
+  teamsSink,
+  toMarkdown,
+} from "bugbottle/server";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "..", "dist");
@@ -270,6 +279,147 @@ const reports = fileStore({
   maxReports: Number(process.env.MAX_REPORTS ?? 2000),
 });
 
+/**
+ * What the inbox filed a report as, remembered until the request is over.
+ *
+ * A sink is handed the report and its Markdown, never the id the store chose,
+ * so the two are tied together here: the key is the object `handleReport`
+ * passes first to `store` and then to every sink, and a `WeakMap` forgets the
+ * entry as soon as the request that made it is collected.
+ */
+const filed = new WeakMap();
+
+/** `fileStore.store`, with the id it answered with kept for the sinks. */
+async function store(report, screenshot) {
+  const result = await reports.store(report, screenshot);
+  if (result?.id) filed.set(report, { id: result.id, picture: Boolean(screenshot?.length) });
+  return result;
+}
+
+/**
+ * The absolute address of this inbox, as a notification links it.
+ *
+ * `baseUrl` below asks the request, which is right for a feed and impossible
+ * here: a sink runs after the browser has been answered, so `PUBLIC_URL` is
+ * the only thing that knows the public name. Without it the address the server
+ * is bound to is the honest answer, and it is right on a laptop.
+ */
+function notifyBase() {
+  const configured = process.env.PUBLIC_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  const bound = server.address();
+  const shown = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  return `http://${shown}:${bound?.port ?? port}`;
+}
+
+/** Where this inbox keeps the report, for a sink that wants to link to it. */
+function reportUrl(report) {
+  const entry = filed.get(report);
+  return entry ? `${notifyBase()}/r/${entry.id}` : undefined;
+}
+
+/**
+ * Where the picture is, when there was one. It is behind the password like
+ * everything else, so Slack and Teams will fetch it and get a 401 rather than
+ * an image — which is the right way round. The link is still worth sending:
+ * whoever opens it is signed in, and the alternative is a public address for a
+ * screenshot of somebody's application.
+ */
+function screenshotUrl(report) {
+  const entry = filed.get(report);
+  return entry?.picture ? `${notifyBase()}/r/${entry.id}.png` : undefined;
+}
+
+/**
+ * What is on the other end of `NOTIFY_WEBHOOK`. Slack, Discord and Teams each
+ * want a body of their own, and the host of the URL says which; `NOTIFY_KIND`
+ * settles it for a webhook that arrives through a relay, a proxy or a gateway
+ * whose hostname says nothing.
+ */
+function webhookKind(target) {
+  const forced = (process.env.NOTIFY_KIND ?? "").trim().toLowerCase();
+  if (forced) return forced;
+  let hostname = "";
+  try {
+    hostname = new URL(target).hostname.toLowerCase();
+  } catch {
+    return "webhook";
+  }
+  if (hostname === "slack.com" || hostname.endsWith(".slack.com")) return "slack";
+  if (/(^|\.)(discord\.com|discordapp\.com)$/.test(hostname)) return "discord";
+  if (/(^|\.)(webhook\.office\.com|logic\.azure\.com|logic\.azure\.us)$/.test(hostname)) {
+    return "teams";
+  }
+  return "webhook";
+}
+
+/**
+ * The deliveries this inbox makes, read from the environment and nothing else.
+ *
+ * They are the library's own sinks: the example adds no delivery code, only
+ * the two addresses — the report's detail page and its picture — that a sink
+ * cannot work out for itself. An empty list is the default, because an inbox
+ * that mailed somebody by accident would be worse than one that is quiet.
+ */
+function notifySinks() {
+  const sinks = [];
+
+  const webhookUrl = process.env.NOTIFY_WEBHOOK;
+  if (webhookUrl) {
+    const kind = webhookKind(webhookUrl);
+    const options = { webhookUrl, reportUrl, screenshotUrl };
+    if (kind === "slack") sinks.push(slackSink(options));
+    else if (kind === "discord") sinks.push(discordSink(options));
+    else if (kind === "teams") sinks.push(teamsSink(options));
+    else {
+      if (kind !== "webhook") {
+        console.error(`NOTIFY_KIND=${kind} is not one of slack, discord, teams, webhook — posting JSON.`);
+      }
+      // The plain shape is the whole report as JSON with the rendered Markdown
+      // beside it. There is no button in it, so the link goes in the facts
+      // table, which is where anything reading this body will look.
+      sinks.push(async (report, ctx) => {
+        await sendReportWebhook(report, {
+          endpoint: webhookUrl,
+          markdown: {
+            facts: { Inbox: reportUrl(report) },
+            ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
+          },
+        });
+      });
+    }
+  }
+
+  const smtpHost = process.env.NOTIFY_SMTP_HOST;
+  if (smtpHost) {
+    const from = process.env.NOTIFY_SMTP_FROM;
+    const to = (process.env.NOTIFY_SMTP_TO ?? "")
+      .split(",")
+      .map((address) => address.trim())
+      .filter(Boolean);
+    if (!from || to.length === 0) {
+      console.error(
+        "Ignoring NOTIFY_SMTP_HOST: NOTIFY_SMTP_FROM and NOTIFY_SMTP_TO are both required.",
+      );
+    } else {
+      const options = { host: smtpHost, from, to, screenshotUrlFrom: screenshotUrl };
+      if (process.env.NOTIFY_SMTP_PORT) options.port = Number(process.env.NOTIFY_SMTP_PORT);
+      if (process.env.NOTIFY_SMTP_USER) options.user = process.env.NOTIFY_SMTP_USER;
+      if (process.env.NOTIFY_SMTP_PASS) options.pass = process.env.NOTIFY_SMTP_PASS;
+      sinks.push(async (report, ctx) => {
+        // Built here rather than once, because the link to the report is one of
+        // the facts and the facts belong to the options, not to the call.
+        const send = smtpSink({ ...options, markdown: { facts: { Inbox: reportUrl(report) } } });
+        await send(report, ctx);
+      });
+    }
+  }
+
+  return sinks;
+}
+
+const sinks = notifySinks();
+
 function listPage(reports) {
   const items = reports
     .map(({ id, title, type, url, receivedAt }) => {
@@ -508,7 +658,15 @@ const server = createServer(async (req, res) => {
           // One named origin or nothing. A wildcard would let any page on the
           // internet fill this disk, and the disk is where the pictures are.
           cors: process.env.ALLOWED_ORIGIN,
-          store: reports.store,
+          store,
+          // Run in order after the report is on disk, each with its own
+          // deadline. A webhook revoked last week is not the reporter's
+          // problem: the failure is the operator's to read in the terminal,
+          // and the answer is still the 201 the report earnt.
+          sinks,
+          onSinkError: (error) => {
+            console.error(`Could not announce the report: ${error?.message ?? error}`);
+          },
         },
       );
       res.writeHead(response.status, { "Content-Type": "application/json" });
@@ -640,4 +798,7 @@ server.listen(port, host, () => {
   const shown = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
   console.log(`Inbox on http://${shown}:${bound} — reports in ${reportsDir}`);
   console.log(`Send one from http://${shown}:${bound}/demo.html`);
+  // The kinds, never the addresses: a webhook URL is the credential, and this
+  // line ends up in a platform's log where a password does not belong.
+  if (sinks.length) console.log(`Announcing every report through ${sinks.length} sink(s)`);
 });

@@ -291,6 +291,15 @@ bundle is unchanged at 583 bytes. The example now routes, authorises and
 renders, and does no filesystem work of its own; its fourteen tests did not
 move.
 
+**Unreleased** — `examples/inbox` is told about a new report rather than
+polled for one (#84): `NOTIFY_WEBHOOK` posts through the Slack, Discord, Teams
+or plain-JSON sink — the URL's own host chooses, `NOTIFY_KIND` overrides — and
+`NOTIFY_SMTP_HOST` and its four companions mail through `smtpSink`. Nothing new
+was written to deliver anything; the example only supplies the detail page and
+the picture as addresses under `PUBLIC_URL`, both behind the password. Nothing
+is sent when neither variable is set, a failed delivery is a line on stderr and
+still a 201, and the example's tests went from fourteen to eighteen.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in

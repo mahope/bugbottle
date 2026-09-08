@@ -44,6 +44,17 @@ change the API; the changelog says so when they do.
   on `node:net`, the STARTTLS upgrade included: the test builds a self-signed
   certificate in DER from a `node:crypto` key pair rather than checking a
   private key into the repository (#81).
+- `examples/inbox` tells somebody when a report arrives, from environment
+  variables alone: `NOTIFY_WEBHOOK` posts through `slackSink`, `discordSink`,
+  `teamsSink` or `sendReportWebhook` — chosen by the URL's host, or by
+  `NOTIFY_KIND` when the host says nothing — and `NOTIFY_SMTP_HOST` with
+  `_PORT`, `_USER`, `_PASS`, `_FROM` and `_TO` mails through `smtpSink`. The
+  example adds no delivery code of its own, only the two addresses a sink
+  cannot work out for itself: the report's detail page under `PUBLIC_URL` and
+  its picture at `/r/<id>.png`, both behind the inbox password. The sinks run
+  after the report is on disk, exactly as `handleReport` runs them, so a
+  webhook revoked last week is a line on stderr and still a 201 for the
+  reporter. Nothing is sent when neither variable is set (#84).
 
 ## 0.11.0 — 2026-09-08
 
