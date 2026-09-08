@@ -6,13 +6,17 @@
  * static site, a client site somebody else deploys. Everything it exposes is
  * the same code the ESM entry points export; nothing here is a second
  * implementation. The only additions are the `window.bugbottle` namespace and
- * the `data-*` reading below, so a site can be wired without writing a line of
- * JavaScript.
+ * the `data-*` reading, which lives in `src/global-shared.ts` because
+ * `src/global-slim.ts` reads the same attributes the same way.
  *
- * Screenshots are deliberately absent. A renderer means `html-to-image`, and
- * that is a large dependency to force on every page that only wants the panel;
- * a site that needs pictures should install the package and pass its own
- * renderer to `window.bugbottle.mount`.
+ * This is the build that carries everything. The slim one is the same panel
+ * without the annotator, the timings snapshot, the shake gesture and the
+ * network log.
+ *
+ * Screenshots are deliberately absent from both. A renderer means
+ * `html-to-image`, and that is a large dependency to force on every page that
+ * only wants the panel; a site that needs pictures should install the package
+ * and pass its own renderer to `window.bugbottle.mount`.
  *
  * This module is excluded from the tsc build (see `tsconfig.build.json`): it
  * is only ever consumed through esbuild, which replaces the version constant.
@@ -22,7 +26,8 @@ import { createAnnotator } from "./annotate.ts";
 import { initBreadcrumbs } from "./breadcrumbs.ts";
 import { initConsoleBuffer } from "./console-buffer.ts";
 import { pickElement } from "./element-picker.ts";
-import { locales, resolveLocale, type Locale } from "./locales.ts";
+import { bootstrap, readOptions } from "./global-shared.ts";
+import { locales, resolveLocale } from "./locales.ts";
 import { initNetwork } from "./network.ts";
 import { initPerf } from "./perf.ts";
 import { createQueue } from "./queue.ts";
@@ -31,7 +36,7 @@ import { onShake, requestShakePermission } from "./shake.ts";
 import { buildReport, sendReport } from "./send.ts";
 import { createSigner } from "./sign.ts";
 import { onShortcut, onUncaughtError } from "./triggers.ts";
-import { mountBugbottle, type MountOptions, type Theme } from "./ui/index.ts";
+import { mountBugbottle, type MountOptions } from "./ui/index.ts";
 
 /** Replaced by esbuild with the version in `package.json`. */
 declare const __BUGBOTTLE_VERSION__: string;
@@ -83,67 +88,11 @@ declare global {
 
 window.bugbottle = api;
 
-/**
- * The script element that is running us. Read it now: `document.currentScript`
- * is only set while the script evaluates, and the auto-mount happens later.
- */
-const script = document.currentScript as HTMLScriptElement | null;
-
-function readTheme(data: DOMStringMap): Theme | undefined {
-  const theme: Theme = {};
-  if (data.primary) theme.primary = data.primary;
-  if (data.position) theme.position = data.position as Theme["position"];
-  return Object.keys(theme).length > 0 ? theme : undefined;
-}
-
-function readExtra(raw: string | undefined): Record<string, unknown> | undefined {
-  if (!raw) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    // Anything but an object would be dropped by the report builder anyway,
-    // and a typo in an attribute must not stop the panel from mounting.
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // A malformed attribute is a mistake on the page, not the reporter's
-    // problem. Mount without the extras rather than not at all.
-  }
-  return undefined;
-}
-
 function autoMount(data: DOMStringMap): void {
   const endpoint = data.endpoint;
   if (!endpoint) return;
 
-  const locale: Locale = resolveLocale(data.locale ?? document.documentElement.lang);
-  const options: MountOptions = { endpoint, locale };
-
-  const theme = readTheme(data);
-  if (theme) options.theme = theme;
-  if (data.brand || data.logo) {
-    options.brand = {};
-    if (data.brand) options.brand.name = data.brand;
-    if (data.logo) options.brand.logo = data.logo;
-  }
-  if (data.trigger) options.trigger = data.trigger;
-  // `data-shortcut="off"` is the only way to have none: the combination is on
-  // by default, so an attribute that merely set it would never be written.
-  if (data.shortcut) options.shortcut = data.shortcut === "off" ? false : data.shortcut;
-  // Any value opens the panel on an uncaught error; `"prefill"` also puts the
-  // error message in the box.
-  if (data.openOnError !== undefined) {
-    options.openOnError = data.openOnError === "prefill" ? { prefill: true } : true;
-  }
-  // Off by default like everywhere else, so any value asks for the field and
-  // `data-contact="required"` is the one value that also refuses to send
-  // without it.
-  if (data.contact !== undefined) {
-    options.contact = data.contact === "required" ? "required" : true;
-  }
-  // Masking is on by default, so the attribute only exists to switch it off:
-  // a page that wants the screenshot exactly as the reporter sees it says so.
-  if (data.mask === "off") options.mask = false;
+  const options = readOptions(data, endpoint);
   // Marking the picture is on by default wherever there is a picture — `mount`
   // above hands the annotator in — so, like masking, the attribute exists only
   // to switch it off. This build ships no renderer, so it matters only once a
@@ -157,18 +106,6 @@ function autoMount(data: DOMStringMap): void {
     const threshold = Number(data.shake);
     options.shake = threshold > 0 ? { on: onShake, threshold } : onShake;
   }
-  // Any value enables the scrubber, including the empty string of a bare
-  // `data-scrub` attribute — the point is that ticking it is one word.
-  if (data.scrub !== undefined) options.scrub = scrubReport;
-  // The key is in the page source for anyone who looks — that is the honest
-  // shape of signing from a browser, and the README says so. It raises the
-  // cost of a script posting to the endpoint; it authenticates nobody.
-  if (data.signKey) options.sign = createSigner({ key: data.signKey });
-  const extra = readExtra(data.extra);
-  if (extra) options.extra = extra;
-
-  initConsoleBuffer();
-  initBreadcrumbs();
   // Any value enables the network log, the same way `data-scrub` does. It is
   // opt-in rather than on: patching fetch is a bigger promise than listening.
   if (data.network !== undefined) initNetwork({ endpoint });
@@ -176,21 +113,7 @@ function autoMount(data: DOMStringMap): void {
   // on. Opt-in rather than on, because listing what a page has stored is a
   // bigger promise than timing it, and a script tag cannot ask first.
   if (data.perf !== undefined) initPerf();
-  // Any value turns the offline queue on, the same way `data-scrub` does. The
-  // queue also flushes whatever an earlier visit left behind as it is created.
-  if (data.queue !== undefined) options.queue = createQueue({ endpoint });
   mount(options);
 }
 
-if (script?.dataset.endpoint) {
-  const data = script.dataset;
-  // The console is patched now rather than on DOMContentLoaded, so an error
-  // thrown while the rest of the page is still parsing is in the buffer too.
-  // The call inside `autoMount` then does nothing; it is idempotent.
-  initConsoleBuffer();
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => autoMount(data), { once: true });
-  } else {
-    autoMount(data);
-  }
-}
+bootstrap(autoMount);

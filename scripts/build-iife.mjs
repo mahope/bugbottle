@@ -1,5 +1,7 @@
 /**
- * Builds `dist/bugbottle.js`, the one-script-tag bundle.
+ * Builds the two one-script-tag bundles: `dist/bugbottle.js`, which carries
+ * everything, and `dist/bugbottle.slim.js`, the same panel without the
+ * annotator, the timings snapshot, the shake gesture and the network log.
  *
  * The ESM output in `dist/` is tsc's; this is a second artefact for pages with
  * no bundler, so it is bundled and minified here rather than shipped as
@@ -16,21 +18,31 @@ import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const outfile = `${root}dist/bugbottle.js`;
 const { version } = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
 
-await build({
-  entryPoints: [`${root}src/global.ts`],
-  outfile,
-  bundle: true,
-  minify: true,
-  format: "iife",
-  platform: "browser",
-  target: ["es2020"],
-  legalComments: "none",
-  define: { __BUGBOTTLE_VERSION__: JSON.stringify(version) },
-});
+/**
+ * The same settings for both files, down to the version define: the slim
+ * build is a different entry point and nothing else, so anything that makes
+ * one of them smaller makes the other smaller too.
+ */
+async function bundle(entry, name) {
+  const outfile = `${root}dist/${name}`;
+  await build({
+    entryPoints: [`${root}src/${entry}`],
+    outfile,
+    bundle: true,
+    minify: true,
+    format: "iife",
+    platform: "browser",
+    target: ["es2020"],
+    legalComments: "none",
+    define: { __BUGBOTTLE_VERSION__: JSON.stringify(version) },
+  });
 
-const bytes = statSync(outfile).size;
-const gzipped = gzipSync(readFileSync(outfile)).length;
-console.log(`dist/bugbottle.js: ${bytes} bytes, ${gzipped} bytes gzipped`);
+  const bytes = statSync(outfile).size;
+  const gzipped = gzipSync(readFileSync(outfile)).length;
+  console.log(`dist/${name}: ${bytes} bytes, ${gzipped} bytes gzipped`);
+}
+
+await bundle("global.ts", "bugbottle.js");
+await bundle("global-slim.ts", "bugbottle.slim.js");

@@ -186,6 +186,12 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
               For a site with no build step: a WordPress theme, a static page, a client
               site somebody else deploys. It mounts itself from the data attributes.
             </p>
+            <p>
+              There are two files. <code>bugbottle.js</code> carries everything;
+              <code>bugbottle.slim.js</code> is the same panel in all eight languages
+              without the annotator, the timings snapshot, shake-to-report and the
+              network log, and says so on the console if you ask for one of them.
+            </p>
           </div>
           <div class="option-code">
             <div class="slab">
@@ -286,7 +292,11 @@ mountBugbottle({ endpoint: "/api/feedback" });</code></pre>
           </tr>
           <tr>
             <th scope="row">the script tag above</th>
-            <td>23.1 kB</td>
+            <td>23.9 kB</td>
+          </tr>
+          <tr>
+            <th scope="row">the same tag, bugbottle.slim.js</th>
+            <td>20.5 kB</td>
           </tr>
           </tbody>
         </table>

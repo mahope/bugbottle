@@ -49,7 +49,7 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   breadcrumbs 1.3 kB; the network log
   1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.3 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 23.9 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 23.9 kB, and the slim one 20.5 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
@@ -780,6 +780,39 @@ that mounts the panel from the tag itself, the annotator included. About
 `https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.7.0/dist/bugbottle.js`. Pin a
 version in either form; `@latest` is a way to have a stranger's next release
 run on your page.
+
+### Two builds
+
+There are two files, and they are the same panel:
+
+| File | Gzipped | What is in it |
+|---|---|---|
+| `dist/bugbottle.js` | 23.9 kB | Everything: the annotator, the timings and storage snapshot, shake-to-report and the network log, all switchable from an attribute. |
+| `dist/bugbottle.slim.js` | 20.5 kB | The same panel, the console, breadcrumbs, the element picker, the offline queue, the scrubber, the signer and all eight locales — without those four. |
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/bugbottle@0.7.0/dist/bugbottle.slim.js"
+  data-endpoint="/api/feedback"
+></script>
+```
+
+From the git tag it is
+`https://cdn.jsdelivr.net/gh/mahope/bugbottle@v0.7.0/dist/bugbottle.slim.js`.
+
+The slim build reads every attribute in the table below except four, which it
+ignores because the code behind them is not in it: **`data-annotate`**,
+**`data-perf`**, **`data-shake`** and **`data-network`**. Write one and it says
+so on the console once, in English — that is a message to whoever wrote the
+script tag, not to the reporter, so it is not translated. `window.bugbottle`
+is the same namespace without `createAnnotator`, `initPerf`, `onShake`,
+`requestShakePermission` and `initNetwork`.
+
+The saving is smaller than the four modules weigh on their own, because inside
+one bundle they share gzip's dictionary, and two of their costs stay behind on
+purpose: the annotator's labels are in all eight locales, which are data, and
+the panel's own annotator toolbar is a static import. Every language still
+works in the slim build; that is the trade it makes.
 
 | Attribute | Effect |
 |---|---|
@@ -2400,7 +2433,7 @@ validators below, and the shared types and limits — including the `StackFrame`
 type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
 `MAX_CONTEXT_LENGTHS`.
 
-**`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
+**`dist/bugbottle.js`** — the everything script-tag build: `window.bugbottle` with
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
 `createQueue`,
 `locales`,
@@ -2409,6 +2442,11 @@ type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
 `onShortcut`, `onUncaughtError`, `onShake`, `requestShakePermission`,
 `version`, and
 `data-*` auto-mount. See "One script tag".
+
+**`dist/bugbottle.slim.js`** — the same build without `createAnnotator`,
+`initPerf`, `onShake`, `requestShakePermission` and `initNetwork`, and so
+without `data-annotate`, `data-perf`, `data-shake` and `data-network`, which it
+warns about once on the console. See "Two builds".
 
 **WordPress** — the plugin at
 [github.com/mahope/bugbottle-wordpress](https://github.com/mahope/bugbottle-wordpress)
