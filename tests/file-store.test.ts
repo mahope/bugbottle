@@ -322,3 +322,52 @@ test("the file name carries the arrival time, so names sort by age", async () =>
     `unexpected names: ${names.join(", ")}`,
   );
 });
+
+/* -------------------------------------------------------------------------- */
+/* Two writes at once                                                          */
+/* -------------------------------------------------------------------------- */
+
+test("two reports stored at once are both listed", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir });
+  // Both calls find no index and both walk the directory. A walk that finished
+  // second used to replace what the first had already remembered, so one of
+  // the two reports was on disk and in no listing until the process restarted.
+  const stored = await Promise.all([store.store(report("First")), store.store(report("Second"))]);
+  const listed = await store.list();
+  assert.equal(listed.length, 2, `only ${listed.map((entry) => entry.title).join(", ")}`);
+  for (const { id } of stored) assert.ok(await store.read(id), `${id} is not readable`);
+});
+
+test("a report stored while the cap is deleting another is still listed", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxReports: 2 });
+  await store.store(report("Oldest", "2026-09-08T10:00:00.000Z"));
+  // The eviction the second write triggers must not throw away what the third
+  // write is in the middle of remembering.
+  await Promise.all([
+    store.store(report("Middle", "2026-09-08T11:00:00.000Z")),
+    store.store(report("Newest", "2026-09-08T12:00:00.000Z")),
+  ]);
+  const listed = await store.list();
+  assert.equal(listed.length, 2);
+  assert.deepEqual(
+    listed.map((entry) => entry.title).sort(),
+    ["Middle", "Newest"],
+    "the cap kept the newest two",
+  );
+});
+
+test("an arrival time cannot walk out of the directory it names a file in", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir });
+  // `handleReport` sets `receivedAt` itself, but `store` is a function anybody
+  // can call, and it is half of a file name.
+  const { id } = await store.store(report("Escaping", "../../2026-09-08T10:00:00.000Z"));
+  const names = await readdir(dir);
+  assert.ok(
+    names.some((name) => name.endsWith(`-${id}.json`)),
+    `the report was written outside the directory: ${names.join(", ")}`,
+  );
+  assert.equal((await store.list()).length, 1);
+});

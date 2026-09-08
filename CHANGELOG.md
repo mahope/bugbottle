@@ -81,6 +81,18 @@ change the API; the changelog says so when they do.
   seventy-five characters RFC 2047 §2 allows: a Danish subject used to become
   one word of a hundred and sixty, which a decoder is entitled to ignore, and
   is now several that fold onto lines that fit.
+- `fileStore` lost a report when two arrived before the directory had been
+  walked. Both writes found no index, both walked, and the walk that finished
+  second became the index — so the first report was on disk, readable by id,
+  and in no listing until the process restarted. The walk is shared now, and
+  once there is an index it is added to and spliced from rather than replaced,
+  so a write holding it across an `await` is still holding the live one when
+  the cap deletes something underneath it.
+- `fileStore` built the front half of a file name out of the report's own
+  `receivedAt`. `handleReport` sets that field itself, but `store` is a
+  function anybody can call, and `../..` in it would have written the report
+  outside the directory — the same hole the id is checked against the UUID
+  shape to close. Only the characters a timestamp is made of survive it now.
 
 ## 0.12.0 — 2026-09-08
 
