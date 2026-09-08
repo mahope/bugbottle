@@ -90,6 +90,42 @@ export {
   type CreateLinearIssueOptions,
   type CreateLinearIssueResult,
 } from "../sinks/linear.ts";
+
+// The two chat sinks are factories rather than send functions, because a
+// channel wants one message per report and nothing to configure at the call
+// site of the delivery itself.
+export {
+  MAX_CHAT_CONSOLE_ENTRIES,
+  type ChatSink,
+  type ChatSinkContext,
+  type UrlFrom,
+} from "../sinks/chat.ts";
+
+export {
+  slackSink,
+  buildSlackMessage,
+  escapeSlack,
+  SLACK_MAX_BLOCKS,
+  SLACK_MAX_TEXT,
+  SLACK_MAX_HEADER_TEXT,
+  SLACK_MAX_FIELDS,
+  SLACK_MAX_FIELD_TEXT,
+  type SlackSinkOptions,
+} from "../sinks/slack.ts";
+
+export {
+  discordSink,
+  buildDiscordMessage,
+  DISCORD_COLOURS,
+  DISCORD_MAX_EMBED_TITLE,
+  DISCORD_MAX_EMBED_DESCRIPTION,
+  DISCORD_MAX_EMBED_FIELDS,
+  DISCORD_MAX_FIELD_NAME,
+  DISCORD_MAX_FIELD_VALUE,
+  DISCORD_MAX_FOOTER_TEXT,
+  DISCORD_MAX_EMBED_TOTAL,
+  type DiscordSinkOptions,
+} from "../sinks/discord.ts";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.
 export {

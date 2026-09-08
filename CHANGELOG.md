@@ -7,6 +7,28 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Added
+
+- `bugbottle/server`: `slackSink` and `discordSink`, two incoming-webhook sinks
+  that post one structured message per report rather than a wall of Markdown.
+  Slack gets a Block Kit message — a header, the message as escaped `mrkdwn`, a
+  section of fields, the last five console entries fenced, an `image` block, a
+  `context` line with the time and the pointed-at selector, and an "Open report"
+  button. Discord gets one embed, coloured red, green or grey by report type,
+  with the same facts as fields, the screenshot as `image`, the report link as
+  the embed's `url` and the selector in the footer. Both are factories that go
+  straight into `handleReport`'s `sinks`, both take an injected `fetch` and use
+  the `AbortSignal` they are handed, and both throw `SinkError` with the
+  upstream status and body. `screenshotUrl` and `reportUrl` are functions of the
+  report, so the addresses come from whatever you stored; neither service will
+  fetch a data URL, so one is ignored rather than sent.
+  `buildSlackMessage` and `buildDiscordMessage` return the body without sending
+  it, for anyone posting through a bot token instead.
+- Every Block Kit and embed limit is a clip rather than a failure: 50 blocks,
+  3000 characters per Slack text object, 10 fields per section; 256, 4096, 25,
+  256 and 1024 on a Discord embed, and 6000 across it, where the description is
+  what gives way first because the facts are what somebody triages from.
+
 ## 0.6.0 — 2026-09-07
 
 The adoptable release: one form state shared by React, Vue and Svelte; a
