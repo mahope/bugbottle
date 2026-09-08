@@ -50,8 +50,9 @@ or wherever `REPORTS_DIR` says — as two files each:
   URL, so the file stays readable;
 - `<id>.png`, the decoded picture.
 
-Deleting a report deletes both. There is no database and nothing to migrate;
-`rm -rf reports/` is the whole retention policy until you write a better one.
+Deleting a report deletes both. There is no database and nothing to migrate:
+`rm -rf reports/` empties the inbox, and *What is deleted, and when* below is
+the policy that runs without you.
 
 Both files are written under a temporary name and renamed into place, which is
 atomic within a directory: a process killed halfway through four megabytes of
@@ -59,14 +60,6 @@ picture leaves a `.tmp` file that no listing looks at, never a truncated report
 or half a screenshot. And every id in a URL is matched against the shape
 `crypto.randomUUID()` writes before it becomes part of a path, so `/r/../../..`
 is a 404 rather than a question about how `normalize` works.
-
-The directory does have a ceiling. `MAX_REPORTS` — 2000 by default — is how
-many reports are kept; once a new one takes the count past it, the oldest are
-deleted, JSON and picture together, until it is back inside. Without that the
-disk is the ceiling: thirty reports a minute are allowed and each may carry
-four megabytes of picture, so an inbox left running is eventually a full volume
-and an endpoint that has stopped accepting anything. Set `MAX_REPORTS=0` to
-switch the cap off, and watch the disk yourself.
 
 The list is held in memory. The directory is walked once, at the first request
 that needs it, and after that a write appends to the list and a delete removes
@@ -77,10 +70,49 @@ reports; the detail page reads the one file it was asked for. If you point a
 second process at the same `REPORTS_DIR`, neither will see the other's
 reports until it restarts — one process per directory.
 
-None of that is special to the example. `fileStore({ dir, maxReports })` is in
-`bugbottle/server`, and `list()`, `read(id)` and `remove(id)` are there for
-whoever wants a different page over the same directory — see *Receiving a
-report* in the main README.
+None of that is special to the example. `fileStore({ dir, maxReports,
+maxAgeDays })` is in `bugbottle/server`, and `list()`, `read(id)`, `remove(id)`
+and `prune()` are there for whoever wants a different page over the same
+directory — see *Receiving a report* in the main README.
+
+### What is deleted, and when
+
+The directory has a ceiling and, if you ask for one, an age limit. Two rules,
+and both of them delete a report whole — the JSON and the picture together:
+
+- **`MAX_REPORTS`** — 2000 by default — is how many reports are kept. Once a
+  new one takes the count past it, the oldest are deleted until it is back
+  inside, **on the write itself**. Without that the disk is the ceiling: thirty
+  reports a minute are allowed and each may carry four megabytes of picture, so
+  an inbox left running is eventually a full volume and an endpoint that has
+  stopped accepting anything. `MAX_REPORTS=0` switches the cap off, and the
+  disk is yours to watch.
+- **`RETENTION_DAYS`** — unset, so off — is how long a report is kept. With it
+  set, everything that arrived longer ago than that is deleted **when the inbox
+  starts and once an hour after that**. It is a schedule rather than a write
+  because it is the rule that empties an inbox nobody is posting to: thirty
+  days of retention on a quiet month has to delete something with no request
+  to trigger it.
+
+Nothing here picks a number for you, and that is deliberate. How long you may
+keep somebody's screenshot is a question about the promise you made them and
+about the law where they live, not one this example can answer; what it can do
+is delete on the day you name. Reports that a run before this one left in the
+directory are pruned too — the first pass walks the directory rather than only
+what this process wrote.
+
+A report a rule deletes is gone: there is no bin, no soft delete, and nothing
+in the notification path is touched — an email or a Slack message that has
+already been sent stays sent, and the link in it starts answering 404. A
+report an arrival time nobody can parse is left alone, since its age is not
+something to guess at; the cap takes it in the end. Files the inbox did not
+write are never touched by either rule, so a directory that also holds a note,
+a backup or an export keeps all three.
+
+The browser has a lifetime of its own, and it is not this one: a report that
+was queued because the endpoint was unreachable sits in that browser's storage
+until it is delivered or the queue's own limits drop it. Retention here is
+about what has arrived.
 
 The detail page renders `toMarkdown` through a tiny subset — headings,
 paragraphs, tables, fenced code, lists and the two `<details>` lines the
@@ -263,7 +295,7 @@ is true: any caller can then pick their own bucket and never meet the limit.
 | `HOST` | `127.0.0.1` by default; the image sets `0.0.0.0`, because in a container the proxy is on the other side of the boundary |
 | `PUBLIC_URL` | The address the feeds and the notifications link to, when the request's own host is not it |
 | `TRUST_PROXY` | Unset by default: the socket, which behind a proxy is the proxy. `true` for the last `X-Forwarded-For` entry, a number for that many hops in from the right, or a header name. As above |
-| `ALLOWED_ORIGIN`, `MAX_REPORTS` | As above |
+| `ALLOWED_ORIGIN`, `MAX_REPORTS`, `RETENTION_DAYS` | As above. *What is deleted, and when* for the last two |
 | `NOTIFY_WEBHOOK`, `NOTIFY_KIND`, `NOTIFY_SMTP_*` | Who is told about a new report, and how. *Be told about new reports* above |
 
 On **Dokploy**, in eight lines:

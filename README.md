@@ -1707,12 +1707,13 @@ it, because an inbox with no ceiling is a disk that fills; `0` keeps
 everything, which is a decision about a disk rather than a default.
 `screenshots: false` keeps the JSON and never writes a picture at all.
 
-Four more calls are there for whoever builds a page over the directory:
+Five more calls are there for whoever builds a page over the directory:
 
 ```ts
 const listed = await reports.list();          // newest first, one small entry each
 const found = await reports.read(id, { screenshot: true });
 await reports.remove(id);                     // the JSON and the picture
+const deleted = await reports.prune();        // retention, and how much it took
 await reports.refresh();                      // walk the directory again
 ```
 
@@ -1729,6 +1730,37 @@ of the same thing: it walks the directory again and answers with what is there
 now, which is what to call after a backup is restored underneath the inbox or
 when something else has been writing to the directory. Nothing calls it on its
 own — a walk on every request is the cost this index exists to avoid.
+
+**Retention.** "Store it like personal data" needs a way to stop storing it.
+`maxAgeDays` is how long a report is kept, and `prune()` is what applies it:
+everything that arrived longer ago than that goes first, then everything over
+`maxReports`, JSON and picture together, and the number it answers with is how
+many reports went. It is off by default, because how long you may keep
+somebody's screenshot is a question about the promise you made them and the law
+where they live, not one a library can answer.
+
+```ts
+const reports = fileStore({ dir: "./reports", maxReports: 2000, maxAgeDays: 90 });
+
+await reports.prune();                                       // at start
+setInterval(() => void reports.prune(), 60 * 60 * 1000).unref();  // and hourly
+```
+
+Nothing schedules it for you — a library owning a timer is a library that keeps
+a process alive — and the cap is the only rule a write applies on its own, so
+an inbox nobody is posting to only empties if something calls `prune()` with no
+request behind it. It is safe to call at any time, including beside a `store`
+halfway through a write, and the first call walks the directory, so what an
+earlier run left behind is pruned too. A report whose arrival time cannot be
+parsed is left alone rather than deleted on a guess, and a file this store did
+not name is never touched at all: a directory that also holds a note, a backup
+or somebody's export keeps all three. `examples/inbox` is this wired up, with
+the interval and a `RETENTION_DAYS` to set.
+
+A queue of unsent reports in the browser has a lifetime of its own and this is
+not it: a report `bugbottle/queue` is holding because the endpoint was
+unreachable sits in that browser's storage until it is delivered or the queue's
+own limits drop it. Retention here is about what has arrived.
 
 Two of its properties are worth saying out loud, because they are the reasons
 not to write this yourself:
@@ -3145,7 +3177,8 @@ imports this entry, so a site that does not ask for it never carries it.
 
 **`bugbottle/server`** — `handleReport` (with `clientAddress` and the
 `TrustProxyOptions` type), `expressHandler`, `fileStore`
-(with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
+(whose store answers `store`, `list`, `read`, `remove`, `prune` and `refresh`,
+with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `StoredReport` and `StoredReportFile` types), `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
 `resetDedupe`, `resetSignatures`, `fingerprint`, `stableHash`,

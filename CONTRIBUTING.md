@@ -58,7 +58,10 @@ need Node 18.
   core moved 1272 → 1310 bytes for it, which is the two registry reads in
   `buildReport` and nothing else — the observers, the store walk and the cookie
   parse are only ever bundled by an application that imports `bugbottle/perf`.
-  `bugbottle/server` is budgeted at 1024 bytes and measures 583: it is a
+  `bugbottle/server` is budgeted at 1024 bytes and measures 583, and 584 with
+  retention on `fileStore` (#89) — a byte esbuild's choice of identifier
+  letters can move on its own, since none of that code reaches this bundle: it
+  is a
   server entry, and everything in it — the sinks and `fileStore` included — is
   tree-shaken away
   from a consumer that imports only the validators, so staying about half a
