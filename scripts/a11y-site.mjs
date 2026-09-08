@@ -6,8 +6,8 @@
  * documentation index, one deep documentation page, the English landing page
  * again with the demo's panel open and the picture editor over it, the index
  * again with the search field open on results, the theme playground with a
- * control moved, the two comparison pages and the changelog, in both colour
- * schemes, with the pinned `axe-core`. Contrast, heading
+ * control moved, the two comparison pages, the Danish getting-started page and the
+ * changelog, in both colour schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
  * without breaking a test.
