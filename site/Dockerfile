@@ -27,6 +27,9 @@ RUN npm ci --ignore-scripts
 
 COPY README.md ./
 COPY scripts/build-docs.mjs ./scripts/
+# The changelog is its own Markdown too, rendered into site/docs/changelog/,
+# so it has to be here or the script fails on a file it cannot read.
+COPY CHANGELOG.md ./
 # The two comparison pages are their own Markdown, not README sections, and
 # the same run writes sitemap.xml and robots.txt.
 COPY site/compare.md ./site/

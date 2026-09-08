@@ -45,14 +45,18 @@ edit("CHANGELOG.md", (t) => {
   return t.replace(/^## Unreleased\r?\n/m, (m) => `${m}\n## ${version} — ${today}\n`);
 });
 
-// README and landing pages: tagged install refs and the version stamp.
+// README and landing pages: tagged install refs, the version stamp, and the
+// link from that stamp to the release on /docs/changelog/, whose anchor is the
+// version with hyphens for dots (scripts/build-docs.mjs writes them that way).
+const anchor = (v) => v.replace(/\./g, "-");
 const refs = (t) =>
   t
     .split(`v${before}`).join(`v${version}`)
     .split(`bugbottle@${before}`).join(`bugbottle@${version}`)
     .split(`Version ${before}`).join(`Version ${version}`)
     .split(`measured at ${before}`).join(`measured at ${version}`)
-    .split(`målt ved ${before}`).join(`målt ved ${version}`);
+    .split(`målt ved ${before}`).join(`målt ved ${version}`)
+    .split(`/docs/changelog/#${anchor(before)}`).join(`/docs/changelog/#${anchor(version)}`);
 for (const f of ["README.md", "site/index.html", "site/da/index.html"]) edit(f, refs);
 
 // The Sentry sink names its version in the envelope header, and a test pins it

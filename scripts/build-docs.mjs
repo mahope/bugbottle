@@ -17,12 +17,14 @@
  * when a new section is added and not placed, because a section nobody placed
  * is a page nobody can reach.
  *
- * Two pages are not README sections: site/compare.md and site/da/sammenlign.md
+ * Three pages are not README sections: site/compare.md and site/da/sammenlign.md
  * are their own Markdown files, rendered by the same renderer into
  * site/compare/ and site/da/sammenlign/ with the landing page's header and
  * footer. They are the only prose on the site that is neither the landing page
  * nor the README, because they are about other people's products and have no
- * business in a package README.
+ * business in a package README. The third is CHANGELOG.md, rendered into
+ * site/docs/changelog/ so the release notes are a page on the site rather than
+ * a link away to a raw file on GitHub.
  *
  * The last two files are for machines: site/sitemap.xml lists every URL the
  * site has, each with the date of the commit that last touched the file it is
@@ -88,6 +90,26 @@ const STANDALONE = [
     otherUrl: "/compare/",
   },
 ];
+
+/* The changelog. Also its own Markdown file rather than a README section, but
+   unlike the comparison it exists in one language and lives under /docs/,
+   because it is documentation: it is the answer to "what moved", and the
+   answer should be a page with the site's typography and not a raw file on
+   GitHub. Its `##` headings are the releases, and their anchors are the
+   version with hyphens for dots, so /docs/changelog/#0-9-0 is a link anyone
+   can guess and the landing pages can stamp. */
+const CHANGELOG = {
+  id: "changelog",
+  lang: "en",
+  source: "CHANGELOG.md",
+  out: join("docs", "changelog"),
+  url: "/docs/changelog/",
+  title: "Changelog",
+  navTitle: "Changelog",
+  eyebrow: "About",
+  heading: "Changelog",
+  tocTitle: "Releases",
+};
 
 /* slug -> group. The order inside a group is the order of the pages in the
    sidebar and of previous/next. */
@@ -157,6 +179,11 @@ const GROUPS = [
         description:
           "Where bugbottle sits next to Marker.io, Jam, Sentry User Feedback, BugPin and rrweb.",
       },
+      {
+        url: "/docs/changelog/",
+        navTitle: "Changelog",
+        description: "Every release, what it added, what it fixed and what it cost in bytes.",
+      },
     ],
   },
 ];
@@ -179,6 +206,16 @@ function slugify(text) {
     .replace(/`/g, "")
     .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .replace(/\s+/g, "-");
+}
+
+/* The anchor of a changelog release. `## 0.9.0 — 2026-09-08` is `#0-9-0` and
+   `## Unreleased` is `#unreleased`, so a link to a release survives the date
+   being corrected and is short enough to type. The heading that covers four
+   patch releases at once — `## 0.2.4, 0.2.3, 0.2.2, 0.2.1` — is anchored by
+   the first version in it, which is the one anybody looks for. */
+function versionAnchor(text) {
+  const version = /\d+\.\d+(?:\.\d+)?/.exec(text);
+  return version ? version[0].replace(/\./g, "-") : slugify(text);
 }
 
 /* Splitting on a regular expression would cut inside the fenced Markdown
@@ -437,6 +474,29 @@ function renderer(page, anchors) {
   };
 }
 
+/* The changelog's own heading rule, on top of the renderer above. A release
+   heading is an `<h2>` carrying its version anchor; everything under it —
+   Added, Fixed, Changed, a dozen times over — is an `<h3>` with no id at all.
+   The shared renderer would give every one of those the id `added`, which is
+   a page with twelve elements answering to one anchor and eleven of them
+   unreachable. Nobody links to "Added"; they link to a release. */
+function changelogRenderer(page) {
+  const base = renderer(page, new Map());
+  return {
+    ...base,
+    heading(token) {
+      const text = this.parser.parseInline(token.tokens);
+      if (token.depth > 2) return `<h3>${text}</h3>\n`;
+      const id = versionAnchor(token.raw.replace(/^#+\s*/, ""));
+      return (
+        `<h2 id="${id}">${text}` +
+        ` <a class="anchor" href="#${id}" aria-label="Link to this release">#</a>` +
+        `</h2>\n`
+      );
+    },
+  };
+}
+
 /* The <head> and the header, shared by the documentation and by the two
    comparison pages. A page carries its own language, its canonical URL and
    the alternates it has; a documentation page has only itself. */
@@ -586,6 +646,23 @@ ${items}
     </nav>\n`;
 }
 
+/* The list of releases at the top of the changelog, in the same ruled column
+   "On this page" uses, so docs.js marks the release the reader is inside as
+   they scroll and the print stylesheet drops it. A reader arrives at a
+   changelog looking for one version; the alternative is scrolling past 1400
+   lines of prose to find it. */
+function releaseToc(releases, title) {
+  const items = releases
+    .map((r) => `      <li><a href="#${r.anchor}">${escapeHtml(r.text)}</a></li>`)
+    .join("\n");
+  return `    <nav class="docs-toc" aria-label="${escapeHtml(title)}">
+      <p>${escapeHtml(title)}</p>
+      <ul>
+${items}
+      </ul>
+    </nav>\n`;
+}
+
 function pageHtml(page, pages) {
   const previous = page.previous
     ? `<a class="prev" href="${page.previous.url}"><span>Previous</span>${escapeHtml(page.previous.navTitle)}</a>`
@@ -692,6 +769,11 @@ function sitemapXml(pages) {
       source: "site/da/sammenlign.md",
       alternates: pair("/da/sammenlign/", "/compare/", "da", "en"),
     },
+    {
+      loc: `${ORIGIN}${CHANGELOG.url}`,
+      source: CHANGELOG.source,
+      alternates: [],
+    },
     { loc: `${ORIGIN}/docs/`, source: "README.md", alternates: [] },
     ...pages.map((page) => ({
       loc: `${ORIGIN}${page.url}`,
@@ -772,7 +854,7 @@ ${sidebar(pages, "index")}
     <p class="docs-lede">
       One page per topic, generated from the project README, so the page you are
       reading and the file in the repository are the same text. This is version
-      ${escapeHtml(version)}; the <a href="${BLOB}/CHANGELOG.md" rel="noopener">changelog</a>
+      ${escapeHtml(version)}; the <a href="${CHANGELOG.url}#${versionAnchor(version)}">changelog</a>
       has what moved.
     </p>
     <div class="docs-index">
@@ -912,13 +994,83 @@ async function main() {
     searchIndex.push(...searchEntries({ url: entry.url, title: entry.heading, body }));
   }
 
+  /* The changelog. One long article like the comparison pages, but under
+     /docs/ and with the list of releases at the top of it. Its H1 goes the way
+     the README's does — the page already has one — while the paragraph under
+     it stays, because it says what the file is and which conventions it
+     follows. */
+  {
+    const body = (await readFile(join(root, CHANGELOG.source), "utf8"))
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .filter((line) => !/^#\s/.test(line))
+      .join("\n")
+      .trim();
+    const lines = body.split("\n");
+    const headings = readHeadings(lines);
+    const releases = headings
+      .filter((h) => h.depth === 2)
+      .map((h) => ({ ...h, anchor: versionAnchor(h.text) }));
+
+    /* The list of releases goes between the paragraph that says what the file
+       is and the first release, which is where a reader looking for one
+       version wants it: after the sentence explaining the versioning scheme,
+       before 1400 lines of prose. */
+    const first = releases[0];
+    const marked = new Marked({ gfm: true, breaks: false });
+    marked.use({ renderer: changelogRenderer(CHANGELOG) });
+    const lede = marked.parse(lines.slice(0, first ? first.line : lines.length).join("\n").trim());
+    const rest = first ? marked.parse(lines.slice(first.line).join("\n").trim()) : "";
+    const page = {
+      ...CHANGELOG,
+      html: `${lede}${releaseToc(releases, CHANGELOG.tocTitle)}${rest}`,
+      description: describe(body),
+      headTitle: `${CHANGELOG.heading} — bugbottle`,
+      canonical: `${ORIGIN}${CHANGELOG.url}`,
+      docsCurrent: true,
+    };
+    const dir = join(root, "site", CHANGELOG.out);
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "index.html"), standaloneHtml(page), "utf8");
+
+    /* Indexed by release, and each release by its own summary rather than by
+       everything under it. The changelog says of every feature what the
+       documentation says, at greater length: indexing all of it would put
+       thirteen release entries above the page that actually documents
+       whatever was searched for, since the ranking counts occurrences. What
+       is wanted here is "which release was that in", so the entry a reader
+       needs is the heading and the paragraph under it. */
+    searchIndex.push({
+      url: CHANGELOG.url,
+      title: CHANGELOG.title,
+      heading: "",
+      text: prose(lines.slice(0, releases[0] ? releases[0].line : lines.length)),
+    });
+    for (let i = 0; i < releases.length; i += 1) {
+      const release = releases[i];
+      if (!release) continue;
+      const next = headings.find((h) => h.line > release.line);
+      searchIndex.push({
+        url: `${CHANGELOG.url}#${release.anchor}`,
+        title: CHANGELOG.title,
+        heading: release.text,
+        text: prose(lines.slice(release.line + 1, next ? next.line : lines.length)),
+      });
+    }
+  }
+
   /* A page that is written but not indexed is a page the search cannot find,
      the same kind of quiet hole as a page with no group. The check is against
      the pages this run wrote, rather than a trust that the loops above stayed
      in step with each other. */
   const indexed = new Set(searchIndex.map((item) => item.url.split("#")[0]));
-  const unindexed = ["/docs/", ...pages.map((page) => page.url), ...STANDALONE.map((s) => s.url)]
-    .filter((url) => !indexed.has(url));
+  const unindexed = [
+    "/docs/",
+    ...pages.map((page) => page.url),
+    ...STANDALONE.map((s) => s.url),
+    CHANGELOG.url,
+  ].filter((url) => !indexed.has(url));
   if (unindexed.length > 0) {
     throw new Error(`Pages missing from site/docs/search.json: ${unindexed.join(", ")}`);
   }
@@ -929,8 +1081,8 @@ async function main() {
 
   process.stdout.write(
     `site/docs: ${pages.length + 1} pages from README.md; ` +
-      `${STANDALONE.length} comparison pages; ${searchIndex.length} search entries; ` +
-      `sitemap.xml and robots.txt\n`,
+      `${STANDALONE.length} comparison pages; the changelog; ` +
+      `${searchIndex.length} search entries; sitemap.xml and robots.txt\n`,
   );
 }
 
