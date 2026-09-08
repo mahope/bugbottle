@@ -10,7 +10,8 @@ under 10 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
 1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/perf` under 1.25 kB,
 `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-`bugbottle/sign` under 512 bytes, the script-tag build under 22 kB. The core budget was 1 kB until 0.6, when stack
+`bugbottle/sign` under 512 bytes, `bugbottle/rrweb` under 768 bytes, the
+script-tag build under 22 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -91,6 +92,18 @@ multipart request against the created issue and GitLab a separate upload whose
 answer is then referenced from the description, so both are a later job and the
 screenshot travels as `screenshotUrl` in the meantime. The validator-only
 `bugbottle/server` bundle is unchanged at 528 bytes gzipped.
+
+**0.7** — `bugbottle/rrweb`: `attachRrweb(record, { seconds, maxBytes })`, a
+rolling replay buffer over the application's own rrweb `record` — an adapter,
+not a recorder, with rrweb neither imported nor depended on. A full snapshot
+every ten seconds is what makes the buffer trimmable, since a replay can only
+be cut at a checkout; whole checkout groups are dropped, oldest first, when
+they fall outside the window and again over `maxBytes`. `maskAllInputs` is on
+by default and the screenshot markers map onto rrweb's own selectors, because
+the scrubber cannot walk somebody else's event format. `normaliseReplay` and a
+1 MB ceiling on the server, `replay: "keep" | "drop"` on `handleReport`, one
+line in `toMarkdown`, `ReplayCapture` in the schema. 711 bytes gzipped against
+a 768-byte budget, and 19 bytes of registry read in the core.
 
 **0.6** — `report.schema.json` generated from the types by
 `scripts/build-schema.ts`, shipped in the package and served at
@@ -218,7 +231,8 @@ bites. No SDK dependency.
 
 - Annotation shipped early, in 0.6; see "Already shipped".
 - `create-bugbottle` scaffold for a receiving endpoint.
-- Playground and StackBlitz demo; rrweb adapter.
+- Playground and StackBlitz demo. (The rrweb adapter shipped early, in 0.7, as
+  `bugbottle/rrweb`; see "Already shipped".)
 - Freeze the report schema and the `beforeSend` contract.
 
 ## Explicitly not planned

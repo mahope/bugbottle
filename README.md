@@ -1081,6 +1081,88 @@ block. `initPerf` returns the `stop()` that disconnects the observers and
 unregisters both — the same thing `resetPerf()` does. In the one-script-tag
 build it is `data-perf` on the script tag.
 
+## Replay with rrweb
+
+If your application already records with [rrweb](https://github.com/rrweb-io/rrweb),
+the half-minute before the reporter opened the panel can travel with the
+report. `bugbottle/rrweb` is an adapter and not a recorder: rrweb is not a
+dependency and is never imported here, so you hand your own `record` in, the
+same way you hand the screenshot renderer in.
+
+```ts
+import { record } from "rrweb";
+import { attachRrweb } from "bugbottle/rrweb";
+
+const stop = attachRrweb(record);                       // 30 s, 512 KiB
+// or
+attachRrweb(record, { seconds: 15, maxBytes: 256 * 1024 });
+```
+
+### Please read this part too
+
+A replay is a recording of a person using your software: what they typed, what
+they had on screen, in what order and how long it took them. Everything the
+["Please read this part"](#please-read-this-part) section says about
+screenshots applies here, and applies twice — a screenshot is one moment and a
+replay is all of them. Turn this on for your own staff, on your own staging
+environment, or on an application whose users have been told; do not turn it on
+quietly on a page that shows one person's data to another.
+
+Two specifics worth knowing before you do.
+
+`scrubReport` does not look inside a replay. The scrubber works field by field
+over a report it understands, and rrweb's event payload is somebody else's
+format — walking it and rewriting strings would corrupt the recording as often
+as it redacted anything. **rrweb's own masking is the whole control here.**
+This adapter therefore sets `maskAllInputs: true` unless you override it, and
+maps the markers you already use for screenshots onto rrweb's selectors:
+`data-bugbottle-mask` becomes `maskTextSelector`, and `data-bugbottle-block`
+becomes `blockSelector` alongside `data-bugbottle`, so the panel never films
+itself. Everything else rrweb offers — `maskTextClass`, `maskInputFn`,
+`ignoreClass` — goes through `recordOptions`:
+
+```ts
+attachRrweb(record, { recordOptions: { maskTextClass: "sensitive" } });
+```
+
+And the receiver has the last word. `handleReport` takes `replay: "drop"`,
+which throws the recording away before anything is scrubbed, deduplicated,
+stored or rendered — the setting for a deployment whose client has rrweb wired
+up before its storage policy is decided.
+
+### How the buffer holds thirty seconds
+
+rrweb emits events for as long as it runs, and a report wants the recent past
+only. The adapter asks rrweb for a fresh full snapshot every ten seconds
+(`checkoutEveryNms`), and a full snapshot is the only place a recording can be
+cut: everything after one is a diff against it, so dropping events out of the
+middle leaves something that will not play. The buffer therefore keeps whole
+checkout groups and drops the oldest — first when it is entirely outside the
+window, then again while the serialised buffer is over `maxBytes`. The newest
+group is never dropped, so `seconds` is a floor and not a promise: you get at
+least what you asked for, up to ten seconds more, and less than that only in
+the first seconds after the page loaded.
+
+If one snapshot alone is over the cap — a page too large to record at that
+size — nothing is attached at all, on the same principle as an oversized
+screenshot: half a replay is not half as useful, it is useless.
+
+`buildReport` attaches the buffer on its own while `attachRrweb` is recording,
+as `replay: { events, seconds }`; pass `includeReplay: false` to leave it out
+of one report. `attachRrweb` returns the `stop()` that stops the recorder,
+empties the buffer and unregisters it — the same thing `resetRrweb()` does.
+
+On the server, `normaliseReplay` keeps the events that are objects with a
+numeric `type` and `timestamp`, strips null bytes, recomputes `seconds` from
+what survived, and drops the whole replay when it serialises to more than
+`MAX_REPLAY_BYTES` (1 MB). `toMarkdown` prints one line — `Replay: 240 events
+over 32 s (attached)` — because the events are for a player and not for a
+reader. `store` writes them with the rest of the report; no sink uploads them
+anywhere.
+
+The one-script-tag build does not carry this. Without a bundler there is no
+`record` to hand in, and the adapter is three lines for anybody who has one.
+
 ## Feeding reports to an agent
 
 A report with a selector, the element's text, the page path and the last few
@@ -2315,6 +2397,9 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
   "network": [                         // only while bugbottle/network is recording
     { "ts": "2026-09-07T08:12:31.004Z", "method": "POST", "url": "/api/orders", "status": 500, "ms": 812 }
   ],
+  "replay": {                          // only while bugbottle/rrweb is recording
+    "events": [{ "type": 2, "timestamp": 1757232751004, "data": {} }], "seconds": 31
+  },
   "screenshotDataUrl": "data:image/png;base64,…"   // only when attached
 }
 ```
@@ -2378,6 +2463,12 @@ post type with an admin list, and emails them if you want. One activation.
 **`bugbottle/queue`** — `createQueue`, and the `Queue`, `QueueOptions` and
 `QueuedReport` types. See "When the network is down".
 
+**`bugbottle/rrweb`** — `attachRrweb`, `getReplay`, `resetRrweb`,
+`isRrwebAttached`, `DEFAULT_REPLAY_SECONDS`, `DEFAULT_REPLAY_MAX_BYTES`,
+`REPLAY_CHECKOUT_MS`, `REPLAY_MASK_SELECTOR`, `REPLAY_BLOCK_SELECTOR`, and the
+`RrwebOptions`, `RrwebRecord`, `RrwebRecordOptions`, `RrwebEvent`,
+`ReplayCapture` and `ReplayEvent` types. See "Replay with rrweb".
+
 **`bugbottle/sign`** — `createSigner`, `computeSignature`, `hmacHex`,
 `DEFAULT_SIGNATURE_HEADER`, and the `SignerOptions` type. See "Signing
 requests".
@@ -2427,7 +2518,7 @@ Requires `html-to-image`.
 `decodeScreenshotDataUrl`, `normaliseMessage`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `normalisePerf`,
-`normaliseStorage`, `isReportType`, `toMarkdown`,
+`normaliseStorage`, `normaliseReplay`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
 `createLinearIssue`, `jiraSink`, `buildJiraDescription`, `jiraBaseUrl`,

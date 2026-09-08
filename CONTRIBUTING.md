@@ -33,7 +33,7 @@ need Node 18.
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
   `bugbottle/queue` 1330 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/shake` 768 bytes,
-  `bugbottle/sign` 512 bytes,
+  `bugbottle/sign` 512 bytes, `bugbottle/rrweb` 768 bytes,
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
   are small; the core they share is not), `dist/bugbottle.js` 23 kB. The
@@ -64,7 +64,11 @@ need Node 18.
   to carry. It measures 685 bytes, adds 94 to the panel (the wiring, not the
   module — `shake` is a function you hand in) and 572 to the script tag, which
   carries everything and must also expose `requestShakePermission`, since a page
-  with no bundler has no other way to ask iOS.
+  with no bundler has no other way to ask iOS. `bugbottle/rrweb` measures 711
+  bytes and costs the bare core 19 more (1316 → 1335): one registry read, and
+  none of the adapter, because rrweb's `record` is handed in by the
+  application rather than imported here. The script tag does not carry it at
+  all — without a bundler there is no `record` to hand in.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a
   file is added.

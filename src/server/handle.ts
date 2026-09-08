@@ -28,6 +28,7 @@ import {
   normaliseMessage,
   normaliseNetwork,
   normalisePerf,
+  normaliseReplay,
   normaliseStorage,
   InvalidScreenshotError,
   type Breadcrumb,
@@ -35,6 +36,7 @@ import {
   type ElementRef,
   type NetworkEntry,
   type PerfSnapshot,
+  type ReplayCapture,
   type ReportContext,
   type StorageSnapshot,
   type ReportType,
@@ -80,6 +82,7 @@ const KNOWN_KEYS = new Set([
   "network",
   "perf",
   "storage",
+  "replay",
   "screenshotDataUrl",
 ]);
 
@@ -104,6 +107,11 @@ export type ValidatedReport = {
   perf: PerfSnapshot | null;
   /** What was in the browser's stores, or null when the client was not looking. */
   storage: StorageSnapshot | null;
+  /**
+   * The session replay, or null when the client was not recording one, sent
+   * one that did not survive validation, or the handler was told to drop it.
+   */
+  replay: ReplayCapture | null;
   extra: Record<string, unknown>;
   /** ISO 8601 timestamp of when the server accepted it. */
   receivedAt: string;
@@ -378,6 +386,16 @@ export type HandleReportOptions = {
     | "drop"
     | "keep"
     | ((bytes: Uint8Array, report: ValidatedReport) => Promise<string | undefined>);
+  /**
+   * What happens to the session replay. `"keep"` (the default) validates it
+   * and hands it to `store` on the report; `"drop"` throws it away, which is
+   * the setting for a deployment that has rrweb wired up on the client but has
+   * not decided where a recording of somebody's screen may be written.
+   *
+   * There is no function form on purpose: a replay is JSON and belongs in the
+   * row the rest of the report goes into, not in a bucket of its own.
+   */
+  replay?: "drop" | "keep";
   /** Where the report is written. Its `id` is what the client is told. */
   store?: (
     report: ValidatedReport,
@@ -823,6 +841,7 @@ export function validateReport(payload: unknown): ValidatedReport | null {
     network: normaliseNetwork(body.network),
     perf: normalisePerf(body.perf),
     storage: normaliseStorage(body.storage),
+    replay: normaliseReplay(body.replay),
     extra: collectExtra(body),
     receivedAt: new Date().toISOString(),
   };
@@ -944,6 +963,11 @@ export async function handleReport(
 
     let report = validateReport(payload);
     if (!report) return json({ error: EMPTY_MESSAGE_ERROR }, 400, cors);
+
+    // Dropped before scrubbing, deduplicating, storing or rendering, so a
+    // deployment that says no to replays never has one in memory a moment
+    // longer than the parse took.
+    if (options.replay === "drop") report.replay = null;
 
     if (options.scrub) {
       report = scrubReport(report, options.scrub === true ? {} : options.scrub);

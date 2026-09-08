@@ -3,8 +3,8 @@
  * requests, timings and the storage snapshot without importing the modules
  * that produce them.
  *
- * `bugbottle/breadcrumbs`, `bugbottle/network` and `bugbottle/perf` are
- * separate entries on purpose: an application that never imports one must not
+ * `bugbottle/breadcrumbs`, `bugbottle/network`, `bugbottle/perf` and
+ * `bugbottle/rrweb` are separate entries on purpose: an application that never imports one must not
  * pay for it. If `send.ts` imported them directly, every bundle would carry
  * every recorder and its patches. Instead each `init*` registers a getter
  * here, and `send.ts` reads it — this file is a handful of bytes and has no
@@ -14,6 +14,7 @@ let breadcrumbSource = null;
 let networkSource = null;
 let perfSource = null;
 let storageSource = null;
+let replaySource = null;
 /** Called by `initBreadcrumbs`; pass null to unregister. */
 export function registerBreadcrumbSource(getter) {
     breadcrumbSource = getter;
@@ -53,5 +54,17 @@ export function registerStorageSource(getter) {
  */
 export function readStorage() {
     return storageSource ? storageSource() : null;
+}
+/** Called by `attachRrweb`; pass null to unregister. */
+export function registerReplaySource(getter) {
+    replaySource = getter;
+}
+/**
+ * The buffered replay, or null when nothing is recording — and also null when
+ * something is recording but has nothing small enough to send, which is the
+ * buffer's own judgement rather than this file's.
+ */
+export function readReplay() {
+    return replaySource ? replaySource() : null;
 }
 //# sourceMappingURL=registry.js.map

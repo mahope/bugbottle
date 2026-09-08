@@ -8,7 +8,7 @@
  * long). Every value goes through `normalise*` first, so this accepts the raw
  * body from the request as well as a validated report.
  */
-import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, } from "./report-core.js";
+import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseReplay, normaliseStorage, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
 /**
  * How many frames of a stack are printed under a console entry. Ten are kept
@@ -136,6 +136,7 @@ export function toMarkdown(raw, options = {}) {
     const network = normaliseNetwork(r.network);
     const perf = normalisePerf(r.perf);
     const storage = normaliseStorage(r.storage);
+    const replay = normaliseReplay(r.replay);
     const consoleEntries = normaliseConsole(r.console, {
         maxEntries: options.maxConsoleEntries,
     });
@@ -174,6 +175,13 @@ export function toMarkdown(raw, options = {}) {
     const ts = consoleEntries.at(-1)?.ts;
     if (ts)
         facts.push(["Last console entry", ts]);
+    // One line rather than a section: the events themselves are for a player,
+    // not for a reader, so what a reader wants here is that there is a recording
+    // and roughly how much of one.
+    if (replay) {
+        const count = `${replay.events.length} event${replay.events.length === 1 ? "" : "s"}`;
+        facts.push(["Replay", `${count} over ${replay.seconds} s (attached)`]);
+    }
     if (options.screenshotUrl)
         facts.push(["Screenshot", options.screenshotUrl]);
     else if (typeof r.screenshotDataUrl === "string" && r.screenshotDataUrl) {

@@ -23,12 +23,13 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
 | `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |
 | `src/perf.ts` | `initPerf()` — the Web Vitals from buffered `PerformanceObserver` entries (LCP last candidate, CLS without recent input, INP as the worst interaction), the navigation milestones, long tasks, the JS heap where it exists, plus the storage snapshot: key names and value lengths, cookie names, values only for an opt-in allow-list. Own entry point. Never a cookie value, on any setting | registry, report-core |
+| `src/rrweb.ts` | `attachRrweb(record, options?)` — an adapter over the application's own rrweb `record`, typed structurally so nothing is imported and rrweb is not a dependency. A rolling buffer of whole checkout groups (`checkoutEveryNms` 10 s, because a replay can only be cut at a full snapshot), trimmed at the window and again at `maxBytes`, oldest group first; `maskAllInputs: true` unless overridden, `data-bugbottle-mask` mapped to rrweb's `maskTextSelector` and `data-bugbottle-block`/`data-bugbottle` to its `blockSelector`. Own entry point. The report gains `replay: { events, seconds }` | registry, report-core (types) |
 | `src/queue.ts` | `createQueue()` — a `localStorage` queue in front of the endpoint, flushed on init, `online` and visibility, with backoff. Own entry point. Imports `send.ts` nowhere: one `fetch` of its own | report-core (types) |
 | `src/triggers.ts` | `onShortcut(combo, handler)` and `onUncaughtError(handler, options)` — the two ways into the panel that need no button. Own entry point. Listeners only: never renders, never sends | fingerprint |
 | `src/shake.ts` | `onShake(handler, options?)` — a `devicemotion` listener with gravity filtered out, three alternating threshold crossings in a second, a cool-down, and nothing measured while the page is hidden. Plus `requestShakePermission()`, the only thing that prompts, and only when the application calls it from a gesture. Own entry point. Listener only: never renders, never sends | triggers (the `ListenerHost` type alone, so nothing at run time) |
 | `src/fingerprint.ts` | `fingerprint(report)` + `stableHash(text)` — one identity for a report, computed the same way in the browser and on the server. Imported by nothing in the core entry, so it is tree-shaken when unused | nothing |
 | `src/react/boundary.ts` | `BugReportBoundary` (catches a render error, renders your fallback with a `report()`) and `createRootErrorHandlers` for React 19. No JSX — `tsc` alone builds this package | send, fingerprint |
-| `src/registry.ts` | Two slots: `initBreadcrumbs` and `initNetwork` register getters, `send.ts` reads them. Keeps the core free of the recorders | report-core (types) |
+| `src/registry.ts` | Five slots: `initBreadcrumbs`, `initNetwork`, `initPerf` (twice, for the timings and the storage snapshot) and `attachRrweb` register getters, `send.ts` reads them. Keeps the core free of the recorders | report-core (types) |
 | `src/send.ts` | `buildReport`, `sendReport` — framework-agnostic | capture, console-buffer, report-core |
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
 | `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`. `enMessages` is separate so the hook does not drag every locale in | nothing |
@@ -67,10 +68,11 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `examples/vanilla-js/` | No-build round trip: Node server + plain HTML form, serves `../../dist` | |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) | |
 
-Seventeen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Eighteen entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./solid`, `./server`,
 `./html-to-image`, `./locales`, `./ui`, `./breadcrumbs`, `./network`,
-`./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
+`./perf`, `./annotate`, `./queue`, `./triggers`, `./shake`, `./sign`,
+`./rrweb` — plus `./report.schema.json`, which is data rather than code. Keep them separate:
 a server bundle must never pull in DOM code, and a client bundle must never
 pay for a module it did not import. Every reporter-facing string goes through a `Locale`;
 never hard-code English in `src/ui/` or the hook.
@@ -171,7 +173,12 @@ tree-shaken away. `bugbottle/perf` is budgeted at 1280 bytes and measures
 1236: five observers, the navigation entry, two store walks and a cookie parse,
 importing nothing but four constants. The core moved 1272 → 1310 bytes for it,
 and that 38 bytes is the whole cost to a consumer who never imports it — two
-registry reads in `buildReport`. `bugbottle/queue` is budgeted at 1330 bytes and measures
+registry reads in `buildReport`. `bugbottle/rrweb` is budgeted at 768 bytes and measures 711: the rolling
+buffer, the checkout trim and the byte cap, importing two types and nothing at
+run time, since rrweb's `record` is handed in by the application. It cost the
+core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
+script tag nothing at all — the IIFE does not export it, because a page with no
+bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1330 bytes and measures
 about 1290: it imports only a type, so that number is the module itself. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is

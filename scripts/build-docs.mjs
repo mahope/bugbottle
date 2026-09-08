@@ -119,6 +119,7 @@ const GROUPS = [
       "what-happened-before",
       "what-the-network-did",
       "performance-and-storage",
+      "replay-with-rrweb",
       "screenshots",
     ],
   },
