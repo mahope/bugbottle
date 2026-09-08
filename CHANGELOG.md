@@ -8,6 +8,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+## 1.0.1 — 2026-09-08
+
 A patch on the day of 1.0: the offline queue could silently skip its retry
 when the backoff timer fired a millisecond ahead of the clock — found by the
 1.0.0 release run itself — and the documentation pages' tables and code slabs
