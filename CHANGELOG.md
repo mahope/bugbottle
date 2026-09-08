@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.12.0 — 2026-09-08
+
 The self-hosted release. Two things that used to need a service now need
 only what you already have: `smtpSink` speaks SMTP itself — EHLO, STARTTLS,
 AUTH PLAIN or LOGIN, one folded and dot-stuffed message, a deadline on every
