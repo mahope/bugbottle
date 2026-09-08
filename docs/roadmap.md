@@ -286,8 +286,10 @@ bites. No SDK dependency.
     `replayStore`, #67 `SendReportWebhookOptions.url`.
   - #68 the server validators and `toMarkdown` off the `.` entry.
   - #69 one shape for `screenshotUrl`/`screenshotUrlFrom` across the sinks.
-  - #70 `network` and `perf` as mount options, the last `data-*` attributes
-    with no option of the same name. Additive, so it can land any time.
+  - ~~#70 `network` and `perf` as mount options, the last `data-*` attributes
+    with no option of the same name.~~ Shipped, unreleased: `MountOptions`
+    takes both on the hand-it-in seam, started on mount and stopped in
+    `destroy()`, and `src/global.ts` passes them through.
 
 ## Explicitly not planned
 

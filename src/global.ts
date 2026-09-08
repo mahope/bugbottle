@@ -108,11 +108,13 @@ function autoMount(data: DOMStringMap): void {
   }
   // Any value enables the network log, the same way `data-scrub` does. It is
   // opt-in rather than on: patching fetch is a bigger promise than listening.
-  if (data.network !== undefined) initNetwork({ endpoint });
+  // The panel starts it and stops it with itself; the endpoint it should not
+  // record is the one it was mounted with.
+  if (data.network !== undefined) options.network = initNetwork;
   // Same shape again: any value turns the timings and the storage snapshot
   // on. Opt-in rather than on, because listing what a page has stored is a
   // bigger promise than timing it, and a script tag cannot ask first.
-  if (data.perf !== undefined) initPerf();
+  if (data.perf !== undefined) options.perf = initPerf;
   mount(options);
 }
 

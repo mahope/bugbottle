@@ -44,12 +44,12 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 1.5 kB gzipped; with the element picker and the React, Vue, Svelte
-  or Solid adapter, 5.7 kB; the optional ready-made panel, 11.4 kB; the picture
+  or Solid adapter, 5.7 kB; the optional ready-made panel, 11.5 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
   1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.3 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 24.1 kB, and the slim one 20.6 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 24.2 kB, and the slim one 20.6 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
@@ -745,6 +745,8 @@ it out and the canvas editor is not in your bundle at all. See
 | `trigger` | `false` for no floating button, or an element or selector to use your own. |
 | `shortcut` | The combination that opens the panel. Default `mod+shift+b`; `false` installs no listener. |
 | `shake` | Open the panel when the phone is shaken. Off by default; hand in `onShake` from `bugbottle/shake`, or `{ on: onShake, threshold, cooldownMs }`. See [Shake to report](#shake-to-report). |
+| `network` | Record the failed and slow requests while the panel is mounted. Off by default; hand in `initNetwork` from `bugbottle/network`, or `{ on: initNetwork, all, slowMs, maxEntries, ignore, beforeRequest }`. The panel's `endpoint` is passed on unless you name one. The same switch as `data-network`. See [What the network did](#what-the-network-did). |
+| `perf` | Record the Web Vitals and the storage snapshot while the panel is mounted. Off by default; hand in `initPerf` from `bugbottle/perf`, or `{ on: initPerf, vitals, storage, allowValues, maxKeys }`. The same switch as `data-perf`. See [Performance and storage](#performance-and-storage). |
 | `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
 | `queue`, `scrub`, `sign`, `beforeSend` | The same seams the plain functions take. |
 | `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. |
@@ -804,8 +806,8 @@ There are two files, and they are the same panel:
 
 | File | Gzipped | What is in it |
 |---|---|---|
-| `dist/bugbottle.js` | 23.9 kB | Everything: the annotator, the timings and storage snapshot, shake-to-report and the network log, all switchable from an attribute. |
-| `dist/bugbottle.slim.js` | 20.5 kB | The same panel, the console, breadcrumbs, the element picker, the offline queue, the scrubber, the signer and all eight locales — without those four. |
+| `dist/bugbottle.js` | 24.2 kB | Everything: the annotator, the timings and storage snapshot, shake-to-report and the network log, all switchable from an attribute. |
+| `dist/bugbottle.slim.js` | 20.6 kB | The same panel, the console, breadcrumbs, the element picker, the offline queue, the scrubber, the signer and all eight locales — without those four. |
 
 ```html
 <script
@@ -842,8 +844,8 @@ works in the slim build; that is the trade it makes.
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
 | `data-contact` | Present, with any value, asks the reporter how to reach them; `required` also refuses to send without it. Off without the attribute. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
-| `data-network` | Present, with any value, records the failed and slow requests. See "What the network did". |
-| `data-perf` | Present, with any value, records the Web Vitals and lists what is in the browser's stores — names and lengths, never values. See "Performance and storage". |
+| `data-network` | Present, with any value, records the failed and slow requests. The same switch as the panel's `network` option. See "What the network did". |
+| `data-perf` | Present, with any value, records the Web Vitals and lists what is in the browser's stores — names and lengths, never values. The same switch as the panel's `perf` option. See "Performance and storage". |
 | `data-sign-key` | Signs the body with this key. A key in the page source is public, so this deters spam rather than authenticating anybody; see [Signing requests](#signing-requests). |
 | `data-queue` | Present, with any value, keeps a failed report in `localStorage` and sends it when the browser is online again. See "When the network is down". |
 | `data-extra` | JSON object merged into every report, e.g. `data-extra='{"appVersion":"1.4.2"}'`. |
@@ -1072,6 +1074,14 @@ one event that fires for every ending. `getNetwork()` returns a copy of what
 has been recorded, and `resetNetwork()` empties it and puts both globals back
 as it found them. `initNetwork` returns that same function as its `stop()`.
 
+The ready-made panel can start it for you: `network: initNetwork` on
+`mountBugbottle` records for as long as the panel is mounted and stops on
+`destroy()`, and the panel's own `endpoint` is passed on so a report never
+describes its own delivery. `{ on: initNetwork, all: true }` tunes it. The
+panel never imports the module — you hand it in — so a page that records
+nothing carries nothing. From the script tag it is `data-network`, which is
+the same switch.
+
 ## Performance and storage
 
 Two questions a report almost never answers and almost always needs to: was it
@@ -1159,8 +1169,11 @@ of the snapshot.
 `perf` and `storage`; pass `includePerf: false` to leave them out of one
 report. `toMarkdown` renders a "Performance" table and a collapsed "Storage"
 block. `initPerf` returns the `stop()` that disconnects the observers and
-unregisters both — the same thing `resetPerf()` does. In the one-script-tag
-build it is `data-perf` on the script tag.
+unregisters both — the same thing `resetPerf()` does. The ready-made panel
+takes it the same way the network log is taken: `perf: initPerf` on
+`mountBugbottle` starts it on mount and stops it on `destroy()`, and
+`{ on: initPerf, storage: false }` tunes it. In the one-script-tag build it is
+`data-perf` on the script tag, which is the same switch.
 
 ## Replay with rrweb
 
@@ -2653,7 +2666,8 @@ Optional peer `solid-js` >= 1.8.
 Requires `html-to-image`.
 
 **`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions` (whose
-`annotate` takes `createAnnotator` itself and whose `shake` takes `onShake`),
+`annotate` takes `createAnnotator` itself, whose `shake` takes `onShake`, and
+whose `network` and `perf` take `initNetwork` and `initPerf`),
 `Theme`, `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,

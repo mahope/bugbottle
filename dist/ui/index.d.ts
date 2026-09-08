@@ -15,6 +15,8 @@
 import type { createAnnotator } from "../annotate.ts";
 import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
+import type { initNetwork, NetworkOptions } from "../network.ts";
+import type { initPerf, PerfOptions } from "../perf.ts";
 import { type ReportType } from "../report-core.ts";
 import type { Queue } from "../queue.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
@@ -121,6 +123,26 @@ export type MountOptions = {
     shake?: typeof onShake | ({
         on: typeof onShake;
     } & ShakeOptions) | false;
+    /**
+     * Record the failed and slow requests, so a report carries what the network
+     * was doing when it was written. The same seam again: `network: initNetwork`
+     * from `bugbottle/network` takes the defaults — including this panel's
+     * `endpoint`, so a report never describes its own delivery — and
+     * `network: { on: initNetwork, all: true }` tunes them. The panel starts the
+     * recorder on mount and stops it in `destroy()`.
+     */
+    network?: typeof initNetwork | ({
+        on: typeof initNetwork;
+    } & NetworkOptions) | false;
+    /**
+     * Record the Web Vitals, the load milestones and the storage snapshot.
+     * `perf: initPerf` from `bugbottle/perf` takes the defaults;
+     * `perf: { on: initPerf, storage: false }` tunes them. Started on mount and
+     * stopped in `destroy()`, like `network`.
+     */
+    perf?: typeof initPerf | ({
+        on: typeof initPerf;
+    } & PerfOptions) | false;
     /**
      * Open the panel when the page throws an error nobody caught. Off by default:
      * a panel that appears uninvited is a decision about the product, not a

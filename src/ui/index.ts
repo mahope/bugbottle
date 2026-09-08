@@ -22,6 +22,8 @@ import {
 } from "../capture.ts";
 import { pickElement } from "../element-picker.ts";
 import { en, type Locale, type Messages, type UiTexts } from "../locales.ts";
+import type { initNetwork, NetworkOptions } from "../network.ts";
+import type { initPerf, PerfOptions } from "../perf.ts";
 import {
   MAX_ELEMENTS,
   REPORT_TYPES,
@@ -141,6 +143,22 @@ export type MountOptions = {
    * the defaults; `shake: { on: onShake, threshold: 12 }` tunes them.
    */
   shake?: typeof onShake | ({ on: typeof onShake } & ShakeOptions) | false;
+  /**
+   * Record the failed and slow requests, so a report carries what the network
+   * was doing when it was written. The same seam again: `network: initNetwork`
+   * from `bugbottle/network` takes the defaults — including this panel's
+   * `endpoint`, so a report never describes its own delivery — and
+   * `network: { on: initNetwork, all: true }` tunes them. The panel starts the
+   * recorder on mount and stops it in `destroy()`.
+   */
+  network?: typeof initNetwork | ({ on: typeof initNetwork } & NetworkOptions) | false;
+  /**
+   * Record the Web Vitals, the load milestones and the storage snapshot.
+   * `perf: initPerf` from `bugbottle/perf` takes the defaults;
+   * `perf: { on: initPerf, storage: false }` tunes them. Started on mount and
+   * stopped in `destroy()`, like `network`.
+   */
+  perf?: typeof initPerf | ({ on: typeof initPerf } & PerfOptions) | false;
   /**
    * Open the panel when the page throws an error nobody caught. Off by default:
    * a panel that appears uninvited is a decision about the product, not a
@@ -953,6 +971,14 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   // holding a phone moves it about.
   const shake = typeof options.shake === "function" ? { on: options.shake } : options.shake;
   if (shake) unsubscribes.push(shake.on(open, shake));
+  // The two recorders are handed in the same way, and for the same reason: the
+  // panel never imports them, so a page that records neither carries neither.
+  // The network recorder is given this panel's endpoint unless the caller named
+  // one, so the delivery of a report is never itself recorded.
+  const network = typeof options.network === "function" ? { on: options.network } : options.network;
+  if (network) unsubscribes.push(network.on({ endpoint: options.endpoint, ...network }));
+  const perf = typeof options.perf === "function" ? { on: options.perf } : options.perf;
+  if (perf) unsubscribes.push(perf.on(perf));
   if (options.openOnError) {
     const prefill = options.openOnError !== true && options.openOnError.prefill === true;
     unsubscribes.push(onUncaughtError((error) => openForError(error.message, prefill)));
