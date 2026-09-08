@@ -311,3 +311,44 @@ test("the inbox refuses to start without a password", async () => {
   assert.equal(code, 1);
   assert.match(stderr, /INBOX_PASSWORD/);
 });
+
+test("the health route answers without a password", async () => {
+  // A platform's health check runs before anybody has a credential, and a
+  // check that needed one would report a healthy inbox as down for ever.
+  const running = await start();
+  try {
+    const response = await fetch(`${running.origin}/health`);
+    assert.equal(response.status, 200);
+    assert.equal((await response.text()).trim(), "ok");
+    assert.match(response.headers.get("content-type") ?? "", /text\/plain/);
+
+    // It is the only thing it says. Everything else still wants the password.
+    const list = await fetch(`${running.origin}/`);
+    assert.equal(list.status, 401);
+  } finally {
+    await stop(running);
+  }
+});
+
+test("REPORTS_DIR is where the reports go, even when it does not exist yet", async () => {
+  // The container names the mount point here, and on a fresh host the
+  // directory arrives empty or not at all.
+  const parent = await mkdtemp(join(tmpdir(), "bugbottle-inbox-"));
+  const reports = join(parent, "deeper", "still");
+  const running = await start({}, reports);
+  try {
+    const id = await post(running.origin, "Written where REPORTS_DIR said");
+    const written = await readdir(reports);
+    assert.ok(
+      written.some((file) => file.endsWith(`-${id}.json`)),
+      `the report is in REPORTS_DIR: ${written.join(", ")}`,
+    );
+
+    // And nothing was written beside the example instead.
+    const beside = await readdir(join(root, "examples", "inbox"));
+    assert.ok(!beside.includes("reports"), "the default directory was not used");
+  } finally {
+    await stop(running);
+    await rm(parent, { recursive: true, force: true });
+  }
+});

@@ -2771,6 +2771,12 @@ npm run build
 INBOX_PASSWORD=$(openssl rand -base64 24) node examples/inbox/server.mjs
 ```
 
+It ships with a `Dockerfile`, a `compose.yml` and a `Caddyfile`, so putting one
+on a VPS is `docker compose up` and a domain; its README walks through Dokploy
+in eight lines. Reports land on a named volume, the image runs as a non-root
+user and installs nothing, and `GET /health` is public for the platform's
+check.
+
 Read `examples/inbox/README.md` before you put one on the internet — the
 screenshots are on disk, so the disk is the bucket the privacy section above
 is about.

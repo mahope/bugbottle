@@ -230,7 +230,11 @@ and serves a read-only inbox — list, detail with the rendered Markdown and the
 picture, copy as Markdown, delete — behind one password from `INBOX_PASSWORD`,
 which it refuses to start without. The smallest honest answer to the thing the
 comparison page says bugbottle lacks: a place the report lands. An example, not
-a product, and never a hosted one — no accounts, no search, no assignment.
+a product, and never a hosted one — no accounts, no search, no assignment. It
+deploys the way its readers deploy: a `node:22-alpine` `Dockerfile` running as
+a non-root user, a `compose.yml` with the reports on a named volume and the
+password from an env file, a `Caddyfile`, a public `GET /health`, and an
+eight-line Dokploy walk-through in its README.
 
 ## 0.5 — evidence and delivery
 

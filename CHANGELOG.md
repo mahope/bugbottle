@@ -9,6 +9,25 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- The inbox example deploys: `examples/inbox/Dockerfile`, `compose.yml`,
+  `.env.example` and `Caddyfile`, plus a "Deploy it" section in its README with
+  an eight-line Dokploy walk-through. The image is `node:22-alpine`, runs as
+  the `node` user and installs nothing — `package.json`, `dist/` and the two
+  files of the example, which is exactly the layout the example's
+  `import "bugbottle/server"` self-reference already resolves against, so the
+  build context is the repository root. `npm pack`ing the library in would work
+  too and was measured against this: it is the same `dist/` carried twice, once
+  in the tarball and once unpacked under `node_modules/`, with an `npm install`
+  at image build time to do it. The reports live on a named volume at `/data`;
+  the password comes from an env file, and compose refuses to start without it,
+  the way the server does. The `ports:` block is bound to loopback, because
+  basic auth over plain HTTP sends the password in every request.
+- `GET /health` on the inbox example: `ok`, public, and deliberately nothing
+  else — a platform's check runs before anybody has the password, and a count
+  of reports at an address with no password on it would be a fact about
+  somebody's application. `HOST` is honoured too, `127.0.0.1` by default and
+  `0.0.0.0` in the image, since inside a container the proxy is on the other
+  side of the boundary. Closes #73.
 - The changelog is a page on the site: `/docs/changelog/`, generated from this
   file by `scripts/build-docs.mjs` in the same run as the documentation and the
   comparison, with the site's typography and the same header and footer. Each

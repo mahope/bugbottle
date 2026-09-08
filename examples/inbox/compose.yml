@@ -1,0 +1,45 @@
+# One inbox, one volume, one password.
+#
+#   cp .env.example .env      # and put a real password in it
+#   docker compose -f examples/inbox/compose.yml up --build
+#
+# Run it from the repository root or from this directory; the context is
+# resolved relative to this file either way.
+
+services:
+  inbox:
+    build:
+      # The repository root, because the example self-references the library:
+      # see the comment at the top of the Dockerfile.
+      context: ../..
+      dockerfile: examples/inbox/Dockerfile
+    restart: unless-stopped
+    environment:
+      # From `.env` beside this file, which is never committed. The `:?` is
+      # deliberate: compose refuses to start rather than let the container come
+      # up and exit, which is the same refusal server.mjs makes for the same
+      # reason.
+      INBOX_PASSWORD: ${INBOX_PASSWORD:?set INBOX_PASSWORD in examples/inbox/.env}
+      # The one origin allowed to post from a browser. Leave it unset and the
+      # endpoint is same-origin only.
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-}
+      MAX_REPORTS: ${MAX_REPORTS:-2000}
+    ports:
+      # Bound to loopback on purpose. Basic auth over plain HTTP sends the
+      # password in every request, so the only thing that should reach this
+      # port is the proxy that terminates TLS in front of it. On a platform
+      # that routes to the container by name — Dokploy, Coolify — drop this
+      # block entirely and let the platform's proxy do it.
+      - "127.0.0.1:8788:8788"
+    volumes:
+      # The reports. Everything else in the container is replaceable; this is
+      # not, and it is as sensitive as the screenshots in it.
+      - reports:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8788/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+
+volumes:
+  reports:
