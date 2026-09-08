@@ -43,7 +43,9 @@ export type DiscordSinkOptions = {
      * data URL is ignored; store the picture first and return its address. Read
      * the privacy note in the README before that address becomes a public one.
      */
-    screenshotUrl?: UrlFrom;
+    screenshotUrl?: string;
+    /** Picks the screenshot address out of the report, when it travels there. */
+    screenshotUrlFrom?: UrlFrom;
     /** A link to the full report, which becomes the embed's title link. */
     reportUrl?: UrlFrom;
     /** Injected `fetch`, for tests or a runtime with its own client. */

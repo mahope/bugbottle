@@ -498,3 +498,57 @@ test("a malformed report is still filed in linear, with a fallback title", async
   assert.equal(result.identifier, undefined);
   assert.equal(linearInput(calls).title, "Feedback: Feedback");
 });
+
+/**
+ * Since 1.0 all seven sinks take the same two keys with the same two meanings:
+ * `screenshotUrl` for an address you already have, `screenshotUrlFrom` for one
+ * that has to be read out of the report. Before that, three of them had no
+ * function form at all and two of them had no string form.
+ */
+test("screenshotUrlFrom reads the address out of the report, and wins over the string", async () => {
+  const carried = { ...report, screenshotUrl: "https://files.example.com/carried.png" };
+  const fromReport = (r: unknown): string | undefined =>
+    (r as { screenshotUrl?: string }).screenshotUrl;
+
+  const github = fakeFetch(201, { number: 9, html_url: "https://example.com/9" });
+  await createGithubIssue(carried, {
+    token: "t",
+    owner: "acme",
+    repo: "app",
+    screenshotUrl: "https://files.example.com/option.png",
+    screenshotUrlFrom: fromReport,
+    fetch: github.fetch,
+  });
+  assert.match(String(sentBody(github.calls).body), /carried\.png/);
+
+  const linear = fakeFetch(200, linearOk);
+  await createLinearIssue(carried, {
+    apiKey: "k",
+    teamId: "team-uuid",
+    screenshotUrlFrom: fromReport,
+    fetch: linear.fetch,
+  });
+  assert.match(String(linearInput(linear.calls).description), /carried\.png/);
+
+  const resend = fakeFetch(200, { id: "msg_1" });
+  await sendReportEmail(carried, {
+    apiKey: "k",
+    from: "bugs@example.com",
+    to: "team@example.com",
+    screenshotUrlFrom: fromReport,
+    fetch: resend.fetch,
+  });
+  assert.match(String(sentBody(resend.calls).text), /carried\.png/);
+});
+
+test("a plain screenshotUrl reaches the resend mail too", async () => {
+  const { fetch, calls } = fakeFetch(200, { id: "msg_2" });
+  await sendReportEmail(report, {
+    apiKey: "k",
+    from: "bugs@example.com",
+    to: "team@example.com",
+    screenshotUrl: "https://files.example.com/shots/abc.png",
+    fetch,
+  });
+  assert.match(String(sentBody(calls).text), /https:\/\/files\.example\.com\/shots\/abc\.png/);
+});

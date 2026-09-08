@@ -39,7 +39,7 @@ function mrkdwn(text, max = MAX_SLACK_TEXT) {
  */
 export function buildSlackMessage(report, options, ctx = {}) {
     const r = readReport(report);
-    const screenshot = resolveUrl(options.screenshotUrl, report, ctx.screenshotUrl);
+    const screenshot = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl ?? ctx.screenshotUrl);
     const link = resolveUrl(options.reportUrl, report);
     const blocks = [
         {

@@ -7,6 +7,32 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- **One shape for the screenshot address across all eleven sinks** (#69).
+  `screenshotUrl` is a `string` everywhere — the address you already have — and
+  `screenshotUrlFrom` is the function that reads one out of the report, which
+  wins where both are given. `slackSink`, `discordSink` and `teamsSink` took
+  the function under the first name until now, which was the one place in the
+  package where a key meant two different things depending on the import:
+
+  ```diff
+   slackSink({
+     webhookUrl: process.env.SLACK_WEBHOOK,
+  -  screenshotUrl: (report) => report.screenshotUrl,
+  +  screenshotUrlFrom: (report) => report.screenshotUrl,
+   });
+  ```
+
+  A sink already passing a string keeps working unchanged.
+  `createGithubIssue`, `createLinearIssue` and `sendReportEmail` gained the
+  function form, and `sendReportEmail` gained `screenshotUrl` beside the
+  `screenshot` bytes it already took, so the address no longer has to be posted
+  through `markdown.screenshotUrl`. All eleven now drop a `data:` address the
+  same way, since no service will fetch one, and all eleven now let an option
+  set on the sink win over the address `handleReport` stored — `toGithub` and
+  `toLinear` had it the other way round.
+
 ### Removed
 
 - **`SendOptions.onFailure`** (#63). Rename it to `onError`: same signature,

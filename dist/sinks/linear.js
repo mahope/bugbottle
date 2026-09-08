@@ -19,6 +19,7 @@
  */
 import { toMarkdown } from "../markdown.js";
 import { messageFromBody, readBody, SinkError } from "./error.js";
+import { resolveUrl } from "./chat.js";
 const LINEAR_API = "https://api.linear.app/graphql";
 /**
  * Asking for the issue back rather than only `success` costs nothing and gives
@@ -77,10 +78,12 @@ function messageFromGraphqlErrors(errors) {
  */
 export async function createLinearIssue(report, options) {
     // An explicit screenshotUrl wins over one already sitting in the markdown
-    // options, so the call site nearest the storage decision is the one heard.
+    // options, so the call site nearest the storage decision is the one heard,
+    // and `screenshotUrlFrom` wins over both because it reads the report itself.
+    const screenshotUrl = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl);
     const markdownOptions = {
         ...options.markdown,
-        ...(options.screenshotUrl ? { screenshotUrl: options.screenshotUrl } : {}),
+        ...(screenshotUrl ? { screenshotUrl } : {}),
     };
     const input = {
         teamId: options.teamId,

@@ -86,7 +86,9 @@ export type TeamsSinkOptions = {
    * address. Read the privacy note in the README before that address becomes
    * a public one.
    */
-  screenshotUrl?: UrlFrom;
+  screenshotUrl?: string;
+  /** Picks the screenshot address out of the report, when it travels there. */
+  screenshotUrlFrom?: UrlFrom;
   /** A link to the full report in your own tool, shown as an `Action.OpenUrl`. */
   reportUrl?: UrlFrom;
   /** The text on that button. Default "Open report". */
@@ -224,7 +226,11 @@ export function buildTeamsMessage(
   ctx: ChatSinkContext = {},
 ): Record<string, unknown> {
   const r = readReport(report);
-  const screenshot = resolveUrl(options.screenshotUrl, report, ctx.screenshotUrl);
+  const screenshot = resolveUrl(
+    options.screenshotUrlFrom,
+    report,
+    options.screenshotUrl ?? ctx.screenshotUrl,
+  );
   const link = resolveUrl(options.reportUrl, report);
 
   const footnoteParts: string[] = [];

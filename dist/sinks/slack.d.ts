@@ -40,7 +40,9 @@ export type SlackSinkOptions = {
      * address. Read the privacy note in the README before that address becomes
      * a public one.
      */
-    screenshotUrl?: UrlFrom;
+    screenshotUrl?: string;
+    /** Picks the screenshot address out of the report, when it travels there. */
+    screenshotUrlFrom?: UrlFrom;
     /** A link to the full report in your own tool, shown as a button. */
     reportUrl?: UrlFrom;
     /** The text on that button. Default "Open report". */

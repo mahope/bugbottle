@@ -15,6 +15,7 @@ import { looksLikeEmail, normaliseContact } from "../report-core.ts";
 import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { en, type Locale } from "../locales.ts";
 import { messageFromBody, readBody, SinkError, type FetchLike } from "./error.ts";
+import { resolveUrl, type UrlFrom } from "./chat.ts";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -37,6 +38,13 @@ export type SendReportEmailOptions = {
   fetch?: FetchLike;
   /** Decoded PNG bytes from `decodeScreenshotDataUrl`, attached as a file. */
   screenshot?: Uint8Array;
+  /**
+   * Where you stored the screenshot, linked from the mail. A separate thing
+   * from `screenshot`, which is the picture itself travelling as a file.
+   */
+  screenshotUrl?: string;
+  /** Picks the screenshot address out of the report, when it travels there. */
+  screenshotUrlFrom?: UrlFrom;
   /** Wording of subject and intro. Default English. */
   locale?: Locale;
   /** Passed through to `toMarkdown` — extra facts, a screenshot URL. */
@@ -94,7 +102,15 @@ export async function sendReportEmail(
   options: SendReportEmailOptions,
 ): Promise<SendReportEmailResult> {
   const locale = options.locale ?? en;
-  const markdownOptions = options.markdown ?? {};
+  // The same two keys as every other sink: the address you already have, or
+  // the function that reads it out of the report. Either one wins over a
+  // `screenshotUrl` sitting in the Markdown options, because it is the call
+  // site nearest the storage decision.
+  const screenshotUrl = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl);
+  const markdownOptions: MarkdownOptions = {
+    ...options.markdown,
+    ...(screenshotUrl ? { screenshotUrl } : {}),
+  };
   const markdown = toMarkdown(report, markdownOptions);
   const title = titleOf(report, markdownOptions);
   const subject = options.subject ?? locale.email.subject.replace("{title}", () => title);

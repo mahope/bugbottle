@@ -854,12 +854,24 @@ export async function handleReport(request, options = {}) {
         return decide(json({ error: "Could not store the report" }, 500, cors), "error");
     }
 }
+/**
+ * The screenshot address a sink is to use: its own option where it has one,
+ * and the address `handleReport` stored otherwise. An option set on the sink
+ * is the call site nearest the storage decision, so it wins — which is what
+ * `screenshotUrl ?? ctx.screenshotUrl` says inside the sinks that take a
+ * context of their own. `screenshotUrlFrom` is left alone here: it reads the
+ * report, so the sink resolves it after this.
+ */
+function withStoredScreenshot(options, ctx) {
+    if (options.screenshotUrl || !ctx.screenshotUrl)
+        return options;
+    return { ...options, screenshotUrl: ctx.screenshotUrl };
+}
 /** Sends every report on to Resend. The screenshot is attached when it was kept. */
 export function toResend(options) {
     return async (report, ctx) => await sendReportEmail(report, {
-        ...options,
+        ...withStoredScreenshot(options, ctx),
         ...(ctx.screenshot ? { screenshot: ctx.screenshot } : {}),
-        markdown: { ...options.markdown, ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}) },
     });
 }
 /** POSTs every report to a webhook — `json`, `slack` or `discord`. */
@@ -871,16 +883,10 @@ export function toWebhook(options) {
 }
 /** Files every report as a GitHub issue, linking the stored screenshot. */
 export function toGithub(options) {
-    return async (report, ctx) => await createGithubIssue(report, {
-        ...options,
-        ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
-    });
+    return async (report, ctx) => await createGithubIssue(report, withStoredScreenshot(options, ctx));
 }
 /** Files every report as a Linear issue, linking the stored screenshot. */
 export function toLinear(options) {
-    return async (report, ctx) => await createLinearIssue(report, {
-        ...options,
-        ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}),
-    });
+    return async (report, ctx) => await createLinearIssue(report, withStoredScreenshot(options, ctx));
 }
 //# sourceMappingURL=handle.js.map

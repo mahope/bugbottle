@@ -20,6 +20,7 @@
  */
 import { toMarkdown } from "../markdown.js";
 import { messageFromBody, readBody, SinkError } from "./error.js";
+import { resolveUrl } from "./chat.js";
 const GITHUB_API = "https://api.github.com";
 /** The version this sink was written against; GitHub asks callers to pin one. */
 const GITHUB_API_VERSION = "2022-11-28";
@@ -50,10 +51,12 @@ function titleOf(report, options) {
  */
 export async function createGithubIssue(report, options) {
     // An explicit screenshotUrl wins over one already sitting in the markdown
-    // options, so the call site nearest the storage decision is the one heard.
+    // options, so the call site nearest the storage decision is the one heard,
+    // and `screenshotUrlFrom` wins over both because it reads the report itself.
+    const screenshotUrl = resolveUrl(options.screenshotUrlFrom, report, options.screenshotUrl);
     const markdownOptions = {
         ...options.markdown,
-        ...(options.screenshotUrl ? { screenshotUrl: options.screenshotUrl } : {}),
+        ...(screenshotUrl ? { screenshotUrl } : {}),
     };
     const payload = {
         title: options.title ?? titleOf(report, markdownOptions),

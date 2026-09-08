@@ -2390,6 +2390,22 @@ None of the numbers is a budget CI enforces; they are here so the cost of a
 sink is known before it is imported, and every one of them is dwarfed by the
 framework already in a server bundle.
 
+**The picture, once for all eleven.** Only Resend and Sentry can carry the
+bytes; every other sink links to an address you stored the picture at. That
+address reaches a sink in one of two ways, spelled the same in all of them
+since 1.0:
+
+- `screenshotUrl?: string` — the address you already have.
+- `screenshotUrlFrom?: (report) => string | undefined` — read it out of the
+  report, for a signed URL built per report.
+
+`screenshotUrlFrom` wins where both are given, because it is the one that saw
+the report; and where neither is, a sink run by `handleReport` falls back to
+the address the `screenshot` function stored. A `data:` URL is never used: the
+services fetch the address themselves, so a data URL is silently dropped rather
+than sent. Read "Please read this part" before that address becomes a public
+one.
+
 `sendReportEmail` posts to Resend. It renders the report with `toMarkdown`,
 attaches the decoded screenshot as `screenshot.png` when you pass the bytes,
 and returns the message id:
@@ -2559,9 +2575,10 @@ export const POST = (req: Request) =>
         webhookUrl: process.env.SLACK_WEBHOOK_URL!,   // the URL is the credential
         username: "bugbottle",
         iconEmoji: ":beetle:",
-        // Both are optional, and both are functions of the report, so the URL
-        // can be built from whatever you stored.
-        screenshotUrl: (r) => signedUrlFor(r),
+        // Both are optional. `screenshotUrlFrom` is a function of the report,
+        // so the address can be built from whatever you stored; pass
+        // `screenshotUrl` instead when you already have it.
+        screenshotUrlFrom: (r) => signedUrlFor(r),
         reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
       }),
       discordSink({
@@ -2617,9 +2634,10 @@ export const POST = (req: Request) =>
     sinks: [
       teamsSink({
         webhookUrl: process.env.TEAMS_WEBHOOK_URL!,   // the URL is the credential
-        // Both are optional, and both are functions of the report, so the URL
-        // can be built from whatever you stored.
-        screenshotUrl: (r) => signedUrlFor(r),
+        // Both are optional. `screenshotUrlFrom` is a function of the report,
+        // so the address can be built from whatever you stored; pass
+        // `screenshotUrl` instead when you already have it.
+        screenshotUrlFrom: (r) => signedUrlFor(r),
         reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
         buttonText: "Open report",                    // the default
       }),
