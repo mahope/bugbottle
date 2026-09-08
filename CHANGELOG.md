@@ -57,6 +57,13 @@ change the API; the changelog says so when they do.
   is dropped whole exactly as an oversized one is: the report keeps everything
   else. Surviving `JSON.stringify` was not the guarantee it looked like, since
   that walk spends less stack per level than this one does.
+- A `__proto__` key from a parsed body is kept as a key rather than becoming a
+  prototype. `JSON.parse` makes it an own property; writing it back with `=`
+  reaches the prototype setter instead, so the value was silently lost and,
+  where it was an object, the row about to be stored inherited whatever the
+  sender had put there. `normaliseReplay`'s null-byte walk and the allow-listed
+  `storage.values` both wrote their keys that way and now write a descriptor.
+  `collectExtra` was already refusing the name outright and is unchanged.
 
 ## 0.10.0 — 2026-09-08
 

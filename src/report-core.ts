@@ -369,6 +369,24 @@ function stripNullBytes(text: string): string {
   return text.replace(/\u0000/g, "");
 }
 
+/**
+ * Writes one own property under a key the sender chose.
+ *
+ * `target[key] = value` reaches the prototype setter when the key is
+ * `__proto__`, and every key that comes out of a parsed body is the sender's
+ * to choose: the value is silently lost, and where the value is an object the
+ * row we are about to store inherits whatever they sent instead. A descriptor
+ * writes the own property `JSON.parse` made in the first place, whatever the
+ * key happens to be called.
+ */
+function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
 
 /**
  * Trims and length-checks the reporter's message.
@@ -727,9 +745,10 @@ export function normaliseStorage(raw: unknown): StorageSnapshot | null {
     for (const [key, value] of Object.entries(o.values as Record<string, unknown>)) {
       if (Object.keys(values).length >= MAX_STORAGE_VALUES) break;
       if (typeof value !== "string") continue;
-      values[stripNullBytes(key).slice(0, MAX_STORAGE_KEY_LENGTH)] = stripNullBytes(value).slice(
-        0,
-        MAX_STORAGE_VALUE_LENGTH,
+      defineOwn(
+        values,
+        stripNullBytes(key).slice(0, MAX_STORAGE_KEY_LENGTH),
+        stripNullBytes(value).slice(0, MAX_STORAGE_VALUE_LENGTH),
       );
     }
     if (Object.keys(values).length > 0) out.values = values;
@@ -777,7 +796,7 @@ function stripNuls(value: unknown, depth: number): unknown {
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
-      out[stripNullBytes(key)] = stripNuls(item, depth + 1);
+      defineOwn(out, stripNullBytes(key), stripNuls(item, depth + 1));
     }
     return out;
   }
