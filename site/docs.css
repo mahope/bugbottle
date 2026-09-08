@@ -91,6 +91,98 @@
   font-weight: 650;
 }
 
+/* -------------------------------------------------------------- search */
+
+/*
+ * The search field at the top of the sidebar, built by docs.js and therefore
+ * absent from a page whose JavaScript never ran. It is set in the sidebar's
+ * own face — Source Sans 3, the same size as the links below it — because it
+ * is part of that column rather than a widget dropped into it.
+ */
+
+.docs-search {
+  margin: 0 0 1.4rem;
+}
+
+.docs-search-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.docs-search-field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  font: inherit;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.docs-search-field::placeholder {
+  color: var(--muted);
+}
+
+/* The count is small and quiet, and it is empty until there is something to
+   count — an empty paragraph must not push the list down a line. */
+.docs-search-count {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.docs-search-count:empty {
+  display: none;
+}
+
+.docs-search-count:not(:empty) {
+  margin: 0.4rem 0 0.2rem;
+}
+
+.docs-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.docs-search-results li a {
+  display: block;
+  padding: 0.3rem 0 0.3rem 0.85rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.docs-search-results li a:hover {
+  border-left-color: var(--accent);
+}
+
+.docs-search-title {
+  display: block;
+}
+
+/* The heading under the page name is the line that says which part of the
+   page the hit is in, so it is the quieter of the two, not the smaller one
+   of two equals. */
+.docs-search-heading {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.docs-search-results li a:hover .docs-search-heading {
+  color: var(--ink);
+}
+
 /* ---------------------------------------------------------------- body */
 
 /* The column holds the wide things — a table, a slab of code — and the prose
@@ -462,6 +554,15 @@ h3:hover > .anchor,
     border: 1px solid var(--rule);
     border-radius: var(--radius);
     background: var(--surface);
+  }
+
+  /* The sidebar is a bordered box here and the search sits inside it, above
+     the topic list — so on a phone the field is directly under the header,
+     which is where a reader who came to search will look for it. */
+  .docs-search {
+    margin: 0;
+    padding: 1.1rem;
+    border-bottom: 1px solid var(--rule);
   }
 
   .docs-topics {

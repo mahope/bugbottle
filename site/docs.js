@@ -1,8 +1,11 @@
 /*
- * The two small things the documentation pages need at runtime. Everything
- * else — which page is current, the anchors, previous and next — is written
- * into the HTML by scripts/build-docs.mjs, so a browser that never runs this
- * file still gets a finished page.
+ * The small things the documentation pages need at runtime: the copy buttons,
+ * the search field over the generated index, the topic list closing on a
+ * phone, and the current heading in "On this page". Everything else — which
+ * page is current, the anchors, previous and next — is written into the HTML
+ * by scripts/build-docs.mjs, so a browser that never runs this file still
+ * gets a finished page, search included: what it loses is the field, not the
+ * list of pages.
  *
  * Not a module: it is loaded with `defer` from every generated page and has
  * nothing to export.
@@ -94,6 +97,192 @@
       if (ok) resolve();
       else reject(new Error("copy refused"));
     });
+  }
+
+  /* ------------------------------------------------------------- search */
+
+  /* A field over an index of every heading on every documentation page,
+     generated beside the pages by scripts/build-docs.mjs. It is built here
+     rather than written into the HTML, so a reader without JavaScript is
+     never offered a box that cannot answer — what they get is the whole list
+     of pages, which is what the page had before there was a search at all.
+
+     The index is fetched on the first focus of the field and not before: it
+     is 70 kB of prose, and a reader who never searches should not pay for
+     it. */
+  var searchLabel = danish ? "Søg i dokumentationen" : "Search the documentation";
+  var noneLabel = danish ? "Ingen resultater" : "No results";
+  var oneLabel = danish ? "1 resultat" : "1 result";
+  var failedLabel = danish ? "Søgningen kunne ikke hentes" : "The search index did not load";
+  var MAX_RESULTS = 8;
+
+  addSearch(document.querySelector(".docs-sidebar"));
+
+  function addSearch(sidebar) {
+    if (!sidebar || !window.fetch) return;
+
+    var form = document.createElement("form");
+    form.className = "docs-search";
+    form.setAttribute("role", "search");
+
+    var label = document.createElement("label");
+    label.className = "docs-search-label";
+    label.htmlFor = "docs-search-field";
+    label.textContent = searchLabel;
+
+    var field = document.createElement("input");
+    field.type = "search";
+    field.id = "docs-search-field";
+    field.className = "docs-search-field";
+    field.autocomplete = "off";
+
+    /* The count is what a screen reader hears when the list changes; the list
+       itself is a plain list of links, which needs no announcing of its own
+       and stays operable with every key a link already understands. */
+    var count = document.createElement("p");
+    count.className = "docs-search-count";
+    count.setAttribute("aria-live", "polite");
+
+    var list = document.createElement("ul");
+    list.className = "docs-search-results";
+
+    form.appendChild(label);
+    form.appendChild(field);
+    form.appendChild(count);
+    form.appendChild(list);
+    sidebar.insertBefore(form, sidebar.firstChild);
+
+    var index = null;
+    var state = "";
+    var shown = [];
+
+    field.addEventListener("focus", load);
+    field.addEventListener("input", function () {
+      load();
+      render();
+    });
+
+    /* Enter opens the first result and Escape empties the field. Submitting
+       the form would reload the page, which is the one thing pressing Enter
+       in a search field must not do here. */
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      go(0);
+    });
+
+    field.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" || event.key === "Esc") {
+        field.value = "";
+        render();
+      }
+    });
+
+    function load() {
+      if (state !== "") return;
+      state = "loading";
+      window
+        .fetch("/docs/search.json")
+        .then(function (response) {
+          if (!response.ok) throw new Error(String(response.status));
+          return response.json();
+        })
+        .then(
+          function (data) {
+            index = data;
+            state = "ready";
+            render();
+          },
+          function () {
+            state = "failed";
+            count.textContent = failedLabel;
+          },
+        );
+    }
+
+    function go(position) {
+      var hit = shown[position];
+      if (hit) window.location.assign(hit.url);
+    }
+
+    function render() {
+      var query = field.value.trim().toLowerCase();
+      while (list.firstChild) list.removeChild(list.firstChild);
+      shown = [];
+      if (query === "" || state === "failed") {
+        count.textContent = state === "failed" ? failedLabel : "";
+        return;
+      }
+      if (!index) return;
+
+      shown = match(query);
+      count.textContent =
+        shown.length === 0
+          ? noneLabel
+          : shown.length === 1
+            ? oneLabel
+            : shown.length + (danish ? " resultater" : " results");
+
+      for (var i = 0; i < shown.length; i += 1) {
+        list.appendChild(result(shown[i]));
+      }
+    }
+
+    function result(hit) {
+      var item = document.createElement("li");
+      var link = document.createElement("a");
+      link.href = hit.url;
+      var title = document.createElement("span");
+      title.className = "docs-search-title";
+      title.textContent = hit.title;
+      link.appendChild(title);
+      if (hit.heading) {
+        var heading = document.createElement("span");
+        heading.className = "docs-search-heading";
+        heading.textContent = hit.heading;
+        link.appendChild(heading);
+      }
+      item.appendChild(link);
+      return item;
+    }
+
+    /* Case-insensitive substring, ranked title before heading before text.
+       Inside a rank the entry that says the word most often wins, which is
+       the difference between the page a word is mentioned on and the page it
+       is about; a tie after that keeps the order of the sidebar. */
+    function match(query) {
+      var hits = [];
+      for (var i = 0; i < index.length; i += 1) {
+        var entry = index[i];
+        var title = (entry.title || "").toLowerCase();
+        var heading = (entry.heading || "").toLowerCase();
+        var text = (entry.text || "").toLowerCase();
+        var rank =
+          title.indexOf(query) !== -1
+            ? 0
+            : heading.indexOf(query) !== -1
+              ? 1
+              : text.indexOf(query) !== -1
+                ? 2
+                : 3;
+        if (rank === 3) continue;
+        hits.push({
+          url: entry.url,
+          title: entry.title,
+          heading: entry.heading,
+          rank: rank,
+          weight: occurrences(title, query) + occurrences(heading, query) + occurrences(text, query),
+          order: i,
+        });
+      }
+      hits.sort(function (a, b) {
+        return a.rank - b.rank || b.weight - a.weight || a.order - b.order;
+      });
+      return hits.slice(0, MAX_RESULTS);
+    }
+
+    function occurrences(haystack, needle) {
+      return haystack.split(needle).length - 1;
+    }
   }
 
   /* The topic list is written open, so a page with no JavaScript is whole at
