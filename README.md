@@ -2208,7 +2208,9 @@ UTF-8 safe, so a token with an accent in it does not throw on the way out. The
 summary is the report's type and its first line — `Bug: The save button does
 nothing` — clipped to the 255 characters Jira keeps, unless you pass `title`.
 `facts` adds bullets of your own, and `maxConsoleEntries` shortens the code
-block, which Jira renders in full with no way to collapse it.
+block, which Jira renders in full with no way to collapse it. A `contact` line
+on the report is the bullet directly under the type, where the Markdown sinks
+put it too.
 
 A refused create names the field: Jira answers with an `errorMessages` list and
 an `errors` object keyed by field, and both are joined into the `SinkError`

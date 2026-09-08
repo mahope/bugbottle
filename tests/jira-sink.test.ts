@@ -294,3 +294,24 @@ test("the sink's deadline reaches fetch as an abort signal", async () => {
     (err: unknown) => (err as Error).name === "AbortError",
   );
 });
+
+test("the contact line is a fact, directly under the type", () => {
+  // Every other sink carries it — `toMarkdown` for GitHub, GitLab and Linear,
+  // the fields for Slack and Discord, `contact_email` for Sentry, `reply_to`
+  // for Resend. Jira builds its own facts, so it has to be told separately.
+  const doc = buildJiraDescription({ ...report, contact: "anna@example.com" });
+  const facts = (firstNode(doc, "bulletList")?.content ?? []).map(textOf);
+  assert.deepEqual(facts.slice(0, 2), ["Type: Bug", "Contact: anna@example.com"]);
+});
+
+test("a contact line of whitespace is not a fact", () => {
+  const doc = buildJiraDescription({ ...report, contact: "   " });
+  const facts = (firstNode(doc, "bulletList")?.content ?? []).map(textOf);
+  assert.ok(!facts.some((line) => line.startsWith("Contact:")));
+});
+
+test("a report with no contact line has no contact fact", () => {
+  const doc = buildJiraDescription(report);
+  const facts = (firstNode(doc, "bulletList")?.content ?? []).map(textOf);
+  assert.ok(!facts.some((line) => line.startsWith("Contact:")));
+});
