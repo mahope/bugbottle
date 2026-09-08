@@ -17,14 +17,16 @@
  * when a new section is added and not placed, because a section nobody placed
  * is a page nobody can reach.
  *
- * Three pages are not README sections: site/compare.md and site/da/sammenlign.md
+ * Four pages are not README sections. site/compare.md and site/da/sammenlign.md
  * are their own Markdown files, rendered by the same renderer into
  * site/compare/ and site/da/sammenlign/ with the landing page's header and
- * footer. They are the only prose on the site that is neither the landing page
- * nor the README, because they are about other people's products and have no
- * business in a package README. The third is CHANGELOG.md, rendered into
- * site/docs/changelog/ so the release notes are a page on the site rather than
- * a link away to a raw file on GitHub.
+ * footer. They are prose that is neither the landing page nor the README,
+ * because they are about other people's products and have no business in a
+ * package README. site/da/kom-i-gang.md is the third, for the same kind of
+ * reason in reverse: the documentation is English and this is the one Danish
+ * way in, so it belongs on the site rather than in the README. The fourth is
+ * CHANGELOG.md, rendered into site/docs/changelog/ so the release notes are a
+ * page on the site rather than a link away to a raw file on GitHub.
  *
  * The last two files are for machines: site/sitemap.xml lists every URL the
  * site has, each with the date of the commit that last touched the file it is
@@ -62,8 +64,12 @@ const INTRO = {
 };
 
 /* The pages that come from their own Markdown file instead of a README
-   section. Each is a pair: the same page in the other language, linked from
-   the other with hreflang, exactly like the two landing pages. */
+   section. The two comparison pages are a pair: the same page in the other
+   language, linked from the other with `otherUrl` and hreflang, exactly like
+   the two landing pages. A page without an `otherUrl` has no counterpart and
+   claims none — `hreflang` is a promise that the other URL is the same page,
+   and there is no honest way to make that promise about a page that does not
+   exist. `indexed: false` keeps a page out of site/docs/search.json. */
 const STANDALONE = [
   {
     id: "compare",
@@ -88,6 +94,23 @@ const STANDALONE = [
     eyebrow: "Om",
     heading: "Sammenlignet med alternativerne",
     otherUrl: "/compare/",
+  },
+  {
+    id: "kom-i-gang",
+    lang: "da",
+    source: join("site", "da", "kom-i-gang.md"),
+    out: join("da", "kom-i-gang"),
+    url: "/da/kom-i-gang/",
+    title: "Kom i gang",
+    navTitle: "Kom i gang",
+    eyebrow: "Dansk",
+    heading: "Kom i gang med bugbottle",
+    /* No `otherUrl`: /docs/install/ is the nearest English page and it is not
+       this page. It is the README's opening — what the package is and how to
+       install it — while this one walks three routes to a first report, the
+       WordPress plugin among them, and says the privacy part in Danish.
+       Calling them alternates would tell a crawler they are the same page. */
+    indexed: false,
   },
 ];
 
@@ -769,6 +792,14 @@ function sitemapXml(pages) {
       source: "site/da/sammenlign.md",
       alternates: pair("/da/sammenlign/", "/compare/", "da", "en"),
     },
+    /* No alternates: the Danish getting-started page has no English twin.
+       /docs/install/ is the nearest thing and it is a different page — see
+       the note on the STANDALONE entry. */
+    {
+      loc: `${ORIGIN}/da/kom-i-gang/`,
+      source: "site/da/kom-i-gang.md",
+      alternates: [],
+    },
     {
       loc: `${ORIGIN}${CHANGELOG.url}`,
       source: CHANGELOG.source,
@@ -963,35 +994,43 @@ async function main() {
     searchIndex.push(...searchEntries(page));
   }
 
-  /* The comparison pages. Their Markdown has no headings to slice at and no
-     README anchors to rewrite, so they go through the renderer with an empty
-     anchor map and come out as one article each. */
+  /* The pages with their own Markdown file. It has no headings to slice at and
+     no README anchors to rewrite, so each goes through the renderer with an
+     empty anchor map and comes out as one article. A page with an `otherUrl`
+     carries alternates both ways and puts its counterpart under the language
+     switch; a page without one carries only itself and leaves the switch
+     pointing at that language's landing page. */
   for (const entry of STANDALONE) {
     const body = (await readFile(join(root, entry.source), "utf8")).replace(/\r\n/g, "\n").trim();
     const marked = new Marked({ gfm: true, breaks: false });
     marked.use({ renderer: renderer(entry, new Map()) });
-    const en = STANDALONE[0];
-    const da = STANDALONE[1];
+    const en = entry.lang === "en" ? entry.url : entry.otherUrl;
+    const da = entry.lang === "da" ? entry.url : entry.otherUrl;
     const page = {
       ...entry,
       html: marked.parse(body),
       description: describe(body),
       headTitle: `${entry.heading} — bugbottle`,
       canonical: `${ORIGIN}${entry.url}`,
-      alternates: [
-        { hreflang: "en", href: `${ORIGIN}${en?.url ?? "/compare/"}` },
-        { hreflang: "da", href: `${ORIGIN}${da?.url ?? "/da/sammenlign/"}` },
-        { hreflang: "x-default", href: `${ORIGIN}${en?.url ?? "/compare/"}` },
-      ],
-      enUrl: en?.url,
-      daUrl: da?.url,
+      alternates:
+        en && da
+          ? [
+              { hreflang: "en", href: `${ORIGIN}${en}` },
+              { hreflang: "da", href: `${ORIGIN}${da}` },
+              { hreflang: "x-default", href: `${ORIGIN}${en}` },
+            ]
+          : undefined,
+      enUrl: en,
+      daUrl: da,
       docsCurrent: false,
     };
     const dir = join(root, "site", entry.out);
     await rm(dir, { recursive: true, force: true });
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "index.html"), standaloneHtml(page), "utf8");
-    searchIndex.push(...searchEntries({ url: entry.url, title: entry.heading, body }));
+    if (entry.indexed !== false) {
+      searchIndex.push(...searchEntries({ url: entry.url, title: entry.heading, body }));
+    }
   }
 
   /* The changelog. One long article like the comparison pages, but under
@@ -1068,7 +1107,7 @@ async function main() {
   const unindexed = [
     "/docs/",
     ...pages.map((page) => page.url),
-    ...STANDALONE.map((s) => s.url),
+    ...STANDALONE.filter((s) => s.indexed !== false).map((s) => s.url),
     CHANGELOG.url,
   ].filter((url) => !indexed.has(url));
   if (unindexed.length > 0) {
@@ -1081,7 +1120,7 @@ async function main() {
 
   process.stdout.write(
     `site/docs: ${pages.length + 1} pages from README.md; ` +
-      `${STANDALONE.length} comparison pages; the changelog; ` +
+      `${STANDALONE.length} pages from their own Markdown; the changelog; ` +
       `${searchIndex.length} search entries; sitemap.xml and robots.txt\n`,
   );
 }

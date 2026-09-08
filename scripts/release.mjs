@@ -57,7 +57,16 @@ const refs = (t) =>
     .split(`measured at ${before}`).join(`measured at ${version}`)
     .split(`målt ved ${before}`).join(`målt ved ${version}`)
     .split(`/docs/changelog/#${anchor(before)}`).join(`/docs/changelog/#${anchor(version)}`);
-for (const f of ["README.md", "site/index.html", "site/da/index.html"]) edit(f, refs);
+// site/da/kom-i-gang.md pins the same jsDelivr URL the README does, so it has
+// to move with the version or the one Danish way in hands out a stale script
+// tag.
+for (const f of [
+  "README.md",
+  "site/index.html",
+  "site/da/index.html",
+  "site/da/kom-i-gang.md",
+])
+  edit(f, refs);
 
 // The Sentry sink names its version in the envelope header, and a test pins it
 // to package.json, so the release stamps it too.

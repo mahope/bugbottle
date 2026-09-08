@@ -30,10 +30,11 @@ COPY scripts/build-docs.mjs ./scripts/
 # The changelog is its own Markdown too, rendered into site/docs/changelog/,
 # so it has to be here or the script fails on a file it cannot read.
 COPY CHANGELOG.md ./
-# The two comparison pages are their own Markdown, not README sections, and
-# the same run writes sitemap.xml and robots.txt.
+# The two comparison pages and the Danish getting-started page are their own
+# Markdown, not README sections, and the same run writes sitemap.xml and
+# robots.txt.
 COPY site/compare.md ./site/
-COPY site/da/sammenlign.md ./site/da/
+COPY site/da/sammenlign.md site/da/kom-i-gang.md ./site/da/
 # The history, for the sitemap's dates. Last, because it changes with every
 # commit and would otherwise invalidate everything below it.
 #
@@ -59,12 +60,14 @@ COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site
 # The two faces the page is set in, served from this host so the footer's
 # promise about external requests stays true.
 COPY site/fonts/ /usr/share/nginx/html/fonts/
-# Named rather than `site/da/`, so the Markdown source of the Danish
-# comparison page is not served next to the page generated from it.
+# Named rather than `site/da/`, so the Markdown sources of the Danish
+# comparison and getting-started pages are not served next to the pages
+# generated from them.
 COPY site/da/index.html /usr/share/nginx/html/da/
 COPY --from=docs /build/site/docs/ /usr/share/nginx/html/docs/
 COPY --from=docs /build/site/compare/ /usr/share/nginx/html/compare/
 COPY --from=docs /build/site/da/sammenlign/ /usr/share/nginx/html/da/sammenlign/
+COPY --from=docs /build/site/da/kom-i-gang/ /usr/share/nginx/html/da/kom-i-gang/
 COPY --from=docs /build/site/sitemap.xml /build/site/robots.txt /usr/share/nginx/html/
 COPY dist/ /usr/share/nginx/html/dist/
 
