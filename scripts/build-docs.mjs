@@ -409,8 +409,8 @@ ${fields}
     </div>
     <div class="pg-stage" data-playground-stage inert></div>
   </div>
-  <div class="slab" data-copy><div class="slab-tab">ts</div><pre><code data-playground-js></code></pre></div>
-  <div class="slab" data-copy><div class="slab-tab">css</div><pre><code data-playground-css></code></pre></div>
+  <div class="slab" data-copy><div class="slab-tab">ts</div><pre tabindex="0"><code data-playground-js></code></pre></div>
+  <div class="slab" data-copy><div class="slab-tab">css</div><pre tabindex="0"><code data-playground-css></code></pre></div>
 </div>
 `;
 }
@@ -690,7 +690,7 @@ function renderer(page, anchors) {
     code(token) {
       const lang = (token.lang ?? "").split(/\s+/)[0] ?? "";
       const tab = lang ? `<div class="slab-tab">${escapeHtml(lang)}</div>` : "";
-      return `<div class="slab" data-copy>${tab}<pre><code>${escapeHtml(token.text)}</code></pre></div>\n`;
+      return `<div class="slab" data-copy>${tab}<pre tabindex="0"><code>${escapeHtml(token.text)}</code></pre></div>\n`;
     },
 
     /* README links are written for GitHub: `#anchor` means somewhere in the
