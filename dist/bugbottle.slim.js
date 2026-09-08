@@ -15,7 +15,7 @@ ${i}`)}}function qe(e,t={}){let n=t.target??(typeof window>"u"?void 0:window);if
   :host([data-scheme="auto"]){--bb-bg:#111827;--bb-text:#f3f4f6;--bb-muted:#9ca3af;--bb-border:#374151;
     --bb-error:#f87171;--bb-accent-text:#93c5fd}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){:host,*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 *,*::before,*::after{box-sizing:border-box}
 .sr{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 button,textarea,input{font:inherit;color:inherit}

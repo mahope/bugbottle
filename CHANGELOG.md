@@ -7,6 +7,26 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- **`prefers-reduced-motion: reduce` is honoured everywhere, and audited**
+  (#96). The panel's stylesheet already switched transitions and animations
+  off; the block now also names `:host` and the pseudo-elements, which `*`
+  never matched, and turns `scroll-behavior` off with them, since a smooth
+  scroll is motion no transition property describes. On the landing pages the
+  scroll to the rendered payload jumps instead of gliding when the reader asked
+  for stillness — CSS cannot reach a scroll a script asks for, so `site/demo.js`
+  reads the media query for it, next to the reveal it already switched off.
+  Every state change still happens; none of them takes time.
+  Both accessibility audits gained the state: `scripts/a11y-audit.mjs` runs axe
+  over the panel with the feature emulated (ten states now, not nine) and then
+  reads every computed `transition-duration` and `animation-duration` back out
+  of the shadow root, and `scripts/a11y-site.mjs` does the same for the landing
+  page and a documentation page (thirty page-and-scheme runs, not twenty-six).
+  The shared walker is `scripts/motionless.mjs`; it descends into open shadow
+  roots, so the demo's panel is covered where it ships, and it fails on a
+  document that still scrolls smoothly.
+
 ### Added
 
 - **`onDecision`: one hook per request saying what `handleReport` decided and

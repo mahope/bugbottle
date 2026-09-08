@@ -5,11 +5,18 @@
  * and the accessibility tree can only be checked in a real browser. This
  * serves `dist/` on a scratch page, mounts the panel with everything showing —
  * the screenshot row, an attached element and its remove button — and runs
- * axe-core over nine states: closed, open in the light scheme, open in the
+ * axe-core over ten states: closed, open in the light scheme, open in the
  * dark one, the picture annotator open in each scheme, the panel with the
- * optional contact field on in each scheme, and the panel and the annotator
- * again under `forced-colors: active`, which is Windows High Contrast. It
- * exits non-zero on any violation.
+ * optional contact field on in each scheme, the panel and the annotator
+ * again under `forced-colors: active`, which is Windows High Contrast, and the
+ * panel under `prefers-reduced-motion: reduce`. It exits non-zero on any
+ * violation.
+ *
+ * Reduced motion also gets a check axe cannot make, for the same reason as
+ * forced colours: a transition is not in the accessibility tree. The run ends
+ * by opening the panel and the annotator with the feature emulated and reading
+ * every computed `transition-duration` and `animation-duration` in the shadow
+ * root back out — see `scripts/motionless.mjs`. All of them have to be zero.
  *
  * Forced colours also get a check axe cannot make. axe reads the accessibility
  * tree and computes contrast from the stylesheet; it cannot tell that the
@@ -35,6 +42,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findChrome, loadPuppeteer } from "./chrome.mjs";
+import { movingElements, reportMotion } from "./motionless.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 // `indexOf` returns -1 when the flag is absent, and argv[-1 + 1] is the path to
@@ -132,20 +140,21 @@ await mkdir(outDir, { recursive: true });
  * palette is forced per tab rather than for the whole browser because the
  * other seven states have to stay in their own colours.
  */
-const emulate = async (tab, scheme, forced) => {
+const emulate = async (tab, scheme, forced, reduced = false) => {
   const session = await tab.createCDPSession();
   await session.send("Emulation.setEmulatedMedia", {
     features: [
       { name: "prefers-color-scheme", value: scheme },
       { name: "forced-colors", value: forced ? "active" : "none" },
+      { name: "prefers-reduced-motion", value: reduced ? "reduce" : "no-preference" },
     ],
   });
 };
 
 /** Runs axe over the whole document, shadow roots included, and saves the report. */
-async function audit(name, scheme, prepare, query = "", forced = false) {
+async function audit(name, scheme, prepare, query = "", forced = false, reduced = false) {
   const tab = await browser.newPage();
-  await emulate(tab, scheme, forced);
+  await emulate(tab, scheme, forced, reduced);
   await tab.goto(`${origin}/?scheme=${scheme}${query}`, { waitUntil: "networkidle0" });
   await tab.waitForSelector("[data-bugbottle=ui]");
   if (prepare) await prepare(tab);
@@ -348,6 +357,24 @@ async function forcedColourPixels() {
   return problems.length;
 }
 
+/**
+ * The panel with everything on it, the annotator open over the picture, and
+ * `prefers-reduced-motion: reduce` asked for. axe cannot answer this one — a
+ * transition is not in the accessibility tree — so the computed durations are
+ * read back out of the shadow root instead. Every state change still happens;
+ * the check is that none of them takes time.
+ */
+async function reducedMotion() {
+  const tab = await browser.newPage();
+  await emulate(tab, "light", false, true);
+  await tab.goto(`${origin}/?scheme=light`, { waitUntil: "networkidle0" });
+  await tab.waitForSelector("[data-bugbottle=ui]");
+  await openAnnotator(tab);
+  const failed = reportMotion("reduced-motion", await movingElements(tab));
+  await tab.close();
+  return failed;
+}
+
 let failures = 0;
 failures += await audit("closed-light", "light");
 failures += await audit("open-light", "light", openWithEverything);
@@ -364,6 +391,11 @@ failures += await audit("contact-dark", "dark", openWithEverything, "&contact=1"
 failures += await audit("forced-open", "light", openWithEverything, "", true);
 failures += await audit("forced-annotate", "light", openAnnotator, "", true);
 failures += await forcedColourPixels();
+// Reduced motion: axe is run over the state as well, so a still panel that
+// broke something else does not pass unnoticed, and then the durations are
+// read.
+failures += await audit("reduced-open", "light", openWithEverything, "", false, true);
+failures += await reducedMotion();
 
 await browser.close();
 server.close();

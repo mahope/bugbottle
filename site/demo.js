@@ -27,6 +27,11 @@ const danish = document.documentElement.lang === "da";
 const locale = danish ? da : en;
 const out = document.getElementById("payload");
 
+/* Asked once, read everywhere on this page: the reveal below never starts,
+   and the scroll to the payload jumps instead of gliding. CSS cannot reach a
+   scroll a script asks for, so this is the only way to honour it. */
+const stillness = window.matchMedia("(prefers-reduced-motion: reduce)");
+
 // So the console section of the payload has something honest in it.
 initConsoleBuffer();
 
@@ -153,7 +158,7 @@ const widget = mountBugbottle({
       : "";
     const copyPayload = out.parentElement.querySelector(".copy");
     if (copyPayload) copyPayload.hidden = !out.textContent;
-    out.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    out.scrollIntoView({ block: "nearest", behavior: stillness.matches ? "auto" : "smooth" });
   },
 });
 
@@ -166,8 +171,6 @@ if (openButton) {
  * The rest of this file is the page, not the library: two small pieces of
  * motion that both degrade to "everything is visible" when they cannot run.
  */
-
-const stillness = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // Sections arrive as you reach them. The class that hides them is set from
 // here, so a page without JavaScript — or with reduced motion asked for —

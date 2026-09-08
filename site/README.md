@@ -365,8 +365,8 @@ included, parsed straight out of `site/security-headers.conf` — and runs the p
 `axe-core` over both landing pages, the English landing page again with the
 demo's panel open and the picture editor over it, the documentation index, one
 deep documentation page, the documentation index again with the search field
-holding results, the theme playground with a control moved, the two comparison pages, the Danish getting-started page, both halves of the privacy checklist and the changelog,
-in **both colour schemes** — twenty-six runs. Three of those runs are states rather than pages. The
+holding results, the theme playground with a control moved, the two comparison pages, the Danish getting-started page, both halves of the privacy checklist, the changelog, and the landing page and the deep documentation page once more under `prefers-reduced-motion: reduce`,
+in **both colour schemes** — thirty runs. Five of those runs are states rather than pages. The
 search state is a click, a word typed and a wait for the
 list: the results are drawn from JavaScript and nothing else on the site would
 notice a link with no accessible name in them. The annotator state opens the
@@ -374,7 +374,12 @@ panel, ticks the screenshot box, waits for the drawn picture and presses "Edit
 picture": `scripts/a11y-audit.mjs` audits the same editor, but on a scratch page
 with its own colours, and it is the site's colours and the site's renderer that
 would break here. The playground state moves four of its controls first, because
-the state worth auditing is the one the reader makes rather than the defaults. It fails on a console message as well as on a violation, because
+the state worth auditing is the one the reader makes rather than the defaults.
+The two reduced-motion states are audited by axe like the rest and then read
+for movement, which axe has no rule for: `scripts/motionless.mjs` walks the
+document and every open shadow root — the demo's panel included — and fails on
+any `transition-duration` or running `animation-duration` above zero, or on a
+document that still scrolls smoothly. It fails on a console message as well as on a violation, because
 a page that logs one is a page that is half-working and nothing else here
 would notice.
 
@@ -654,7 +659,11 @@ reveals sections with one `IntersectionObserver` as the reader scrolls to
 them. The class that hides a section before it is revealed is set from
 JavaScript, so a browser without it — or one asking for reduced motion —
 never hides anything. Every animation and transition is switched off under
-`prefers-reduced-motion`. A headless full-page screenshot that never scrolls
+`prefers-reduced-motion`, `scroll-behavior` goes back to `auto`, and the one
+scroll a script asks for — `demo.js` bringing the rendered payload into view
+after a send — jumps rather than glides, since no stylesheet can reach that
+one. `scripts/a11y-site.mjs` audits the pages in that state and fails if
+anything still moves. A headless full-page screenshot that never scrolls
 the real viewport will not trigger this — scroll through the page first, or
 the shot will show sections stuck invisible below the fold.
 

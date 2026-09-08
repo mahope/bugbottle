@@ -7,11 +7,17 @@
  * again with the demo's panel open and the picture editor over it, the index
  * again with the search field open on results, the theme playground with a
  * control moved, the two comparison pages, the Danish getting-started page,
- * both halves of the privacy checklist and the
- * changelog, in both colour schemes, with the pinned `axe-core`. Contrast, heading
+ * both halves of the privacy checklist, the changelog, and the landing and
+ * documentation pages once more under `prefers-reduced-motion: reduce`, in both
+ * colour schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
  * without breaking a test.
+ *
+ * The two reduced-motion states are read for movement as well as audited: no
+ * element on the page, the demo panel's shadow root included, may have a
+ * `transition-duration` or a running `animation-duration` above zero, and the
+ * document may not still scroll smoothly. See `scripts/motionless.mjs`.
  *
  * It also fails on a console error, because a page that logs one is a page
  * that is half-working, and there is no other check that would notice. A
@@ -35,6 +41,7 @@ import { readFile, mkdir, writeFile, access } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findChrome, loadPuppeteer } from "./chrome.mjs";
+import { movingElements, reportMotion } from "./motionless.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const site = join(root, "site");
@@ -136,13 +143,25 @@ const PAGES = [
   ["privacy-checklist", "/docs/privacy-checklist/"],
   ["privatliv", "/da/privatliv/"],
   ["changelog", "/docs/changelog/"],
+  /* The landing page and a documentation page under
+     `prefers-reduced-motion: reduce`. The landing page is the one with the
+     reveal, the demo's panel and a scroll a script asks for; the documentation
+     page carries the article styles and the sidebar. Both are audited by axe as
+     usual and then read for anything still moving. */
+  ["landing-still", "/", "reduced"],
+  ["docs-still", "/docs/the-ready-made-panel/", "reduced"],
 ];
 
 let failures = 0;
 
 async function audit(name, path, scheme, state) {
   const tab = await browser.newPage();
-  await tab.emulateMediaFeatures([{ name: "prefers-color-scheme", value: scheme }]);
+  await tab.emulateMediaFeatures([
+    { name: "prefers-color-scheme", value: scheme },
+    /* "no-preference" rather than nothing, so the other states are audited
+       with the reveal running, which is how the page usually arrives. */
+    { name: "prefers-reduced-motion", value: state === "reduced" ? "reduce" : "no-preference" },
+  ]);
   const noise = [];
   tab.on("console", (m) => {
     if (m.type() === "error" || m.type() === "warning") noise.push(`${m.type()}: ${m.text()}`);
@@ -278,6 +297,11 @@ async function audit(name, path, scheme, state) {
   );
   for (const line of noise) console.error(`  ${label}: ${line}`);
   failures += report.violations.length + noise.length;
+  /* The reduced-motion check, which axe has no rule for. It runs after axe so
+     the page has been scrolled through and every section is in its final
+     state — a transition that only exists while a section arrives would
+     otherwise be missed. */
+  if (state === "reduced") failures += reportMotion(label, await movingElements(tab));
   await tab.close();
 }
 
