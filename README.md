@@ -2447,10 +2447,10 @@ await sendReportWebhook(payload, {
 });
 ```
 
-The address was `url` until 0.9, where everything else in the package calls it
-`endpoint`. That name still works and is deprecated; it goes in 1.0. A vendor's
-own address keeps the vendor's own word — `webhookUrl` for the Slack, Discord
-and Teams sinks below, `host` for GitLab, `site` for Jira, `dsn` for Sentry.
+The address is `endpoint`, the word everything else in the package uses for
+somewhere you POST a report. A vendor's own address keeps the vendor's own
+word — `webhookUrl` for the Slack, Discord and Teams sinks below, `host` for
+GitLab, `site` for Jira, `dsn` for Sentry.
 
 ### Your own SMTP server
 

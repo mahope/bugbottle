@@ -23,6 +23,11 @@ change the API; the changelog says so when they do.
   option object the vendor prefix said nothing the key did not. The store
   contracts are unchanged, and `HandleReportOptions.store`, the top-level one
   that persists a report, is a different option and was never touched.
+- **`SendReportWebhookOptions.url`** (#67). Rename it to `endpoint`, the word
+  everything else in the package uses for somewhere it POSTs a report.
+  `toWebhook` takes the same options object and migrates the same way; a
+  vendor's own address keeps the vendor's own word, so `webhookUrl`, `host`,
+  `site` and `dsn` are unchanged.
 
 ## 0.15.0 — 2026-09-08
 

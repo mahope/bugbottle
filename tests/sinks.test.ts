@@ -219,7 +219,7 @@ test("slack gets text and discord gets content", async () => {
 
   const discord = fakeFetch(204, "");
   const result = await sendReportWebhook(report, {
-    url: "https://discord.com/api/webhooks/x",
+    endpoint: "https://discord.com/api/webhooks/x",
     format: "discord",
     fetch: discord.fetch,
   });
@@ -234,7 +234,7 @@ test("a long report is clipped to the discord limit", async () => {
     message: `Overflowing\n${"x".repeat(5000)}`,
   };
   await sendReportWebhook(long, {
-    url: "https://discord.com/api/webhooks/x",
+    endpoint: "https://discord.com/api/webhooks/x",
     format: "discord",
     fetch,
   });
@@ -247,7 +247,7 @@ test("a long report is clipped to the discord limit", async () => {
 test("a refused webhook becomes a SinkError", async () => {
   const { fetch } = fakeFetch(404, "no_service");
   await assert.rejects(
-    () => sendReportWebhook(report, { url: "https://hooks.slack.com/gone", fetch }),
+    () => sendReportWebhook(report, { endpoint: "https://hooks.slack.com/gone", fetch }),
     (err: unknown) => {
       assert.ok(err instanceof SinkError);
       assert.equal(err.name, "SinkError");
@@ -497,14 +497,4 @@ test("a malformed report is still filed in linear, with a fallback title", async
   assert.equal(result.id, "iss_2");
   assert.equal(result.identifier, undefined);
   assert.equal(linearInput(calls).title, "Feedback: Feedback");
-});
-
-test("the deprecated url still says where the webhook is", async () => {
-  const { fetch, calls } = fakeFetch(200, { ok: true });
-  const result = await sendReportWebhook(report, {
-    url: "https://hook.example.com/old-name",
-    fetch,
-  });
-  assert.equal(result.status, 200);
-  assert.equal(calls[0]?.url, "https://hook.example.com/old-name");
 });

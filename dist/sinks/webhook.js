@@ -39,7 +39,7 @@ export async function sendReportWebhook(report, options) {
     const format = options.format ?? "json";
     const markdown = toMarkdown(report, options.markdown ?? {});
     const doFetch = options.fetch ?? globalThis.fetch;
-    const response = await doFetch(options.endpoint ?? options.url, {
+    const response = await doFetch(options.endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...options.headers },
         body: JSON.stringify(bodyFor(report, format, markdown)),

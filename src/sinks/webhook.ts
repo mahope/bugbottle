@@ -19,21 +19,14 @@ export type WebhookFormat = "json" | "slack" | "discord";
 
 /**
  * Where the report goes. `endpoint` is the name everything else in the package
- * uses for the address it POSTs to; `url` is what this sink called it until
- * 0.9 and is accepted in its place until 1.0 (#67). One of the two is
- * required, and giving both is a type error rather than a guess.
+ * uses for the address it POSTs to — `sendReport(endpoint, …)`,
+ * `QueueOptions.endpoint`, `data-endpoint` — and the address here is the
+ * integrator's own server, so it uses the same word.
  */
-export type SendReportWebhookTarget =
-  | {
-      /** The webhook URL. Treat it as a secret: anyone holding it can post. */
-      endpoint: string;
-      url?: never;
-    }
-  | {
-      /** @deprecated Renamed to `endpoint` in 0.9. Removed in 1.0 (#67). */
-      url: string;
-      endpoint?: never;
-    };
+export type SendReportWebhookTarget = {
+  /** The webhook URL. Treat it as a secret: anyone holding it can post. */
+  endpoint: string;
+};
 
 export type SendReportWebhookOptions = SendReportWebhookTarget & {
   /** Injected `fetch`, for tests or a runtime with its own client. */
@@ -81,7 +74,7 @@ export async function sendReportWebhook(
   const markdown = toMarkdown(report, options.markdown ?? {});
 
   const doFetch = options.fetch ?? globalThis.fetch;
-  const response = await doFetch(options.endpoint ?? options.url, {
+  const response = await doFetch(options.endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...options.headers },
     body: JSON.stringify(bodyFor(report, format, markdown)),
