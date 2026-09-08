@@ -8,7 +8,7 @@
  * long). Every value goes through `normalise*` first, so this accepts the raw
  * body from the request as well as a validated report.
  */
-import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, } from "./report-core.js";
+import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
 /**
  * How many frames of a stack are printed under a console entry. Ten are kept
@@ -153,6 +153,11 @@ export function toMarkdown(raw, options = {}) {
     if (message)
         out.push(message, "");
     const facts = [["Type", TYPE_LABEL[type] ?? type]];
+    // Directly under the type, because a reader deciding what to do with a
+    // report wants to know whether they can answer it before anything else.
+    const contact = normaliseContact(r.contact);
+    if (contact)
+        facts.push(["Contact", contact]);
     if (context.url)
         facts.push(["Page", `\`${context.url}\``]);
     if (context.viewport)

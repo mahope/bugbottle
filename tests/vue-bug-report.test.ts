@@ -164,6 +164,25 @@ test("a successful submit reports the id, clears the form and calls onSent", asy
   unmount();
 });
 
+test("the contact ref is writable and reaches the posted body", async () => {
+  const fetchStub = stubFetch(() => json({ id: "rep_c" }));
+  const { form, unmount } = mount({ endpoint: ENDPOINT });
+
+  assert.equal(form.contact.value, "");
+  // Writable, so `v-model="contact"` works: this is what the template does.
+  form.contact.value = "anna@example.com";
+  assert.equal(form.contact.value, "anna@example.com");
+  form.setMessage("The save button does nothing");
+  await form.submit();
+  await nextTick();
+
+  const body = fetchStub.seen[0]?.body as Record<string, unknown>;
+  assert.equal(body["contact"], "anna@example.com");
+  assert.equal(form.contact.value, "", "cleared with the rest of the form");
+  fetchStub.restore();
+  unmount();
+});
+
 test("a rejected report surfaces the server's own message", async () => {
   const fetchStub = stubFetch(() => json({ error: "Reports are closed for this project" }, 500));
   const { form, unmount } = mount({ endpoint: ENDPOINT });

@@ -159,6 +159,15 @@ test("the storage block collapses by default and can be opened out", () => {
   assert.doesNotMatch(open, /<details><summary>Storage/);
 });
 
+test("a contact line becomes a fact row, and only when there is one", () => {
+  const md = toMarkdown({ ...report, contact: "  anna@example.com  " });
+  assert.match(md, /\| Contact \| anna@example\.com \|/);
+  assert.doesNotMatch(toMarkdown(report), /\| Contact \|/);
+  assert.doesNotMatch(toMarkdown({ ...report, contact: "   " }), /\| Contact \|/);
+  // Free text, so a phone number is rendered exactly as the reporter wrote it.
+  assert.match(toMarkdown({ ...report, contact: "call me on 12345678" }), /\| Contact \| call me on 12345678 \|/);
+});
+
 test("a nonsense perf or storage section renders nothing and never throws", () => {
   for (const bad of ["fast", 42, [], {}, null]) {
     const md = toMarkdown({ type: "bug", message: "x", perf: bad, storage: bad });

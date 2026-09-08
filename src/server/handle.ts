@@ -23,6 +23,7 @@ import {
   isReportType,
   normaliseBreadcrumbs,
   normaliseConsole,
+  normaliseContact,
   normaliseContext,
   normaliseElements,
   normaliseMessage,
@@ -73,6 +74,7 @@ export const TOO_LARGE_ERROR = "Report is too large";
 const KNOWN_KEYS = new Set([
   "type",
   "message",
+  "contact",
   "context",
   "console",
   "elements",
@@ -95,6 +97,12 @@ const KNOWN_KEYS = new Set([
 export type ValidatedReport = {
   type: ReportType;
   message: string;
+  /**
+   * How to reach the reporter, when the form asked and they answered. Absent
+   * when they did not, so a row never carries an empty contact line — and
+   * personal data when it is there: see the privacy section of the README.
+   */
+  contact?: string;
   context: ReportContext;
   console: ConsoleEntry[];
   elements: ElementRef[];
@@ -813,9 +821,13 @@ export function validateReport(payload: unknown): ValidatedReport | null {
   >;
   const message = normaliseMessage(body.message);
   if (!message) return null;
+  const contact = normaliseContact(body.contact);
   return {
     type: isReportType(body.type) ? body.type : "other",
     message,
+    // Left out rather than set to null: a report without a contact line has no
+    // contact line, and a reader should not have to tell those two apart.
+    ...(contact ? { contact } : {}),
     context: normaliseContext(body.context),
     console: normaliseConsole(body.console),
     elements: normaliseElements(body.elements),

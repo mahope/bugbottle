@@ -12,6 +12,7 @@ import {
   type ValidatedReport,
 } from "../src/server/handle.ts";
 import { expressHandler } from "../src/server/express.ts";
+import { MAX_CONTACT_LENGTH } from "../src/report-core.ts";
 import {
   PNG_BYTES,
   PNG_DATA_URL,
@@ -374,6 +375,44 @@ test("a custom dedupe key decides what counts as the same report", async () => {
   assert.equal(second.status, 200);
   assert.deepEqual(await second.json(), { id: "rep_8", duplicate: true });
   resetDedupe();
+});
+
+test("a contact line is validated onto the report and never lands in extra", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(
+    post({ ...body, contact: `  an${String.fromCharCode(0)}na@example.com  ` }),
+    { store: async (report) => void (stored = report) },
+  );
+  assert.equal(stored?.contact, "anna@example.com");
+  assert.equal("contact" in (stored?.extra ?? {}), false, "it is a known field, not an extra");
+});
+
+test("a contact line is clipped, and an empty one leaves no key behind", async () => {
+  let stored: ValidatedReport | undefined;
+  await handleReport(post({ ...body, contact: "x".repeat(MAX_CONTACT_LENGTH + 40) }), {
+    store: async (report) => void (stored = report),
+  });
+  assert.equal(stored?.contact?.length, MAX_CONTACT_LENGTH);
+
+  for (const contact of ["   ", 42, null]) {
+    let empty: ValidatedReport | undefined;
+    await handleReport(post({ ...body, contact }), {
+      store: async (report) => void (empty = report),
+    });
+    assert.equal("contact" in (empty ?? {}), false, `${JSON.stringify(contact)} adds no key`);
+  }
+});
+
+test("the contact line reaches the markdown a sink is handed", async () => {
+  let markdown = "";
+  await handleReport(post({ ...body, contact: "anna@example.com" }), {
+    sinks: [
+      async (_report, ctx) => {
+        markdown = ctx.markdown;
+      },
+    ],
+  });
+  assert.match(markdown, /\| Contact \| anna@example\.com \|/);
 });
 
 test("extra keeps unknown scalars, clips strings and drops nested objects", async () => {

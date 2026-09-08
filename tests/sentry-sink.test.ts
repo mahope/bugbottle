@@ -280,6 +280,27 @@ test("no contact is passed, no contact is invented", () => {
   assert.ok(!("name" in contexts.feedback));
 });
 
+test("the report's own contact line fills contact_email when it is an address", () => {
+  const email = buildSentryEvent({ ...reportBody, contact: "anna@example.com" }, { dsn: DSN });
+  const emailContexts = email.contexts as { feedback: Record<string, unknown> };
+  assert.equal(emailContexts.feedback.contact_email, "anna@example.com");
+  assert.equal((email.extra as Record<string, unknown>).contact, "anna@example.com");
+
+  // A phone number is kept as a fact and never put behind a mail link.
+  const phone = buildSentryEvent({ ...reportBody, contact: "call me on 12345678" }, { dsn: DSN });
+  const phoneContexts = phone.contexts as { feedback: Record<string, unknown> };
+  assert.ok(!("contact_email" in phoneContexts.feedback));
+  assert.equal((phone.extra as Record<string, unknown>).contact, "call me on 12345678");
+
+  // An explicit reader still wins over the field.
+  const explicit = buildSentryEvent(
+    { ...reportBody, contact: "anna@example.com" },
+    { dsn: DSN, contactEmail: () => "support@example.com" },
+  );
+  const explicitContexts = explicit.contexts as { feedback: Record<string, unknown> };
+  assert.equal(explicitContexts.feedback.contact_email, "support@example.com");
+});
+
 test("the browser and device contexts come from the context facts", () => {
   const contexts = buildSentryEvent(fullReportBody, { dsn: DSN }).contexts as Record<
     string,

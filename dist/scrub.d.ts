@@ -45,6 +45,18 @@ export type ScrubOptions = {
     keep?: ScrubberName[];
     /** What redacted text becomes. Default `[redacted]`. */
     replacement?: string;
+    /**
+     * Redact the report's `contact` field, whole. Off by default, and the one
+     * scrubber that is: an address the reporter typed into a field asking for
+     * one is not a leak, and redacting it by default would quietly break the
+     * feature it belongs to. A team that keeps reports somewhere more public
+     * than the inbox switches it on.
+     *
+     * The whole value goes, not the parts that match a pattern — a contact line
+     * is an email address, a phone number or a handle, and only the first of
+     * those would be caught by the built-in patterns.
+     */
+    contact?: boolean;
 };
 export declare const DEFAULT_REPLACEMENT = "[redacted]";
 /**

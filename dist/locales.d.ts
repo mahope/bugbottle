@@ -35,6 +35,15 @@ export type UiTexts = {
     };
     messageLabel: string;
     messagePlaceholder: string;
+    /** Label of the optional contact field. Rendered only when it is asked for. */
+    contactLabel: string;
+    /**
+     * The line under that field. It says what the address is used for, because
+     * asking somebody for one without saying why is how a form loses trust.
+     */
+    contactHint: string;
+    /** Shown in the status line when `contact: "required"` and the field is empty. */
+    contactRequired: string;
     screenshot: string;
     /** Shown next to the screenshot checkbox; say what the picture may contain. */
     screenshotNote: string;

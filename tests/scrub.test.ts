@@ -206,6 +206,23 @@ test("a self-referential report does not hang the scrubber", () => {
   assert.equal(out.self, input, "unknown fields are copied across, not walked");
 });
 
+test("the contact field is kept unless the application asks for it to go", () => {
+  const withContact = { ...report("it broke"), contact: "call me on 12345678" };
+  assert.equal(
+    scrubReport(withContact).contact,
+    "call me on 12345678",
+    "an address the reporter typed on purpose is not a leak",
+  );
+  assert.equal(scrubReport(withContact, { contact: true }).contact, R);
+  // The whole line goes, not only the part a pattern would have matched.
+  assert.equal(scrubReport({ ...withContact, contact: "anna@example.com" }, { contact: true }).contact, R);
+  assert.equal(
+    "contact" in scrubReport(report("it broke"), { contact: true }),
+    false,
+    "a report without a contact line does not grow one",
+  );
+});
+
 test("the built-in patterns are exported so they can be reused or inspected", () => {
   assert.deepEqual(Object.keys(BUILTIN_SCRUBBERS).sort(), [
     "bearer",

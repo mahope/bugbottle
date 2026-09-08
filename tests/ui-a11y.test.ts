@@ -62,7 +62,9 @@ function parts(host: HTMLElement) {
     types: [...root.querySelectorAll(".type")] as HTMLElement[],
     textarea: root.querySelector("textarea") as HTMLTextAreaElement,
     shotBox: root.querySelector(".check input") as HTMLInputElement,
-    shotNote: root.querySelector(".note") as HTMLElement,
+    // By id rather than by `.note`: the optional contact field has a note of
+    // its own, and it comes first in the panel.
+    shotNote: root.querySelector("#bb-shot-note") as HTMLElement,
     pickBtn: root.querySelector(".pick") as HTMLButtonElement,
     list: root.querySelector("ul") as HTMLElement,
     live: root.querySelector(".sr") as HTMLElement,

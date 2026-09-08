@@ -33,6 +33,15 @@ export type UiTexts = {
   types: { bug: string; idea: string; other: string };
   messageLabel: string;
   messagePlaceholder: string;
+  /** Label of the optional contact field. Rendered only when it is asked for. */
+  contactLabel: string;
+  /**
+   * The line under that field. It says what the address is used for, because
+   * asking somebody for one without saying why is how a form loses trust.
+   */
+  contactHint: string;
+  /** Shown in the status line when `contact: "required"` and the field is empty. */
+  contactRequired: string;
   screenshot: string;
   /** Shown next to the screenshot checkbox; say what the picture may contain. */
   screenshotNote: string;
@@ -127,6 +136,9 @@ export const en: Locale = {
     types: { bug: "Bug", idea: "Idea", other: "Other" },
     messageLabel: "What happened?",
     messagePlaceholder: "What is wrong, missing or confusing?",
+    contactLabel: "How can we reach you?",
+    contactHint: "Only used to answer this report.",
+    contactRequired: "Please say how we can reach you",
     screenshot: "Attach a picture of this page",
     screenshotNote: "The picture shows this page as you see it now.",
     annotate: "Edit picture",
@@ -177,6 +189,9 @@ export const da: Locale = {
     types: { bug: "Fejl", idea: "Idé", other: "Andet" },
     messageLabel: "Hvad skete der?",
     messagePlaceholder: "Hvad er galt, mangler eller er forvirrende?",
+    contactLabel: "Hvordan kan vi kontakte dig?",
+    contactHint: "Bruges kun til at svare på denne rapport.",
+    contactRequired: "Skriv, hvordan vi kan kontakte dig",
     screenshot: "Vedhæft et billede af denne side",
     screenshotNote: "Billedet viser siden som du ser den nu.",
     annotate: "Rediger billedet",
@@ -227,6 +242,9 @@ export const sv: Locale = {
     types: { bug: "Fel", idea: "Idé", other: "Annat" },
     messageLabel: "Vad hände?",
     messagePlaceholder: "Vad är fel, saknas eller är förvirrande?",
+    contactLabel: "Hur kan vi nå dig?",
+    contactHint: "Används bara för att svara på den här rapporten.",
+    contactRequired: "Skriv hur vi kan nå dig",
     screenshot: "Bifoga en bild av den här sidan",
     screenshotNote: "Bilden visar sidan som du ser den nu.",
     annotate: "Redigera bilden",
@@ -277,6 +295,9 @@ export const nb: Locale = {
     types: { bug: "Feil", idea: "Idé", other: "Annet" },
     messageLabel: "Hva skjedde?",
     messagePlaceholder: "Hva er galt, mangler eller er forvirrende?",
+    contactLabel: "Hvordan kan vi nå deg?",
+    contactHint: "Brukes bare til å svare på denne rapporten.",
+    contactRequired: "Skriv hvordan vi kan nå deg",
     screenshot: "Legg ved et bilde av denne siden",
     screenshotNote: "Bildet viser siden slik du ser den nå.",
     annotate: "Rediger bildet",
@@ -327,6 +348,9 @@ export const de: Locale = {
     types: { bug: "Fehler", idea: "Idee", other: "Sonstiges" },
     messageLabel: "Was ist passiert?",
     messagePlaceholder: "Was ist falsch, fehlt oder ist verwirrend?",
+    contactLabel: "Wie können wir Sie erreichen?",
+    contactHint: "Wird nur verwendet, um auf diese Meldung zu antworten.",
+    contactRequired: "Bitte geben Sie an, wie wir Sie erreichen können",
     screenshot: "Bild dieser Seite anhängen",
     screenshotNote: "Das Bild zeigt diese Seite so, wie Sie sie jetzt sehen.",
     annotate: "Bild bearbeiten",
@@ -378,6 +402,9 @@ export const nl: Locale = {
     types: { bug: "Fout", idea: "Idee", other: "Anders" },
     messageLabel: "Wat gebeurde er?",
     messagePlaceholder: "Wat is er mis, ontbreekt of is verwarrend?",
+    contactLabel: "Hoe kunnen we je bereiken?",
+    contactHint: "Wordt alleen gebruikt om op deze melding te reageren.",
+    contactRequired: "Geef aan hoe we je kunnen bereiken",
     screenshot: "Een afbeelding van deze pagina bijvoegen",
     screenshotNote: "De afbeelding toont deze pagina zoals je die nu ziet.",
     annotate: "Afbeelding bewerken",
@@ -428,6 +455,9 @@ export const fr: Locale = {
     types: { bug: "Bug", idea: "Idée", other: "Autre" },
     messageLabel: "Que s'est-il passé ?",
     messagePlaceholder: "Qu'est-ce qui est faux, manquant ou déroutant ?",
+    contactLabel: "Comment pouvons-nous vous joindre ?",
+    contactHint: "Utilisé uniquement pour répondre à ce signalement.",
+    contactRequired: "Indiquez comment nous pouvons vous joindre",
     screenshot: "Joindre une image de cette page",
     screenshotNote: "L'image montre cette page telle que vous la voyez.",
     annotate: "Modifier l'image",
@@ -479,6 +509,9 @@ export const es: Locale = {
     types: { bug: "Error", idea: "Idea", other: "Otro" },
     messageLabel: "¿Qué ha pasado?",
     messagePlaceholder: "¿Qué está mal, falta o resulta confuso?",
+    contactLabel: "¿Cómo podemos contactarte?",
+    contactHint: "Solo se usa para responder a este informe.",
+    contactRequired: "Indica cómo podemos contactarte",
     screenshot: "Adjuntar una imagen de esta página",
     screenshotNote: "La imagen muestra esta página tal como la ves ahora.",
     annotate: "Editar la imagen",

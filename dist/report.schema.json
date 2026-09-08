@@ -61,6 +61,11 @@
           "maxItems": 50,
           "type": "array"
         },
+        "contact": {
+          "description": "How to reach the reporter, when the form asked for it and they answered. Free text: an email address, a phone number, a name in your own chat. Off by default everywhere, and personal data the moment it is on — see the privacy section of the README before you store it.",
+          "maxLength": 200,
+          "type": "string"
+        },
         "context": {
           "$ref": "#/$defs/ReportContext"
         },

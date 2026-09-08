@@ -44,12 +44,12 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 1.5 kB gzipped; with the element picker and the React, Vue, Svelte
-  or Solid adapter, 5.6 kB; the optional ready-made panel, 11.1 kB; the picture
+  or Solid adapter, 5.6 kB; the optional ready-made panel, 11.3 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
   1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.3 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 23.1 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 23.9 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
@@ -157,6 +157,23 @@ Call `report.open()` when the form appears, so the screenshot shows what they
 were looking at rather than the form on top of it. Anything marked
 `data-bugbottle` is left out of the picture and cannot be picked — put it on
 your panel and your trigger button.
+
+Every adapter also carries `contact` and `setContact`, for a form that asks
+how to reach the reporter — an ordinary input bound the way `message` is:
+
+```tsx
+<input
+  type="email"
+  value={report.contact}
+  onChange={(e) => report.setContact(e.target.value)}
+/>
+```
+
+Nothing validates it, and an empty one is left out of the body entirely, so a
+form without such a field sends no `contact` key at all. In Vue it is a
+writable ref (`v-model="contact"`), in Svelte `$form.contact` with
+`form.setContact(…)`, in Solid the accessor `contact()`. It is personal data
+once you ask for it: see [Please read this part](#please-read-this-part).
 
 Other options: `initialType`, `screenshotFor` and `consoleFor` (which report
 types get a picture and the console; bugs only by default), `extra` (fields
@@ -679,8 +696,17 @@ const widget = mountBugbottle({
 It offers the three report types, a message, the screenshot checkbox (only
 when a renderer is given), the element picker, and a thank-you state. Pass
 `trigger: "#my-feedback-button"` to use your own button instead of the
-floating one, or `trigger: false` and call `open()` yourself. About 11.1 kB
+floating one, or `trigger: false` and call `open()` yourself. About 11.3 kB
 gzipped, no framework.
+
+`contact: true` adds one more field, under the message: how to reach the
+reporter. It is off by default, because asking for an address is a promise to
+answer and that promise is yours to make. `contact: "required"` refuses to
+send without it, through the same inline error an empty message gets. The
+field is an `<input type="email">` for the keyboard it brings up on a phone,
+but nothing validates what is typed — "call me on 12345678" is a perfectly
+good answer, and it arrives as `contact` on the report either way. It is
+personal data once it is on: see [Please read this part](#please-read-this-part).
 
 "Edit picture" over the attached screenshot is the one thing the panel does
 not carry by itself: hand in `createAnnotator` and you get the button, leave
@@ -692,6 +718,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `endpoint` | Where the report is POSTed. **Required**. |
 | `screenshot` | A `ScreenshotRenderer`. Without it the screenshot row is not rendered. |
 | `annotate` | `createAnnotator` from `bugbottle/annotate` renders "Edit picture"; omitted or `false`, nothing leads to an editor and none of it is bundled. |
+| `contact` | `true` adds an optional field asking how to reach the reporter; `"required"` refuses to send without it. Off by default. What they type travels as `contact` on the report. |
 | `elementPicker` | `false` leaves the picker out. Default true. |
 | `locale`, `texts`, `messages` | The language, and per-string overrides of it. |
 | `theme`, `brand` | Colours, radius, position; the name and logo in the header. |
@@ -725,8 +752,9 @@ out — that mode hides the panel and changes the pointer, neither of which a
 screen reader reports. Targets are at least 24x24, focus rings are visible in
 both colour schemes, the dark scheme lightens the accent and the error red so
 they hold their contrast, and `prefers-reduced-motion` is respected. axe-core
-reports no violations on the panel open in either scheme, closed, or with the
-picture editor open in either scheme; run the
+reports no violations on the panel open in either scheme, closed, with the
+picture editor open in either scheme, or with the contact field on in either
+scheme; run the
 audit yourself with `npm run build && npm run a11y` (Chrome and
 `puppeteer-core` required). All of the announced text comes from the locale,
 so it is announced in the reporter's language.
@@ -736,7 +764,7 @@ so it is announced in the reporter's language.
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
 that mounts the panel from the tag itself, the annotator included. About
-23.1 kB gzipped:
+23.9 kB gzipped:
 
 ```html
 <script
@@ -762,6 +790,7 @@ run on your page.
 | `data-brand` | Name in the panel header. |
 | `data-logo` | Image URL shown before the title and on the trigger. |
 | `data-trigger` | Selector for your own button. Without it, the floating one is rendered. |
+| `data-contact` | Present, with any value, asks the reporter how to reach them; `required` also refuses to send without it. Off without the attribute. |
 | `data-scrub` | Present, with any value, redacts the report with `scrubReport` before it is sent. |
 | `data-network` | Present, with any value, records the failed and slow requests. See "What the network did". |
 | `data-perf` | Present, with any value, records the Web Vitals and lists what is in the browser's stores — names and lengths, never values. See "Performance and storage". |
@@ -1111,6 +1140,7 @@ The save button does nothing
 | | |
 |---|---|
 | Type | Bug |
+| Contact | anna@example.com |
 | Page | `/orders/42?tab=notes` |
 | Viewport | 1440x900 |
 | Browser | Mozilla/5.0 … |
@@ -1275,7 +1305,8 @@ delivery: a sink that has not answered by then is abandoned and counted in
 handed an `AbortSignal` in its context that it can pass to `fetch`.
 
 `store` receives a `ValidatedReport` — `{ type, message, context, console,
-elements, breadcrumbs, network, extra, receivedAt }` — and the decoded PNG when
+elements, breadcrumbs, network, extra, receivedAt }`, plus `contact` when the
+form asked for one and the reporter answered — and the decoded PNG when
 there was one. `extra` is every top-level key the client sent that bugbottle
 does not know about, so a tenant id or a build number arrives without a schema
 change; strings are clipped to 500 characters, numbers and booleans pass, and
@@ -1821,6 +1852,13 @@ The subject comes from the report's title and the locale, unless you pass
 `subject` yourself. The body is the Markdown, with a minimal HTML version
 beside it.
 
+When the report carries a `contact` line that looks like an email address, it
+becomes the mail's `reply_to`, so answering the report answers the person who
+wrote it. A line that is not an address — "call me on 12345678" — is left in
+the body as a fact row and no `reply_to` is sent, because Resend refuses the
+whole send rather than ignoring one. Pass `replyTo` to override the address,
+or `replyTo: false` to send none at all.
+
 `sendReportWebhook` posts to anything with a URL. `json` sends the report as it
 arrived plus a `markdown` field, which is what Make, n8n and your own intake
 endpoint want; `slack` sends `{ text }` and `discord` sends `{ content }`,
@@ -2140,6 +2178,11 @@ Requiring people to be signed in is worth considering too. An anonymous
 screenshot is one nobody can be asked about later, and nobody can be told has
 been deleted.
 
+The optional contact field is personal data you asked for: store it like one —
+keep it where the rest of the report is kept, delete it when the report goes,
+and pass `scrubReport(report, { contact: true })` if reports end up anywhere
+more public than the inbox.
+
 The context is the mild part of a report by comparison. It is the page path and
 query, the viewport, the user agent, and — when the browser offers them — the
 language, the time zone, the screen size and pixel ratio, the colour scheme,
@@ -2242,15 +2285,23 @@ An order number of 16 digits is kept, because it fails Luhn. Prose that happens
 to say `key=value` is kept, because the query pattern only runs on URLs.
 
 `scrubReport(report, options)` takes `patterns` (extra global regexes, redacted
-whole), `keep` (built-ins to switch off by name) and `replacement`:
+whole), `keep` (built-ins to switch off by name), `replacement`, and `contact`:
 
 ```ts
 scrubReport(report, {
   patterns: [/\bACME-\d+\b/g],
   keep: ["email"],          // "email" | "bearer" | "jwt" | "card" | "iban" | "query"
   replacement: "[redacted]",
+  contact: true,            // redact the contact line, whole. Off by default.
 });
 ```
+
+`contact` is the one scrubber that is off unless you ask, and the only one that
+replaces a whole field rather than what matched: an address the reporter typed
+into a field asking for one is not a leak, and redacting it by default would
+break the feature it belongs to — but a phone number or a handle is not caught
+by any pattern, so when reports go somewhere more public than the inbox, the
+line goes whole or not at all.
 
 The scrubber is its own module and nothing else imports it, so a bundle that
 does not use it does not carry it. Pattern matching is not a guarantee: it
@@ -2288,6 +2339,7 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
 {
   "type": "bug",                       // "bug" | "idea" | "other"
   "message": "The save button does nothing",
+  "contact": "anna@example.com",       // only when the form asked and they answered
   "context": {
     "url": "/orders/42?tab=notes",     // path and query; no origin, no fragment
     "viewport": "1440x900",
@@ -2345,7 +2397,8 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `fingerprint`, `stableHash`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`, the server
 validators below, and the shared types and limits — including the `StackFrame`
-type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
+`MAX_CONTEXT_LENGTHS`.
 
 **`dist/bugbottle.js`** — the script-tag build: `window.bugbottle` with
 `mount`, `initConsoleBuffer`, `initBreadcrumbs`, `initNetwork`, `initPerf`,
@@ -2424,7 +2477,8 @@ Requires `html-to-image`.
 **`bugbottle/server`** — `handleReport`, `expressHandler`, `toResend`,
 `toWebhook`, `toGithub`, `toLinear`, `validateReport`, `collectExtra`, `resetRateLimits`,
 `resetDedupe`, `resetSignatures`, `fingerprint`, `stableHash`,
-`decodeScreenshotDataUrl`, `normaliseMessage`,
+`decodeScreenshotDataUrl`, `normaliseMessage`, `normaliseContact`,
+`looksLikeEmail`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `normalisePerf`,
 `normaliseStorage`, `isReportType`, `toMarkdown`,

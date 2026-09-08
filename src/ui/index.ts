@@ -97,6 +97,18 @@ export type MountOptions = {
    * the reporter sees it. See `CaptureOptions["mask"]`.
    */
   mask?: CaptureOptions["mask"];
+  /**
+   * Ask the reporter how to reach them. Off by default, and deliberately: a
+   * field that asks for an address is a promise to answer, and a promise is
+   * the application's to make, not the library's.
+   *
+   * `true` renders an optional email field under the message; `"required"`
+   * renders the same field and refuses to send without it, through the same
+   * inline error the empty message uses. What the reporter types travels as
+   * `contact` on the report — free text, so a phone number is a fine answer
+   * whatever the input says.
+   */
+  contact?: false | true | "required";
   /** Offer the element picker. Default true. */
   elementPicker?: boolean;
   /**
@@ -259,7 +271,9 @@ h2{font-size:16px;font-weight:600;margin:0;flex:1}
 .type{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px}
 .type[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
 label.field{display:block;font-weight:600;margin:8px 0 4px}
-textarea{width:100%;min-height:88px;resize:vertical;padding:8px 10px;border:1px solid var(--bb-border);border-radius:calc(var(--bb-radius) - 4px);background:transparent}
+textarea,input[type="email"]{width:100%;padding:8px 10px;border:1px solid var(--bb-border);border-radius:calc(var(--bb-radius) - 4px);background:transparent}
+textarea{min-height:88px;resize:vertical}
+.hint{margin-left:0}
 .check{display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;min-height:24px}
 .preview{display:block;max-width:100%;max-height:120px;border:1px solid var(--bb-border);border-radius:6px;margin:6px 0}
 .edit,.act{border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;padding:6px 10px}
@@ -438,6 +452,15 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   const typesRow = el("div", { class: "types", role: "radiogroup" });
   const messageLabel = el("label", { class: "field", for: "bb-message" });
   const textarea = el("textarea", { id: "bb-message", rows: "4" });
+  const contactLabel = el("label", { class: "field", for: "bb-contact", hidden: "" });
+  // `type="email"` for the keyboard it brings up on a phone; the browser's own
+  // validation never runs, because the panel is not a form and submits
+  // nothing. A phone number typed here is still sent, exactly as typed.
+  const contactInput = el("input", {
+    id: "bb-contact", type: "email", autocomplete: "email",
+    "aria-describedby": "bb-contact-note", hidden: "",
+  });
+  const contactNote = el("p", { class: "note hint", id: "bb-contact-note", hidden: "" });
   const shotBox = el("input", { type: "checkbox", "aria-describedby": "bb-shot-note" });
   const shotText = el("span");
   const shotRow = el("label", { class: "check" }, shotBox, shotText);
@@ -459,7 +482,8 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   const status = el("p", { class: "status", role: "status", "aria-live": "polite" });
   const sendBtn = el("button", { class: "send", type: "button" });
   const form = el("div", { class: "form" },
-    intro, typesRow, messageLabel, textarea, shotRow, shotNote, preview, editBtn, editor,
+    intro, typesRow, messageLabel, textarea, contactLabel, contactInput, contactNote,
+    shotRow, shotNote, preview, editBtn, editor,
     pickBtn, list, status, sendBtn);
   const thanksText = el("p");
   const thanksClose = el("button", { class: "send", type: "button" });
@@ -480,6 +504,18 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     shotNote.hidden = true;
   }
   if (options.elementPicker === false) pickBtn.hidden = true;
+  // Nothing about the contact field is rendered unless it was asked for: no
+  // label, no input, no note, and nothing in the focus order.
+  const wantsContact = options.contact === true || options.contact === "required";
+  if (wantsContact) {
+    contactLabel.hidden = false;
+    contactInput.hidden = false;
+    contactNote.hidden = false;
+    if (options.contact === "required") {
+      contactInput.required = true;
+      contactInput.setAttribute("aria-required", "true");
+    }
+  }
 
   const typeButtons = new Map<ReportType, HTMLButtonElement>();
   for (const t of types) {
@@ -529,6 +565,8 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     for (const [t, b] of typeButtons) b.textContent = ui.types[t];
     messageLabel.textContent = ui.messageLabel;
     textarea.placeholder = ui.messagePlaceholder;
+    contactLabel.textContent = ui.contactLabel;
+    contactNote.textContent = ui.contactHint;
     shotText.textContent = ui.screenshot;
     shotNote.textContent = ui.screenshotNote;
     shotNote.hidden = !options.screenshot || !ui.screenshotNote;
@@ -703,6 +741,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       textarea.focus();
       return;
     }
+    if (options.contact === "required" && !contactInput.value.trim()) {
+      setStatus(ui.contactRequired, "error");
+      contactInput.focus();
+      return;
+    }
     // Marks the reporter made but never confirmed with "Done" are still marks
     // they made. Send sits below the editor and nothing says the editor has to
     // be closed first, so committing them here is what keeps a blur from being
@@ -719,6 +762,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       report = buildReport({
         type,
         message: textarea.value,
+        // Empty unless the field is showing, and `buildReport` leaves an empty
+        // one out of the body entirely.
+        contact: wantsContact ? contactInput.value : "",
         screenshotDataUrl: shotBox.checked ? screenshot : null,
         includeConsole: consoleFor(type),
         elements,
@@ -767,6 +813,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
 
   function resetForm() {
     textarea.value = "";
+    contactInput.value = "";
     elements = [];
     renderElements();
     clearScreenshot();

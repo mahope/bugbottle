@@ -15,6 +15,13 @@ export declare const MAX_SCREENSHOT_BYTES: number;
 /** Base64 inflates by about a third; the prefix is the rest of the slack. */
 export declare const MAX_SCREENSHOT_DATA_URL_LENGTH = 2900000;
 export declare const MAX_MESSAGE_LENGTH = 4000;
+/**
+ * Longest the optional contact line may be. It is a way of reaching one
+ * person — an address, a phone number, a handle — not a paragraph, so 200
+ * characters is generous and still short enough that nobody can hide prose in
+ * a field a reader trusts to be short.
+ */
+export declare const MAX_CONTACT_LENGTH = 200;
 /** How many console entries a report may carry. Oldest are dropped first. */
 export declare const MAX_CONSOLE_ENTRIES = 50;
 /** Longest a single console message may be before it is clipped. */
@@ -240,6 +247,13 @@ export type BugReport = {
     type: ReportType;
     message: string;
     context: ReportContext;
+    /**
+     * How to reach the reporter, when the form asked for it and they answered.
+     * Free text: an email address, a phone number, a name in your own chat. Off
+     * by default everywhere, and personal data the moment it is on — see the
+     * privacy section of the README before you store it.
+     */
+    contact?: string;
     console?: ConsoleEntry[];
     /** Elements the reporter pointed at, in the order they were attached. */
     elements?: ElementRef[];
@@ -259,6 +273,25 @@ export declare function isReportType(value: unknown): value is ReportType;
  * Returns null when there is nothing worth storing.
  */
 export declare function normaliseMessage(raw: unknown, maxLength?: number): string | null;
+/**
+ * Trims and length-checks the optional contact line, exactly as the message is
+ * treated. Returns null when there is nothing worth storing.
+ *
+ * There is deliberately no format check: the reporter is answering "how do we
+ * reach you", and "call me on 12345678" is a perfectly good answer. Only the
+ * sinks that need a real address — the Resend reply-to, Sentry's
+ * `contact_email` — ask whether it looks like one, with {@link looksLikeEmail}.
+ */
+export declare function normaliseContact(raw: unknown, maxLength?: number): string | null;
+/**
+ * Whether a contact line can be used as an email address.
+ *
+ * Permissive on purpose: a line is only refused when it plainly is not an
+ * address, because the cost of a false negative is a reply nobody can send and
+ * the cost of a false positive is one bounced mail. Nothing in the browser
+ * entry imports this, so it is tree-shaken out of every client bundle.
+ */
+export declare function looksLikeEmail(value: unknown): value is string;
 /**
  * Clips the context strings. A browser can send a user-agent of any length,
  * and this ends up in your database.

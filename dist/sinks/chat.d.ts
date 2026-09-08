@@ -35,7 +35,7 @@ export type ChatReport = {
     title: string;
     /** The reporter's own words, unescaped. */
     message: string;
-    /** Page, Viewport, Browser and whichever optional context facts are set. */
+    /** Contact, Page, Viewport, Browser and whichever optional context facts are set. */
     facts: [string, string][];
     /** The last few console entries, one per line, or nothing. */
     consoleText: string | undefined;

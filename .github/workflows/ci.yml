@@ -80,8 +80,15 @@ jobs:
           # for the permission. The file measures 23073, so the budget is 23552.
           # No locale string was added: a shake opens the panel the reporter
           # already knows, and says nothing of its own.
-          if [ "$iife" -gt 23552 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 23552" >&2
+          # The optional contact field (#51) then added 767 bytes and took the
+          # budget to 24576. Two thirds of that is text: three locale strings —
+          # a label, a hint and the refusal a required field shows — in eight
+          # languages, which this build carries all of. The rest is the panel's
+          # own half of the field and the `data-contact` reading, which is the
+          # only way a page with no bundler can ask for it. The file measures
+          # 23839.
+          if [ "$iife" -gt 24576 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 24576" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -189,8 +196,15 @@ jobs:
           # #43 added 94 bytes to this number (10 997 -> 11 091): the shake
           # detector is a function handed in like `annotate`, so the panel
           # carries the wiring and never the module.
-          if [ "$ui" -gt 11264 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 11264" >&2
+          # #51 added 256 bytes (11 086 -> 11 342) and took the budget to
+          # 11776: the optional contact field is an input, a label, a hint and
+          # the required check that refuses a submit, plus its three English
+          # strings. It is off by default and the markup is static, so the
+          # bytes are paid by every panel; a field nobody switches on is a
+          # hidden input and three strings, which is the cheapest shape this
+          # can take without a second entry point for one input.
+          if [ "$ui" -gt 11776 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 11776" >&2
             exit 1
           fi
           # The annotator on its own: a canvas, three tools, an undo stack and

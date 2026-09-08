@@ -9,6 +9,41 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- An optional contact field: `contact` on the report — free text, trimmed,
+  null bytes stripped, clipped at `MAX_CONTACT_LENGTH` (200) and part of
+  `report.schema.json` — so a team that receives "the save button does
+  nothing" can answer the person who wrote it. Off by default everywhere,
+  because asking for an address is a promise to answer and that promise is the
+  application's to make.
+  - `createReportState` carries `contact` and `setContact`, and all four
+    adapters expose them the way they expose `message`: spread into the React
+    hook and the Svelte store, a writable ref in Vue, an accessor in Solid. An
+    empty line is left out of the body entirely, so a form that never asks
+    sends no `contact` key.
+  - `mountBugbottle` takes `contact: false | true | "required"`. `true`
+    renders an `<input type="email">` with a label and a hint under the
+    message; `"required"` refuses to send without it through the same inline
+    error an empty message gets. Nothing validates what is typed — "call me on
+    12345678" is a good answer. Three new locale strings in all eight
+    languages, and `data-contact` on the script tag (`required` included).
+  - `scrubReport(report, { contact: true })` redacts the line, whole. It is the
+    one scrubber that is off unless asked: an address typed into a field asking
+    for one is not a leak, but a phone number matches no pattern, so when
+    reports go somewhere public the line goes whole or not at all.
+  - `toMarkdown` renders a `Contact` fact row under the type, so the GitHub and
+    Linear sinks carry it as well; Slack and Discord put it first in their
+    fields; Sentry fills `contexts.feedback.contact_email` from it when it
+    looks like an address and keeps the whole line in `extra.contact`.
+  - `sendReportEmail` sets `reply_to` from a contact line that looks like an
+    email, so replying to the mail answers the reporter. A line that is not an
+    address is left in the body only — Resend refuses a malformed `reply_to`
+    rather than ignoring it. `replyTo` overrides it; `replyTo: false` sends
+    none.
+  - `handleReport` validates the field onto `ValidatedReport` (absent when
+    there is none, never in `extra`), and `bugbottle/server` exports
+    `normaliseContact`, `looksLikeEmail` and `MAX_CONTACT_LENGTH`.
+- `npm run a11y` audits two more states, the panel with the contact field on in
+  each colour scheme. Seven states, zero violations.
 - `rateLimit.rateLimitStore` and `dedupe.dedupeStore` on `handleReport`, shaped
   like the `replayStore` seam beside them: a fleet behind a load balancer can
   now share one rate limit and one dedupe answer instead of one per instance.
@@ -78,6 +113,11 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- The `bugbottle/ui` budget is 11776 bytes gzipped (was 11264; measures 11 342)
+  and `dist/bugbottle.js` 24576 (was 23552; measures 23 839). The field is one
+  input, a label, a hint and the required check — about 256 bytes — and three
+  locale strings, which the script tag carries in eight languages. Argued in
+  the comments beside both budgets in `.github/workflows/ci.yml`.
 - Every `<url>` in the generated `site/sitemap.xml` carries a `<lastmod>`: the
   date of the commit that last touched the file the page is generated from,
   read with `git log -1 --format=%cs` and never from a file mtime, which a

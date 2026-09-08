@@ -87,6 +87,48 @@ test("the subject and intro follow the locale, and an explicit subject wins", as
   assert.equal(sentBody(override.calls).subject, "Something specific");
 });
 
+test("a contact line that is an address becomes the reply-to", async () => {
+  const { fetch, calls } = fakeFetch(200, { id: "re_c1" });
+  await sendReportEmail(
+    { ...report, contact: "  anna@example.com  " },
+    { apiKey: "k", from: "a@b.c", to: "t@example.com", fetch },
+  );
+  const body = sentBody(calls);
+  assert.equal(body.reply_to, "anna@example.com");
+  assert.match(String(body.text), /\| Contact \| anna@example\.com \|/, "and it is in the body");
+});
+
+test("a contact line that is not an address is in the body and not the reply-to", async () => {
+  const phone = fakeFetch(200, { id: "re_c2" });
+  await sendReportEmail(
+    { ...report, contact: "call me on 12345678" },
+    { apiKey: "k", from: "a@b.c", to: "t@example.com", fetch: phone.fetch },
+  );
+  const body = sentBody(phone.calls);
+  assert.equal("reply_to" in body, false, "Resend would refuse the whole send");
+  assert.match(String(body.text), /\| Contact \| call me on 12345678 \|/);
+
+  const none = fakeFetch(200, { id: "re_c3" });
+  await sendReportEmail(report, { apiKey: "k", from: "a@b.c", to: "t@example.com", fetch: none.fetch });
+  assert.equal("reply_to" in sentBody(none.calls), false, "no contact line, no reply-to");
+});
+
+test("an explicit replyTo wins, and false sends none at all", async () => {
+  const explicit = fakeFetch(200, { id: "re_c4" });
+  await sendReportEmail(
+    { ...report, contact: "anna@example.com" },
+    { apiKey: "k", from: "a@b.c", to: "t@example.com", replyTo: "bugs@example.com", fetch: explicit.fetch },
+  );
+  assert.equal(sentBody(explicit.calls).reply_to, "bugs@example.com");
+
+  const off = fakeFetch(200, { id: "re_c5" });
+  await sendReportEmail(
+    { ...report, contact: "anna@example.com" },
+    { apiKey: "k", from: "a@b.c", to: "t@example.com", replyTo: false, fetch: off.fetch },
+  );
+  assert.equal("reply_to" in sentBody(off.calls), false);
+});
+
 test("a screenshot is attached as base64 PNG bytes", async () => {
   const { fetch, calls } = fakeFetch(200, { id: "re_3" });
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02]);
@@ -243,6 +285,17 @@ test("the issue is opened on the named repository with the documented headers", 
   assert.equal("labels" in body, false, "no labels key when none were asked for");
 });
 
+test("the issue body carries the contact line as a fact row", async () => {
+  const { fetch, calls } = fakeFetch(201, { number: 42, html_url: "https://example.com/42" });
+  await createGithubIssue({ ...report, contact: "anna@example.com" }, {
+    token: "t",
+    owner: "acme",
+    repo: "app",
+    fetch,
+  });
+  assert.match(String(sentBody(calls).body), /\| Contact \| anna@example\.com \|/);
+});
+
 test("labels are passed along and an explicit title wins", async () => {
   const { fetch, calls } = fakeFetch(201, { number: 7, html_url: "https://example.com/7" });
   await createGithubIssue(report, {
@@ -348,6 +401,16 @@ test("the issue goes to Linear as a GraphQL mutation with the key sent as-is", a
   assert.equal("projectId" in input, false, "no projectId key when none was asked for");
   assert.equal("labelIds" in input, false, "no labelIds key when none were asked for");
   assert.match(String(sentBody(calls).query), /issueCreate/);
+});
+
+test("the Linear description carries the contact line as a fact row", async () => {
+  const { fetch, calls } = fakeFetch(200, linearOk);
+  await createLinearIssue({ ...report, contact: "anna@example.com" }, {
+    apiKey: "k",
+    teamId: "team-uuid",
+    fetch,
+  });
+  assert.match(String(linearInput(calls).description), /\| Contact \| anna@example\.com \|/);
 });
 
 test("a project, labels and an explicit title are passed along", async () => {

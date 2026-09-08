@@ -165,6 +165,23 @@ test("a successful submit reports the id, clears the form and calls onSent", asy
   form.destroy();
 });
 
+test("the contact line is in the store and reaches the posted body", async () => {
+  const fetchStub = stubFetch(() => json({ id: "rep_c" }));
+  const form = createBugReport({ endpoint: ENDPOINT });
+
+  assert.equal(get(form).contact, "");
+  form.setContact("anna@example.com");
+  assert.equal(get(form).contact, "anna@example.com");
+  form.setMessage("The save button does nothing");
+  await form.submit();
+
+  const body = fetchStub.seen[0]?.body as Record<string, unknown>;
+  assert.equal(body["contact"], "anna@example.com");
+  assert.equal(get(form).contact, "", "cleared with the rest of the form");
+  fetchStub.restore();
+  form.destroy();
+});
+
 test("a rejected report surfaces the server's own message", async () => {
   const fetchStub = stubFetch(() => json({ error: "Reports are closed for this project" }, 500));
   const form = createBugReport({ endpoint: ENDPOINT });

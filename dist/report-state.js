@@ -41,6 +41,7 @@ export function createReportState(options) {
     let state = {
         type: firstType(),
         message: "",
+        contact: "",
         screenshot: null,
         includeScreenshot: canShoot() && armedFor(firstType()),
         canScreenshot: canShoot(),
@@ -93,6 +94,9 @@ export function createReportState(options) {
         },
         setMessage(next) {
             set({ message: next });
+        },
+        setContact(next) {
+            set({ contact: next });
         },
         toggleScreenshot(checked) {
             if (!canShoot())
@@ -148,6 +152,7 @@ export function createReportState(options) {
             set({
                 type,
                 message: "",
+                contact: "",
                 screenshot: null,
                 elements: [],
                 includeScreenshot: canShoot() && armedFor(type),
@@ -165,6 +170,7 @@ export function createReportState(options) {
             // behind, so the next one does not start with the last one still in it.
             const clearForm = () => set({
                 message: "",
+                contact: "",
                 screenshot: null,
                 elements: [],
                 includeScreenshot: canShoot() && armedFor(state.type),
@@ -176,6 +182,7 @@ export function createReportState(options) {
                 report = buildReport({
                     type: state.type,
                     message: state.message,
+                    contact: state.contact,
                     screenshotDataUrl: state.includeScreenshot ? state.screenshot : null,
                     includeConsole: (opts.consoleFor ?? bugsOnly)(state.type),
                     elements: state.elements,

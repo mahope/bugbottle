@@ -143,6 +143,9 @@ export type SentrySinkOptions = {
      * The reporter's email address, when your application knows it. It is what
      * somebody replies to, so it is worth passing: read it off the report, which
      * is where a `contact_email` in `extra` would have arrived.
+     *
+     * Without this, the report's own `contact` field is used when it looks like
+     * an address — which is what the panel's optional contact field writes.
      */
     contactEmail?: (report: unknown) => string | undefined;
     /** The reporter's name, on the same terms. */

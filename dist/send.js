@@ -15,6 +15,9 @@ export function buildReport(input) {
         message: input.message.trim(),
         context: collectContext(),
     };
+    const contact = input.contact?.trim();
+    if (contact)
+        report.contact = contact;
     if (input.includeConsole ?? true)
         report.console = getConsoleBuffer();
     if (input.elements && input.elements.length > 0)

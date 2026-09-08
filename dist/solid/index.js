@@ -30,6 +30,8 @@ export function createBugReport(options) {
         types: REPORT_TYPES,
         type: () => state().type,
         message: () => state().message,
+        /** The contact line, when your form asks for one. Empty otherwise. */
+        contact: () => state().contact,
         /** Whether a renderer was supplied, so the form can hide the checkbox. */
         canScreenshot: () => state().canScreenshot,
         screenshot: () => state().screenshot,

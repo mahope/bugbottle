@@ -17,7 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
-import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
+import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normalisePerf, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
 import { fingerprint } from "../fingerprint.js";
 import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 import { toMarkdown } from "../markdown.js";
@@ -44,6 +44,7 @@ export const TOO_LARGE_ERROR = "Report is too large";
 const KNOWN_KEYS = new Set([
     "type",
     "message",
+    "contact",
     "context",
     "console",
     "elements",
@@ -487,9 +488,13 @@ export function validateReport(payload) {
     const message = normaliseMessage(body.message);
     if (!message)
         return null;
+    const contact = normaliseContact(body.contact);
     return {
         type: isReportType(body.type) ? body.type : "other",
         message,
+        // Left out rather than set to null: a report without a contact line has no
+        // contact line, and a reader should not have to tell those two apart.
+        ...(contact ? { contact } : {}),
         context: normaliseContext(body.context),
         console: normaliseConsole(body.console),
         elements: normaliseElements(body.elements),

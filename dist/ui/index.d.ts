@@ -75,6 +75,18 @@ export type MountOptions = {
      * the reporter sees it. See `CaptureOptions["mask"]`.
      */
     mask?: CaptureOptions["mask"];
+    /**
+     * Ask the reporter how to reach them. Off by default, and deliberately: a
+     * field that asks for an address is a promise to answer, and a promise is
+     * the application's to make, not the library's.
+     *
+     * `true` renders an optional email field under the message; `"required"`
+     * renders the same field and refuses to send without it, through the same
+     * inline error the empty message uses. What the reporter types travels as
+     * `contact` on the report — free text, so a phone number is a fine answer
+     * whatever the input says.
+     */
+    contact?: false | true | "required";
     /** Offer the element picker. Default true. */
     elementPicker?: boolean;
     /**

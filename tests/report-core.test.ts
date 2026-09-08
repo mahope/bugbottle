@@ -4,13 +4,16 @@ import {
   decodeScreenshotDataUrl,
   InvalidScreenshotError,
   isReportType,
+  looksLikeEmail,
   normaliseConsole,
+  normaliseContact,
   normaliseContext,
   normaliseMessage,
   normalisePerf,
   normaliseStorage,
   MAX_CONSOLE_ENTRIES,
   MAX_CONSOLE_MESSAGE_LENGTH,
+  MAX_CONTACT_LENGTH,
   MAX_CONTEXT_LENGTHS,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
@@ -327,4 +330,30 @@ test("null bytes never survive a storage snapshot, whichever field they arrive i
   assert.equal(snapshot?.local?.[0]?.key, "theme");
   assert.equal(snapshot?.cookies?.[0], "session");
   assert.equal(snapshot?.values?.k, "value");
+});
+
+test("a contact line is trimmed, clipped and stripped of null bytes", () => {
+  assert.equal(normaliseContact("  anna@example.com  "), "anna@example.com");
+  assert.equal(normaliseContact(`an${String.fromCharCode(0)}na@example.com`), "anna@example.com");
+  assert.equal(normaliseContact("x".repeat(MAX_CONTACT_LENGTH + 50))?.length, MAX_CONTACT_LENGTH);
+  assert.equal(
+    normaliseContact("call me on 12345678"),
+    "call me on 12345678",
+    "nothing here checks the shape of an answer",
+  );
+});
+
+test("a contact line that says nothing is nothing", () => {
+  for (const bad of ["", "   ", String.fromCharCode(0), 42, null, undefined, {}, ["a@b.c"]]) {
+    assert.equal(normaliseContact(bad), null, `${JSON.stringify(bad)} is not a contact`);
+  }
+});
+
+test("only a contact line that could be an address looks like one", () => {
+  for (const good of ["anna@example.com", " anna.berg+work@example.co.uk ", "a@b.dk"]) {
+    assert.equal(looksLikeEmail(good), true, `${good} is an address`);
+  }
+  for (const bad of ["call me on 12345678", "anna@example", "@example.com", "anna@", "", 5, null]) {
+    assert.equal(looksLikeEmail(bad), false, `${JSON.stringify(bad)} is not an address`);
+  }
 });

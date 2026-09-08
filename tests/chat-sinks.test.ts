@@ -129,6 +129,22 @@ test("the slack message is one Block Kit post with a header, the message and the
   for (const f of fields) assert.equal(f.type, "mrkdwn");
 });
 
+test("a contact line is the first field in both channels, and absent when there is none", () => {
+  const withContact = { ...report, contact: "anna@example.com" };
+
+  const slack = buildSlackMessage(withContact, { webhookUrl: SLACK_URL });
+  const slackFields = blocksOf(slack).find((b) => "fields" in b)?.fields as { text: string }[];
+  assert.equal(slackFields[0]?.text, "*Contact*\nanna@example.com");
+
+  const discord = buildDiscordMessage(withContact, { webhookUrl: DISCORD_URL });
+  const discordFields = embedOf(discord).fields as { name: string; value: string }[];
+  assert.deepEqual([discordFields[0]?.name, discordFields[0]?.value], ["Contact", "anna@example.com"]);
+
+  const plain = buildDiscordMessage(report, { webhookUrl: DISCORD_URL });
+  const plainFields = embedOf(plain).fields as { name: string }[];
+  assert.equal(plainFields.some((f) => f.name === "Contact"), false);
+});
+
 test("the last five console entries travel as a fenced block, and no more", async () => {
   const many = {
     ...report,

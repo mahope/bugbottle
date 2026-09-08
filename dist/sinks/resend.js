@@ -10,6 +10,7 @@
  * Server-only, like everything under `bugbottle/server` — a key that reaches
  * the browser is a key that has been given away.
  */
+import { looksLikeEmail, normaliseContact } from "../report-core.js";
 import { toMarkdown } from "../markdown.js";
 import { en } from "../locales.js";
 import { messageFromBody, readBody, SinkError } from "./error.js";
@@ -65,6 +66,15 @@ export async function sendReportEmail(report, options) {
         text: `${intro}\n\n${markdown}`,
         html: `<p>${escapeHtml(intro)}</p>\n<pre>${escapeHtml(markdown)}</pre>`,
     };
+    // A contact line that is an address is what somebody replies to; one that
+    // says "call me on 12345678" is not, and Resend would refuse the whole send
+    // rather than ignore it. Either way the line is in the body, as a fact row.
+    const contact = normaliseContact(report?.contact);
+    const replyTo = options.replyTo === false
+        ? undefined
+        : (options.replyTo ?? (looksLikeEmail(contact) ? contact : undefined));
+    if (replyTo)
+        payload.reply_to = replyTo;
     if (options.screenshot && options.screenshot.length > 0) {
         payload.attachments = [
             { filename: "screenshot.png", content: bytesToBase64(options.screenshot) },

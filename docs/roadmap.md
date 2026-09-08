@@ -6,11 +6,11 @@ Short version. The reasoning is in `research-features.md` and
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1.5 kB gzipped, `bugbottle/react` under 5.5 kB, `bugbottle/ui`
-under 10 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
+under 11.5 kB, `bugbottle/breadcrumbs` under 1.5 kB, `bugbottle/network` under
 1.3 kB, `bugbottle/queue` under 1.3 kB, `bugbottle/perf` under 1.25 kB,
 `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue` and `bugbottle/svelte` under 1.5 kB each over the shared core,
-`bugbottle/sign` under 512 bytes, the script-tag build under 22 kB. The core budget was 1 kB until 0.6, when stack
+`bugbottle/sign` under 512 bytes, the script-tag build under 24 kB. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -155,6 +155,19 @@ embed limit is a clip rather than a failure. Server-only, so they cost a
 browser bundle nothing. Microsoft Teams is the same shape over Adaptive Cards
 and is a later job: its incoming webhooks are being retired in favour of
 Workflows, so the connector to write against is not the one to write today.
+
+**0.8** — the optional contact field: `contact` on the report, off by default
+everywhere, so a team can answer the person who wrote "the save button does
+nothing". Free text — an address, a phone number, a handle — trimmed and
+clipped at 200 characters, in the schema, in `createReportState` and all four
+adapters, and in the panel as `contact: false | true | "required"`, where
+`required` refuses a submit through the inline error an empty message already
+uses. Three locale strings in eight languages and `data-contact` on the script
+tag. It earns its keep at the far end: `reply_to` on the Resend mail when it
+looks like an address, `contexts.feedback.contact_email` in Sentry on the same
+test, a fact row in `toMarkdown` and so in the GitHub and Linear issues, and a
+first field in Slack and Discord. `scrubReport(report, { contact: true })`
+takes the line out whole for the teams that keep reports somewhere public.
 
 **0.7** — `rateLimit.rateLimitStore` and `dedupe.dedupeStore` beside
 `signature.replayStore`, so all three things `handleReport` remembers between

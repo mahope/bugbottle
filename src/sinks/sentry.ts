@@ -50,8 +50,10 @@
 import {
   decodeScreenshotDataUrl,
   isReportType,
+  looksLikeEmail,
   normaliseBreadcrumbs,
   normaliseConsole,
+  normaliseContact,
   normaliseContext,
   normaliseElements,
   normaliseMessage,
@@ -178,6 +180,9 @@ export type SentrySinkOptions = {
    * The reporter's email address, when your application knows it. It is what
    * somebody replies to, so it is worth passing: read it off the report, which
    * is where a `contact_email` in `extra` would have arrived.
+   *
+   * Without this, the report's own `contact` field is used when it looks like
+   * an address — which is what the panel's optional contact field writes.
    */
   contactEmail?: (report: unknown) => string | undefined;
   /** The reporter's name, on the same terms. */
@@ -430,7 +435,13 @@ export function buildSentryEvent(
     source: "bugbottle",
   };
   if (context.url) feedback.url = context.url;
-  const contactEmail = options.contactEmail?.(report);
+  // The report's own contact line is the default, but only when it is an
+  // address: Sentry puts `contact_email` behind a mail link, and "call me on
+  // 12345678" behind one is worse than nothing. The whole line still travels
+  // in `extra.contact`, so a phone number is not lost, only not linked.
+  const contact = normaliseContact(raw.contact);
+  const contactEmail =
+    options.contactEmail?.(report) ?? (looksLikeEmail(contact) ? contact : undefined);
   if (contactEmail) feedback.contact_email = contactEmail;
   const contactName = options.contactName?.(report);
   if (contactName) feedback.name = contactName;
@@ -447,6 +458,7 @@ export function buildSentryEvent(
   if (Object.keys(device).length > 0) contexts.device = device;
 
   const extra: Record<string, unknown> = {};
+  if (contact) extra.contact = contact;
   if (elements.length > 0) extra.elements = elements;
   if (context.language) extra.language = context.language;
   if (context.timezone) extra.timezone = context.timezone;
