@@ -381,7 +381,11 @@ async function overRateLimit(request, options, onError) {
 function corsHeaders(cors) {
     if (!cors)
         return {};
-    return { "Access-Control-Allow-Origin": cors === true ? "*" : cors };
+    // `Vary: Origin` travels with the header even when the value is a fixed `*`
+    // or a single origin: a shared cache in front of the endpoint must not hand
+    // one origin's answer to another, and a configuration that changes later
+    // would otherwise be served from a cache that never learnt it varies.
+    return { "Access-Control-Allow-Origin": cors === true ? "*" : cors, Vary: "Origin" };
 }
 function json(body, status, cors) {
     return new Response(JSON.stringify(body), {
@@ -395,8 +399,19 @@ function withCors(response, cors) {
     if (Object.keys(headers).length === 0)
         return response;
     const merged = new Headers(response.headers);
-    for (const [k, v] of Object.entries(headers))
+    for (const [k, v] of Object.entries(headers)) {
+        // A `respond` of the caller's own may already vary on something else, and
+        // replacing their list with ours would quietly break their caching.
+        if (k === "Vary") {
+            const existing = merged.get("Vary");
+            const already = (existing ?? "")
+                .split(",")
+                .some((part) => part.trim().toLowerCase() === "origin");
+            merged.set("Vary", existing && !already ? `${existing}, ${v}` : (existing ?? v));
+            continue;
+        }
         merged.set(k, v);
+    }
     return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,

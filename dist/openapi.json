@@ -1,5 +1,4 @@
 {
-  "$id": "https://bugbottle.dev/schema/openapi.json",
   "components": {
     "schemas": {
       "Accepted": {
@@ -579,7 +578,7 @@
       "name": "bugbottle",
       "url": "https://bugbottle.dev"
     },
-    "description": "bugbottle is a client library, not a service: this describes the endpoint **you** run, as `handleReport` from `bugbottle/server` behaves. The request body is the published report schema (https://bugbottle.dev/schema/report.json), inlined here so the document stands on its own; the responses are the ones the handler gives. The path below is the one the README's examples use — yours is wherever you mounted the route, and no server is listed because there is no bugbottle server to list.\n\nSeveral answers only occur when the matching option is set: 200 needs `dedupe`, 401 needs `authorize` or `signature`, 429 needs `rateLimit`, and 204 needs `cors`. A handler configured without them simply never sends them, which is why they are documented rather than promised.",
+    "description": "bugbottle is a client library, not a service: this describes the endpoint **you** run, as `handleReport` from `bugbottle/server` behaves. The request body is the published report schema (https://bugbottle.dev/schema/report.json), inlined here so the document stands on its own; the responses are the ones the handler gives. The path below is the one the README's examples use — yours is wherever you mounted the route, and the only server listed is your own origin, because there is no bugbottle server to list.\n\nSeveral answers only occur when the matching option is set: 200 needs `dedupe`, 401 needs `authorize` or `signature`, 429 needs `rateLimit`, and 204 needs `cors`. A handler configured without them simply never sends them, which is why they are documented rather than promised.",
     "license": {
       "identifier": "MIT",
       "name": "MIT"
@@ -593,7 +592,7 @@
   "paths": {
     "/api/bug-report": {
       "options": {
-        "description": "Answered only when `cors` is set. The requested headers are reflected back, so a client may send its own — a CSRF token, a tracing id — without this document listing them.",
+        "description": "Answered with a 204 only when `cors` is set; without it the handler has no preflight to give and OPTIONS is a method like any other, so it is refused with the same `{ error }` a GET gets. The requested headers are reflected back, so a client may send its own — a CSRF token, a tracing id — without this document listing them.",
         "operationId": "preflightBugReport",
         "responses": {
           "204": {
@@ -611,13 +610,38 @@
                   "type": "string"
                 }
               },
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Access-Control-Max-Age": {
                 "description": "Always `86400`.",
                 "schema": {
                   "type": "string"
                 }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
               }
             }
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Method not allowed"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "`cors` is not set, so there is no preflight to answer and the request falls through to the method check. No CORS headers come back with it — there are none to send."
           }
         },
         "security": [
@@ -652,7 +676,21 @@
                 }
               }
             },
-            "description": "A duplicate of a report already seen inside the dedupe window. Nothing was stored and no sink ran; the id, when there is one, is the first copy's."
+            "description": "A duplicate of a report already seen inside the dedupe window. Nothing was stored and no sink ran; the id, when there is one, is the first copy's.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "201": {
             "content": {
@@ -665,7 +703,21 @@
                 }
               }
             },
-            "description": "Stored. The id is whatever your `store` returned, and the client hands it to `onSent`."
+            "description": "Stored. The id is whatever your `store` returned, and the client hands it to `onSent`.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "202": {
             "content": {
@@ -676,7 +728,21 @@
                 }
               }
             },
-            "description": "Accepted and delivered to the sinks, but no `store` was configured, so there is no id to give back."
+            "description": "Accepted and delivered to the sinks, but no `store` was configured, so there is no id to give back.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -689,7 +755,21 @@
                 }
               }
             },
-            "description": "The body was not JSON, or the report had no message. The `error` is shown to the reporter, so it is a sentence rather than a code."
+            "description": "The body was not JSON, or the report had no message. The `error` is shown to the reporter, so it is a sentence rather than a code.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "content": {
@@ -702,7 +782,21 @@
                 }
               }
             },
-            "description": "`authorize` said no, or the `X-Bugbottle-Signature` header was missing, stale or wrong."
+            "description": "`authorize` said no, or the `X-Bugbottle-Signature` header was missing, stale or wrong.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "405": {
             "content": {
@@ -715,7 +809,21 @@
                 }
               }
             },
-            "description": "The route was reached with something other than POST (or the CORS preflight below). Documented here because it is this path's answer; the other methods are not operations of their own."
+            "description": "The route was reached with something other than POST — a GET, most likely. Documented here because it is this path's answer; those methods are not operations of their own. The OPTIONS operation below documents its own 405.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "408": {
             "content": {
@@ -728,7 +836,21 @@
                 }
               }
             },
-            "description": "The body was still arriving when the deadline passed. The stream is cancelled rather than drained."
+            "description": "The body was still arriving when the deadline passed. The stream is cancelled rather than drained.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "413": {
             "content": {
@@ -741,7 +863,21 @@
                 }
               }
             },
-            "description": "The body was over the ceiling — 4 MB unless `maxBodyBytes` says otherwise. Counted as it arrives, so an oversized upload is cut off rather than buffered."
+            "description": "The body was over the ceiling — 4 MB unless `maxBodyBytes` says otherwise. Counted as it arrives, so an oversized upload is cut off rather than buffered.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
             "content": {
@@ -754,7 +890,21 @@
                 }
               }
             },
-            "description": "Past the rate limit for this caller. A rate-limit store that is down fails open, so this is a real count rather than an outage."
+            "description": "Past the rate limit for this caller. A rate-limit store that is down fails open, so this is a real count rather than an outage.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -767,7 +917,21 @@
                 }
               }
             },
-            "description": "Something the handler did not expect — a `store` that threw, most likely. Whatever broke, its message stays on the server."
+            "description": "Something the handler did not expect — a `store` that threw, most likely. Whatever broke, its message stays on the server.",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Present only when `cors` is set: `*` for `cors: true`, otherwise the single origin you configured.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache never hands one origin's answer to another.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -780,5 +944,12 @@
       },
       "summary": "One report in, one answer out."
     }
-  }
+  },
+  "servers": [
+    {
+      "description": "Your own origin. bugbottle runs no service, so the path is relative to the application you mounted `handleReport` in.",
+      "url": "/"
+    }
+  ],
+  "x-bugbottle-id": "https://bugbottle.dev/schema/openapi.json"
 }

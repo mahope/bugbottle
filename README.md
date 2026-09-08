@@ -1553,7 +1553,10 @@ export const POST = (req: Request) =>
 Only a `POST` carries a report: anything else is answered with `405`, and an
 `OPTIONS` preflight is answered before that when `cors` is set — reflecting the
 `Access-Control-Request-Headers` the browser asked for, so your own header
-(a CSRF token, a tracing id) needs no configuration here.
+(a CSRF token, a tracing id) needs no configuration here. Every answer that
+carries `Access-Control-Allow-Origin` carries `Vary: Origin` beside it, so a
+shared cache in front of the endpoint cannot hand one origin's answer to
+another; a `respond` of your own that already varies on something keeps it.
 
 The body is bounded in two directions. `maxBodyBytes` is counted on the stream
 as well as read from `content-length`, which is a claim rather than a fact, and
@@ -1965,8 +1968,14 @@ time from the same two sources as everything else on this page: the report
 schema is its request body, ceilings and all, and its responses are the ones
 `handleReport` gives — `201 { id }`, `202 {}` without a store, `200` for a
 duplicate, and the `400`, `401`, `405`, `408`, `413`, `429` and `500` answers
-with the `{ error }` they carry. The `X-Bugbottle-Signature` header is a
-security scheme described for what it is: spam deterrence, not authentication.
+with the `{ error }` they carry. The preflight is an operation of its own, with
+the `204` it answers when `cors` is set and the `405 { error }` it answers when
+it is not, and every answer that allows an origin documents the
+`Access-Control-Allow-Origin` and `Vary` headers that come with it. The
+`X-Bugbottle-Signature` header is a security scheme described for what it is:
+spam deterrence, not authentication. The document lints clean under
+[Redocly](https://redocly.com/docs/cli/) — no errors and no warnings — and CI
+runs that linter on every push, so it stays that way.
 
 ```bash
 curl -s https://bugbottle.dev/schema/openapi.json | jq .paths
@@ -1978,8 +1987,10 @@ import openapi from "bugbottle/openapi.json" with { type: "json" };
 
 The path in it is `/api/bug-report`, the one this page's examples use. Yours is
 wherever you mounted the route, so rename it after importing; nothing in the
-library reads it. No server is listed, because there is no bugbottle server to
-list — the endpoint is yours.
+library reads it. The only server listed is `/`, your own origin, because there
+is no bugbottle server to list — the endpoint is yours. The address the
+document is served from travels as `x-bugbottle-id` rather than `$id`, which
+OpenAPI 3.1 does not allow at the root.
 
 ## Recipes
 

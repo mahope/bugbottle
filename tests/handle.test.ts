@@ -285,6 +285,40 @@ test("cors adds the header to a normal answer too", async () => {
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
 });
 
+test("every answer that allows an origin says it varies on one", async () => {
+  // A shared cache in front of the endpoint must not hand one origin's answer
+  // to another, so the allow header never travels alone.
+  const preflight = await handleReport(
+    new Request("https://app.example.com/api/bug-report", { method: "OPTIONS" }),
+    { cors: "https://app.example.com" },
+  );
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("Vary"), "Origin");
+
+  const accepted = await handleReport(post(body), { cors: true });
+  assert.equal(accepted.headers.get("Vary"), "Origin");
+
+  const refused = await handleReport(post({ message: "   " }), { cors: true });
+  assert.equal(refused.status, 400);
+  assert.equal(refused.headers.get("Vary"), "Origin");
+});
+
+test("without cors nothing varies on the origin", async () => {
+  const response = await handleReport(post(body), {});
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+  assert.equal(response.headers.get("Vary"), null);
+});
+
+test("a respond of your own keeps whatever it already varied on", async () => {
+  const response = await handleReport(post(body), {
+    cors: true,
+    respond: () =>
+      new Response("ok", { status: 200, headers: { Vary: "Accept-Encoding" } }),
+  });
+
+  assert.equal(response.headers.get("Vary"), "Accept-Encoding, Origin");
+});
+
 test("the rate limit answers 429 once the window is full", async () => {
   resetRateLimits();
   const options = { rateLimit: { limit: 2, windowMs: 60_000, key: () => "one-caller" } };
