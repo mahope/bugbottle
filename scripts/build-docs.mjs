@@ -17,14 +17,17 @@
  * when a new section is added and not placed, because a section nobody placed
  * is a page nobody can reach.
  *
- * Four pages are not README sections. site/compare.md and site/da/sammenlign.md
+ * Five pages are not README sections. site/compare.md and site/da/sammenlign.md
  * are their own Markdown files, rendered by the same renderer into
  * site/compare/ and site/da/sammenlign/ with the landing page's header and
  * footer. They are prose that is neither the landing page nor the README,
  * because they are about other people's products and have no business in a
  * package README. site/da/kom-i-gang.md is the third, for the same kind of
  * reason in reverse: the documentation is English and this is the one Danish
- * way in, so it belongs on the site rather than in the README. The fourth is
+ * way in, so it belongs on the site rather than in the README.
+ * site/da/privatliv.md is the fourth and the one page written twice: it is the
+ * Danish half of the README's privacy checklist, paired with it by hreflang
+ * because the two really are one page in two languages. The fifth is
  * CHANGELOG.md, rendered into site/docs/changelog/ so the release notes are a
  * page on the site rather than a link away to a raw file on GitHub.
  *
@@ -112,6 +115,22 @@ const STANDALONE = [
        Calling them alternates would tell a crawler they are the same page. */
     indexed: false,
   },
+  {
+    id: "privatliv",
+    lang: "da",
+    source: join("site", "da", "privatliv.md"),
+    out: join("da", "privatliv"),
+    url: "/da/privatliv/",
+    title: "Privatliv",
+    navTitle: "Privatliv",
+    eyebrow: "Dansk",
+    heading: "Privatliv i bugbottle",
+    /* The one Danish page with an English twin. It is the same page as the
+       README's privacy checklist, field for field, so it says so with
+       `hreflang`: an EU site owner reaching for it in Danish and a crawler
+       looking at both should be told they are one page in two languages. */
+    otherUrl: "/docs/privacy-checklist/",
+  },
 ];
 
 /* The changelog. Also its own Markdown file rather than a README section, but
@@ -191,8 +210,10 @@ const GROUPS = [
   },
   {
     title: "About",
-    blurb: "Who writes this, under which licence, and what else is out there.",
-    slugs: ["who-makes-it", "licence"],
+    blurb:
+      "The answers a data protection question needs, who writes this, and " +
+      "under which licence.",
+    slugs: ["privacy-checklist", "who-makes-it", "licence"],
     /* Not a README section, so it is listed here rather than in `slugs`: the
        comparison lives on the site alone. */
     extras: [
@@ -211,9 +232,32 @@ const GROUPS = [
   },
 ];
 
+/* The documentation pages that also exist in Danish, slug -> the Danish URL.
+   The README is English by definition, so a `##` section normally has no
+   counterpart and claims none. The privacy checklist is the exception: it is
+   written twice, here and as site/da/privatliv.md, and the two are the same
+   page in two languages. Named once, and read where the head, the language
+   switch and the sitemap are built, so a pair is one line rather than four
+   places to forget. */
+const TRANSLATED = {
+  "privacy-checklist": "/da/privatliv/",
+};
+
 /* A handful of README headings do not make good page titles on their own —
    they read as a continuation of the sentence above them, which the page no
    longer has. */
+/* The one README heading whose URL is not its own slug. "A privacy checklist"
+   reads as a sentence in the README and would give /docs/a-privacy-checklist/,
+   which is a worse URL to hand to a data protection officer than
+   /docs/privacy-checklist/ — and this URL is quoted in the sitemap's hreflang
+   pair, on the Danish page and in the WordPress plugin's README, so it is the
+   part that has to be short and stable. The README anchor is unchanged: it
+   stays `#a-privacy-checklist` on GitHub, and the anchor map below points it
+   at the page as well, so a link written for GitHub still lands here. */
+const SLUG_OVERRIDES = {
+  "a-privacy-checklist": "privacy-checklist",
+};
+
 const TITLE_OVERRIDES = {
   "the-form-react": "The form (React)",
   api: "API",
@@ -468,7 +512,8 @@ function sliceSections(markdown) {
     const end = next ? next.line : lines.length;
     const body = lines.slice(top.line + 1, end).join("\n").trim();
     sections.push({
-      slug: top.slug,
+      slug: SLUG_OVERRIDES[top.slug] ?? top.slug,
+      readmeSlug: top.slug,
       title: TITLE_OVERRIDES[top.slug] ?? top.text,
       navTitle: top.text,
       readmeAnchor: `#${top.slug}`,
@@ -973,17 +1018,28 @@ function sitemapXml(pages) {
       source: "site/da/kom-i-gang.md",
       alternates: [],
     },
+    /* The privacy checklist is the one Danish page that does have one, so it
+       is paired here the way the two comparison pages are. Its English half
+       is a README section, and gets its half of the pair below. */
+    {
+      loc: `${ORIGIN}/da/privatliv/`,
+      source: "site/da/privatliv.md",
+      alternates: pair("/da/privatliv/", "/docs/privacy-checklist/", "da", "en"),
+    },
     {
       loc: `${ORIGIN}${CHANGELOG.url}`,
       source: CHANGELOG.source,
       alternates: [],
     },
     { loc: `${ORIGIN}/docs/`, source: "README.md", alternates: [] },
-    ...pages.map((page) => ({
-      loc: `${ORIGIN}${page.url}`,
-      source: "README.md",
-      alternates: [],
-    })),
+    ...pages.map((page) => {
+      const daUrl = TRANSLATED[page.slug];
+      return {
+        loc: `${ORIGIN}${page.url}`,
+        source: "README.md",
+        alternates: daUrl ? pair(page.url, daUrl, "en", "da") : [],
+      };
+    }),
   ];
 
   const body = entries
@@ -1131,11 +1187,27 @@ async function main() {
     const section = bySlug.get(slug);
     if (!section) throw new Error(`missing section ${slug}`);
     const group = GROUPS.find((g) => g.slugs.includes(slug));
+    const url = `/docs/${slug}/`;
+    /* A page with a Danish twin carries the alternates both ways and points
+       the language switch at it. Every other documentation page has only
+       itself, and the switch falls back to the landing page. */
+    const daUrl = TRANSLATED[slug];
     return {
       ...section,
-      url: `/docs/${slug}/`,
+      url,
       groupTitle: group?.title ?? "",
       description: describe(section.body),
+      ...(daUrl
+        ? {
+            enUrl: url,
+            daUrl,
+            alternates: [
+              { hreflang: "en", href: `${ORIGIN}${url}` },
+              { hreflang: "da", href: `${ORIGIN}${daUrl}` },
+              { hreflang: "x-default", href: `${ORIGIN}${url}` },
+            ],
+          }
+        : {}),
     };
   });
 
@@ -1150,6 +1222,9 @@ async function main() {
   const anchors = new Map();
   for (const page of pages) {
     anchors.set(page.slug, page.url);
+    /* A section whose URL was shortened is still linked to by its heading
+       anchor everywhere else in the README, so both point at the page. */
+    if (page.readmeSlug) anchors.set(page.readmeSlug, page.url);
     for (const heading of page.headings) {
       anchors.set(heading.slug, `${page.url}#${heading.slug}`);
     }

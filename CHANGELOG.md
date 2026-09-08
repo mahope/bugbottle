@@ -7,6 +7,23 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Documentation
+
+- A privacy checklist, in English and Danish (#92). `## A privacy checklist` in
+  the README, on the site as [/docs/privacy-checklist/](https://bugbottle.dev/docs/privacy-checklist/)
+  and [/da/privatliv/](https://bugbottle.dev/da/privatliv/), answers the three
+  questions an EU site owner has to answer before a lawyer asks them: what is
+  collected, where does it go, and how long is it kept. Every field of a report
+  gets a row — on by default, whether it can hold personal data, the switch
+  that turns it off, and where it ends up — followed by retention, the "no
+  cookies, no fingerprinting, no third party" facts with the site's CSP as the
+  proof, and a policy paragraph to adapt. Not legal advice, and it says so.
+- The two pages are one page in two languages and say so: `hreflang` alternates
+  both ways in the sitemap and in each head, the third such pair on the site.
+  `tests/privacy-checklist.test.ts` compares the field column of both tables
+  with the properties of the generated report schema, so a new field cannot be
+  added to `BugReport` and left out of either checklist.
+
 ## 0.13.0 — 2026-09-08
 
 The reviewed release. A fresh-context review read everything since 0.9.0 and

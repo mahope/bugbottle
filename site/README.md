@@ -3,8 +3,9 @@
 The site at [bugbottle.dev](https://bugbottle.dev): a landing page in English
 at `/` and Danish at `/da/`, the English documentation at `/docs/`, the
 changelog at `/docs/changelog/`, a comparison page in both languages at
-`/compare/` and `/da/sammenlign/`, and one Danish getting-started page at
-`/da/kom-i-gang/`. The
+`/compare/` and `/da/sammenlign/`, a privacy checklist in both languages at
+`/docs/privacy-checklist/` and `/da/privatliv/`, and one Danish
+getting-started page at `/da/kom-i-gang/`. The
 landing pages are static HTML written by hand; the documentation, the
 changelog, the comparison, `sitemap.xml` and `robots.txt` are generated when
 the image is built. No framework, no analytics, no
@@ -26,7 +27,8 @@ from this host and the favicon is an inline SVG.
 | `compare.md` | The English "Compared with" page, as Markdown. The only prose on the site that is neither the landing page nor the README |
 | `da/sammenlign.md` | The same page in Danish, written for a Danish reader rather than translated |
 | `da/kom-i-gang.md` | The Danish getting-started page, as Markdown: three routes to a first report and the privacy part in Danish. See "Kom i gang" below |
-| `compare/`, `da/sammenlign/`, `da/kom-i-gang/` | **Generated, never committed.** The three pages above, rendered by `scripts/build-docs.mjs`; see "The comparison" and "Kom i gang" below |
+| `da/privatliv.md` | The Danish privacy checklist, as Markdown: the same page as the README's `## A privacy checklist`, in Danish. See "Privatliv" below |
+| `compare/`, `da/sammenlign/`, `da/kom-i-gang/`, `da/privatliv/` | **Generated, never committed.** The four pages above, rendered by `scripts/build-docs.mjs`; see "The comparison", "Kom i gang" and "Privatliv" below |
 | `docs/changelog/` | **Generated, never committed.** `CHANGELOG.md` rendered by the same script; see "The changelog" below |
 | `sitemap.xml`, `robots.txt` | **Generated, never committed.** Written by the same script; see "The sitemap and robots.txt" below |
 | `panel.png` | A real capture of the panel open on this page, in the hero. See "The hero screenshot" below |
@@ -333,8 +335,8 @@ included, parsed straight out of `site/security-headers.conf` — and runs the p
 `axe-core` over both landing pages, the English landing page again with the
 demo's panel open and the picture editor over it, the documentation index, one
 deep documentation page, the documentation index again with the search field
-holding results, the theme playground with a control moved, the two comparison pages, the Danish getting-started page and the changelog,
-in **both colour schemes** — twenty-two runs. Three of those runs are states rather than pages. The
+holding results, the theme playground with a control moved, the two comparison pages, the Danish getting-started page, both halves of the privacy checklist and the changelog,
+in **both colour schemes** — twenty-six runs. Three of those runs are states rather than pages. The
 search state is a click, a word typed and a wait for the
 list: the results are drawn from JavaScript and nothing else on the site would
 notice a link with no accessible name in them. The annotator state opens the
@@ -443,6 +445,31 @@ copies files by name rather than copying `site/da/`, so the Markdown source is
 never served beside the page built from it. A new standalone page needs both
 lines or it is simply missing from the image.
 
+## Privatliv
+
+`/da/privatliv/` is the Danish half of the README's `## A privacy checklist`,
+rendered from `site/da/privatliv.md` exactly the way the comparison pages are.
+Unlike "Kom i gang", this one **is** the same page as its English counterpart:
+the same thirteen fields in the same order, the same retention paragraph, the
+same policy template. So the two carry `hreflang` alternates both ways — the
+`STANDALONE` entry names `/docs/privacy-checklist/` as its `otherUrl`, and the
+English page gets its half from `TRANSLATED` in the script, which is the one
+place a documentation page is told it has a twin.
+
+Two things keep the pair honest.
+
+- **The URL is shortened on purpose.** The README heading slugifies to
+  `a-privacy-checklist`, and `SLUG_OVERRIDES` maps it to `privacy-checklist`,
+  because this URL is the one quoted in an `hreflang`, in the Danish page and
+  in the WordPress plugin's README. The README's own anchor is untouched, and
+  the anchor map carries both, so a link written for GitHub still lands on the
+  page here.
+- **The field table cannot drift.** `tests/privacy-checklist.test.ts` reads the
+  first column of both tables and compares it with the properties of the
+  generated report schema, in both languages and in the same order. A field
+  added to `BugReport` and left out of either page fails the test rather than
+  quietly telling a site owner it does not exist.
+
 ## The changelog
 
 `/docs/changelog/` is `CHANGELOG.md`, rendered by the same script through the
@@ -479,12 +506,13 @@ actually documents whatever was searched for.
 gitignored like `site/docs/`, so a new documentation page cannot be added
 without appearing in the sitemap. The sitemap lists absolute
 `https://bugbottle.dev` URLs: the two landing pages, the documentation index
-and every documentation page, the changelog, the two comparison pages and
-`/da/kom-i-gang/`. The pairs that
-exist in both languages — the landing pages, and the two comparison pages —
-carry `xhtml:link` alternates for `en`, `da` and `x-default` in both
-directions; the documentation exists in English only and carries none, and
-neither does the Danish getting-started page — see "Kom i gang" for why.
+and every documentation page, the changelog, the two comparison pages,
+`/da/privatliv/` and `/da/kom-i-gang/`. The three pairs that
+exist in both languages — the landing pages, the two comparison pages, and the
+privacy checklist in English and Danish — carry `xhtml:link` alternates for
+`en`, `da` and `x-default` in both directions; the rest of the documentation
+exists in English only and carries none, and neither does the Danish
+getting-started page — see "Kom i gang" for why.
 
 Every `<url>` carries a `<lastmod>`, and the date is the date of the commit
 that last touched the file the page is generated from — `git log -1
