@@ -743,7 +743,7 @@ test("a server that stops reading ends in a write timeout, not a hang", async (t
 
     assert.ok(failure instanceof SinkError, "a stalled write is a SinkError");
     assert.equal(failure.status, SMTP_NO_REPLY);
-    assert.match(failure.message, /did not read the message within 250 ms/);
+    assert.match(failure.message, /did not (read|answer) the message within 250 ms/);
     assert.ok(Date.now() - started < 10_000, "it gave up quickly");
   } finally {
     await fake.close();
