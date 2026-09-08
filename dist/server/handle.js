@@ -332,7 +332,7 @@ async function verifySignature(request, body, options) {
     // with digests of their own choosing — though a public key means they can
     // still mint digests that do verify, which is why the in-memory store bounds
     // itself per signed second and why `signature.store` exists at all.
-    const store = options.store ?? options.replayStore;
+    const { store } = options;
     if (store) {
         // A store that throws propagates: `handleReport` answers 500 rather than
         // accept a signature it could not check against what it has already seen.
@@ -368,7 +368,7 @@ async function overRateLimit(request, address, options, onError) {
     // and a `key` of your own may read one. Clipping it bounds one entry, and
     // the ceiling below bounds the whole map.
     const key = (options.key ? options.key(request, address) : address).slice(0, MAX_RATE_LIMIT_KEY_LENGTH);
-    const store = options.store ?? options.rateLimitStore;
+    const { store } = options;
     if (store) {
         try {
             // The count is checked before it is compared, for the same reason the
@@ -727,7 +727,7 @@ export async function handleReport(request, options = {}) {
         let dedupeKey;
         if (options.dedupe) {
             const now = Date.now();
-            const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
+            const dedupeStore = options.dedupe.store;
             dedupeKey = (options.dedupe.key ?? fingerprint)(report);
             let seen;
             if (dedupeStore) {
@@ -804,7 +804,7 @@ export async function handleReport(request, options = {}) {
         // Recorded once the report is stored, so a `store` that threw does not
         // leave a fingerprint that swallows the retry.
         if (dedupeKey !== undefined && options.dedupe) {
-            const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
+            const dedupeStore = options.dedupe.store;
             if (dedupeStore) {
                 try {
                     await dedupeStore.set(dedupeKey, { id }, Date.now() + options.dedupe.windowMs);

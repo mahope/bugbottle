@@ -304,12 +304,6 @@ export type RateLimitOptions = {
    * table with a TTL.
    */
   store?: RateLimitStore;
-  /**
-   * @deprecated Renamed to `store` in 0.9 — inside `rateLimit` the prefix said
-   * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
-   * one that counts.
-   */
-  rateLimitStore?: RateLimitStore;
 };
 
 /**
@@ -371,12 +365,6 @@ export type DedupeOptions = {
    * wants one answer across all of them hands in its own store.
    */
   store?: DedupeStore;
-  /**
-   * @deprecated Renamed to `store` in 0.9 — inside `dedupe` the prefix said
-   * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
-   * one that is asked.
-   */
-  dedupeStore?: DedupeStore;
 };
 
 /** What a dedupe store keeps: the id the first copy was stored under, if any. */
@@ -470,12 +458,6 @@ export type SignatureOptions = {
    * the skew window anyway, which is exactly how long the entry has to live.
    */
   store?: ReplayStore;
-  /**
-   * @deprecated Renamed to `store` in 0.9 — inside `signature` the prefix said
-   * nothing the key did not. Removed in 1.0 (#66). Given both, `store` is the
-   * one that is asked.
-   */
-  replayStore?: ReplayStore;
 };
 
 /**
@@ -832,7 +814,7 @@ async function verifySignature(
   // with digests of their own choosing — though a public key means they can
   // still mint digests that do verify, which is why the in-memory store bounds
   // itself per signed second and why `signature.store` exists at all.
-  const store = options.store ?? options.replayStore;
+  const { store } = options;
   if (store) {
     // A store that throws propagates: `handleReport` answers 500 rather than
     // accept a signature it could not check against what it has already seen.
@@ -873,7 +855,7 @@ async function overRateLimit(
     0,
     MAX_RATE_LIMIT_KEY_LENGTH,
   );
-  const store = options.store ?? options.rateLimitStore;
+  const { store } = options;
   if (store) {
     try {
       // The count is checked before it is compared, for the same reason the
@@ -1247,7 +1229,7 @@ export async function handleReport(
     let dedupeKey: string | undefined;
     if (options.dedupe) {
       const now = Date.now();
-      const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
+      const dedupeStore = options.dedupe.store;
       dedupeKey = (options.dedupe.key ?? fingerprint)(report);
       let seen: DedupeEntry | undefined;
       if (dedupeStore) {
@@ -1325,7 +1307,7 @@ export async function handleReport(
     // Recorded once the report is stored, so a `store` that threw does not
     // leave a fingerprint that swallows the retry.
     if (dedupeKey !== undefined && options.dedupe) {
-      const dedupeStore = options.dedupe.store ?? options.dedupe.dedupeStore;
+      const dedupeStore = options.dedupe.store;
       if (dedupeStore) {
         try {
           await dedupeStore.set(dedupeKey, { id }, Date.now() + options.dedupe.windowMs);

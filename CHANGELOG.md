@@ -18,6 +18,11 @@ change the API; the changelog says so when they do.
   The rename is mechanical, and nobody has to read a value to make it:
   `<VENDOR>_MAX_<REST>` becomes `MAX_<VENDOR>_<REST>`, so `SLACK_MAX_TEXT` is
   `MAX_SLACK_TEXT` and `DISCORD_MAX_EMBED_TITLE` is `MAX_DISCORD_EMBED_TITLE`.
+- **`rateLimit.rateLimitStore`, `dedupe.dedupeStore` and
+  `signature.replayStore`** (#66). All three are `store` now — inside the
+  option object the vendor prefix said nothing the key did not. The store
+  contracts are unchanged, and `HandleReportOptions.store`, the top-level one
+  that persists a report, is a different option and was never touched.
 
 ## 0.15.0 — 2026-09-08
 

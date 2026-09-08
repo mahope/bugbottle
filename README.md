@@ -2038,8 +2038,8 @@ handleReport(req, {
 ```
 
 All three are called `store`, inside `rateLimit`, `dedupe` and `signature`.
-They were `rateLimitStore`, `dedupeStore` and `replayStore` until 0.9; those
-names still work, are deprecated, and go in 1.0.
+`HandleReportOptions.store`, the top-level one that persists a report, is a
+different option.
 
 **Two of them fail open and one fails closed, and that is deliberate.** A
 rate-limit store that throws lets the report through: refusing an honest
