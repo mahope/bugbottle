@@ -70,6 +70,28 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- `dist/openapi.json` did not survive an OpenAPI linter (#87). Redocly reported
+  two errors and a warning on the file whose whole purpose is to be read by
+  other people's tooling: `$id` at the root, which the 3.1 meta-schema does not
+  permit there however legal the keyword is one level down; no `servers` at
+  all; and an OPTIONS operation with no refusal documented. The identifier is
+  `x-bugbottle-id` now, the servers list is the one honest entry — `/`, the
+  reader's own origin, because there is no bugbottle service to point at — and
+  the preflight documents the `405 { error }` it answers when `cors` is off
+  beside the `204` it answers when it is on. Every answer that allows an origin
+  now documents `Access-Control-Allow-Origin` and `Vary` as well, on the
+  preflight and on the POST alike. `tests/openapi.test.ts` compares the
+  handler's answers with the document *per operation* rather than pooled across
+  the path item, so an operation can no longer be credited with a status only
+  its neighbour answers, and CI runs `@redocly/cli@2.51.2` over the built file
+  after the build so none of it can regress.
+- `handleReport` sent `Access-Control-Allow-Origin` without `Vary: Origin`. A
+  shared cache in front of the endpoint could store one origin's answer and
+  hand it to the next, which for a single-origin `cors` is the wrong header on
+  a cross-origin reply and for `cors: true` is a header that outlives the
+  configuration that produced it. The two now travel together on every answer,
+  refusals and preflight included, and a `respond` of your own that already
+  varies on something keeps it — `Origin` is appended, not substituted.
 - `smtpSink` sent an unroutable `From` when the address carried a non-ASCII
   display name. `foldHeader` encoded the whole value as one RFC 2047 word, so
   `Bjørn Hansen <bugs@example.com>` reached the wire as `=?UTF-8?B?…?=` and

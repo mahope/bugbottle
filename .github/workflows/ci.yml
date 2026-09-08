@@ -22,6 +22,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The generated document is what other people's tooling reads, so it has
+      # to satisfy a real OpenAPI linter and not only our own tests. Pinned,
+      # because a new rule in a later release would fail a build that changed
+      # nothing.
+      - name: The OpenAPI document lints clean
+        run: npx --yes @redocly/cli@2.51.2 lint dist/openapi.json
       - run: npm run build:docs
       - name: dist is committed and current
         run: |

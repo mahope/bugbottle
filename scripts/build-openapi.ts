@@ -37,7 +37,13 @@ import { DEFAULT_MAX_BODY_BYTES } from "../src/server/handle.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Where the document is served from, beside the report schema. */
+/**
+ * Where the document is served from, beside the report schema.
+ *
+ * It travels as `x-bugbottle-id` rather than `$id`: OpenAPI 3.1 closes the
+ * root object, so a `$id` there is a structural error in the meta-schema even
+ * though the same keyword is legal in every schema below it.
+ */
 export const OPENAPI_ID = "https://bugbottle.dev/schema/openapi.json";
 
 /** The route the README's examples mount the handler on. */
@@ -62,6 +68,44 @@ function retargetRefs(node: unknown): void {
     obj.$ref = obj.$ref.replace("#/$defs/", "#/components/schemas/");
   }
   for (const value of Object.values(obj)) retargetRefs(value);
+}
+
+/**
+ * The two headers every answer carries once `cors` is set — including the
+ * refusals, because `handleReport` puts them on every response it builds.
+ *
+ * They are written out rather than `$ref`-ed at `#/components/headers`, so
+ * that every `$ref` in the document points at a schema and a reader chasing
+ * one never leaves the schemas section.
+ */
+function corsResponseHeaders(): Json {
+  return {
+    "Access-Control-Allow-Origin": {
+      description:
+        "Present only when `cors` is set: `*` for `cors: true`, otherwise the " +
+        "single origin you configured.",
+      schema: { type: "string" },
+    },
+    Vary: {
+      description:
+        "`Origin`, sent alongside `Access-Control-Allow-Origin` so a shared cache " +
+        "never hands one origin's answer to another.",
+      schema: { type: "string" },
+    },
+  };
+}
+
+/**
+ * Puts those headers on every answer of an operation, which is what
+ * `handleReport` does: the CORS header goes on the refusals as well, or a
+ * browser would see a network error instead of the sentence explaining itself.
+ */
+function withCorsHeaders(responses: Json): Json {
+  const out: Json = {};
+  for (const [status, response] of Object.entries(responses)) {
+    out[status] = { ...(response as Json), headers: corsResponseHeaders() };
+  }
+  return out;
 }
 
 /** One JSON answer, with the schema it always has. */
@@ -103,10 +147,23 @@ export function buildOpenApiDocument(): Json {
 
   return {
     openapi: "3.1.0",
-    // A document served under an address may as well say so, and 3.1 allows
-    // the JSON Schema keywords at the top level.
-    $id: OPENAPI_ID,
+    // A document served under an address may as well say so — but as an
+    // extension, because the 3.1 meta-schema closes the root object and a
+    // `$id` there is a structural error rather than the identifier it looks
+    // like.
+    "x-bugbottle-id": OPENAPI_ID,
     jsonSchemaDialect: DIALECT,
+    // There is no bugbottle service to point at, so the only honest server is
+    // the reader's own: the path below is relative to whatever origin the
+    // application that mounted `handleReport` is served from.
+    servers: [
+      {
+        url: "/",
+        description:
+          "Your own origin. bugbottle runs no service, so the path is relative " +
+          "to the application you mounted `handleReport` in.",
+      },
+    ],
     info: {
       title: "bugbottle report endpoint",
       version: pkg.version,
@@ -118,8 +175,8 @@ export function buildOpenApiDocument(): Json {
         SCHEMA_ID +
         "), inlined here so the document stands on its own; the responses are the " +
         "ones the handler gives. The path below is the one the README's examples " +
-        "use — yours is wherever you mounted the route, and no server is listed " +
-        "because there is no bugbottle server to list.\n\n" +
+        "use — yours is wherever you mounted the route, and the only server listed " +
+        "is your own origin, because there is no bugbottle server to list.\n\n" +
         "Several answers only occur when the matching option is set: 200 needs " +
         "`dedupe`, 401 needs `authorize` or `signature`, 429 needs `rateLimit`, and " +
         "204 needs `cors`. A handler configured without them simply never sends " +
@@ -153,7 +210,7 @@ export function buildOpenApiDocument(): Json {
               },
             },
           },
-          responses: {
+          responses: withCorsHeaders({
             "200": jsonResponse(
               "A duplicate of a report already seen inside the dedupe window. " +
                 "Nothing was stored and no sink ran; the id, when there is one, is " +
@@ -184,9 +241,10 @@ export function buildOpenApiDocument(): Json {
               "Not allowed",
             ),
             "405": errorResponse(
-              "The route was reached with something other than POST (or the CORS " +
-                "preflight below). Documented here because it is this path's answer; " +
-                "the other methods are not operations of their own.",
+              "The route was reached with something other than POST — a GET, most " +
+                "likely. Documented here because it is this path's answer; those " +
+                "methods are not operations of their own. The OPTIONS operation " +
+                "below documents its own 405.",
               "Method not allowed",
             ),
             "408": errorResponse(
@@ -210,20 +268,23 @@ export function buildOpenApiDocument(): Json {
                 "likely. Whatever broke, its message stays on the server.",
               "Could not store the report",
             ),
-          },
+          }),
         },
         options: {
           operationId: "preflightBugReport",
           summary: "CORS preflight",
           description:
-            "Answered only when `cors` is set. The requested headers are reflected " +
-            "back, so a client may send its own — a CSRF token, a tracing id — " +
-            "without this document listing them.",
+            "Answered with a 204 only when `cors` is set; without it the handler " +
+            "has no preflight to give and OPTIONS is a method like any other, so " +
+            "it is refused with the same `{ error }` a GET gets. The requested " +
+            "headers are reflected back, so a client may send its own — a CSRF " +
+            "token, a tracing id — without this document listing them.",
           security: [{}],
           responses: {
             "204": {
               description: "The preflight is allowed. No body.",
               headers: {
+                ...corsResponseHeaders(),
                 "Access-Control-Allow-Methods": {
                   description: "Always `POST, OPTIONS`.",
                   schema: { type: "string" },
@@ -240,6 +301,12 @@ export function buildOpenApiDocument(): Json {
                 },
               },
             },
+            "405": errorResponse(
+              "`cors` is not set, so there is no preflight to answer and the " +
+                "request falls through to the method check. No CORS headers come " +
+                "back with it — there are none to send.",
+              "Method not allowed",
+            ),
           },
         },
       },
