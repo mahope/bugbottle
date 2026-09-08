@@ -7,9 +7,25 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
-The annotator, request signing and the comparison page. Recorded here rather
-than under 0.6.0, where they were first written down: all three landed after
-that tag was cut.
+The evidence release: the reporter can mark the picture before it leaves, a
+blur that really destroys what it covers, request signing with a replay cache
+that the key holder cannot empty, timings and a storage snapshot, shake to
+report on a phone, a Solid adapter, and four more places a report can land —
+Slack, Discord, Sentry (with GlitchTip and Bugsink) — beside the existing four.
+The panel now takes the annotator and the shake detector as functions you hand
+in, so a panel nobody marks a picture in ships neither; that is the one change
+an existing `annotate: true` has to make. The site was set in two typefaces of
+its own and audited page by page. A fresh-context review of the annotator, the
+signing and the comparison page went in before this tag, with three privacy and
+security fixes recorded under Fixed.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.5 kB,
+`bugbottle/react` 5.6 kB, `bugbottle/vue` 5.6 kB, `bugbottle/svelte` 5.5 kB,
+`bugbottle/solid` 5.6 kB, `bugbottle/ui` 11.1 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.2 kB, `bugbottle/queue` 1.3 kB, `bugbottle/triggers` 1.3 kB,
+`bugbottle/shake` 0.6 kB, `bugbottle/sign` 0.4 kB, `dist/bugbottle.js` 23.1 kB,
+`bugbottle/server` validators 0.5 kB.
 
 ### Added
 
