@@ -7,6 +7,27 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+The observable release. `handleReport` says what it decided: `onDecision`
+fires once per request with the status, one of eleven reason words, the
+address the rate limit keyed on and the report's id, routed through the one
+way out of the handler so no answer can skip it; the inbox example prints an
+audit line from it and answers `/metrics` in OpenMetrics text behind its
+password. Nothing moves under `prefers-reduced-motion`, and both audits now
+read every transition and animation duration to prove it. The landing pages
+caught up with the library: the eleven places a report can land, the queue
+and its quota story, the privacy checklist, the theme playground and the
+inbox. No public API changed shape.
+
+Sizes (esbuild, minified + gzipped, without `html-to-image`): core 1.4 kB,
+`bugbottle/react` 5.7 kB, `bugbottle/vue` 5.8 kB, `bugbottle/svelte` 5.6 kB,
+`bugbottle/solid` 5.7 kB, `bugbottle/ui` 11.6 kB, `bugbottle/annotate` 1.4 kB,
+`bugbottle/breadcrumbs` 1.3 kB, `bugbottle/network` 1.2 kB, `bugbottle/perf`
+1.3 kB, `bugbottle/queue` 1.5 kB, `bugbottle/queue-idb` 0.7 kB,
+`bugbottle/triggers` 1.3 kB, `bugbottle/shake` 0.7 kB, `bugbottle/sign` 0.4 kB,
+`bugbottle/rrweb` 0.7 kB, `bugbottle/locales-extra` 4.7 kB,
+`dist/bugbottle.js` 24.6 kB, `dist/bugbottle.slim.js` 21.0 kB,
+`bugbottle/server` validators 0.6 kB.
+
 ### Changed
 
 - **`prefers-reduced-motion: reduce` is honoured everywhere, and audited**
