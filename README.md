@@ -1224,7 +1224,7 @@ failed response has an `error` or `message` field, it is shown to the reporter.
 
 ## Sending it somewhere
 
-Storing the report is one thing; seeing it is another. Four sinks live in
+Storing the report is one thing; seeing it is another. Six sinks live in
 `bugbottle/server`, each a formatter over one `fetch` call, none with a
 dependency of its own. None of them reads your environment: the key, the URL
 and the token are arguments, so it is visible at the call site where the secret
@@ -1273,6 +1273,67 @@ await sendReportWebhook(payload, {
   headers: { "X-Token": process.env.INTAKE_TOKEN! },
 });
 ```
+
+### Slack and Discord
+
+A report that lands in the team's chat within a second is a report that gets
+read. `slackSink` and `discordSink` are the richer version of the two webhook
+formats above: instead of a wall of Markdown they post one structured message
+per report — the title, the message, the facts in columns, the last five
+console entries, the picture when there is a URL for it, and a button to the
+full report. Both are factories, so they go straight into `sinks`:
+
+```ts
+import { handleReport, slackSink, discordSink } from "bugbottle/server";
+
+export const POST = (req: Request) =>
+  handleReport(req, {
+    screenshot: async (bytes) => await putPrivate(bytes),   // returns a URL
+    store: async (report) => await db.reports.insert(report),
+    sinks: [
+      slackSink({
+        webhookUrl: process.env.SLACK_WEBHOOK_URL!,   // the URL is the credential
+        username: "bugbottle",
+        iconEmoji: ":beetle:",
+        // Both are optional, and both are functions of the report, so the URL
+        // can be built from whatever you stored.
+        screenshotUrl: (r) => signedUrlFor(r),
+        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+      }),
+      discordSink({
+        webhookUrl: process.env.DISCORD_WEBHOOK_URL!,
+        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+      }),
+    ],
+  });
+```
+
+Slack gets a Block Kit message: a header, the message as `mrkdwn` with `&`,
+`<` and `>` escaped, a section of up to ten fields, the console in a fenced
+block, an `image` block, a `context` line with the time and the selector the
+reporter pointed at, and an `actions` button. Discord gets one embed, coloured
+by report type — red for a bug, green for an idea, grey for anything else —
+with the same facts as fields, the screenshot as `image`, the report link as
+the embed's `url`, and the selector in the footer.
+
+Both services cap everything they are given: 50 blocks and 3000 characters per
+text object on Slack, 6000 characters across an embed on Discord. Every one of
+those is a clip rather than a failure — a report that arrives truncated is
+still read, and a report that 400s because a stack trace was one character too
+long is not. On Discord the description is what gives way first, because the
+facts are what somebody triages from.
+
+Neither service will fetch a data URL, so a screenshot only appears when you
+have stored the picture and can hand back an address. Read "Please read this
+part" before that address becomes a public one: a link in a channel is only as
+private as what it points at, and a chat workspace is a wider audience than an
+issue tracker.
+
+Both take an injected `fetch`, so a test asserts the payload without a network,
+and both use the `AbortSignal` `handleReport` hands them, so `sinkTimeoutMs`
+really does end the request. If you would rather post the message yourself —
+through a bot token, into a thread — `buildSlackMessage(report, options)` and
+`buildDiscordMessage(report, options)` return the body without sending it.
 
 `createGithubIssue` files the report as an issue, which for a small team is
 the whole backend: the report lands in the same list as everything else that is
@@ -1327,7 +1388,7 @@ mutation still comes back with a `200` and puts the reason in an `errors`
 array. The sink reads it and throws `SinkError` anyway, so a mistyped team id
 is a failure you can see rather than an issue that was never created.
 
-All four throw `SinkError`, carrying the HTTP status and the response body,
+All six throw `SinkError`, carrying the HTTP status and the response body,
 when the service answers with anything but success. Catch it around the sink
 rather than around the whole handler: a report you have already stored should
 not be lost to a chat webhook that was revoked last week.
@@ -1628,7 +1689,10 @@ Requires `html-to-image`.
 `normaliseBreadcrumbs`, `normaliseNetwork`, `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
-`createLinearIssue`,
+`createLinearIssue`, `slackSink`, `discordSink`, `buildSlackMessage`,
+`buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `SLACK_MAX_*`
+and `DISCORD_MAX_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
+`DiscordSinkOptions`, `ChatSink`, `ChatSinkContext` and `UrlFrom` types,
 `InvalidScreenshotError`, `SinkError`, `SinkTimeoutError`, `REPORT_TYPES`,
 the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `DEFAULT_SINK_TIMEOUT_MS` defaults, the `ValidatedReport`,

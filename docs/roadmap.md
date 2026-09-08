@@ -100,6 +100,15 @@ picture" flow over it: a labelled toolbar, the tools as a `radiogroup`, focus
 back to the button that opened it, eight new strings in eight languages,
 `annotate: false` and `data-annotate="off"` to switch it off.
 
+**0.7** — `slackSink` and `discordSink` in `bugbottle/server`: one structured
+message per report over an incoming webhook, Block Kit on one side and an
+embed on the other, with the facts as fields, five console entries, the stored
+screenshot as a picture and a link to the full report. Every Block Kit and
+embed limit is a clip rather than a failure. Server-only, so they cost a
+browser bundle nothing. Microsoft Teams is the same shape over Adaptive Cards
+and is a later job: its incoming webhooks are being retired in favour of
+Workflows, so the connector to write against is not the one to write today.
+
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
 Action `mahope/bugbottle@v0` that validates exported reports in CI.
@@ -122,7 +131,9 @@ Action `mahope/bugbottle@v0` that validates exported reports in CI.
 - Optional HMAC signature (WebCrypto) verified by the server helper. Documented
   honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
   see "Already shipped".)
-- More sinks: Jira, GitLab. Sentry envelope.
+- More sinks: Jira, GitLab. Sentry envelope. (Slack and Discord shipped as
+  structured sinks; see "Already shipped". Microsoft Teams is noted there as a
+  later job.)
 
 ## 1.0 — adoptable
 

@@ -26,6 +26,12 @@ export { sendReportEmail, } from "../sinks/resend.js";
 export { sendReportWebhook, DISCORD_MAX_CONTENT, } from "../sinks/webhook.js";
 export { createGithubIssue, } from "../sinks/github.js";
 export { createLinearIssue, } from "../sinks/linear.js";
+// The two chat sinks are factories rather than send functions, because a
+// channel wants one message per report and nothing to configure at the call
+// site of the delivery itself.
+export { MAX_CHAT_CONSOLE_ENTRIES, } from "../sinks/chat.js";
+export { slackSink, buildSlackMessage, escapeSlack, SLACK_MAX_BLOCKS, SLACK_MAX_TEXT, SLACK_MAX_HEADER_TEXT, SLACK_MAX_FIELDS, SLACK_MAX_FIELD_TEXT, } from "../sinks/slack.js";
+export { discordSink, buildDiscordMessage, DISCORD_COLOURS, DISCORD_MAX_EMBED_TITLE, DISCORD_MAX_EMBED_DESCRIPTION, DISCORD_MAX_EMBED_FIELDS, DISCORD_MAX_FIELD_NAME, DISCORD_MAX_FIELD_VALUE, DISCORD_MAX_FOOTER_TEXT, DISCORD_MAX_EMBED_TOTAL, } from "../sinks/discord.js";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.
 export { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, } from "../scrub.js";

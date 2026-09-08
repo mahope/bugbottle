@@ -43,6 +43,11 @@ need Node 18.
   and the editor state, and the eight new locale strings in eight languages on
   top of that in the script-tag build. Every budget rise is argued in a comment
   beside it in `.github/workflows/ci.yml`; a new one needs the same.
+  `bugbottle/server` is measured and printed rather than budgeted: it is a
+  server entry, and everything in it — the sinks included — is tree-shaken away
+  from a consumer that imports only the validators. The number to watch there is
+  that it stays about half a kilobyte, which is the proof that no sink leaked
+  into the shared path.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a
   file is added.

@@ -19,6 +19,9 @@ export { sendReportEmail, type SendReportEmailOptions, type SendReportEmailResul
 export { sendReportWebhook, DISCORD_MAX_CONTENT, type SendReportWebhookOptions, type SendReportWebhookResult, type WebhookFormat, } from "../sinks/webhook.ts";
 export { createGithubIssue, type CreateGithubIssueOptions, type CreateGithubIssueResult, } from "../sinks/github.ts";
 export { createLinearIssue, type CreateLinearIssueOptions, type CreateLinearIssueResult, } from "../sinks/linear.ts";
+export { MAX_CHAT_CONSOLE_ENTRIES, type ChatSink, type ChatSinkContext, type UrlFrom, } from "../sinks/chat.ts";
+export { slackSink, buildSlackMessage, escapeSlack, SLACK_MAX_BLOCKS, SLACK_MAX_TEXT, SLACK_MAX_HEADER_TEXT, SLACK_MAX_FIELDS, SLACK_MAX_FIELD_TEXT, type SlackSinkOptions, } from "../sinks/slack.ts";
+export { discordSink, buildDiscordMessage, DISCORD_COLOURS, DISCORD_MAX_EMBED_TITLE, DISCORD_MAX_EMBED_DESCRIPTION, DISCORD_MAX_EMBED_FIELDS, DISCORD_MAX_FIELD_NAME, DISCORD_MAX_FIELD_VALUE, DISCORD_MAX_FOOTER_TEXT, DISCORD_MAX_EMBED_TOTAL, type DiscordSinkOptions, } from "../sinks/discord.ts";
 export { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, type ScrubOptions, type Scrubber, type ScrubberName, } from "../scrub.ts";
 export { decodeScreenshotDataUrl, InvalidScreenshotError, isReportType, normaliseMessage, normaliseContext, normaliseConsole, normaliseElements, normaliseBreadcrumbs, normaliseNetwork, MAX_MESSAGE_LENGTH, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_DATA_URL_LENGTH, MAX_CONSOLE_ENTRIES, MAX_CONSOLE_MESSAGE_LENGTH, MAX_ELEMENTS, MAX_ELEMENT_TEXT_LENGTH, MAX_BREADCRUMBS, MAX_BREADCRUMB_TEXT_LENGTH, MAX_NETWORK_ENTRIES, MAX_STACK_FRAMES, MAX_STACK_STRING_LENGTH, MAX_CONTEXT_LENGTHS, REPORT_TYPES, type ReportType, type ReportContext, type BugReport, type ConsoleEntry, type ConsoleLevel, type StackFrame, type ElementRef, type Breadcrumb, type BreadcrumbKind, type NetworkEntry, } from "../report-core.ts";
 //# sourceMappingURL=index.d.ts.map
