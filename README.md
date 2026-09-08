@@ -3495,7 +3495,10 @@ It ships with a `Dockerfile`, a `compose.yml` and a `Caddyfile`, so putting one
 on a VPS is `docker compose up` and a domain; its README walks through Dokploy
 in eight lines. Reports land on a named volume, the image runs as a non-root
 user and installs nothing, and `GET /health` is public for the platform's
-check.
+check. `GET /metrics` is behind the password with everything else and answers
+in OpenMetrics text — one counter per `onDecision` reason, how many reports are
+on disk, and when the newest arrived — so Prometheus can alert on an endpoint
+that has quietly stopped receiving.
 
 Read `examples/inbox/README.md` before you put one on the internet — the
 screenshots are on disk, so the disk is the bucket the privacy section above

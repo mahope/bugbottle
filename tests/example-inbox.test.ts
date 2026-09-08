@@ -908,3 +908,101 @@ test("without RETENTION_DAYS an old report is kept", async () => {
     await stop(running);
   }
 });
+
+/** Reads `/metrics` with the password and answers with the raw text. */
+async function metrics(origin: string): Promise<string> {
+  const response = await fetch(`${origin}/metrics`, { headers: { Authorization: auth } });
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("content-type"),
+    "application/openmetrics-text; version=1.0.0; charset=utf-8",
+  );
+  return await response.text();
+}
+
+/** The value of one sample line, found by its full name and labels. */
+function sample(text: string, name: string): number {
+  const found = text.split("\n").find((line) => line.startsWith(`${name} `));
+  assert.ok(found, `No sample named ${name} in:\n${text}`);
+  return Number(found.slice(name.length + 1));
+}
+
+test("three posts — one stored, one duplicate, one too large — are counted at /metrics", async () => {
+  const running = await start();
+  try {
+    const body = JSON.stringify({ type: "bug", message: "The same report, twice" });
+    const send = (payload: string) =>
+      fetch(`${running.origin}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+
+    assert.equal((await send(body)).status, 201);
+    // The same fingerprint inside the dedupe window: accepted, stored once.
+    const again = await send(body);
+    assert.equal(again.status, 200);
+    assert.equal(((await again.json()) as { duplicate?: boolean }).duplicate, true);
+
+    // Over the four-megabyte ceiling. The inbox answers 413 and closes the
+    // socket, so a client still writing the body may see the close rather than
+    // the status — either is the refusal, and the counter is what this is
+    // really about.
+    const oversized = JSON.stringify({ type: "bug", message: "x".repeat(5 * 1024 * 1024) });
+    try {
+      const refused = await send(oversized);
+      assert.equal(refused.status, 413);
+    } catch {
+      // The connection went away mid-body. Still a refusal.
+    }
+
+    const text = await metrics(running.origin);
+    assert.equal(sample(text, 'bugbottle_decisions_total{reason="stored"}'), 1);
+    assert.equal(sample(text, 'bugbottle_decisions_total{reason="duplicate"}'), 1);
+    assert.equal(sample(text, 'bugbottle_decisions_total{reason="too-large"}'), 1);
+    // Every word is a series from the first scrape, whether or not it has fired.
+    assert.equal(sample(text, 'bugbottle_decisions_total{reason="rate-limited"}'), 0);
+    assert.equal(sample(text, 'bugbottle_decisions_total{reason="error"}'), 0);
+
+    // One report on disk, and the second it arrived.
+    assert.equal(sample(text, "bugbottle_reports_stored"), 1);
+    const last = sample(text, "bugbottle_last_report_timestamp_seconds");
+    assert.ok(last > 1_700_000_000, `Not a plausible timestamp: ${last}`);
+    assert.ok(last <= Date.now() / 1000 + 1, `In the future: ${last}`);
+
+    // The format itself: a counter family is named without the `_total` its
+    // samples carry, and the last line is what tells a parser it read all of it.
+    assert.match(text, /^# TYPE bugbottle_decisions counter$/m);
+    assert.match(text, /^# UNIT bugbottle_last_report_timestamp_seconds seconds$/m);
+    assert.ok(text.endsWith("# EOF\n"), `Did not end with # EOF:\n${text}`);
+  } finally {
+    await stop(running);
+  }
+});
+
+test("an empty inbox still answers every series, at zero", async () => {
+  const running = await start();
+  try {
+    const text = await metrics(running.origin);
+    assert.equal(sample(text, "bugbottle_reports_stored"), 0);
+    assert.equal(sample(text, "bugbottle_last_report_timestamp_seconds"), 0);
+    assert.equal(sample(text, 'bugbottle_decisions_total{reason="stored"}'), 0);
+  } finally {
+    await stop(running);
+  }
+});
+
+test("metrics are behind the same password as the inbox", async () => {
+  const running = await start();
+  try {
+    const refused = await fetch(`${running.origin}/metrics`);
+    assert.equal(refused.status, 401);
+    assert.match(refused.headers.get("www-authenticate") ?? "", /^Basic realm=/);
+    const wrong = await fetch(`${running.origin}/metrics`, {
+      headers: { Authorization: `Basic ${Buffer.from("inbox:nope").toString("base64")}` },
+    });
+    assert.equal(wrong.status, 401);
+  } finally {
+    await stop(running);
+  }
+});

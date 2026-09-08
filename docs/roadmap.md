@@ -315,6 +315,14 @@ out of it — no message, no contact line, no picture — because a log is a sec
 place data ends up. `examples/inbox` prints one JSON line per decision behind
 `AUDIT_LOG=1`.
 
+**Unreleased** — `/metrics` on `examples/inbox` (#95). The same `onDecision`
+hook, counted rather than printed, served as OpenMetrics text behind the
+inbox's password: one counter per reason word with all eleven present from the
+first scrape, how many reports are on disk, and when the newest arrived — the
+last of which is the age alert an endpoint that has quietly stopped receiving
+needs. In memory, reset by a restart, no dependency; no bytes gauge, because
+the index carries no sizes and a scrape should not `stat` two thousand files.
+
 **Unreleased** — retention on `fileStore` (#89). `maxAgeDays` says how long a
 report is kept and `prune()` applies it: everything older goes, then everything
 over `maxReports`, JSON and picture together, and the count comes back. Off by
