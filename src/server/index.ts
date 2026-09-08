@@ -204,6 +204,27 @@ export {
   DISCORD_MAX_EMBED_TOTAL,
   type DiscordSinkOptions,
 } from "../sinks/discord.ts";
+
+// Microsoft Teams is the third chat sink, and the odd one out: the Office 365
+// connector webhooks are retired, so a card goes through a Workflows webhook
+// inside a Bot Framework message, and the whole request is capped at 28 kB.
+export {
+  teamsSink,
+  buildTeamsMessage,
+  escapeTeams,
+  TEAMS_CARD_SCHEMA,
+  TEAMS_CARD_VERSION,
+  TEAMS_CARD_CONTENT_TYPE,
+  MAX_TEAMS_MESSAGE_BYTES,
+  MAX_TEAMS_TITLE,
+  MAX_TEAMS_MESSAGE,
+  MAX_TEAMS_FACTS,
+  MAX_TEAMS_FACT_TITLE,
+  MAX_TEAMS_FACT_VALUE,
+  MAX_TEAMS_CONSOLE,
+  MAX_TEAMS_BUTTON_TEXT,
+  type TeamsSinkOptions,
+} from "../sinks/teams.ts";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.
 export {

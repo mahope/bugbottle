@@ -40,6 +40,10 @@ export { sentrySink, buildSentryEvent, buildSentryEnvelope, parseSentryDsn, sent
 export { jiraSink, buildJiraDescription, jiraBaseUrl, jiraAuthHeader, messageFromJiraBody, DEFAULT_JIRA_ISSUE_TYPE, MAX_JIRA_CONSOLE_ENTRIES, MAX_JIRA_SUMMARY, } from "../sinks/jira.js";
 export { gitlabSink, messageFromGitlabBody, DEFAULT_GITLAB_HOST, MAX_GITLAB_DESCRIPTION, MAX_GITLAB_TITLE, } from "../sinks/gitlab.js";
 export { discordSink, buildDiscordMessage, DISCORD_COLOURS, MAX_DISCORD_EMBED_TITLE, MAX_DISCORD_EMBED_DESCRIPTION, MAX_DISCORD_EMBED_FIELDS, MAX_DISCORD_FIELD_NAME, MAX_DISCORD_FIELD_VALUE, MAX_DISCORD_FOOTER_TEXT, MAX_DISCORD_EMBED_TOTAL, DISCORD_MAX_EMBED_TITLE, DISCORD_MAX_EMBED_DESCRIPTION, DISCORD_MAX_EMBED_FIELDS, DISCORD_MAX_FIELD_NAME, DISCORD_MAX_FIELD_VALUE, DISCORD_MAX_FOOTER_TEXT, DISCORD_MAX_EMBED_TOTAL, } from "../sinks/discord.js";
+// Microsoft Teams is the third chat sink, and the odd one out: the Office 365
+// connector webhooks are retired, so a card goes through a Workflows webhook
+// inside a Bot Framework message, and the whole request is capped at 28 kB.
+export { teamsSink, buildTeamsMessage, escapeTeams, TEAMS_CARD_SCHEMA, TEAMS_CARD_VERSION, TEAMS_CARD_CONTENT_TYPE, MAX_TEAMS_MESSAGE_BYTES, MAX_TEAMS_TITLE, MAX_TEAMS_MESSAGE, MAX_TEAMS_FACTS, MAX_TEAMS_FACT_TITLE, MAX_TEAMS_FACT_VALUE, MAX_TEAMS_CONSOLE, MAX_TEAMS_BUTTON_TEXT, } from "../sinks/teams.js";
 // Useful in the route handler too: scrub once more on the way in, so the row
 // that is written is the redacted one whatever the client did or did not do.
 export { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT, } from "../scrub.js";

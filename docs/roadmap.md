@@ -167,8 +167,9 @@ embed on the other, with the facts as fields, five console entries, the stored
 screenshot as a picture and a link to the full report. Every Block Kit and
 embed limit is a clip rather than a failure. Server-only, so they cost a
 browser bundle nothing. Microsoft Teams is the same shape over Adaptive Cards
-and is a later job: its incoming webhooks are being retired in favour of
-Workflows, so the connector to write against is not the one to write today.
+and was held back here, because its incoming webhooks were being retired in
+favour of Workflows and the connector to write against was not the one to
+write that day; it shipped as `teamsSink` below.
 
 **0.8** — the optional contact field: `contact` on the report, off by default
 everywhere, so a team can answer the person who wrote "the save button does
@@ -251,6 +252,18 @@ restyling a real panel mounted into the page and printing the
 `mountBugbottle({ theme })` call and the CSS-variable block to copy (#76).
 Nothing in the package changed.
 
+**Unreleased** — `teamsSink`, the tenth sink and the third chat one, over a
+Microsoft Teams Workflows webhook (#78). The wait since 0.7 was the point: the
+Office 365 connector webhooks are retired, so the endpoint to write against is
+the Workflows one, which takes a Bot Framework message with a schema 1.5
+Adaptive Card attached rather than the card on its own. Title, the message as
+plain text with `wrap` and every Markdown character escaped, the facts as a
+`FactSet`, five console entries in a monospace block, an `Image` when there is
+a URL to fetch, and an `Action.OpenUrl`. Workflows answers 202, so every 2xx is
+a success, and the 28 kB a webhook accepts is a budget the card is measured
+against before it is sent — console first, then the facts from the back, then
+the reporter's own words. Server-only, so it costs a browser bundle nothing.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
@@ -283,9 +296,9 @@ bites. No SDK dependency.
   honestly as spam deterrence, not authentication. (Shipped as `bugbottle/sign`;
   see "Already shipped".)
 - More sinks: Jira, GitLab. (All of them shipped — Slack, Discord, the Sentry
-  envelope, and now `jiraSink` and `gitlabSink`; see "Already shipped".
-  Microsoft Teams and attachments on the two issue trackers are noted there as
-  later jobs.)
+  envelope, `jiraSink`, `gitlabSink` and now `teamsSink`; see "Already
+  shipped". Attachments on the two issue trackers are noted there as a later
+  job.)
 
 ## 1.0 — adoptable
 
