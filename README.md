@@ -1891,6 +1891,30 @@ page returned as HTML, or a 40 MB payload never reaches your storage.
 If your response has an `id` field, the client hands it to `onSent`. If a
 failed response has an `error` or `message` field, it is shown to the reporter.
 
+### An OpenAPI document
+
+If your APIs are gated on an OpenAPI description, you do not have to write this
+one. `bugbottle/openapi.json` is an OpenAPI 3.1 document generated at build
+time from the same two sources as everything else on this page: the report
+schema is its request body, ceilings and all, and its responses are the ones
+`handleReport` gives — `201 { id }`, `202 {}` without a store, `200` for a
+duplicate, and the `400`, `401`, `405`, `408`, `413`, `429` and `500` answers
+with the `{ error }` they carry. The `X-Bugbottle-Signature` header is a
+security scheme described for what it is: spam deterrence, not authentication.
+
+```bash
+curl -s https://bugbottle.dev/schema/openapi.json | jq .paths
+```
+
+```ts
+import openapi from "bugbottle/openapi.json" with { type: "json" };
+```
+
+The path in it is `/api/bug-report`, the one this page's examples use. Yours is
+wherever you mounted the route, so rename it after importing; nothing in the
+library reads it. No server is listed, because there is no bugbottle server to
+list — the endpoint is yours.
+
 ## Recipes
 
 The endpoint is the same everywhere; only the sentence that produces a
@@ -2996,6 +3020,10 @@ and `ExpressResponseLike`.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
 served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).
+
+**`bugbottle/openapi.json`** — the OpenAPI 3.1 description of the report
+endpoint, generated from that schema and from `handleReport`'s answers, also
+served at [bugbottle.dev/schema/openapi.json](https://bugbottle.dev/schema/openapi.json).
 
 Ships as ESM with TypeScript declarations. Node 18+ on the server; any
 evergreen browser on the client.
