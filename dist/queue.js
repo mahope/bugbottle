@@ -150,7 +150,7 @@ function localStorageQueue(key) {
  */
 export function createQueue(options) {
     const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
-    const maxEntries = options.maxEntries ?? options.maxItems ?? DEFAULT_MAX_ENTRIES;
+    const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
     const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
     const storage = options.storage ?? localStorageQueue(storageKey);
     let items = [];

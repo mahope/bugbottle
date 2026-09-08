@@ -628,9 +628,6 @@ queue.clear();         // throw them away
 queue.destroy();       // remove the listeners; the reports stay in storage
 ```
 
-The cap was called `maxItems` until 0.9, the one recorder that did not call it
-`maxEntries`. That name still works and is deprecated; it goes in 1.0.
-
 ### When the quota runs out
 
 `localStorage` is a few megabytes for the whole origin, shared with whatever

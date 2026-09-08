@@ -444,25 +444,6 @@ test("clear throws the queue away in memory and in storage", () => {
   assert.equal(map.get(KEY), undefined);
 });
 
-test("the deprecated maxItems still caps the queue, and maxEntries wins over it", () => {
-  const old = makeQueue({ endpoint: "/api/feedback", maxItems: 2, fetch: fakeFetch(503).fetch });
-  old.enqueue(report("one"));
-  old.enqueue(report("two"));
-  old.enqueue(report("three"));
-  assert.equal(old.size(), 2, "the old name is still honoured");
-  old.clear();
-
-  const both = makeQueue({
-    endpoint: "/api/feedback",
-    maxEntries: 1,
-    maxItems: 3,
-    fetch: fakeFetch(503).fetch,
-  });
-  both.enqueue(report("one"));
-  both.enqueue(report("two"));
-  assert.equal(both.size(), 1, "the new name is the one that counts");
-});
-
 /**
  * What a full quota costs. Until 0.13 a refused `setItem` turned the queue
  * memory-only and that was the whole of it: the report reached `localStorage`

@@ -11,6 +11,9 @@ change the API; the changelog says so when they do.
 
 - **`SendOptions.onFailure`** (#63). Rename it to `onError`: same signature,
   same contract, awaited before the error reaches the caller.
+- **`QueueOptions.maxItems`** (#64). Rename it to `maxEntries`, which is what
+  the console buffer, the breadcrumbs and the network log call the same cap:
+  same meaning, same default of five, oldest evicted first.
 
 ## 0.15.0 — 2026-09-08
 
