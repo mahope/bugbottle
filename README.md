@@ -617,7 +617,7 @@ retrying it would only fail again more quietly — nothing is ever queued on a
 const queue = createQueue({
   endpoint: "/api/feedback",
   storageKey: "bugbottle:queue", // where in localStorage
-  maxItems: 5,                   // the oldest is evicted first
+  maxEntries: 5,                 // the oldest is evicted first
   maxAgeMs: 7 * 24 * 60 * 60 * 1000,
   headers: { Authorization: `Bearer ${token}` },
 });
@@ -627,6 +627,9 @@ await queue.flush();   // resolves with how many are still waiting
 queue.clear();         // throw them away
 queue.destroy();       // remove the listeners; the reports stay in storage
 ```
+
+The cap was called `maxItems` until 0.9, the one recorder that did not call it
+`maxEntries`. That name still works and is deprecated; it goes in 1.0.
 
 A report is at most a few hundred bytes without its picture and a megabyte or
 two with one, so a queued item that would not fit — over 1 MB serialised —

@@ -9,6 +9,11 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- `QueueOptions.maxEntries` is the new name for `maxItems`. The console buffer,
+  the breadcrumbs and the network log all cap their ring buffer with
+  `maxEntries`; the queue was the one that did not. `maxItems` still works, is
+  marked `@deprecated`, and goes in 1.0 (#64).
+
 - `SendOptions.onError` is the new name for `onFailure`, which is what
   `MountOptions` and `HandleReportOptions` have always called the same idea.
   `onFailure` still works, is marked `@deprecated`, and goes in 1.0 (#63);

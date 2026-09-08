@@ -152,8 +152,12 @@ test("two flushes at once send the report once", async () => {
   assert.deepEqual(calls, ["once"]);
 });
 
-test("only the newest maxItems reports are kept", () => {
-  const queue = makeQueue({ endpoint: "/api/feedback", maxItems: 2, fetch: fakeFetch(503).fetch });
+test("only the newest maxEntries reports are kept", () => {
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    maxEntries: 2,
+    fetch: fakeFetch(503).fetch,
+  });
   queue.enqueue(report("one"));
   queue.enqueue(report("two"));
   queue.enqueue(report("three"));
@@ -355,13 +359,13 @@ test("a report delivered while the queue shifted under it is removed by identity
     return new Response("{}", { status: 200 });
   }) as unknown as typeof globalThis.fetch;
 
-  const queue = makeQueue({ endpoint: "/api/feedback", maxItems: 2, fetch });
+  const queue = makeQueue({ endpoint: "/api/feedback", maxEntries: 2, fetch });
   queue.enqueue(report("one"));
   queue.enqueue(report("two"));
   const flushing = queue.flush();
   assert.deepEqual(sent, ["one"]);
 
-  // A third report while the first is still in flight. At maxItems that evicts
+  // A third report while the first is still in flight. At maxEntries that evicts
   // the head, so the item at position 0 is no longer the one being delivered —
   // and removing by position would throw away a report nobody has sent.
   queue.enqueue(report("three"));
@@ -414,4 +418,23 @@ test("clear throws the queue away in memory and in storage", () => {
   queue.clear();
   assert.equal(queue.size(), 0);
   assert.equal(map.get(KEY), undefined);
+});
+
+test("the deprecated maxItems still caps the queue, and maxEntries wins over it", () => {
+  const old = makeQueue({ endpoint: "/api/feedback", maxItems: 2, fetch: fakeFetch(503).fetch });
+  old.enqueue(report("one"));
+  old.enqueue(report("two"));
+  old.enqueue(report("three"));
+  assert.equal(old.size(), 2, "the old name is still honoured");
+  old.clear();
+
+  const both = makeQueue({
+    endpoint: "/api/feedback",
+    maxEntries: 1,
+    maxItems: 3,
+    fetch: fakeFetch(503).fetch,
+  });
+  both.enqueue(report("one"));
+  both.enqueue(report("two"));
+  assert.equal(both.size(), 1, "the new name is the one that counts");
 });
