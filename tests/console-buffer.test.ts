@@ -198,3 +198,25 @@ test("a rejection with no usable stack is still recorded, without one", () => {
     delete (globalThis as { window?: unknown }).window;
   }
 });
+
+test("initConsoleBuffer returns the stop, and it is resetConsoleBuffer", () => {
+  const { result: stop } = withSilencedConsole(() => {
+    const returned = initConsoleBuffer();
+    console.error("save failed");
+    return returned;
+  });
+  assert.equal(typeof stop, "function");
+  assert.equal(stop, resetConsoleBuffer, "the same function under both names");
+  assert.equal(getConsoleBuffer().length, 1);
+  const patched = console.error;
+  stop();
+  assert.equal(getConsoleBuffer().length, 0, "the stop empties the buffer");
+  assert.notEqual(console.error, patched, "and puts the real console back");
+});
+
+test("a second initConsoleBuffer returns the stop as well", () => {
+  withSilencedConsole(() => {
+    initConsoleBuffer();
+    assert.equal(typeof initConsoleBuffer(), "function");
+  });
+});

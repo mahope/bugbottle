@@ -498,3 +498,22 @@ test("initNetwork starts from an empty buffer", async () => {
     assert.equal(getNetwork().length, 0, "a new session does not inherit the last one");
   });
 });
+
+test("initNetwork returns the stop, and it is resetNetwork", async () => {
+  await withBrowser(async ({ original }) => {
+    const stop = initNetwork();
+    assert.equal(stop, resetNetwork, "the same function under both names");
+    assert.notEqual(globalThis.fetch, original, "the patch is in place while recording");
+    stop();
+    assert.equal(globalThis.fetch, original, "the stop unpatches what it patched");
+    assert.equal(isNetworkActive(), false);
+  });
+});
+
+test("the stop comes back from a second call and from maxEntries: 0", async () => {
+  await withBrowser(async () => {
+    assert.equal(initNetwork({ maxEntries: 0 }), resetNetwork);
+    initNetwork();
+    assert.equal(initNetwork(), resetNetwork);
+  });
+});

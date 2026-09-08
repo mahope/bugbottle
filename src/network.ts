@@ -279,11 +279,16 @@ function patchXhr(): void {
  * there is simply nothing to patch. `maxEntries: 0` records nothing and
  * patches nothing at all, since a buffer that throws every entry away is pure
  * cost.
+ *
+ * Returns the stop, `resetNetwork`, so a caller can unpatch what it patched
+ * without importing a second name. Every `init*` in the package returns its
+ * own; the call that patched nothing returns it too, and calling it is
+ * harmless.
  */
-export function initNetwork(options: NetworkOptions = {}): void {
-  if (initialised) return;
+export function initNetwork(options: NetworkOptions = {}): () => void {
+  if (initialised) return resetNetwork;
   const cap = resolveMaxEntries(options.maxEntries);
-  if (cap === 0) return;
+  if (cap === 0) return resetNetwork;
   initialised = true;
   // A fresh session starts empty, whatever a previous one left behind.
   buffer = [];
@@ -300,6 +305,7 @@ export function initNetwork(options: NetworkOptions = {}): void {
   patchXhr();
 
   registerNetworkSource(getNetwork);
+  return resetNetwork;
 }
 
 /** A copy of what has been recorded so far, oldest first. */

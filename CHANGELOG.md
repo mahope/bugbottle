@@ -7,6 +7,15 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+### Changed
+
+- `initConsoleBuffer`, `initBreadcrumbs` and `initNetwork` return their stop —
+  `resetConsoleBuffer`, `resetBreadcrumbs` and `resetNetwork` — the way
+  `initPerf` and `attachRrweb` already did. A caller can undo what it started
+  without importing a second name, and a call that recorded nothing (a second
+  `init`, or `maxEntries: 0`) returns the stop as well, where calling it is
+  harmless. Nothing changed for the callers that ignore the return value.
+
 ### Fixed
 
 - `jiraSink` splits a multi-line message into `text` nodes with `hardBreak`

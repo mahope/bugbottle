@@ -97,6 +97,14 @@ frames; the browser gives none.
 In a server-rendered app, make sure this runs in the browser only — it patches
 whichever `console` it finds.
 
+Every recorder in the package returns its own stop, so a hot-reloaded module or
+a test can undo what it started without importing a second name:
+
+```ts
+const stop = initConsoleBuffer();
+stop(); // the real console back, the buffer empty
+```
+
 ## The form (React)
 
 ```tsx
@@ -991,6 +999,8 @@ initBreadcrumbs({
 
 `getBreadcrumbs()` returns a copy of the timeline, and `resetBreadcrumbs()`
 empties it, removes the listeners and puts `history` back as it found it.
+`initBreadcrumbs` returns that same function as its `stop()`, so a caller that
+started the recorder can undo it without importing a second name.
 
 ## What the network did
 
@@ -1054,7 +1064,7 @@ The patched `fetch` always calls the original and hands back its result
 untouched, rejections included; `XMLHttpRequest` is timed with `loadend`, the
 one event that fires for every ending. `getNetwork()` returns a copy of what
 has been recorded, and `resetNetwork()` empties it and puts both globals back
-as it found them.
+as it found them. `initNetwork` returns that same function as its `stop()`.
 
 ## Performance and storage
 
