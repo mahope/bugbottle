@@ -28,6 +28,16 @@ change the API; the changelog says so when they do.
   `toWebhook` takes the same options object and migrates the same way; a
   vendor's own address keeps the vendor's own word, so `webhookUrl`, `host`,
   `site` and `dsn` are unchanged.
+- **The server validators and `toMarkdown` are off the `bugbottle` entry**
+  (#68). Import them from `bugbottle/server`, which has re-exported every one
+  of them all along — the functions are identical and only the path changes.
+  They are what a receiving server does with a report that has arrived, and the
+  core entry is what a reader opens to learn what the browser half is; fourteen
+  server names in that list said the opposite. `REPORT_TYPES` and
+  `isReportType` stay on `bugbottle`, because the panel and the adapters build
+  the type radiogroup out of them. They were tree-shaken before, so no bundle
+  gets smaller: the core measured 1540 bytes gzipped before the change and
+  1543 after, which is the compressor, not the code.
 
 ## 0.15.0 — 2026-09-08
 

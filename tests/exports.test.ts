@@ -148,6 +148,30 @@ test("the README's sinks table has a row for every sink and invents none", () =>
   assert.equal(rows.length, 11, `eleven sinks, ${rows.length} rows`);
 });
 
+/**
+ * The core entry is what a reader opens first to learn what the browser half
+ * of the library is, so the things a *receiving server* does with a report are
+ * not in it (#68). `REPORT_TYPES` and `isReportType` are the exception, and a
+ * named one: the panel and the adapters build the type radiogroup out of them,
+ * and `ReportType` would otherwise be a type with no values behind it.
+ */
+test("the core entry carries no server validator and no Markdown renderer", async () => {
+  const core = await import("../src/index.ts");
+  const names = Object.keys(core);
+  const server = names.filter(
+    (name) => /^normalise/.test(name) || name === "toMarkdown" || name === "validateReport",
+  );
+  assert.deepEqual(server, [], `bugbottle exports ${server.join(", ")}, which belong on /server`);
+  assert.ok(names.includes("REPORT_TYPES"), "the panel builds its radiogroup out of these");
+  assert.ok(names.includes("isReportType"));
+
+  // And they are all still one import away, where they belong.
+  const serverEntry = await import("../src/server/index.ts");
+  for (const name of ["normaliseMessage", "normaliseConsole", "normaliseNotes", "toMarkdown"]) {
+    assert.ok(name in serverEntry, `bugbottle/server should still export ${name}`);
+  }
+});
+
 test("CLAUDE.md counts the entry points it lists", () => {
   const claude = read("CLAUDE.md");
   const word = WORDS[code.length - 10];

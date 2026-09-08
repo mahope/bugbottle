@@ -3267,12 +3267,15 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `buildReport`, `sendReport`, `scrubReport`, `scrubUrl`, `BUILTIN_SCRUBBERS`,
 `fingerprint`, `stableHash`,
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`,
-`toMarkdown` (with `MarkdownOptions`; it and the validators live in
-`bugbottle/server` as well, which is where they belong — see
-`docs/api-audit-1.0.md`), the server
-validators below, and the shared types and limits — including the `StackFrame`
-type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTACT_LENGTH` and
-`MAX_CONTEXT_LENGTHS`.
+`REPORT_TYPES`, `isReportType`, and the shared types and limits — including the
+`StackFrame` type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`,
+`MAX_CONTACT_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+
+The validators and `toMarkdown` are **not** here: they are what a receiving
+server does with a report that has arrived, so since 1.0 they live on
+`bugbottle/server` alone. `REPORT_TYPES` and `isReportType` stay, because the
+panel and the adapters build the type radiogroup out of them and `ReportType`
+would otherwise be a type with no values behind it.
 
 The option and payload types come with them: `BugReport`, `ReportContext`,
 `ReportType`, `ConsoleEntry`, `ConsoleLevel`, `ElementRef`, `Breadcrumb`,
