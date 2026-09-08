@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.9.0 — 2026-09-08
+
 The consistency release. The whole public API was read once before 1.0 —
 412 exported names across eighteen entry points — and the seven naming rules
 that came out of it are now in CLAUDE.md. Every rename ships as an alias:
