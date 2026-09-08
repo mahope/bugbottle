@@ -2585,15 +2585,17 @@ export const POST = (req: Request) =>
         webhookUrl: process.env.SLACK_WEBHOOK_URL!,   // the URL is the credential
         username: "bugbottle",
         iconEmoji: ":beetle:",
-        // Both are optional. `screenshotUrlFrom` is a function of the report,
-        // so the address can be built from whatever you stored; pass
-        // `screenshotUrl` instead when you already have it.
+        // All optional, and the link to the full report takes the same pair of
+        // shapes as the picture: `screenshotUrlFrom` and `reportUrlFrom` are
+        // functions of the report, so the address can be built from whatever
+        // you stored; pass the plain `screenshotUrl` or `reportUrl` string
+        // instead when you already have it.
         screenshotUrlFrom: (r) => signedUrlFor(r),
-        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        reportUrlFrom: (r) => `https://app.acme.com/reports/${idOf(r)}`,
       }),
       discordSink({
         webhookUrl: process.env.DISCORD_WEBHOOK_URL!,
-        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        reportUrlFrom: (r) => `https://app.acme.com/reports/${idOf(r)}`,
       }),
     ],
   });
@@ -2644,11 +2646,13 @@ export const POST = (req: Request) =>
     sinks: [
       teamsSink({
         webhookUrl: process.env.TEAMS_WEBHOOK_URL!,   // the URL is the credential
-        // Both are optional. `screenshotUrlFrom` is a function of the report,
-        // so the address can be built from whatever you stored; pass
-        // `screenshotUrl` instead when you already have it.
+        // All optional, and the link to the full report takes the same pair of
+        // shapes as the picture: `screenshotUrlFrom` and `reportUrlFrom` are
+        // functions of the report, so the address can be built from whatever
+        // you stored; pass the plain `screenshotUrl` or `reportUrl` string
+        // instead when you already have it.
         screenshotUrlFrom: (r) => signedUrlFor(r),
-        reportUrl: (r) => `https://app.acme.com/reports/${idOf(r)}`,
+        reportUrlFrom: (r) => `https://app.acme.com/reports/${idOf(r)}`,
         buttonText: "Open report",                    // the default
       }),
     ],
@@ -2659,7 +2663,8 @@ export const POST = (req: Request) =>
 The card is schema 1.5: a bold title, the message as a wrapping `TextBlock`,
 the facts as a `FactSet`, the last five console entries in a monospace block,
 an `Image` when there is a URL to fetch, a subtle line with the time and the
-selector, and an `Action.OpenUrl` when you give a `reportUrl`. A `TextBlock`
+selector, and an `Action.OpenUrl` when you give a `reportUrl` or a
+`reportUrlFrom`. A `TextBlock`
 renders a subset of Markdown, so every string is escaped into plain text first
 — `*.tsx` stays `*.tsx` rather than turning half the card italic. There are no
 inputs and no `Action.Submit`: a webhook has nowhere to send an answer.

@@ -116,7 +116,7 @@ Every alias the table above added has gone, and the removals are the whole of
 | `SignatureOptions.replayStore` | `SignatureOptions.store` | #66 |
 | `SendReportWebhookOptions.url` | `SendReportWebhookOptions.endpoint` | #67 |
 
-Two shapes changed with them:
+Three shapes changed with them:
 
 - **#68** took the eleven server validators and `toMarkdown` off the `.` entry.
   They are on `bugbottle/server`, which re-exported every one of them all
@@ -129,6 +129,12 @@ Two shapes changed with them:
   function winning where both are given. Slack, Discord and Teams took the
   function under the first name, which was the only place in the package where
   one key had two types depending on the import.
+- **The link to the full report followed it.** The audit read `reportUrl` on
+  Slack, Discord and Teams as a vendor-shaped name and stopped there; it is
+  the same mistake #69 undid one option to the left. `reportUrl` is a `string`
+  and `reportUrlFrom` the function, the function winning where both are given.
+  No alias, for the same reason nothing else here has one: after 1.0 the
+  rename costs a major version, so it is made now or never.
 
 - ~~**#70** mirrors `data-network` and `data-perf` with `network` and `perf`
   mount options on the hand-it-in seam.~~ Landed before 1.0:

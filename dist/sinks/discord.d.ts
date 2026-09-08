@@ -47,7 +47,9 @@ export type DiscordSinkOptions = {
     /** Picks the screenshot address out of the report, when it travels there. */
     screenshotUrlFrom?: UrlFrom;
     /** A link to the full report, which becomes the embed's title link. */
-    reportUrl?: UrlFrom;
+    reportUrl?: string;
+    /** Picks that link out of the report. Wins over `reportUrl`. */
+    reportUrlFrom?: UrlFrom;
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
 };

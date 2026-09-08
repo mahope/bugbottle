@@ -474,8 +474,9 @@ read locally — and know that forgetting is caught.
     that 0.9 added, and that is the whole shape of a rename now.
   - One shape for one idea across the sinks: `screenshotUrl` is the address you
     have and `screenshotUrlFrom` reads one out of the report, in all eleven of
-    them. A key that means a string in one sink and a function in the next is
-    the mistake #69 existed to undo.
+    them, and `reportUrl`/`reportUrlFrom` is the same pair for the link to the
+    full report on the three chat sinks. A key that means a string in one sink
+    and a function in the next is the mistake #69 existed to undo.
 
 ## Releasing
 

@@ -25,8 +25,8 @@ the README's API section and `CLAUDE.md` stop agreeing; and the seven naming
 rules in `CLAUDE.md` are the contract the next name is chosen by rather than a
 style preference.
 
-Every migration in one table. All seven are mechanical, and nobody has to read
-a value to make one:
+Every migration in one table. All of them are mechanical, and nobody has to
+read a value to make one:
 
 | Was | Is | Where |
 |---|---|---|
@@ -39,6 +39,7 @@ a value to make one:
 | `SendReportWebhookOptions.url` | `SendReportWebhookOptions.endpoint` | `sendReportWebhook`, `toWebhook` |
 | `import { normalise*, toMarkdown } from "bugbottle"` | `… from "bugbottle/server"` | the core entry |
 | `slackSink({ screenshotUrl: (r) => … })` | `slackSink({ screenshotUrlFrom: (r) => … })` | Slack, Discord, Teams |
+| `slackSink({ reportUrl: (r) => … })` | `slackSink({ reportUrlFrom: (r) => … })` | Slack, Discord, Teams |
 
 The wire format is unchanged: a 0.15 browser and a 1.0 server understand each
 other in both directions, and so do the schema, the OpenAPI document and the
@@ -94,6 +95,25 @@ about what the entry says it is and not about bytes.
   same way, since no service will fetch one, and all eleven now let an option
   set on the sink win over the address `handleReport` stored — `toGithub` and
   `toLinear` had it the other way round.
+- **The link to the full report takes the same pair of shapes** (#69's shape,
+  applied to the one option it had missed). `slackSink`, `discordSink` and
+  `teamsSink` took a function of the report under `reportUrl`, which is the
+  name every other address in the package uses for a plain string. `reportUrl`
+  is now that string — the address you already have — and `reportUrlFrom` is
+  the function, winning where both are given:
+
+  ```diff
+   slackSink({
+     webhookUrl: process.env.SLACK_WEBHOOK,
+  -  reportUrl: (report) => `https://app.acme.com/reports/${idOf(report)}`,
+  +  reportUrlFrom: (report) => `https://app.acme.com/reports/${idOf(report)}`,
+   });
+  ```
+
+  There is no alias: 1.0 is where a rename like this is free, and after it a
+  rename costs a major version. `examples/inbox` passes the function and moved
+  with it.
+
 ### Fixed
 
 - **The offline queue delivers signed** (#98). `createQueue` had no `sign`
