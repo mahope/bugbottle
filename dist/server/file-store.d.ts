@@ -85,6 +85,17 @@ export type FileStore = {
     }) => Promise<StoredReportFile | null>;
     /** Deletes a report and its picture. True when there was one. */
     remove: (id: string) => Promise<boolean>;
+    /**
+     * Walks the directory again and answers with what is there now.
+     *
+     * Nothing calls it on its own account: the index is kept up to date by every
+     * write and delete, and this process is assumed to be the only writer. When
+     * it is not — a backup restored underneath it, a volume remounted, a second
+     * process with the same directory — this is how to say so. Reports written
+     * by something else appear and reports it deleted go, in the array every
+     * caller is already holding rather than a new one.
+     */
+    refresh: () => Promise<StoredReport[]>;
 };
 /**
  * A directory of reports, with an index built on the first call that needs it.

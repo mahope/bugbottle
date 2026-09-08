@@ -79,14 +79,18 @@ export function fileStore(options) {
         return walking;
     }
     async function walk() {
+        index = await readDirectory();
+        return index;
+    }
+    /** One pass over the directory, answering with entries and touching nothing. */
+    async function readDirectory() {
         let files = [];
         try {
             files = await readdir(dir);
         }
         catch {
             // No directory yet is an empty inbox, not an error.
-            index = [];
-            return index;
+            return [];
         }
         const pictures = new Set(files.filter((name) => name.endsWith(".png")));
         const entries = [];
@@ -104,8 +108,7 @@ export function fileStore(options) {
                 // empty the list. Our own writes cannot land here: see `writeAtomic`.
             }
         }
-        index = entries;
-        return index;
+        return entries;
     }
     /**
      * Deletes the oldest reports until the directory is back inside the ceiling.
@@ -132,10 +135,21 @@ export function fileStore(options) {
      * that is between its write and the line that remembers it is holding this
      * array, and replacing it would leave that report remembered nowhere.
      */
-    async function forget(entry) {
-        const at = index?.findIndex((other) => other.id === entry.id) ?? -1;
+    /**
+     * Takes one entry out of the index, in place.
+     *
+     * Spliced rather than filtered into a new array, for the same reason
+     * `forget` does it: a `store` between its write and the line that remembers
+     * it is holding this array, and replacing it would leave that report
+     * remembered nowhere.
+     */
+    function drop(id) {
+        const at = index?.findIndex((other) => other.id === id) ?? -1;
         if (index && at !== -1)
             index.splice(at, 1);
+    }
+    async function forget(entry) {
+        drop(entry.id);
         await rm(join(dir, entry.file), { force: true });
         await rm(join(dir, `${entry.id}.png`), { force: true });
     }
@@ -178,6 +192,13 @@ export function fileStore(options) {
                 report = JSON.parse(await readFile(join(dir, entry.file), "utf8"));
             }
             catch {
+                // The index says this report is here and the disk says it is not:
+                // something outside this process deleted it, or the file was replaced
+                // with something that no longer parses. Either way the listing is now
+                // lying, and a link to a report that answers 404 for the rest of the
+                // run is worse than a listing one entry shorter. The picture, if there
+                // was one, is left where it is: a read does not delete files.
+                drop(id);
                 return null;
             }
             const found = { entry, report };
@@ -190,6 +211,16 @@ export function fileStore(options) {
                 }
             }
             return found;
+        },
+        async refresh() {
+            const fresh = await readDirectory();
+            // In place: the array is the index, and a `store` holding it across an
+            // `await` must still be holding the live one when this returns.
+            if (index)
+                index.splice(0, index.length, ...fresh);
+            else
+                index = fresh;
+            return [...index];
         },
         async remove(id) {
             if (!UUID.test(id))

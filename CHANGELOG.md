@@ -67,6 +67,11 @@ change the API; the changelog says so when they do.
   The 1 MB ceiling that took the screenshot off every large report before it
   was ever stored is gone; a picture that fits is kept whole, and the storage
   is what says whether it fits.
+- Sizes after the #88 review fixes, all inside the budgets they already had:
+  `bugbottle/queue` 1553 → 1545 (the seam lost a method), `bugbottle/queue-idb`
+  654 → 661 (`versionchange`), `bugbottle/ui` 11 485 → 11 486,
+  `dist/bugbottle.js` 24 424 → 24 441 and `dist/bugbottle.slim.js`
+  20 886 → 20 896. The validator-only server bundle is 584 bytes, unmoved.
 - Sizes: `bugbottle/queue` 1313 → 1553 bytes gzipped (budget 1330 → 1600),
   `dist/bugbottle.js` 24 238 → 24 424 (budget 24576 → 25088) and
   `dist/bugbottle.slim.js` 20 650 → 20 886 (budget 20992 → 21504). The seam
@@ -76,6 +81,13 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- `fileStore` listed reports that were no longer there. The index is built by
+  one walk and kept up to date by this process's own writes, so a report
+  deleted from outside stayed in every listing until the process restarted —
+  a link that answered 404 each time somebody tried it. An entry `read` finds
+  nothing behind is dropped from the index then and there, and the new
+  `refresh()` walks the directory again on purpose, in place, for the backup
+  restored underneath an inbox (#88).
 - The theme playground printed a block that pinned every colour it had read off
   the panel and `scheme` as it happened to be, so a reader who copied it
   verbatim shipped a panel that ignores `prefers-color-scheme` — the one

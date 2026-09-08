@@ -1671,12 +1671,13 @@ it, because an inbox with no ceiling is a disk that fills; `0` keeps
 everything, which is a decision about a disk rather than a default.
 `screenshots: false` keeps the JSON and never writes a picture at all.
 
-Three more calls are there for whoever builds a page over the directory:
+Four more calls are there for whoever builds a page over the directory:
 
 ```ts
 const listed = await reports.list();          // newest first, one small entry each
 const found = await reports.read(id, { screenshot: true });
 await reports.remove(id);                     // the JSON and the picture
+await reports.refresh();                      // walk the directory again
 ```
 
 `list()` answers `{ id, file, title, type, url, receivedAt, screenshot }` per
@@ -1684,6 +1685,14 @@ report — the strings a list shows, without reading every file for them. The
 directory is walked once, on the first call that needs it, and kept up to date
 by every write and delete after that; `read(id)` then reads exactly the one
 file that was asked for, and only fetches the picture when you ask for it.
+
+An entry `read` finds nothing behind is dropped from the listing then and
+there, so a report deleted by something outside this process stops being a link
+that answers 404 for the rest of the run. `refresh()` is the deliberate version
+of the same thing: it walks the directory again and answers with what is there
+now, which is what to call after a backup is restored underneath the inbox or
+when something else has been writing to the directory. Nothing calls it on its
+own — a walk on every request is the cost this index exists to avoid.
 
 Two of its properties are worth saying out loud, because they are the reasons
 not to write this yourself:
