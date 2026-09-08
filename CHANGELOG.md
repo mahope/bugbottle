@@ -70,6 +70,13 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- The chat sinks left half a character behind when they clipped. `clip` sliced
+  UTF-16 units, so a message ending on an emoji or an ideograph outside the
+  basic plane lost one of its two units and Slack, Discord and Teams all drew
+  the leftover as `�`. It counts characters now. The Teams byte budget
+  counts them the same way where it works out how much to ask for: a limit in
+  units is a limit a message of emoji is already under, and the loop that
+  clipped it would never have ended (#88).
 - `teamsSink` read a refusal as a delivery on a legacy connector webhook. Those
   are retired but still in use, and they answer `200` with `Webhook message
   delivery failed with error: …` in the body where a Workflows webhook answers

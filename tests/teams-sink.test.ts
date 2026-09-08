@@ -468,3 +468,30 @@ test("the teams sink hands its abort signal to fetch", async () => {
   await teamsSink({ webhookUrl: TEAMS_URL, fetch })(report, { signal: controller.signal });
   assert.equal(calls[0]?.init.signal, controller.signal);
 });
+
+test("a card of astral characters is clipped to the cap without looping", () => {
+  // The message is measured in characters and the cap in bytes, and an emoji
+  // is two UTF-16 units. Asking `clip` for a limit in units would be a limit
+  // the message is already under, so nothing would come off and the loop would
+  // never end — which only shows when the overspend is smaller than the
+  // difference between the two counts, so the address is sized to leave the
+  // card a few hundred bytes over and no more.
+  const message = "\u{1F41B}".repeat(2000);
+  const url = (padding: number) => `https://files.example.com/${"a".repeat(padding)}.png`;
+  const base = jsonByteLength(
+    buildTeamsMessage({ type: "bug", message }, { webhookUrl: TEAMS_URL, screenshotUrl: () => url(0) }),
+  );
+  const padding = MAX_TEAMS_MESSAGE_BYTES - base + 500;
+  assert.ok(padding > 0, "the address is what puts the card over the cap");
+
+  const payload = buildTeamsMessage(
+    { type: "bug", message },
+    { webhookUrl: TEAMS_URL, screenshotUrl: () => url(padding) },
+  );
+
+  assert.ok(jsonByteLength(payload) <= MAX_TEAMS_MESSAGE_BYTES, "the card fits");
+  const text = String(textBlocks(payload)[1]?.text ?? "");
+  assert.ok(text.length > 0, "a truncated sentence still says what went wrong");
+  assert.ok(Array.from(text).length < 2000, "and it really was clipped");
+  assert.ok(!text.includes("�"), "nothing was cut in half");
+});

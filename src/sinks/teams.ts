@@ -291,8 +291,12 @@ export function buildTeamsMessage(
   while (jsonByteLength(payload) > MAX_TEAMS_MESSAGE_BYTES && parts.message.length > 0) {
     // Every character dropped is at least one byte dropped, so subtracting the
     // overspend in characters always makes progress and usually ends it here.
+    // The count has to be `clip`'s own — characters, not UTF-16 units — or a
+    // message of emoji would ask for a limit it is already under and the loop
+    // would never end.
     const over = jsonByteLength(payload) - MAX_TEAMS_MESSAGE_BYTES;
-    parts.message = clip(parts.message, Math.max(0, parts.message.length - over - 1));
+    const characters = Array.from(parts.message).length;
+    parts.message = clip(parts.message, Math.max(0, characters - over - 1));
     payload = envelope(buildCard(parts));
   }
 
