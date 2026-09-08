@@ -8,6 +8,16 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Fixed
+
+- The offline queue could skip a retry. The backoff timer called `flush`, and
+  `flush` refuses to run while the clock reads before the attempt it scheduled;
+  a timer firing a millisecond ahead of `Date.now()` therefore did nothing, and
+  the report waited for the next `online` or visibility event. The timer now
+  clears the backoff before it flushes. Found by the release run of 1.0.0, whose
+  own test for the signed retry hit exactly that millisecond.
+
+
 ## 1.0.0 — 2026-09-08
 
 The freeze. 1.0 says what the next version number will mean: **removing or
@@ -4842,12 +4852,3 @@ First cut. Extracted from the feedback bubble in two production apps.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
   picker included), `bugbottle/server` 0.8 kB.
-### Fixed
-
-- The offline queue could skip a retry. The backoff timer called `flush`, and
-  `flush` refuses to run while the clock reads before the attempt it scheduled;
-  a timer firing a millisecond ahead of `Date.now()` therefore did nothing, and
-  the report waited for the next `online` or visibility event. The timer now
-  clears the backoff before it flushes. Found by the release run of 1.0.0, whose
-  own test for the signed retry hit exactly that millisecond.
-
