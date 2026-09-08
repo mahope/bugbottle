@@ -792,6 +792,40 @@ test("ALLOWED_ORIGIN really lets that origin's browser post a report", async () 
   }
 });
 
+test("the inbox refuses to start on a NOTIFY_SMTP_PORT that is not a port", async () => {
+  // `Number("smtp")` is NaN, which is not nullish, so the sink's own default
+  // never applied: the example would have started and tried to connect to port
+  // NaN on the first report, hours after the typo was made.
+  const child = spawn(process.execPath, [server], {
+    cwd: root,
+    env: {
+      ...process.env,
+      INBOX_PASSWORD: PASSWORD,
+      PORT: "0",
+      NOTIFY_SMTP_HOST: "smtp.example.com",
+      NOTIFY_SMTP_FROM: "bugs@example.com",
+      NOTIFY_SMTP_TO: "team@example.com",
+      NOTIFY_SMTP_PORT: "smtp",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => (stderr += chunk));
+  // An inbox that starts anyway never exits, so the wait is bounded and the
+  // process killed: a test that hangs says less than one that fails.
+  const code = await new Promise<number | null | "running">((resolve) => {
+    const timer = setTimeout(() => resolve("running"), 5_000);
+    child.once("exit", (status) => {
+      clearTimeout(timer);
+      resolve(status);
+    });
+  });
+  if (code === "running") child.kill();
+  assert.equal(code, 1, "it refused to start");
+  assert.match(stderr, /NOTIFY_SMTP_PORT/);
+});
+
 test("without the notify variables nobody is told", async () => {
   const hook = await fakeWebhook();
   const running = await start({ PUBLIC_URL: "https://bugs.example.test" });

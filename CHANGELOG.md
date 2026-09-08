@@ -76,6 +76,12 @@ change the API; the changelog says so when they do.
 
 ### Fixed
 
+- The inbox example took a `NOTIFY_SMTP_PORT` that is not a number. `Number`
+  answers a typo with `NaN`, which is not nullish, so the sink's own default
+  never applied and the port reached it as `NaN` — the inbox came up looking
+  healthy and failed on the first report, hours after the mistake was made. It
+  refuses to start now, which is while somebody is still looking at the
+  configuration (#88).
 - `createIdbStorage()` went memory-only for the life of the page when another
   tab upgraded the database. Nothing listened for `versionchange`, so the
   connection was closed under it and every transaction after that threw — and
