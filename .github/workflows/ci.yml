@@ -70,10 +70,18 @@ jobs:
           # `bugbottle/perf` (#42) then added about 1.08 kB — the whole module,
           # since the script tag carries every recorder it can switch on — and
           # #48's longer keyboard sentence in eight languages about 300 bytes more;
-          # the file measures 22514, so the budget is 23040. The snapshot is
+          # the file measured 22501, so the budget was 23040. The snapshot is
           # still opt-in at run time behind `data-perf`, exactly as the network log.
-          if [ "$iife" -gt 23040 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 23040" >&2
+          # `bugbottle/shake` (#43) then added 572 bytes: the module gzips to
+          # 685 on its own and to rather less inside a bundle it can share a
+          # dictionary with, plus the `data-shake` reading and
+          # `requestShakePermission` on the namespace — which this build has to
+          # expose, because a page with no bundler has no other way to ask iOS
+          # for the permission. The file measures 23073, so the budget is 23552.
+          # No locale string was added: a shake opens the panel the reporter
+          # already knows, and says nothing of its own.
+          if [ "$iife" -gt 23552 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 23552" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -95,6 +103,7 @@ jobs:
           echo 'import { initPerf } from "bugbottle/perf"; initPerf();' > perf.js
           echo 'import { createQueue } from "bugbottle/queue"; export { createQueue };' > queue.js
           echo 'import { onShortcut, onUncaughtError } from "bugbottle/triggers"; export { onShortcut, onUncaughtError };' > triggers.js
+          echo 'import { onShake, requestShakePermission } from "bugbottle/shake"; export { onShake, requestShakePermission };' > shake.js
           echo 'import { createSigner } from "bugbottle/sign"; export { createSigner };' > sign.js
       - name: Bundle each entry and report gzipped sizes
         working-directory: /tmp/consumer
@@ -113,8 +122,9 @@ jobs:
           npx esbuild perf.js --bundle --minify --format=esm --outfile=out-perf.js
           npx esbuild queue.js --bundle --minify --format=esm --outfile=out-queue.js
           npx esbuild triggers.js --bundle --minify --format=esm --outfile=out-triggers.js
+          npx esbuild shake.js --bundle --minify --format=esm --outfile=out-shake.js
           npx esbuild sign.js --bundle --minify --format=esm --outfile=out-sign.js
-          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-sign; do
+          for f in out-core out-react out-vue out-svelte out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-triggers out-shake out-sign; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -174,6 +184,9 @@ jobs:
           # reachable again without dropping the feature, and a dynamic import
           # would only move the cost onto a network round trip in the middle of
           # a report.
+          # #43 added 94 bytes to this number (10 997 -> 11 091): the shake
+          # detector is a function handed in like `annotate`, so the panel
+          # carries the wiring and never the module.
           if [ "$ui" -gt 11264 ]; then
             echo "bugbottle/ui is $ui bytes gzipped; the budget is 11264" >&2
             exit 1
@@ -242,6 +255,17 @@ jobs:
           triggers=$(gzip -c out-triggers.js | wc -c)
           if [ "$triggers" -gt 1300 ]; then
             echo "bugbottle/triggers is $triggers bytes gzipped; the budget is 1300" >&2
+            exit 1
+          fi
+          # The shake detector: one listener, a high-pass filter over three
+          # axes and the permission call iOS needs. It imports nothing but a
+          # type, so this number is the module itself. It is its own entry
+          # rather than a third function in `bugbottle/triggers`, which measures
+          # within twenty bytes of its own budget — and a phone gesture is not
+          # something a desktop application should be made to carry.
+          shake=$(gzip -c out-shake.js | wc -c)
+          if [ "$shake" -gt 768 ]; then
+            echo "bugbottle/shake is $shake bytes gzipped; the budget is 768" >&2
             exit 1
           fi
           # One key import, one HMAC and a hex loop, and it imports nothing at

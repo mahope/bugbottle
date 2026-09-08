@@ -37,6 +37,7 @@ import {
   type BuildReportInput,
   type SendOptions,
 } from "../send.ts";
+import type { onShake, ShakeOptions } from "../shake.ts";
 import { DEFAULT_SHORTCUT, onShortcut, onUncaughtError } from "../triggers.ts";
 
 export type Theme = {
@@ -118,6 +119,16 @@ export type MountOptions = {
    * installs no listener. Never fires while the reporter is typing in a field.
    */
   shortcut?: string | false;
+  /**
+   * Open the panel when the reporter shakes the phone. Off by default, because
+   * on iOS it needs a permission the application has to ask for from a button
+   * of its own — see `requestShakePermission` and the README.
+   *
+   * The same seam as `annotate`: hand in the detector and only the pages that
+   * want the gesture carry it. `shake: onShake` from `bugbottle/shake` takes
+   * the defaults; `shake: { on: onShake, threshold: 12 }` tunes them.
+   */
+  shake?: typeof onShake | ({ on: typeof onShake } & ShakeOptions) | false;
   /**
    * Open the panel when the page throws an error nobody caught. Off by default:
    * a panel that appears uninvited is a decision about the product, not a
@@ -888,6 +899,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   if (options.shortcut !== false) {
     unsubscribes.push(onShortcut(options.shortcut ?? DEFAULT_SHORTCUT, toggle));
   }
+  // A shake opens the panel rather than toggling it: the gesture that would
+  // close it is the same one that shook it open, and a reporter mid-sentence
+  // holding a phone moves it about.
+  const shake = typeof options.shake === "function" ? { on: options.shake } : options.shake;
+  if (shake) unsubscribes.push(shake.on(open, shake));
   if (options.openOnError) {
     const prefill = options.openOnError !== true && options.openOnError.prefill === true;
     unsubscribes.push(onUncaughtError((error) => openForError(error.message, prefill)));

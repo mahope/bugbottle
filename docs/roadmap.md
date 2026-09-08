@@ -66,6 +66,18 @@ keys per store and 100 cookies. Never values, except the keys named in
 table and a collapsed "Storage" block in `toMarkdown`, and `scrubReport` over
 the allow-listed values and the cookie names.
 
+**0.6** — `bugbottle/shake`: `onShake(callback, options?)`, a `devicemotion`
+detector with the gravity filtered out — three crossings of 15 m/s² with
+alternating direction inside a second, then a three-second cool-down, and
+nothing measured while the page is hidden. `requestShakePermission()` returns
+`"granted"`, `"denied"` or `"unsupported"` and is the only thing that ever
+prompts, from a button the application owns, because iOS 13 and later gate
+motion behind a user gesture in Safari alone. The panel takes the detector the
+way it takes the annotator — `shake: onShake`, or `{ on: onShake, threshold,
+cooldownMs }` — and `data-shake` switches it on from the script tag. 685 bytes
+gzipped against a 768-byte budget; the panel pays 94 bytes of wiring and none of
+the module.
+
 **0.6** — `report.schema.json` generated from the types by
 `scripts/build-schema.ts`, shipped in the package and served at
 bugbottle.dev/schema/report.json, so a receiver can be built in any language
@@ -154,8 +166,9 @@ bites. No SDK dependency.
 ## 0.6 — adapters and triggers
 
 - Solid adapter. (Vue and Svelte shipped; see "Already shipped".)
-- Shake-to-report in its own entry. (The keyboard shortcut, the auto-open and
-  the React error boundary shipped; see "Already shipped".)
+- Shake-to-report in its own entry. (Shipped as `bugbottle/shake`; the keyboard
+  shortcut, the auto-open and the React error boundary shipped before it. See
+  "Already shipped".)
 - Performance snapshot from buffered `PerformanceObserver` entries; storage
   snapshot (keys and lengths only). (Shipped as `bugbottle/perf`; see "Already
   shipped".)

@@ -32,10 +32,11 @@ need Node 18.
   bytes, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1280 bytes,
   `bugbottle/queue` 1330 bytes,
-  `bugbottle/triggers` 1300 bytes, `bugbottle/sign` 512 bytes,
+  `bugbottle/triggers` 1300 bytes, `bugbottle/shake` 768 bytes,
+  `bugbottle/sign` 512 bytes,
   `bugbottle/vue` and `bugbottle/svelte` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 22 kB. The
+  are small; the core they share is not), `dist/bugbottle.js` 23 kB. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the
@@ -57,7 +58,13 @@ need Node 18.
   server entry, and everything in it — the sinks included — is tree-shaken away
   from a consumer that imports only the validators. The number to watch there is
   that it stays about half a kilobyte, which is the proof that no sink leaked
-  into the shared path.
+  into the shared path. `bugbottle/shake` is its own entry rather than a third
+  function in `bugbottle/triggers`, which measures 1281 bytes against a 1300
+  budget: a phone gesture is not something a desktop application should be made
+  to carry. It measures 685 bytes, adds 94 to the panel (the wiring, not the
+  module — `shake` is a function you hand in) and 572 to the script tag, which
+  carries everything and must also expose `requestShakePermission`, since a page
+  with no bundler has no other way to ask iOS.
 - The docs moved with the code: README section and API list, CHANGELOG under
   Unreleased, `docs/roadmap.md`, and the layout table in CLAUDE.md when a
   file is added.

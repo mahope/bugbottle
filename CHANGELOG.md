@@ -13,6 +13,28 @@ that tag was cut.
 
 ### Added
 
+- `bugbottle/shake`: `onShake(callback, options?)`, the gesture a phone has
+  instead of a keyboard shortcut. A `devicemotion` listener with a one-pole
+  high-pass filter over the three axes, so the 9.8 m/s² a still phone reports
+  forever is not mistaken for movement; a shake is three crossings of the
+  threshold (15 m/s² by default) with alternating direction inside one second,
+  which is what separates a shake from a drop. A three-second cool-down keeps
+  one gesture to one panel, and the listener comes off on `visibilitychange`, so
+  a phone in a pocket with a background tab measures nothing.
+  `requestShakePermission()` resolves to `"granted"`, `"denied"` or
+  `"unsupported"` and is the only thing here that ever prompts: iOS 13 and later
+  gate motion behind `DeviceMotionEvent.requestPermission()` from a user
+  gesture, in Safari alone, so the application owns that button and `onShake`
+  stays silent until permission arrives. `mountBugbottle` takes the detector the
+  way it takes the annotator — `shake: onShake`, or `{ on: onShake, threshold,
+  cooldownMs }` — so the panel carries the wiring and never the module, and
+  `data-shake` (presence, or a number for the threshold) switches it on from the
+  script tag, which also exposes `requestShakePermission` because a page with no
+  bundler has no other way to ask iOS. Its own entry point rather than a third
+  function in `bugbottle/triggers`, which measures 1281 bytes against a
+  1300-byte budget: 685 bytes gzipped against 768, 94 bytes added to
+  `bugbottle/ui` and 572 to `dist/bugbottle.js`, whose budget rises to 23552.
+  No new locale string — a shake opens the panel the reporter already knows.
 - `bugbottle/perf`: `initPerf(options?)`, a fifth recorder that answers "was it
   slow?" and "what state was the browser in?" without bundling `web-vitals`.
   `report.perf` carries LCP, CLS, INP, TTFB, DOM content loaded, load, the
@@ -969,4 +991,4 @@ First cut. Extracted from the feedback bubble in two production apps.
   error type.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
-  picker included), `bugbottle/server` 0.8 kB.
+  picker included), `bugbottle/server` 0.8 kB.
