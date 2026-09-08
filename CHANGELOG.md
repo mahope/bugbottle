@@ -96,6 +96,40 @@ change the API; the changelog says so when they do.
   was prose until now — and `scripts/a11y-site.mjs` a playground state, with
   four controls moved before axe looks. Nothing in the package changed.
   Closes #76.
+- `tests/fuzz.test.ts`: a seeded generator that builds thousands of hostile
+  reports — the wrong type at every path, strings past every limit, objects
+  nested deeper than a parser likes, null bytes, lone surrogates, `__proto__`
+  and `constructor` as keys, arrays where objects go, numbers written as
+  strings, NaN and Infinity — and feeds them through every `normalise*`,
+  `validateReport`, `collectExtra`, `scrubReport`, `toMarkdown` and
+  `handleReport`. It asserts three things and only three: nothing throws,
+  every output respects its `MAX_*` limit, and `handleReport` answers with a
+  status it chose rather than a 500 it fell into. The generator is hand-rolled
+  (no new dependency) and seeded, and a failure prints the seed and the
+  iteration, so `FUZZ_SEED=<seed> FUZZ_ITERATIONS=<n>` replays it exactly.
+  `FUZZ_ITERATIONS` defaults to 2000, a little over two seconds. It found the
+  two defects fixed below, and each of them has a named regression test beside
+  it in the same file.
+  Closes #79.
+
+### Fixed
+
+- `normaliseReplay` no longer throws on a deeply nested replay event. The walk
+  that takes null bytes out of a parsed event recursed once per level, so an
+  event nested a couple of thousand deep overflowed the stack — out of a
+  validator documented never to throw, and out of `handleReport` as a 500 to a
+  reporter who had done nothing wrong. The walk now has a depth of its own
+  (200, which is deeper than rrweb nests a DOM snapshot), and a replay past it
+  is dropped whole exactly as an oversized one is: the report keeps everything
+  else. Surviving `JSON.stringify` was not the guarantee it looked like, since
+  that walk spends less stack per level than this one does.
+- A `__proto__` key from a parsed body is kept as a key rather than becoming a
+  prototype. `JSON.parse` makes it an own property; writing it back with `=`
+  reaches the prototype setter instead, so the value was silently lost and,
+  where it was an object, the row about to be stored inherited whatever the
+  sender had put there. `normaliseReplay`'s null-byte walk and the allow-listed
+  `storage.values` both wrote their keys that way and now write a descriptor.
+  `collectExtra` was already refusing the name outright and is unchanged.
 
 ## 0.10.0 — 2026-09-08
 
