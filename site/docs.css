@@ -626,10 +626,151 @@ h3:hover > .anchor,
   }
 }
 
+/* ------------------------------------------------- the theme playground */
+
+/* Written into /docs/languages-and-branding/ by scripts/build-docs.mjs and made
+   visible by site/playground.js once it has mounted a panel. Everything the
+   playground needs is here rather than in a style attribute: the page's
+   Content-Security-Policy allows inline style only because the panel itself
+   needs it, and the page has never had any. */
+
+.playground {
+  margin: 2rem 0;
+  padding: 1.4rem 1.4rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+
+.playground > h3 {
+  margin-top: 0;
+}
+
+.pg-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  margin: 1.2rem 0;
+}
+
+.pg-controls {
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+}
+
+.pg-field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.7rem;
+}
+
+.pg-field label {
+  flex: 1;
+  color: var(--muted);
+}
+
+.pg-field input,
+.pg-field select,
+.pg-field button {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.35rem;
+  max-width: 9rem;
+}
+
+.pg-field input[type="color"] {
+  width: 2.75rem;
+  height: 1.9rem;
+  padding: 0.15rem;
+  cursor: pointer;
+}
+
+.pg-field input[type="range"] {
+  padding: 0;
+  border: 0;
+  width: 6rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.pg-field output {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 3rem;
+}
+
+.pg-field button {
+  cursor: pointer;
+  padding: 0.35rem 0.7rem;
+}
+
+.pg-field button:hover {
+  border-color: var(--ink);
+}
+
+.pg-field :focus-visible {
+  outline: 2px solid var(--accent-mark);
+  outline-offset: 2px;
+}
+
+/* The panel is mounted in here with its fixed positioning taken off, so the
+   stage is what the corner would be. `data-pos` is copied onto it by
+   playground.js: the panel's own stylesheet handles left and right, and this
+   handles top and bottom, which a box in an article has to decide for itself. */
+.pg-stage {
+  display: flex;
+  align-items: flex-end;
+  min-height: 26rem;
+  padding: 1rem;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--rule-soft);
+  overflow: hidden;
+}
+
+.pg-stage[data-pos^="top"] {
+  align-items: flex-start;
+}
+
+.pg-stage > [data-bugbottle="ui"] {
+  flex: 1;
+}
+
+@media (max-width: 48rem) {
+  .pg-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pg-stage {
+    min-height: 0;
+  }
+}
+
+/* On a phone the panel is wider than the column it is standing in — it sizes
+   itself against the viewport, which is the right answer in an application and
+   too wide for a box inside an article. Zoomed rather than scrolled: a
+   scrollable box inside an inert stage is one nobody can reach with a
+   keyboard. */
+@media (max-width: 30rem) {
+  .pg-stage {
+    padding: 0.5rem;
+  }
+
+  .pg-stage > [data-bugbottle="ui"] {
+    zoom: 0.72;
+  }
+}
+
 @media print {
   .docs-sidebar,
   .docs-toc,
   .docs-pager,
+  .playground,
   .copy {
     display: none;
   }

@@ -4,7 +4,8 @@
  * `scripts/a11y-audit.mjs` mounts `bugbottle/ui` on a scratch page and audits
  * the widget. This one audits the site: the two landing pages, the
  * documentation index, one deep documentation page, the index again with the
- * search field open on results, the two comparison pages and the changelog, in
+ * search field open on results, the theme playground with a control moved,
+ * the two comparison pages and the changelog, in
  * both colour schemes, with the pinned `axe-core`. Contrast, heading
  * order, landmarks and accessible names are all questions only a layout engine
  * can answer, and a stylesheet is exactly the kind of change that breaks them
@@ -122,6 +123,7 @@ const PAGES = [
   ["docs-index", "/docs/"],
   ["docs-panel", "/docs/the-ready-made-panel/"],
   ["docs-search", "/docs/", "search"],
+  ["docs-playground", "/docs/languages-and-branding/", "playground"],
   ["compare-en", "/compare/"],
   ["compare-da", "/da/sammenlign/"],
   ["changelog", "/docs/changelog/"],
@@ -173,6 +175,29 @@ async function audit(name, path, scheme, state) {
   /* The search field is built by docs.js and fetches its index on the first
      focus, so this is a click, a word typed, and a wait for the list — the
      state a reader is in when they are reading results. */
+  /* The theme playground: a panel mounted into the page and restyled by the
+     controls beside it. Audited after a control has moved, because the state
+     worth looking at is the one the reader makes. The stage is inert, so what
+     axe reads here is the controls; the panel itself is audited by
+     scripts/a11y-audit.mjs. */
+  if (state === "playground") {
+    await tab.waitForSelector(".playground:not([hidden])", { timeout: 5000 });
+    await tab.evaluate(() => {
+      const set = (id, value) => {
+        const field = document.getElementById(id);
+        field.value = value;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      set("pg-primary", "#0f766e");
+      set("pg-radius", "2");
+      set("pg-font", 'Georgia, "Times New Roman", serif');
+      set("pg-position", "top-left");
+    });
+    await tab.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+  }
+
   if (state === "search") {
     await tab.click(".docs-search-field");
     await tab.type(".docs-search-field", "screenshot");

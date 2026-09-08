@@ -197,6 +197,167 @@ const TITLE_OVERRIDES = {
   "please-read-this-part": "Privacy: please read this part",
 };
 
+/* Scripts a single page loads on top of docs.js, keyed on the slug. The
+   documentation is one shell for thirty pages, so anything that runs on one of
+   them has to be named here rather than added to the file every page loads:
+   /playground.js is a theme editor that twenty-nine pages have no use for. A
+   module, because it imports the panel from /dist/. */
+const PAGE_SCRIPTS = {
+  "languages-and-branding": ["/playground.js"],
+};
+
+/*
+ * The theme playground under "Branding and theme".
+ *
+ * The variable names and the `theme` keys are not written here. They are read
+ * out of the README's own table by `themeVariables()` below, because that table
+ * is what the reader is looking at when they reach the playground: a second
+ * copy in this script could rename `--bb-bg` on the page and leave the table
+ * saying something else, and nobody would notice until a reader copied the CSS
+ * and it did nothing. What is written here is the one thing the table does not
+ * say — how a value is edited — and the build fails when a control names a key
+ * the table does not have, so the two cannot drift apart quietly.
+ *
+ * The default values are not here either: the playground reads them off the
+ * mounted panel with getComputedStyle, so the controls start where the panel
+ * actually starts even after src/ui/index.ts changes its blue.
+ */
+const PLAYGROUND_CONTROLS = [
+  { key: "primary", label: "Primary colour", control: "colour" },
+  { key: "background", label: "Ground", control: "colour" },
+  { key: "text", label: "Ink", control: "colour" },
+  { key: "radius", label: "Corner radius", control: "length", min: 0, max: 28, step: 1, unit: "px" },
+  {
+    key: "font",
+    label: "Font",
+    control: "choice",
+    /* The empty value means "leave the panel's own stack alone", and the
+       playground then prints no `font` at all. The other three are stacks
+       every desktop has, so the change is a change rather than a fallback. */
+    options: [
+      ["", "The panel's own stack"],
+      ['Georgia, "Times New Roman", serif', "Georgia"],
+      ["Verdana, Geneva, sans-serif", "Verdana"],
+      ["ui-monospace, SFMono-Regular, Menlo, monospace", "Monospace"],
+    ],
+  },
+  {
+    key: "position",
+    label: "Position",
+    control: "choice",
+    options: [
+      ["bottom-right", "Bottom right"],
+      ["bottom-left", "Bottom left"],
+      ["top-right", "Top right"],
+      ["top-left", "Top left"],
+    ],
+  },
+  {
+    key: "scheme",
+    label: "Colour scheme",
+    control: "choice",
+    options: [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]],
+  },
+];
+
+/* The rows of the README's `--bb-*` table, as `{ variable, key }`. The two
+   rows that are attributes rather than custom properties carry an em dash in
+   the first column and come back with `variable: null`. The header row and the
+   separator both fail the `theme` key pattern and are skipped, which is why
+   nothing here has to count lines. */
+function themeVariables(body) {
+  const lines = body.split("\n");
+  const start = lines.findIndex((line) => /^###\s+Branding and theme\s*$/.test(line));
+  if (start === -1) return [];
+  const rows = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i] ?? "";
+    if (/^#{1,3}\s/.test(line)) break;
+    if (!line.startsWith("|")) continue;
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    const key = /^`([A-Za-z]+)`$/.exec(cells[1] ?? "");
+    if (!key) continue;
+    const variable = /^`(--bb-[a-z-]+)`$/.exec(cells[0] ?? "");
+    rows.push({ variable: variable ? variable[1] : null, key: key[1] });
+  }
+  return rows;
+}
+
+/* One labelled control per entry in PLAYGROUND_CONTROLS, carrying the CSS
+   variable the README's table gives its key. Every input has a <label for>;
+   the range also has an <output>, because a slider that says nothing about
+   where it is is a slider nobody can set on purpose. */
+function playgroundHtml(body) {
+  const byKey = new Map(themeVariables(body).map((row) => [row.key, row]));
+  const missing = PLAYGROUND_CONTROLS.filter((c) => !byKey.has(c.key)).map((c) => c.key);
+  if (missing.length) {
+    throw new Error(
+      `The theme playground names ${missing.join(", ")}, which the README's ` +
+        `"Branding and theme" table does not list. Add the row or drop the control.`,
+    );
+  }
+
+  const fields = PLAYGROUND_CONTROLS.map((control) => {
+    const row = byKey.get(control.key);
+    const id = `pg-${control.key.toLowerCase()}`;
+    const data =
+      ` data-key="${control.key}"` +
+      (row.variable ? ` data-var="${row.variable}"` : "") +
+      (control.unit ? ` data-unit="${control.unit}"` : "");
+    let field;
+    if (control.control === "colour") {
+      field = `<input id="${id}" type="color"${data}>`;
+    } else if (control.control === "length") {
+      field =
+        `<input id="${id}" type="range" min="${control.min}" max="${control.max}" ` +
+        `step="${control.step}"${data}>` +
+        `<output for="${id}" id="${id}-value"></output>`;
+    } else {
+      const options = control.options
+        .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+        .join("");
+      field = `<select id="${id}"${data}>${options}</select>`;
+    }
+    return (
+      `      <p class="pg-field">` +
+      `<label for="${id}">${escapeHtml(control.label)}</label>${field}</p>`
+    );
+  }).join("\n");
+
+  /* Hidden until playground.js has mounted a panel into it: without JavaScript
+     — or with /dist/ missing — an empty stage and two empty code blocks with
+     copy buttons are worse than no section at all. */
+  return `<div class="playground" data-playground hidden>
+  <h3 id="theme-playground">Try it</h3>
+  <p>Move a control and the panel beside it is restyled as you go, from the same
+  values the table above lists. The two blocks below are the call and the
+  stylesheet that produce what you are looking at. Nothing is saved: reloading
+  the page brings back the defaults.</p>
+  <div class="pg-grid">
+    <div class="pg-controls" role="group" aria-labelledby="theme-playground">
+${fields}
+      <p class="pg-field"><button type="button" class="pg-reset">Reset the theme</button></p>
+    </div>
+    <div class="pg-stage" data-playground-stage inert></div>
+  </div>
+  <div class="slab" data-copy><div class="slab-tab">ts</div><pre><code data-playground-js></code></pre></div>
+  <div class="slab" data-copy><div class="slab-tab">css</div><pre><code data-playground-css></code></pre></div>
+</div>
+`;
+}
+
+/* The playground goes under "Branding and theme", which means after everything
+   that heading owns: the next heading of the same level or above, or the end of
+   the page when — as today — the section is the last on it. */
+function withPlayground(html, body) {
+  const block = playgroundHtml(body);
+  const heading = html.indexOf('<h2 id="branding-and-theme"');
+  if (heading === -1) throw new Error('the panel page has no "Branding and theme" heading');
+  const next = html.slice(heading + 1).search(/<h[12] /);
+  if (next === -1) return html + block;
+  return html.slice(0, heading + 1 + next) + block + html.slice(heading + 1 + next);
+}
+
 /* GitHub's heading anchors, near enough for the headings this README has:
    lowercase, punctuation dropped, spaces to hyphens. */
 function slugify(text) {
@@ -599,9 +760,19 @@ function foot(page) {
 </footer>
 
 <script src="/docs.js" defer></script>
-</body>
+${pageScripts(page)}</body>
 </html>
 `;
+}
+
+/* The page-specific scripts, if the slug has any. A module rather than a
+   `defer`red classic script, so it can import the panel from /dist/; both wait
+   for the document either way. */
+function pageScripts(page) {
+  const slug = typeof page === "string" ? "" : (page.slug ?? "");
+  return (PAGE_SCRIPTS[slug] ?? [])
+    .map((src) => `<script type="module" src="${src}"></script>\n`)
+    .join("");
 }
 
 function sidebar(pages, currentSlug) {
@@ -939,6 +1110,10 @@ async function main() {
     const marked = new Marked({ gfm: true, breaks: false });
     marked.use({ renderer: renderer(page, anchors) });
     page.html = marked.parse(page.body);
+    /* The one page with something on it that is not README prose. */
+    if (page.slug === "languages-and-branding") {
+      page.html = withPlayground(page.html, page.body);
+    }
   }
 
   await rm(outDir, { recursive: true, force: true });

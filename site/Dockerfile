@@ -56,6 +56,11 @@ COPY site/nginx.conf /etc/nginx/conf.d/default.conf
 # The one copy of the security headers, included by every block in nginx.conf.
 COPY site/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site/og.png site/panel.png site/panel-narrow.png site/panel-da.png site/panel-da-narrow.png /usr/share/nginx/html/
+# The theme playground, loaded by /docs/languages-and-branding/ alone. Its own
+# line rather than the list above, because it belongs to one page and the
+# generated documentation is what asks for it.
+COPY site/playground.js /usr/share/nginx/html/
+
 # The two faces the page is set in, served from this host so the footer's
 # promise about external requests stays true.
 COPY site/fonts/ /usr/share/nginx/html/fonts/

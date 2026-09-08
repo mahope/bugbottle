@@ -9,6 +9,24 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- A theme playground in the documentation, under "Branding and theme" on
+  `/docs/languages-and-branding/`: labelled controls for the primary colour, the
+  ground, the ink, the corner radius, the font, the position and the colour
+  scheme, restyling a real `bugbottle/ui` panel mounted into the page and
+  printing the `mountBugbottle({ theme: ... })` call and the CSS-variable block
+  to copy. The panel is mounted with `trigger: false` into an `inert` stage, so
+  it is a live component the reader cannot type into, and the theme reaches it
+  through `style.setProperty` on the host and its two data attributes rather
+  than through an inline stylesheet the site's Content-Security-Policy would
+  refuse. `site/playground.js` is vanilla JavaScript loaded by that one page,
+  through a new `PAGE_SCRIPTS` hook in `scripts/build-docs.mjs` keyed on the
+  slug. The variable names come from the README's own table, which
+  `scripts/build-docs.mjs` now reads and writes onto the controls: a control
+  naming a `theme` key the table does not list fails the build, so the two
+  cannot drift. The README gained that table — the whole `--bb-*` list, which
+  was prose until now — and `scripts/a11y-site.mjs` a playground state, with
+  four controls moved before axe looks. Nothing in the package changed.
+  Closes #76.
 - Five more languages, in their own entry point: `bugbottle/locales-extra`
   ships Italian, Polish, Portuguese, Finnish and Ukrainian in the same `Locale`
   shape as the eight bundled ones, with every key present and reviewed line by

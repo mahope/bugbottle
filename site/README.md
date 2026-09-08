@@ -18,6 +18,7 @@ from this host and the favicon is an inline SVG.
 | `docs.css` | The documentation pages only, loaded after `style.css` and leaning on its tokens |
 | `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
 | `docs.js` | The documentation pages only: copy buttons, the search field, the topic list closing on a phone, and the current heading in "On this page" |
+| `playground.js` | The theme playground on `/docs/languages-and-branding/` and nowhere else: labelled controls over a real panel, and the code to copy. See "The theme playground" below |
 | `fonts/` | The four woff2 faces the page is set in, latin only. See "The typefaces" below |
 | `docs/` | **Generated, never committed.** Written by `scripts/build-docs.mjs`; see "The documentation" below |
 | `docs/search.json` | **Generated, never committed.** The search index the field in the sidebar reads; see "The search" below |
@@ -207,6 +208,49 @@ falls back to a selection and `execCommand`, which is the path that check
 actually exercises — and that Windows hands the text back with CRLF line
 endings, so compare normalised.
 
+## The theme playground
+
+`/docs/languages-and-branding/#branding-and-theme` carries the one piece of the
+documentation that is not README prose: a block of labelled controls — primary
+colour, ground, ink, corner radius, font, position, colour scheme — beside a
+real `bugbottle/ui` panel that is restyled as they move, with the
+`mountBugbottle({ theme: … })` call and the CSS-variable block printed below it
+for copying. `site/playground.js` is all of it, in vanilla JavaScript, loaded
+by that page alone.
+
+Three decisions worth knowing before editing it:
+
+- **The variable names are not in the playground.** `scripts/build-docs.mjs`
+  reads them out of the README's own "Branding and theme" table — the one the
+  reader is looking at when they reach the controls — and writes them onto each
+  control as `data-var`, so the CSS the playground prints is the CSS that table
+  documents. What the script does hold is `PLAYGROUND_CONTROLS`, which says
+  only *how* a value is edited, and it **fails the build** when a control names
+  a `theme` key the table does not list. The two cannot drift apart quietly,
+  and neither can be renamed on its own.
+- **The panel is real and the stage is `inert`.** It is mounted with
+  `trigger: false` and `shortcut: false` into a container the reader cannot
+  focus, tab into or type in: it is a picture that happens to be the live
+  component. Nothing is ever sent — there is no endpoint on this host — and
+  because the stage is inert, the panel's dialog and focus trap do not fight
+  the page around it. Two panels on one page is fine in any case: each mount
+  gets its own shadow root, so the `bb-*` ids inside them do not clash.
+- **No inline style, ever.** The stage and the controls are styled from
+  `docs.css`; the theme reaches the panel through `style.setProperty` on the
+  host and through its `data-pos` and `data-scheme` attributes, which is what
+  the library itself does. The page's Content-Security-Policy allows inline
+  style only because the panel needs it, and no page on this site has ever had
+  any.
+
+The page-specific script hook is `PAGE_SCRIPTS` in `scripts/build-docs.mjs`,
+keyed on the slug: one shell serves thirty pages, so a file only one of them
+needs is named there rather than added to `docs.js`. They are ES modules, since
+this one imports the panel from `/dist/`.
+
+The whole block is written `hidden` and unhidden by `playground.js` once it has
+mounted a panel. A reader without JavaScript, or with `/dist/` missing, sees
+the table and the prose and no empty boxes with copy buttons on them.
+
 ## The search
 
 The field at the top of the sidebar — under the header on a phone, where the
@@ -265,10 +309,13 @@ It serves `site/` and `dist/` the way nginx does — the security headers
 included, parsed straight out of `site/security-headers.conf` — and runs the pinned
 `axe-core` over both landing pages, the documentation index, one deep
 documentation page, the documentation index again with the search field
-holding results, the two comparison pages and the changelog, in **both colour
-schemes** — sixteen runs. The search state is a click, a word typed and a wait for the
+holding results, the theme playground with a control moved, the two comparison
+pages and the changelog, in **both colour
+schemes** — eighteen runs. The search state is a click, a word typed and a wait for the
 list: the results are drawn from JavaScript and nothing else on the site would
-notice a link with no accessible name in them. It fails on a console message as well as on a violation, because
+notice a link with no accessible name in them. The playground state moves four
+of its controls first, because the state worth auditing is the one the reader
+makes rather than the defaults. It fails on a console message as well as on a violation, because
 a page that logs one is a page that is half-working and nothing else here
 would notice.
 

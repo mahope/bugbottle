@@ -244,6 +244,13 @@ a non-root user, a `compose.yml` with the reports on a named volume and the
 password from an env file, a `Caddyfile`, a public `GET /health`, and an
 eight-line Dokploy walk-through in its README.
 
+**Unreleased** — a theme playground on the documentation site
+(`/docs/languages-and-branding/#branding-and-theme`): labelled controls for the
+primary colour, ground, ink, radius, font, position and colour scheme,
+restyling a real panel mounted into the page and printing the
+`mountBugbottle({ theme })` call and the CSS-variable block to copy (#76).
+Nothing in the package changed.
+
 ## 0.5 — evidence and delivery
 
 - `fetch(..., { keepalive })` with `sendBeacon` fallback; offline queue in
@@ -284,8 +291,10 @@ bites. No SDK dependency.
 
 - Annotation shipped early, in 0.6; see "Already shipped".
 - `create-bugbottle` scaffold for a receiving endpoint.
-- Playground and StackBlitz demo. (The rrweb adapter shipped early, in 0.8, as
-  `bugbottle/rrweb`; see "Already shipped".)
+- StackBlitz demo. (The theme playground shipped early, on the documentation
+  page for branding — a real panel restyled by labelled controls, printing the
+  call and the CSS to copy (#76). The rrweb adapter shipped early too, in 0.8,
+  as `bugbottle/rrweb`; both are under "Already shipped".)
 - Freeze the report schema and the `beforeSend` contract.
 - **The API audit is done** (#62): the whole public surface is read and written
   up in `docs/api-audit-1.0.md`, and the naming rules it settled are in
