@@ -1,5 +1,5 @@
 bugbottle is one small piece of a crowded field, and it is not the most
-capable thing in it. This page places it next to four tools people actually
+capable thing in it. This page places it next to five tools people actually
 reach for, so you can tell in a minute whether you want a library or a
 product. Every figure below was checked on 7 September 2026 against the page
 linked in its row; prices and features move, so follow the link before you

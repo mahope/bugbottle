@@ -23,6 +23,8 @@
 <meta property="og:image:alt" content="bugbottle: et rapportkort med en besked, en elementvælger, en konsolfejl og et klikspor, beseglet med 201.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://bugbottle.dev/og.png">
+<link rel="preload" href="/fonts/sourcesans3-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/newsreader-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -112,7 +114,7 @@
         <div>
           <dt>Det fylder ingenting</dt>
           <dd>
-            Nul afhængigheder og syv indgange, så en side kun betaler for det, den
+            Nul afhængigheder og én indgang per del, så en side kun betaler for det, den
             faktisk importerer. Kernen fylder 1,3 kB gzippet.
             <a href="#start">Tabellen længere nede</a> har resten.
           </dd>
@@ -217,68 +219,70 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
         </div>
       </div>
 
-      <table class="sizes">
-        <caption>Hvad hver indgang koster, målt ved 0.6.0</caption>
-        <thead>
-          <tr>
-            <th scope="col">Import</th>
-            <th scope="col">Gzippet</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">bugbottle</th>
-            <td>1,3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/react</th>
-            <td>5,5 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/vue</th>
-            <td>5,6 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/svelte</th>
-            <td>5,4 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/ui</th>
-            <td>10,1 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/breadcrumbs</th>
-            <td>1,3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/network</th>
-            <td>1,2 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/queue</th>
-            <td>1,3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">bugbottle/triggers</th>
-            <td>1,3 kB</td>
-          </tr>
-          <tr>
-            <th scope="row">script-tagget ovenfor</th>
-            <td>18,1 kB</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="small muted">
-        Bundlet med esbuild, minificeret, uden <code>html-to-image</code>. CI fejler, hvis
-        tallene vokser ud over budgettet.
-      </p>
+      <div class="offset-body">
+        <table class="sizes">
+          <caption>Hvad hver indgang koster, målt ved 0.6.0</caption>
+          <thead>
+            <tr>
+              <th scope="col">Import</th>
+              <th scope="col">Gzippet</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">bugbottle</th>
+              <td>1,3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/react</th>
+              <td>5,5 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/vue</th>
+              <td>5,6 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/svelte</th>
+              <td>5,4 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/ui</th>
+              <td>10,1 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/breadcrumbs</th>
+              <td>1,3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/network</th>
+              <td>1,2 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/queue</th>
+              <td>1,3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">bugbottle/triggers</th>
+              <td>1,3 kB</td>
+            </tr>
+            <tr>
+              <th scope="row">script-tagget ovenfor</th>
+              <td>18,1 kB</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="small muted">
+          Bundlet med esbuild, minificeret, uden <code>html-to-image</code>. CI fejler, hvis
+          tallene vokser ud over budgettet.
+        </p>
 
-      <p class="small muted">
-        Vil du hellere bygge formularen selv? <code>useBugReport</code> fra
-        <code>bugbottle/react</code> giver dig den samme kerne uden en linje færdig HTML:
-        <a href="https://github.com/mahope/bugbottle#the-form-react" hreflang="en">afsnittet om formularen</a>
-        (på engelsk).
-      </p>
+        <p class="small muted">
+          Vil du hellere bygge formularen selv? <code>useBugReport</code> fra
+          <code>bugbottle/react</code> giver dig den samme kerne uden en linje færdig HTML:
+          <a href="https://github.com/mahope/bugbottle#the-form-react" hreflang="en">afsnittet om formularen</a>
+          (på engelsk).
+        </p>
+      </div>
     </div>
   </section>
 
@@ -320,63 +324,71 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
   </section>
 
   <section id="privacy" class="reveal">
-    <div class="wrap">
-      <h2>Læs det her, før du slår skærmbilleder til</h2>
-      <p>
-        Et skærmbillede af din applikation indeholder alt, hvad den, der melder fejlen,
-        kunne se. I et journalsystem kan det være et billede af en patient; i et
-        lønsystem en løn; i dit måske nogens indbakke eller en halvskrevet besked, der
-        aldrig blev sendt.
-      </p>
-      <p>Tre ting følger heraf, og dem kan biblioteket ikke gøre for dig:</p>
-      <ol>
-        <li>
-          <strong>Læg skærmbilleder et privat sted.</strong> Hvis din objektlagring har
-          offentlig læseadgang, og det har mange mediearkiver, kan alt, hvad du lægger
-          derind, hentes af enhver, der kender adressen. Brug en separat lagerplads uden
-          offentlig adgang.
-        </li>
-        <li>
-          <strong>Vis dem kun gennem en rute, der kræver login.</strong> Giv aldrig et
-          skærmbillede en offentlig adresse. Slå nøglen op ud fra rækken i databasen
-          frem for at tage den fra forespørgslen, så et id ikke kan bruges til at
-          gennemsøge hele lageret.
-        </li>
-        <li>
-          <strong>Sig det, før billedet bliver taget.</strong> Skriv det i formularen
-          ved siden af afkrydsningsfeltet, ikke i en politik, ingen åbner.
-        </li>
-      </ol>
-      <p>
-        Det er også værd at overveje at kræve, at folk er logget ind. Et anonymt
-        skærmbillede er et, ingen bagefter kan spørges om, og ingen kan få at vide er
-        blevet slettet.
-        <a href="https://github.com/mahope/bugbottle#please-read-this-part" hreflang="en">Hele afsnittet i dokumentationen.</a>
-      </p>
+    <div class="wrap spread">
+      <div class="spread-head">
+        <h2>Læs det her, før du slår skærmbilleder til</h2>
+      </div>
+      <div class="spread-body">
+        <p>
+          Et skærmbillede af din applikation indeholder alt, hvad den, der melder fejlen,
+          kunne se. I et journalsystem kan det være et billede af en patient; i et
+          lønsystem en løn; i dit måske nogens indbakke eller en halvskrevet besked, der
+          aldrig blev sendt.
+        </p>
+        <p>Tre ting følger heraf, og dem kan biblioteket ikke gøre for dig:</p>
+        <ol>
+          <li>
+            <strong>Læg skærmbilleder et privat sted.</strong> Hvis din objektlagring har
+            offentlig læseadgang, og det har mange mediearkiver, kan alt, hvad du lægger
+            derind, hentes af enhver, der kender adressen. Brug en separat lagerplads uden
+            offentlig adgang.
+          </li>
+          <li>
+            <strong>Vis dem kun gennem en rute, der kræver login.</strong> Giv aldrig et
+            skærmbillede en offentlig adresse. Slå nøglen op ud fra rækken i databasen
+            frem for at tage den fra forespørgslen, så et id ikke kan bruges til at
+            gennemsøge hele lageret.
+          </li>
+          <li>
+            <strong>Sig det, før billedet bliver taget.</strong> Skriv det i formularen
+            ved siden af afkrydsningsfeltet, ikke i en politik, ingen åbner.
+          </li>
+        </ol>
+        <p>
+          Det er også værd at overveje at kræve, at folk er logget ind. Et anonymt
+          skærmbillede er et, ingen bagefter kan spørges om, og ingen kan få at vide er
+          blevet slettet.
+          <a href="https://github.com/mahope/bugbottle#please-read-this-part" hreflang="en">Hele afsnittet i dokumentationen.</a>
+        </p>
+      </div>
     </div>
   </section>
 
   <section id="colophon" class="reveal">
-    <div class="wrap">
-      <h2>Hvem der skriver på det</h2>
-      <p>
-        Jeg hedder Mads Holst Jensen, er freelance web- og AI-udvikler i Danmark og
-        arbejder under navnet Mahope. bugbottle er blevet til i kundearbejde: to apps,
-        hvor brugerne blev ved med at melde fejl, jeg ikke kunne genskabe. Så byggede
-        jeg den del, der samler beviserne, og pillede stykker af den, indtil den var
-        lille nok til at give væk.
-      </p>
-      <p>
-        Jeg bygger den slags til andres produkter også: vejen en bruger går, når noget
-        er galt, det interne værktøj ingen har haft tid til, integrationen der skal
-        blive ved med at virke, når jeg er gået igen. Er det dét, du mangler, så skriv
-        og fortæl, hvad det drejer sig om.
-      </p>
-      <p class="signature">
-        <strong>Mads Holst Jensen</strong>
-        <a href="https://mahoje.dk">mahoje.dk</a>
-        <a href="mailto:mads@mahope.dk">mads@mahope.dk</a>
-      </p>
+    <div class="wrap spread">
+      <div class="spread-head">
+        <h2>Hvem der skriver på det</h2>
+      </div>
+      <div class="spread-body">
+        <p>
+          Jeg hedder Mads Holst Jensen, er freelance web- og AI-udvikler i Danmark og
+          arbejder under navnet Mahope. bugbottle er blevet til i kundearbejde: to apps,
+          hvor brugerne blev ved med at melde fejl, jeg ikke kunne genskabe. Så byggede
+          jeg den del, der samler beviserne, og pillede stykker af den, indtil den var
+          lille nok til at give væk.
+        </p>
+        <p>
+          Jeg bygger den slags til andres produkter også: vejen en bruger går, når noget
+          er galt, det interne værktøj ingen har haft tid til, integrationen der skal
+          blive ved med at virke, når jeg er gået igen. Er det dét, du mangler, så skriv
+          og fortæl, hvad det drejer sig om.
+        </p>
+        <p class="signature">
+          <strong>Mads Holst Jensen</strong>
+          <a href="https://mahoje.dk">mahoje.dk</a>
+          <a href="mailto:mads@mahope.dk">mads@mahope.dk</a>
+        </p>
+      </div>
     </div>
   </section>
 
@@ -392,6 +404,10 @@ mountBugbottle({ endpoint: "/api/feedback", locale: da });</code></pre>
     </nav>
     <p>MIT-licens. Skrevet og vedligeholdt af <a href="https://mahoje.dk">Mahope</a> i Danmark.</p>
     <p>Siden sætter ingen cookies, kører ingen statistik og henter ingenting udefra.</p>
+    <nav class="lang lang-footer" aria-label="Sprog">
+      <a href="/" lang="en" hreflang="en">English</a>
+      <a href="/da/" aria-current="page" lang="da" hreflang="da">Dansk</a>
+    </nav>
   </div>
 </footer>
 

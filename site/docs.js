@@ -11,6 +11,15 @@
 (function () {
   "use strict";
 
+  /* The documentation is English, but the two comparison pages are not, and
+     they load this same file. The three words the buttons say follow the
+     language the page declares rather than the language most of the pages
+     happen to be in. */
+  var danish = document.documentElement.lang === "da";
+  var copyLabel = danish ? "Kopiér" : "Copy";
+  var copiedLabel = danish ? "Kopieret" : "Copied";
+  var pressLabel = danish ? "Tryk Ctrl+C" : "Press Ctrl+C";
+
   /* A copy button per code block. Added from here rather than from the
      generated HTML so the button only ever exists where it can work. */
   var slabs = document.querySelectorAll(".docs-body .slab[data-copy]");
@@ -25,15 +34,15 @@
     var button = document.createElement("button");
     button.type = "button";
     button.className = "copy";
-    button.textContent = "Copy";
+    button.textContent = copyLabel;
     button.addEventListener("click", function () {
       var text = code.textContent || "";
       copy(text).then(
         function () {
-          say("Copied");
+          say(copiedLabel);
         },
         function () {
-          say("Press Ctrl+C");
+          say(pressLabel);
         },
       );
     });
@@ -44,7 +53,7 @@
       button.setAttribute("data-done", "yes");
       window.clearTimeout(timer);
       timer = window.setTimeout(function () {
-        button.textContent = "Copy";
+        button.textContent = copyLabel;
         button.removeAttribute("data-done");
       }, 1600);
     }
@@ -87,11 +96,23 @@
     });
   }
 
+  /* The topic list is written open, so a page with no JavaScript is whole at
+     every width. On a phone it is twenty-eight links standing between the
+     reader and the article they asked for, so it closes — and the summary
+     names the page they are on, which is what a closed list should say. */
+  var topics = document.querySelector(".docs-topics");
+  var here = topics && topics.querySelector('a[aria-current="page"]');
+  if (topics && window.matchMedia("(max-width: 60rem)").matches) {
+    topics.open = false;
+    var summary = topics.querySelector("summary");
+    if (summary && here) summary.textContent = here.textContent;
+  }
+
   /* On a narrow screen the sidebar is a short scrolling box, so the current
      page can start out below its fold. Scroll the box itself — never the
      window, which would jump the reader past the heading they came for. */
   var sidebar = document.querySelector(".docs-sidebar");
-  var current = sidebar && sidebar.querySelector('a[aria-current="page"]');
+  var current = here;
   if (sidebar && current && sidebar.scrollHeight > sidebar.clientHeight) {
     /* offsetTop would be measured against whichever ancestor happens to be
        positioned, which differs between the two layouts. Rectangles do not. */

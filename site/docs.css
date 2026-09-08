@@ -22,6 +22,14 @@
 
 /* ------------------------------------------------------------- sidebar */
 
+/* The list of topics is a <details> written open. On a wide screen the
+   disclosure is meaningless, so the summary is not drawn at all and the
+   element behaves like the plain nav it used to be. */
+
+.docs-topics > summary {
+  display: none;
+}
+
 .docs-sidebar {
   position: sticky;
   top: 1.5rem;
@@ -85,8 +93,13 @@
 
 /* ---------------------------------------------------------------- body */
 
+/* The column holds the wide things — a table, a slab of code — and the prose
+   inside it is capped narrower, at about 75 characters of Source Sans 3. A
+   documentation line that runs the full width of the column is one the eye
+   loses its place in on the way back. */
+
 .docs-body {
-  max-width: 44rem;
+  max-width: 52rem;
 }
 
 .docs-eyebrow {
@@ -116,9 +129,10 @@
 }
 
 .docs-lede {
-  font-size: 1.125rem;
+  font-size: 1.1875rem;
+  line-height: 1.55;
   color: var(--muted);
-  max-width: 40rem;
+  max-width: 34rem;
 }
 
 /* Visible on hover and to a keyboard, never in a screenshot or in print. */
@@ -139,7 +153,7 @@ h3:hover > .anchor,
 
 .docs-body p,
 .docs-body li {
-  max-width: 40rem;
+  max-width: 33rem;
 }
 
 .docs-body ul,
@@ -203,13 +217,14 @@ h3:hover > .anchor,
 
 /* -------------------------------------------------------- on this page */
 
+/* A ruled column, not a card. It is a list of the headings a reader is about
+   to scroll past; a bordered box gives it the weight of a callout and puts a
+   second frame on a page that already has the sidebar. The rule is the same
+   one the sidebar hangs its links off, so the two read as one system. */
 .docs-toc {
   font-family: var(--sans);
   font-size: 0.9375rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  padding: 0.9rem 1.1rem;
-  margin: 0 0 2rem;
+  margin: 0 0 2.25rem;
   max-width: 26rem;
 }
 
@@ -225,18 +240,28 @@ h3:hover > .anchor,
   list-style: none;
   margin: 0;
   padding: 0;
+  border-left: 1px solid var(--rule);
 }
 
 .docs-toc li a {
   color: var(--muted);
   text-decoration: none;
   display: block;
-  padding: 0.12rem 0;
+  margin-left: -1px;
+  padding: 0.16rem 0 0.16rem 0.85rem;
+  border-left: 2px solid transparent;
 }
 
-.docs-toc li a:hover,
+.docs-toc li a:hover {
+  color: var(--ink);
+}
+
+/* The heading the reader is inside, marked by docs.js. It carries the accent
+   rule as well as the ink, because colour on its own is not a signal. */
 .docs-toc a[aria-current="true"] {
   color: var(--ink);
+  font-weight: 600;
+  border-left-color: var(--accent);
 }
 
 /* ------------------------------------------------------- code and copy */
@@ -426,13 +451,58 @@ h3:hover > .anchor,
     padding-top: 1.5rem;
   }
 
+  /* Closed by docs.js, so the article starts at the top of the screen rather
+     than below a scrolling box of twenty-eight links. Open, the list is as
+     long as it needs to be: a box that scrolls inside a page that scrolls is
+     two scrollbars for one list. */
   .docs-sidebar {
     position: static;
-    max-height: 15rem;
-    padding: 0.9rem 1.1rem;
+    max-height: none;
+    overflow: visible;
     border: 1px solid var(--rule);
     border-radius: var(--radius);
     background: var(--surface);
+  }
+
+  .docs-topics {
+    padding: 0 1.1rem;
+  }
+
+  .docs-topics > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0 -1.1rem;
+    padding: 0.7rem 1.1rem;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .docs-topics > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* A chevron drawn from a border, so there is no glyph to go missing and no
+     icon font to fetch. */
+  .docs-topics > summary::after {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: none;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: translateY(-0.15em) rotate(45deg);
+  }
+
+  .docs-topics[open] > summary::after {
+    transform: translateY(0.1em) rotate(-135deg);
+  }
+
+  .docs-topics[open] {
+    padding-bottom: 1rem;
   }
 
   .docs-toc {

@@ -1,21 +1,75 @@
 /*
  * One stylesheet for both languages. Colour tokens live on :root and are
  * redefined once under prefers-color-scheme, so no colour is written twice.
- * System fonts only: the page makes no external request at all, which is a
- * claim printed in the footer and therefore worth keeping true.
  *
- * The page is set almost entirely in the system serif, the way a long email
- * is, with the system sans kept for the things that are furniture: navigation,
- * buttons, table headers, small print. The seal red appears in four places
- * (the bottle in the wordmark, the primary button, the stamp under the hero,
- * the focus ring) and nowhere else, so it still means something when it shows
- * up.
+ * Two faces, and they are served from this host. The files came from Google
+ * Fonts; they are copied into site/fonts/ rather than linked, because the
+ * footer promises that the page makes no external request and a stylesheet
+ * from fonts.googleapis.com would hand every reader's address to a third
+ * party on a page whose whole argument is that nothing sits in the middle.
+ * See site/README.md for the recipe that fetched them.
+ *
+ * Newsreader announces — the headline, the section headings, the table
+ * captions — and Source Sans 3 says everything else, including the prose.
+ * The seal red appears in four places (the bottle in the wordmark, the
+ * primary button, the stamp under the hero, the focus ring) and nowhere else,
+ * so it still means something when it shows up.
  *
  * Two scales carry the rhythm, and nothing outside them should be invented
  * ad hoc: --s-1..--s-8 for space and --t-2xs..--t-2xl for size. Sections are
  * spaced with --section-y so the page breathes at one interval rather than
  * six.
  */
+
+/* The latin cut of each face and nothing else: æøå and the punctuation the
+   two languages use are all inside U+0000-00FF, and a reader who lands on a
+   word outside it gets the fallback for that word rather than 60 kB more
+   font. `swap` because the text is the page; the two faces the first screen
+   needs are preloaded from the HTML, so the swap happens before paint. */
+
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/newsreader-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/sourcesans3-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/sourcesans3-400i.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/sourcesans3-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
 
 :root {
   color-scheme: light dark;
@@ -43,6 +97,9 @@
   --slab-ink: #d7e5df;
   --slab-rule: #21473f;
   --slab-key: #8fd0bc;
+  /* A heading on the dark ground: the slab ink is tuned for a line of code,
+     which is a shade too quiet for a headline sitting on top of one. */
+  --slab-head: #f2f7f5;
   --shadow: 0 1px 2px rgb(13 42 36 / 0.06), 0 8px 24px -12px rgb(13 42 36 / 0.18);
 
   --radius: 4px;
@@ -68,12 +125,21 @@
   --t-xl: clamp(1.4rem, 1.15rem + 0.85vw, 1.8rem);
   --t-2xl: clamp(2.05rem, 1.4rem + 2.1vw, 2.8rem);
 
-  /* Around 65 characters of the system serif at --t-base. */
-  --measure: 34rem;
-  --measure-narrow: 30rem;
+  /* Around 68 characters of Source Sans 3 at --t-base. It is a narrower face
+     than the system serif this page used to be set in, so the measure came
+     down with it rather than staying at 34rem and running long. */
+  --measure: 31rem;
+  --measure-narrow: 27rem;
 
-  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  /* The left rail. Three different layouts on this page put a short label
+     beside a body of text — the spec list, the three ways in, and the two
+     sections that are one heading and one argument — and they all hang off
+     the same column, so the page has one left edge for prose and one for
+     the things that name it. */
+  --rail: 14rem;
+
+  --sans: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --display: "Newsreader", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -98,6 +164,7 @@
     --slab-ink: #cfe0da;
     --slab-rule: #1a3b34;
     --slab-key: #6fbfa8;
+    --slab-head: #eaf3ef;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
 }
@@ -123,7 +190,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: var(--t-base)/1.7 var(--serif);
+  font: var(--t-base)/1.65 var(--sans);
   font-synthesis-weight: none;
   overflow-wrap: break-word;
 }
@@ -153,12 +220,21 @@ summary:focus-visible {
   border-radius: 2px;
 }
 
+/* The display face announces; it never carries a paragraph. h3 is the
+   exception: at this size it is a label beside a code block, and the sans
+   sits better next to monospace than a serif at 17px does. */
 h1,
-h2,
+h2 {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: -0.008em;
+  text-wrap: balance;
+}
+
 h3 {
-  font-family: var(--serif);
-  font-weight: 700;
-  letter-spacing: -0.005em;
+  font-family: var(--sans);
+  font-weight: 600;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
@@ -352,6 +428,41 @@ main > section:first-child {
   padding: calc(var(--section-y) + var(--s-5)) 0;
 }
 
+/* ----------------------------------------------------------- the spread */
+
+/* Two sections are one heading and one argument: the screenshot warning and
+   the colophon. Set as a heading over a column of prose they leave two thirds
+   of a wide screen empty, which on the dark ground below is very loud
+   emptiness. Set as a rail and a column they sit on the same grid as the spec
+   list and the three ways in, and the heading stays beside the paragraph it
+   introduces rather than floating above it. */
+
+.spread {
+  display: grid;
+  gap: var(--s-4);
+}
+
+@media (min-width: 56rem) {
+  .spread {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: var(--s-7);
+    align-items: start;
+  }
+
+  .spread h2 {
+    margin-bottom: 0;
+    max-width: none;
+    /* The heading is a rail label at this width, not a banner: it steps down
+       so the paragraph beside it is what the eye lands on. */
+    font-size: var(--t-lg);
+    line-height: 1.22;
+  }
+}
+
+.spread-body > :last-child {
+  margin-bottom: 0;
+}
+
 /* ------------------------------------------------------------------ hero */
 
 .hero {
@@ -368,12 +479,25 @@ main > section:first-child {
   .hero-grid {
     grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
     gap: var(--s-7);
+    /* The two columns end together. Left to itself the frame keeps its 16/11
+       and stops level with the second paragraph, leaving a quarter of the
+       hero empty under it; stretched, the crop simply takes a little more off
+       the left, where there is nothing to read. */
+    align-items: stretch;
   }
 
   /* The picture starts a little below the headline rather than level with it:
      the two columns are not a matched pair. */
   .shot {
     margin-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .shot-frame {
+    flex: 1 1 auto;
+    aspect-ratio: auto;
+    min-height: 21rem;
   }
 }
 
@@ -393,6 +517,24 @@ main > section:first-child {
   flex-wrap: wrap;
   gap: var(--s-3);
   margin-top: var(--s-6);
+}
+
+/* Three buttons on a 390-pixel screen wrap two and one, which looks like a
+   button that fell off the row. Two columns with the primary across the top
+   is the same three choices, arranged on purpose. */
+@media (max-width: 34rem) {
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .actions .button {
+    text-align: center;
+  }
+
+  .actions .primary {
+    grid-column: 1 / -1;
+  }
 }
 
 .button {
@@ -555,7 +697,7 @@ button.button {
 
 @media (min-width: 50rem) {
   .specs div {
-    grid-template-columns: 13rem minmax(0, 1fr);
+    grid-template-columns: var(--rail) minmax(0, 1fr);
     align-items: baseline;
     gap: var(--s-1) var(--s-7);
   }
@@ -688,7 +830,7 @@ td code {
 
 @media (min-width: 56rem) {
   .option {
-    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-columns: var(--rail) minmax(0, 1fr);
     gap: var(--s-7);
     align-items: start;
   }
@@ -710,6 +852,16 @@ td code {
   margin-bottom: 0;
 }
 
+/* The measured numbers sit under the code, not under the labels: at this
+   width the section already has a rail, and a table that starts at the page
+   edge reads as a new section rather than as the footnote to the three
+   snippets above it. */
+@media (min-width: 56rem) {
+  .offset-body {
+    margin-left: calc(var(--rail) + var(--s-7));
+  }
+}
+
 /* ------------------------------------------------------------ size table */
 
 /* The measured numbers, in the one place a table is the honest shape. Update
@@ -721,13 +873,14 @@ td code {
   font-size: var(--t-sm);
   margin: 0 0 var(--s-3);
   width: 100%;
-  max-width: 34rem;
+  max-width: 32rem;
 }
 
 .sizes caption {
   text-align: left;
-  font-family: var(--serif);
-  font-size: var(--t-base);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--t-md);
   padding-bottom: var(--s-2);
 }
 
@@ -844,6 +997,38 @@ td code {
 
 /* --------------------------------------------------------------- privacy */
 
+/* The one section printed on the dark ground the code slabs use. It is the
+   part of the page that has to be read rather than skimmed — a public media
+   bucket nearly exposed screenshots once — and a warning set in the same
+   paper as everything around it is a warning that gets scrolled past. It is
+   not a colour of its own: it is the slab, at the width of the page. */
+
+#privacy {
+  background: var(--slab);
+  color: var(--slab-ink);
+  border-top-color: var(--slab);
+  /* The seal red has nothing to say against this ground; the key green does. */
+  --focus: var(--slab-key);
+}
+
+#privacy h2 {
+  color: var(--slab-head);
+}
+
+#privacy strong {
+  color: var(--slab-head);
+  font-weight: 600;
+}
+
+#privacy a {
+  text-decoration-color: var(--slab-key);
+}
+
+#privacy a:hover {
+  color: var(--slab-head);
+  text-decoration-color: currentColor;
+}
+
 #privacy ol {
   padding-left: 1.25rem;
   max-width: var(--measure);
@@ -910,6 +1095,27 @@ footer nav {
   flex-wrap: wrap;
   gap: var(--s-2) var(--s-5);
   margin-bottom: var(--s-5);
+}
+
+/* The same segmented control as the header, at the end of the page. The
+   header's copy is above the fold and gone by the time a reader has finished;
+   this one is where somebody who has read to the bottom in the wrong language
+   is already looking. It says the languages by name rather than by code,
+   because there is room for it here. */
+.lang-footer {
+  display: inline-flex;
+  margin-top: var(--s-5);
+  margin-bottom: 0;
+  background: var(--surface);
+}
+
+.lang-footer a {
+  padding: 0.4rem 0.85rem;
+  font-size: var(--t-xs);
+}
+
+.lang-footer a:hover {
+  background: var(--paper);
 }
 
 footer a {
