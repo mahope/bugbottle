@@ -2651,8 +2651,9 @@ Requires `html-to-image`.
 `MAX_GITLAB_DESCRIPTION`, `MAX_GITLAB_TITLE`, the `GitlabSink`,
 `GitlabSinkOptions` and `CreateGitlabIssueResult` types,
 `slackSink`, `discordSink`, `buildSlackMessage`,
-`buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `SLACK_MAX_*`
-and `DISCORD_MAX_*` limits, `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
+`buildDiscordMessage`, `escapeSlack`, `DISCORD_COLOURS`, the `MAX_SLACK_*`
+and `MAX_DISCORD_*` limits (the vendor-first `SLACK_MAX_*` and `DISCORD_MAX_*`
+spellings still exist, deprecated, and go in 1.0), `MAX_CHAT_CONSOLE_ENTRIES`, the `SlackSinkOptions`,
 `DiscordSinkOptions`, `ChatSink`, `ChatSinkContext` and `UrlFrom` types,
 `sentrySink`, `buildSentryEvent`, `buildSentryEnvelope`, `parseSentryDsn`,
 `sentryAuthHeader`, `clipBytes`, `SentrySinkError`, `SENTRY_CLIENT`,

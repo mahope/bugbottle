@@ -13,7 +13,7 @@ import { toMarkdown, type MarkdownOptions } from "../markdown.ts";
 import { messageFromBody, readBody, SinkError, type FetchLike } from "./error.ts";
 
 /** Discord rejects a longer `content` outright, so we clip before it does. */
-export const DISCORD_MAX_CONTENT = 2000;
+export const MAX_DISCORD_CONTENT = 2000;
 
 export type WebhookFormat = "json" | "slack" | "discord";
 
@@ -43,7 +43,7 @@ function clip(text: string, max: number): string {
 
 function bodyFor(report: unknown, format: WebhookFormat, markdown: string): unknown {
   if (format === "slack") return { text: markdown };
-  if (format === "discord") return { content: clip(markdown, DISCORD_MAX_CONTENT) };
+  if (format === "discord") return { content: clip(markdown, MAX_DISCORD_CONTENT) };
   const base = typeof report === "object" && report !== null ? report : {};
   return { ...(base as Record<string, unknown>), markdown };
 }
@@ -79,3 +79,9 @@ export async function sendReportWebhook(
 
   return { status: response.status };
 }
+
+/**
+ * @deprecated Renamed to `MAX_DISCORD_CONTENT` in 0.9: every other ceiling in the
+ * package starts with `MAX_`. Removed in 1.0 (#65).
+ */
+export const DISCORD_MAX_CONTENT = MAX_DISCORD_CONTENT;

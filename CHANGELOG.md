@@ -9,6 +9,12 @@ change the API; the changelog says so when they do.
 
 ### Changed
 
+- The thirteen Slack and Discord ceilings are `MAX_SLACK_*` and
+  `MAX_DISCORD_*`, so every limit in the package starts with `MAX_` — Jira,
+  GitLab, Sentry and report-core already did. The vendor-first `SLACK_MAX_*`
+  and `DISCORD_MAX_*` names are the same numbers, marked `@deprecated`, and go
+  in 1.0 (#65).
+
 - `QueueOptions.maxEntries` is the new name for `maxItems`. The console buffer,
   the breadcrumbs and the network log all cap their ring buffer with
   `maxEntries`; the queue was the one that did not. `maxItems` still works, is
