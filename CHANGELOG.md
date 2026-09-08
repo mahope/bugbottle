@@ -7,6 +7,8 @@ change the API; the changelog says so when they do.
 
 ## Unreleased
 
+## 0.14.0 — 2026-09-08
+
 The accountable release. The rate limit used to key on the first entry of
 `X-Forwarded-For`, which is the one the caller writes, so a fresh header bought
 a fresh allowance; `trustProxy` now says which address to believe, the Express
