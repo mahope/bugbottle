@@ -144,6 +144,36 @@ export {
   type SentryTruncation,
 } from "../sinks/sentry.ts";
 
+// The two issue-tracker sinks for teams that are on neither GitHub nor Linear.
+// Jira is the only sink that does not send Markdown: its v3 API takes the
+// Atlassian Document Format, so the report is rendered as a node tree instead.
+export {
+  jiraSink,
+  buildJiraDescription,
+  jiraBaseUrl,
+  jiraAuthHeader,
+  messageFromJiraBody,
+  DEFAULT_JIRA_ISSUE_TYPE,
+  MAX_JIRA_CONSOLE_ENTRIES,
+  MAX_JIRA_SUMMARY,
+  type JiraSink,
+  type JiraSinkOptions,
+  type CreateJiraIssueResult,
+  type AdfDoc,
+  type AdfNode,
+} from "../sinks/jira.ts";
+
+export {
+  gitlabSink,
+  messageFromGitlabBody,
+  DEFAULT_GITLAB_HOST,
+  MAX_GITLAB_DESCRIPTION,
+  MAX_GITLAB_TITLE,
+  type GitlabSink,
+  type GitlabSinkOptions,
+  type CreateGitlabIssueResult,
+} from "../sinks/gitlab.ts";
+
 export {
   discordSink,
   buildDiscordMessage,

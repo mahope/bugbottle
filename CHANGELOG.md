@@ -9,6 +9,31 @@ change the API; the changelog says so when they do.
 
 ### Added
 
+- Two more places a report can land, for teams on neither GitHub nor Linear.
+  `jiraSink({ site, email, apiToken, projectKey, issueType? })` files a Jira
+  Cloud issue over REST v3. It is the only sink that does not send Markdown:
+  v3 takes the Atlassian Document Format in `description`, so the report is
+  built as a node tree instead — a paragraph for the reporter's words, a bullet
+  list for the facts and the element, a code block for the last twenty console
+  entries. `buildJiraDescription` returns that document on its own. The two
+  credentials are the basic auth pair, base64-encoded UTF-8 safe so an accented
+  token does not throw on the way out, and a refused create names the field:
+  Jira's `errorMessages` list and its per-field `errors` object are joined into
+  the `SinkError` message. `site` accepts `acme`, `acme.atlassian.net` or the
+  full URL.
+- `gitlabSink({ host?, projectId, token, labels? })` files a GitLab issue with
+  the Markdown from `toMarkdown` verbatim. `host` defaults to gitlab.com, so a
+  self-hosted instance is one option; a namespaced `projectId` is URL-encoded
+  into the one path segment, the token travels in `PRIVATE-TOKEN` rather than
+  in `Authorization`, and labels are comma-joined, which is the shape the API
+  takes. GitLab answers `404` rather than `403` for a project the token cannot
+  see, so the `SinkError` message — its own, flat or keyed by field — is the
+  only thing that tells a wrong project from a too-narrow scope.
+  Neither takes an attachment in this version: both want a second request in a
+  different shape, so the screenshot is stored by you and travels as
+  `screenshotUrl`, as it does for GitHub and Linear. The validator-only
+  `bugbottle/server` bundle is unchanged at 528 bytes gzipped — the emitted
+  code is byte-for-byte the same, so neither sink reached the shared path.
 - **Search over the documentation.** `bugbottle.dev/docs` has a field at the
   top of its sidebar — under the header on a phone — over an index generated
   beside the pages: one entry per page and per heading, matched
