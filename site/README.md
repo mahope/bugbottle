@@ -16,7 +16,7 @@ from this host and the favicon is an inline SVG.
 | `da/index.html` | Danish page — same structure, same sections, written for a Danish reader rather than translated |
 | `style.css` | Shared by every page. Colour tokens on `:root`, redefined once for dark mode |
 | `docs.css` | The documentation pages only, loaded after `style.css` and leaning on its tokens |
-| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, plus the scroll reveal and the copy buttons on the code slabs |
+| `demo.js` | Mounts the real `bugbottle/ui` panel with a fake `fetch`, a picture it draws itself and the annotator over it, plus the scroll reveal and the copy buttons on the code slabs |
 | `docs.js` | The documentation pages only: copy buttons, the search field, the topic list closing on a phone, and the current heading in "On this page" |
 | `fonts/` | The four woff2 faces the page is set in, latin only. See "The typefaces" below |
 | `docs/` | **Generated, never committed.** Written by `scripts/build-docs.mjs`; see "The documentation" below |
@@ -85,8 +85,29 @@ Nothing is sent anywhere, and no endpoint exists on the host.
 `mountBugbottle` takes that `fetch` option for exactly this reason; it is
 passed straight through to `sendReport`.
 
-Screenshots are switched off in the demo: `html-to-image` is not loaded, so no
-renderer is given and the panel does not offer the checkbox.
+### The picture the demo draws
+
+`html-to-image` is not loaded here and never will be: a public page has nowhere
+private to put a photograph of whatever a visitor has on screen. But a panel
+with no picture cannot show the part 0.7.0 added, so `demo.js` gives
+`mountBugbottle` a `screenshot` renderer of its own — `drawDemoPicture`, which
+paints a simplified picture of the demo section onto a canvas (the header band,
+a heading, a few text bars, the button and the code slab) and returns it as a
+PNG data URL. It ignores the `root` and the `filter` a real renderer uses,
+because it renders no DOM; it honours `pixelRatio`, so the half-scale retry
+`captureScreenshot` makes really does produce a smaller picture. The colours are
+read from the page's own tokens with `getComputedStyle`, so the drawing follows
+the page into dark mode.
+
+`annotate: createAnnotator` from `/dist/annotate.js` comes with it, so "Edit
+picture" appears and the rectangle, the arrow and the blur can be tried. The
+data URL is allowed by `img-src 'self' data:`, which the policy already had.
+
+Both pages say the picture is drawn rather than captured, and the checkbox and
+its note are the one place the demo overrides the locale: "Attach the drawn
+picture" and "The page draws a simplified picture of itself. Nothing is
+photographed." — the bundled wording, "the picture shows this page as you see
+it now", is true of a capture and would not be true here.
 
 ## The hero screenshot
 
@@ -263,12 +284,18 @@ pages it belongs to.
 `scripts/a11y-site.mjs` is the check that a stylesheet cannot quietly break.
 It serves `site/` and `dist/` the way nginx does — the security headers
 included, parsed straight out of `site/security-headers.conf` — and runs the pinned
-`axe-core` over both landing pages, the documentation index, one deep
-documentation page, the documentation index again with the search field
+`axe-core` over both landing pages, the English landing page again with the
+demo's panel open and the picture editor over it, the documentation index, one
+deep documentation page, the documentation index again with the search field
 holding results, the two comparison pages and the changelog, in **both colour
-schemes** — sixteen runs. The search state is a click, a word typed and a wait for the
+schemes** — eighteen runs. Two of those runs are states rather than pages. The
+search state is a click, a word typed and a wait for the
 list: the results are drawn from JavaScript and nothing else on the site would
-notice a link with no accessible name in them. It fails on a console message as well as on a violation, because
+notice a link with no accessible name in them. The annotator state opens the
+panel, ticks the screenshot box, waits for the drawn picture and presses "Edit
+picture": `scripts/a11y-audit.mjs` audits the same editor, but on a scratch page
+with its own colours, and it is the site's colours and the site's renderer that
+would break here. It fails on a console message as well as on a violation, because
 a page that logs one is a page that is half-working and nothing else here
 would notice.
 

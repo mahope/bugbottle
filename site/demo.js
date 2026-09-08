@@ -6,8 +6,18 @@
  *
  * Nothing leaves the browser. There is no endpoint on this host, no analytics
  * and no storage — the point is to show the payload, not to collect it.
+ *
+ * The picture is the one part that is not the library doing its usual work. A
+ * real capture renders the page through `bugbottle/html-to-image`, and this
+ * page has nowhere private to put such a thing, so the demo hands the panel a
+ * renderer that *draws* a small picture of the demo section instead: a header
+ * band, a few text bars and the button, painted onto a canvas. It is an
+ * approximation, not a photograph, and both pages say so. It is enough for the
+ * part worth trying — the rectangle, the arrow and the blur from
+ * `bugbottle/annotate`, over a picture that never leaves the tab.
  */
 
+import { createAnnotator } from "/dist/annotate.js";
 import { initConsoleBuffer } from "/dist/index.js";
 import { da, en } from "/dist/locales.js";
 import { toMarkdown } from "/dist/server/index.js";
@@ -39,14 +49,101 @@ async function demoFetch(_url, init) {
   });
 }
 
+/*
+ * The picture the demo marks up.
+ *
+ * A `ScreenshotRenderer` is `(root, { filter, pixelRatio }) => Promise<dataUrl>`;
+ * a real one renders `root` and leaves out the nodes `filter` rejects. This one
+ * ignores both. It has no DOM to render — drawing is the honest thing to offer
+ * on a public page — and there is nothing in a drawing for a filter to remove.
+ * `pixelRatio` is honoured, so the one retry `captureScreenshot` makes at half
+ * scale really does produce a smaller picture.
+ *
+ * The colours come from the page's own tokens, so the drawing follows the page
+ * into dark mode rather than being a light rectangle in the middle of it.
+ */
+const PICTURE_WIDTH = 880;
+const PICTURE_HEIGHT = 520;
+
+/** One of the page's colour tokens, with a fallback for a browser that has none. */
+function token(name, fallback) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+async function drawDemoPicture(_root, options) {
+  const ratio = options && options.pixelRatio > 0 ? options.pixelRatio : 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(PICTURE_WIDTH * ratio);
+  canvas.height = Math.round(PICTURE_HEIGHT * ratio);
+  const paint = canvas.getContext("2d");
+  if (!paint) throw new Error("This browser has no 2D canvas");
+  paint.scale(ratio, ratio);
+
+  const surface = token("--surface", "#ffffff");
+  const ink = token("--ink", "#0d2a24");
+  const muted = token("--muted", "#4a635d");
+  const accent = token("--accent", "#a8102b");
+  const accentInk = token("--accent-ink", "#ffffff");
+
+  // The paper, and the plate the demo section sits on.
+  paint.fillStyle = token("--paper", "#edf0ec");
+  paint.fillRect(0, 0, PICTURE_WIDTH, PICTURE_HEIGHT);
+  paint.fillStyle = surface;
+  paint.fillRect(40, 40, PICTURE_WIDTH - 80, PICTURE_HEIGHT - 80);
+  paint.strokeStyle = token("--rule", "#d3dcd6");
+  paint.lineWidth = 2;
+  paint.strokeRect(40, 40, PICTURE_WIDTH - 80, PICTURE_HEIGHT - 80);
+
+  // The header band, with the wordmark's square where the bottle stands.
+  paint.fillStyle = accent;
+  paint.fillRect(40, 40, PICTURE_WIDTH - 80, 56);
+  paint.fillStyle = accentInk;
+  paint.fillRect(68, 60, 18, 18);
+  paint.fillRect(100, 64, 120, 10);
+
+  // The heading, then the paragraph as bars in the section's own text colour.
+  paint.fillStyle = ink;
+  paint.fillRect(68, 136, 360, 18);
+  paint.fillStyle = muted;
+  const bars = [520, 486, 540, 300, 512, 448];
+  bars.forEach((width, i) => paint.fillRect(68, 184 + i * 26, width, 10));
+
+  // The button, and the slab the Markdown is rendered into beside it.
+  paint.fillStyle = accent;
+  paint.fillRect(68, 360, 176, 40);
+  paint.fillStyle = accentInk;
+  paint.fillRect(92, 375, 128, 10);
+  paint.fillStyle = token("--slab", "#0d2a24");
+  paint.fillRect(620, 136, 192, 264);
+  paint.fillStyle = token("--slab-key", "#8fd0bc");
+  for (let i = 0; i < 9; i += 1) {
+    paint.fillRect(636, 160 + i * 26, i % 3 === 2 ? 96 : 160, 8);
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
 const widget = mountBugbottle({
   endpoint: "/this-endpoint-does-not-exist",
   fetch: demoFetch,
   locale,
+  // The renderer above, and the editor that marks what it drew. Both are handed
+  // in rather than imported by the library, so an application that wants
+  // neither pays for neither.
+  screenshot: drawDemoPicture,
+  annotate: createAnnotator,
   texts: {
     intro: danish
       ? "Det her er en demo. Rapporten forlader ikke din browser — den bliver vist på siden."
       : "This is a demo. The report never leaves your browser — it is rendered on the page.",
+    // The locale's own wording is "the picture shows this page as you see it
+    // now", which is true of a capture and not of this drawing. The demo says
+    // what it really attaches.
+    screenshot: danish ? "Vedhæft det tegnede billede" : "Attach the drawn picture",
+    screenshotNote: danish
+      ? "Siden tegner et forenklet billede af sig selv — den er ikke fotograferet."
+      : "The page draws a simplified picture of itself. Nothing is photographed.",
   },
   // The seal red the page uses. It carries white text in both schemes.
   theme: { position: "bottom-right", primary: "#a8102b", onPrimary: "#ffffff" },
