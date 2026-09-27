@@ -180,6 +180,24 @@ nextjs.org, angular.dev, nuxt.com.
   Se "Fund fra WordPress-iterationen" — de tre fund, der ikke stod i planen.
   **MÅL: `/docs/wordpress/` baseline 0 besøgende (siden findes ikke) pr.
   2026-09-27.** Sammenlign 25/10 og 25/11. 38 docs-sider (fra 37).
+- [x] **14. `/docs/hono/` — den første *server*-side.** 28/9,
+  `ceo/hono-page`. **Ny akse, målt 28/9 01:3x (Google Suggest, samme metode):
+  `fastify error handling` 10, `hono middleware` 10, `express error handling
+  middleware` 8, `hono error handling` 7, `hono error handler` 5,
+  `cloudflare workers error handling` 5, `nodejs error reporting` 6,
+  `self hosted error tracking` 7** — altså samme bånd som react-router (10) og
+  vue (10), og **nul sider i hele kategorien**: `Server`-gruppen har
+  `receiving-a-report`/`recipes`/`sending-it-somewhere`, men ingen side nævner
+  et server-framework, selv om missionen siger "server-validatorer til flere
+  frameworks". Hono er valgt over Fastify (10) fordi `handleReport` *er* en
+  `Request`→`Response`-funktion, så Hono og Cloudflare Workers kræver **nul
+  lim** — mens Fastify kræver et nyt `fastifyHandler`-export, altså en minor
+  med kode først. Siden dækker begge roller: modtager *og* afsender.
+  Se "Fund fra Hono-iterationen" — fire fund i `hono@4.13.9`'s build, ingen i
+  docs, og det første er en fejl **der ikke kan rapporteres overhovedet**.
+  **MÅL: `/docs/hono/` baseline 0 besøgende (siden findes ikke) pr.
+  2026-09-28.** Sammenlign 25/10 og 25/11. 43 docs-sider (fra 42), 194
+  søgeposter (fra 184).
 
 ### Fund fra Vue-iterationen (28/9) — den billigste side med de hårdeste fund
 
@@ -742,6 +760,67 @@ fejlveje (`client.js:1574` reroute-hook, `client.js:2077` "This will cause a
 full page reload") er **begge `DEV`-guardede**, og `handle_error` har nul
 — så en client-navigationsfejl logges af din hook eller af ingen.
 `unhandledrejection` står **0 gange** i `@sveltejs/kit@2.70.3`.
+
+## Fund fra Hono-iterationen (28/9) — fire fund i `hono@4.13.9`, fire i kode
+
+Metoden er den sjette gang den samme: `npm pack hono@4.13.9`, læs
+`dist/hono-base.js`, `dist/http-exception.js` og de fire adapter-entries — ikke
+hono.dev. Den viste sig endnu engang at være den stærkeste, fordi **to af de fire
+fund er fejl, ingen guide nævner, og den ene slet ikke kan rapporteres.**
+
+1. **En route der glemmer `return` er en 404, ikke en 500** —
+   `res ?? this.#notFoundHandler(c)` (`hono-base.js` linje 303). En handler der
+   returnerer `undefined` uden at finalisere konteksten får
+   `c.text("404 Not Found", 404)`. Altså: ingen throw, ingen `console.error`,
+   intet `onError` ser, **ingen rapport mulig**. Det er det eneste failure mode
+   på hele siden, hvor en reporter ikke kan hjælpe, og det ligner en forkert
+   URL. Derfor står det som et *punkt i "What to check"*, ikke som en rettelse.
+2. **`throw "ikke en Error"` springer hele `onError` over.** `#handleError`
+   (linje 273-278) gør `if (err instanceof Error) … throw err` — alt andet
+   kastes *ud af appen*. En reporter i `onError` ser ingenting, og platformen
+   rapporterer en unhandled rejection i stedet for din 500. Ikke løseligt med
+   en option; kun et `try`/`catch` eller en proceshandler.
+3. **En kastet `HTTPException` når aldrig konsollen.** Standardhandleren
+   tjekker `"getResponse" in err` *før* `console.error(err)` (linje 10-16), så
+   en bevidst 404/401 er korrekt stillet uden log — og følgen for os er at en
+   `onError`, der rapporterer alt hvad den får, **indsender hver eneste 404 som
+   en bug**. Siden giver `err instanceof HTTPException`-filteret.
+4. **`onError` erstatter konsollinjen** (`onError = (handler) => { this.
+   errorHandler = handler }`, linje 162-165) — og `console.error(err)` ligger
+   i modulens *default*-handler. Fjerde framework i rækken (Vue, Nuxt, Reacts
+   `onCaughtError`, nu Hono). Mønstret er nu dokumenteret fire steder; det er
+   ved at være en regel, ikke en undtagelse.
+
+**To fund uden for fejlstien, der ændrer opsætningen:**
+
+- **`buildReport` virker uden DOM.** `collectContext()` svarer
+  `{ url: "", viewport: "", userAgent: "" }` når `window` mangler
+  (`src/capture.ts:225`), og `initConsoleBuffer` patcher
+  `console.error`/`console.warn` ubetinget og springer kun `window`-lytterne
+  over (`src/console-buffer.ts:100-109`) — dens egen JSDoc siger allerede "on
+  the server that is the server's". En Worker kan altså sende en *rigtig*
+  rapport med en rigtig ringbuffer. Det er en egenskab biblioteket altid har
+  haft, og ingen side har brugt den; nu er den dokumenteret for første gang.
+- **`hono/cloudflare-workers` og `hono/deno` indeholder ingen HTTP-handler.**
+  De eksporterer `getConnInfo`, `serveStatic`, `upgradeWebSocket`, `toSSG` —
+  fordi `Hono` selv *er* en fetch-handler (`fetch = (request, …) => …` er en
+  property på klassen, linje 331), så `export default app` er hele historien.
+  Kun `bun` (`getBunServer`), `vercel` og `aws-lambda` (`handle`, som er
+  `(app) => (req) => app.fetch(req)`) har en adapter. Den tabel er næsten
+  sikkert det, der får folk til at sidde fast første gang.
+
+**Konsekvens for resten af rækken:** den nye klasse fra Astro-iterationen
+("hvor mange kroge har den her framework") får en *fjerde* variant her, fordi
+Hono har **én** krog, og den dækker ikke to af de tre fejlklasser: en glemt
+`return` og et ikke-`Error`-kast. Fremover: en serverside-side skal begynde med
+"hvad kan frameworken overhovedet se", ikke med "hvilken krog".
+
+**Næste kandidater i kategorien** (samme måling, ikke valgt endnu):
+`fastify error handling` 10 kræver et nyt `fastifyHandler`-export (minor, kode
+først); `@hono/node-server` + `fileStore` på Node er en *anden* historie end
+Workers og kunne være en sektion i `/docs/recipes/` i stedet for en side;
+`cloudflare workers error handling` 5 kan lægges ind i Hono-siden som en
+D1/KV-`store`-opskrift, hvis ikke den bliver for lang.
 
 ## ❓ Til Mads
 
