@@ -202,6 +202,23 @@ attribute needs a major version, and a new entry point needs a minor one.
   the browser with its message replaced, and `error.digest` is the only thing
   that ties the report back to your server log.
 
+### Fixed
+
+- **`createRootErrorHandlers` deleted the console line it was installed in place
+  of.** React's own default for `onCaughtError` is one `console.error(error)` —
+  in `react-dom@19.3.0`'s production bundle as well as the development one, read
+  out of it to be sure — and passing a function for that key *replaces* the
+  default. An application that adopted the React 19 root handlers, which is what
+  the `React` page tells a plain React application to do, therefore had no
+  console entry left for the errors it was reporting: this library's ring buffer
+  records exactly that line, so the console section of every other report sent
+  from the same page was quietly empty, and the line nobody was looking for in
+  devtools was gone too. Both handlers now write `console.error(error)` before
+  they send, the line React wrote, so adding the reporter does not cost the
+  evidence. The `dedupeMs` window applies to the send only, as before: a
+  component that throws on every render logs every time and still files one
+  report. No API change.
+
 ## 1.0.1 — 2026-09-08
 
 A patch on the day of 1.0: the offline queue could silently skip its retry

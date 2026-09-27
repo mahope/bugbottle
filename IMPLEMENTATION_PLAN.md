@@ -146,6 +146,9 @@ nextjs.org, angular.dev, nuxt.com.
   `useRouteError`), ikke de to projekters dokumentation — metoden har holdt
   seks gange. **MÅL: `/docs/react-router/` baseline 0 besøgende (siden findes
   ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
+  **I GANG 28/9.** Forskningen er færdig, fundene står i "Fund fra
+  React-Router-iterationen", og **den afslørede en fejl i vores egen kode, som er
+  rettet og merged først** (se loggen, iteration 11).
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -586,8 +589,80 @@ afsnitslister mod hinanden. Siderne er én side med et hreflang-par, og den
  almindelige måde den går forkert på er et afsnit på den ene side. Parrene står
 udskrevet i testen, fordi de to sprog ikke deler prosa.
 
+## Fund fra React-Router-iterationen (28/9) — forskningen er færdig, siden er ikke skrevet
+
+Læst i de publicerede builds, som altid: `react-router@8.4.0` (seneste — **v8
+er ude, v7-linjen ender på 7.18.4**; API'et er det samme i begge, `onError` er
+verificeret i begge), `react-dom@19.3.0`'s produktionsbundle, og
+`@remix-run/react@2.17.5`. Plus **deres egen** `docs/how-to/error-reporting.md`,
+som er pakken med svaret og ender i `myReportError(error, location, errorInfo)` —
+altså præcis det sted, hvor bugbottle hører hjemme. Siden skal bygge videre på
+disse otte fund:
+
+1. **Der er tre modes, og de svarer forskelligt.** Framework mode
+   (`HydratedRouter`) og data mode (`createBrowserRouter` + `RouterProvider`)
+   har begge `onError`. **Declarative mode (`<Routes>` / `useRoutes`) har ingen
+   router-krog overhovedet** — `useRoutes` kalder `useRoutesImpl(routes,
+   locationArg)` uden `dataRouterOpts`, så `RenderErrorBoundary` bliver aldrig
+   monteret (`hooks.js`: betingelsen er `dataRouterState && (…)`). Der fanger
+   React Router intet; fejlen lander i din egen boundary. Det er planens
+   tredje fejlklasse, og den har en anden opsætning end de to andre.
+2. **`onError` er en erstatning for konsollinjen på datadelen, ikke en
+   tilføjelse.** `router.js` rummer `console.error` **0 gange** — en fejl fra en
+   loader, action eller middleware har ingen anden log, og `onError` er det
+   eneste sted den kommer ud. `RenderErrorBoundary.componentDidCatch` har derimod
+   et `else console.error("React Router caught the following error during render", error)`,
+   så en *render*-fejl taber linjen kun hvis React ikke logger den — og i
+   React 19 gør den (`defaultOnCaughtError` = `console.error(error)` også i
+   produktion). Samme regel som på de andre frameworksider: log den tilbage.
+3. **En 404 du kastede med vilje kommer ind som en crash.** `isRouteErrorResponse`
+   er stadig eksporteret i v8, og handleren kan ikke kende forskel uden den.
+   Kilden skal springe den over (eller sende den som sin egen type) — ellers
+   fyller en bevidst `throw new Response("Not found", { status: 404 })` inboxen.
+4. **`info.params` er rod-matchets params** — `params: newState.matches[0]?.params ?? {}`
+   — så den er `{}` i enhver app hvis rod-route ikke har et dynamisk segment.
+   Brug `pattern` (eller `useParams()` i boundaryen) til at vide hvilken route
+   det var.
+5. **En route uden egen `ErrorBoundary` fanges af den nærmeste forfader**, og
+   `RenderErrorBoundary` er kun monteret når
+   `match.route.ErrorBoundary || match.route.errorElement || index === 0`.
+   `getDerivedStateFromProps` beholder fejlen indtil **location ændres** eller en
+   revalidation går tilbage til idle — så en "prøv igen"-knap, der bare
+   re-renderer, rydder ikke siden, og hvert forsøg der fejler igen sender en
+   rapport. Serverens `dedupe` på fingerprint er svaret.
+6. **Fejlsiden, hvor panelet ikke er mounted.** Framework-mode's standard er
+   `RemixRootDefaultErrorBoundary`, og den gør `console.error(error)` og renderer
+   sit eget `<html>/<head>/<body>` med inline styles og et script, der logger
+   "💿 Hey developer 👋". **Ringbufferen overlever, panelet gør ikke** — samme
+   svar som de fire andre sider (én knap i `root.tsx`), og her er grunden læst
+   ud af deres egen kilde. Remix v2 har præcis samme klasse.
+7. **Remix v2 har ingen client-krog overhovedet.** `RemixBrowserProps` i
+   `@remix-run/react@2.17.5` er `export interface RemixBrowserProps {}` — tom.
+   Så `onError` er en v7+-ting, og en Remix-v2-app må bruge Reacts egne
+   root-handlers eller lægge knappen i `errorBoundary`-eksporten.
+8. **Serveren: `handleError` i `entry.server.tsx`, og `request.signal.aborted` er
+   ikke valgfrit.** Der er ingen browser på serveren, så svaret er en POST med
+   `{ message }` — `validateReport` kræver **kun** `message` (verificeret i
+   `src/server/handle.ts:1031`), og en ukendt topniveau-nøde bliver `extra`, så
+   stacken kommer med som `extra.stack`. Seks linjer.
+
+Plus: deres `docs/how-to/error-reporting.md` siger "make sure to still log the
+error" — hvilket er den samme halve sandhed Vue-siden skrev om. Vi siger
+hvorfor, og vi siger at `console.error` er den linje ringbufferen læser.
+
 ## ❓ Til Mads
 
+- **`createRootErrorHandlers` slettede konsollinjen den erstattede — rettet
+  28/9.** Reacts egen standard for `onCaughtError` er én `console.error(error)`,
+  også i `react-dom@19.3.0`'s **produktions**bundle (læst ud af den for at være
+  sikker), og at give en funktion for den nøgle *erstatter* standarden. En app
+  der brugte root-handlerne — altså det `React`-siden anbefaler til en plain
+  React-app — havde derfor ingen konsolindgang tilbage for præcis de fejl den
+  rapporterede, og ringbufferen læser netop den linje. Rettet: begge handlers
+  skriver `console.error(error)` før de sender. Fundet kom fra
+  React-Router-undersøgelsen, ikke fra en fejlrapport, og det er det tredje
+  eksempel på samme mønster (Vue, Nuxt, nu os) — **mønstret er værd at kigge
+  efter i hvert framework-afsnit: dækker siden "hvad sker der med konsollen?"**
 - **`mountBugbottle().open()` kan ikke forudfylde beskeden.** Panelets egen
   `openOnError: { prefill: true }` kan det, men kun for vinduesfejl, og kun
   fordi panelet selv ringer `openForError`. Ethvert andet kald — en
@@ -675,6 +750,30 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 11** (`ceo/keep-react-console-line`). Opgave 12
+  forsøgt, men først fundet: **en fejl i vores egen kode**, rettet og merged
+  uden at siden er skrevet endnu. Se "Fund fra React-Router-iterationen" for de
+  otte fund siden skal bygge på.
+  - **Fundet kom fra at læse React 19's produktionsbundle igen, den syvende
+    gang:** `defaultOnCaughtError(error) { console.error(error); }` — også i
+    `react-dom-client.production.js`. `createRootErrorHandlers` giver begge nøgler
+    en funktion, og det *erstatter* standarden. Altså: den React-side, der anbefaler
+    root-handlerne til en plain React-app, slettede præcis den konsolindgang,
+    ringbufferen optager, for de fejl den rapporterede. Rettet med én linje
+    (`console.error(error)` før senden) + test + README-afsnit + CHANGELOG.
+  - **Mønstret er tre gange bekræftet nu** (Vue `errorHandler`, Nuxt
+    `showError`, nu vores egen React-handler): en reporter der *erstatter* en
+    loglinje, tager beviset med. Skriv det som en fast regel for alle
+    frameworksider, ikke som en pointe pr. side.
+  - `npm run check` grøn: 881 tests, 0 fejl, 0 advarsler. IIFE'en er uændret
+    byte for byte (24 645 / 21 063) — denne kode er i `bugbottle/react`, ikke i
+    script-taget. `dist/react/boundary.*` er ændret og committet.
+  - Deploy-noterne fra i går (support, vue, react, wordpress) er **stadig åbne
+    og ikke forfaldne**: merge 23:3x, det næste batch-vindue er 07:30 28/9.
+    Denne iteration merger før det vindue og kan verificeres i samme kørsel.
+  - Næste iteration: skrive `/docs/react-router/` — fundene er skrevet ned, så
+    det er en ren skriveopgave.
 
 - **2026-09-28, iteration 10** (`ceo/support-page`). Opgave 11: `/support/` +
   `.github/FUNDING.yml`. Se opgaven for datagrunden.

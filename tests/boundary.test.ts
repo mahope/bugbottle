@@ -189,6 +189,29 @@ test("the root handlers report each distinct error once per window", async () =>
   assert.match(String(bodies[1]?.message), /a different failure/);
 });
 
+test("the root handlers keep the console line React's own handler would have written", async () => {
+  const { fn, bodies } = fakeFetch();
+  const original = console.error;
+  const logged: unknown[] = [];
+  const error = new Error("the whole root fell over");
+  console.error = (...args: unknown[]) => void logged.push(args[0]);
+  try {
+    const handlers = createRootErrorHandlers({ endpoint: ENDPOINT, fetch: fn });
+    handlers.onCaughtError(error, { componentStack: "\n    at App" });
+    // A component that throws on every render throws as fast as it can render,
+    // so the same error arrives again inside the dedupe window. The console
+    // line is React's behaviour and is not deduplicated — only the send is.
+    handlers.onCaughtError(error, { componentStack: "\n    at App" });
+    await flush();
+  } finally {
+    console.error = original;
+  }
+
+  assert.equal(logged.length, 2, "every throw is logged, the way React logs it");
+  assert.ok(logged.every((line) => line === error));
+  assert.equal(bodies.length, 1, "and the report is still sent once per window");
+});
+
 test("clicking report twice files one report, and the fallback is told it is sending", async () => {
   let release!: () => void;
   const bodies: Record<string, unknown>[] = [];

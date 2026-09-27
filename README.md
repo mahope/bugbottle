@@ -466,6 +466,15 @@ only place in the library that sends without asking — so the privacy text that
 goes with a report belongs in your notice (see
 [Please read this part](#please-read-this-part)).
 
+It puts the log back, though, and that is not politeness. Passing a function for
+`onCaughtError` *replaces* `defaultOnCaughtError`, so without that the error
+leaves no console entry at all — and the console entry is what the ring buffer
+records, and what every other report on that page carries as its console
+section. Each handler writes `console.error(error)` before it sends, exactly the
+line React wrote, so adding the reporter does not cost you the evidence. The
+dedupe window applies to the send only: a component that throws on every render
+still logs every time, and still files one report.
+
 `hydrateRoot` takes the same object, with the same two keys. It is the same
 `RootOptions` the render path reads, so a server-rendered app that hydrates gets
 the same reports as one that does not:
