@@ -109,7 +109,7 @@ nextjs.org, angular.dev, nuxt.com.
   på hele sitet) pr. 2026-09-27.** Sammenlign 25/10. Effekten forventes ikke at
   komme fra trafikken men fra tilliden i salgsfasen — en virksomhedskundes
   privacyfunktion spørger om denne side, før den spørger om features.
-- [x] **9. `/docs/react/` — React uden meta-framework.** 28/9, `ceo/react-page`.
+- [x] **9. `/docs/react/` — React uden meta-framework.** 27/9, `ceo/react-page`.
   Se "Fund fra React-iterationen" — de tre fælder, ingen af dem i Reacts egen
   dokumentation. **MÅL: `/docs/react/` baseline 0 besøgende (siden findes ikke)
   pr. 2026-09-27.** Sammenlign 25/10 og 25/11. 39 docs-sider (fra 38).
@@ -172,7 +172,7 @@ og siger eksplicit hvorfor. En valgfri felt-tilføjelse til en eksisterende
 eksporteret type er en **minor** efter vores egne navneregler, ikke en patch,
 så den ligger under ❓.
 
-**Baseline for rækken (Google Suggest, hentet 28/9, samme metode som
+**Baseline for rækken (Google Suggest, hentet 27/9, samme metode som
 27/9-iterationen):** `react error boundary` **10**, `vue error handling` 10,
 `sveltekit error handling` 7, `svelte error handling` 6, `remix error handling`
 2, `solid start error handling` **0**. React valgt over Vue fordi vi *allerede*
@@ -561,7 +561,7 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
-- **2026-09-28, iteration 8** (`ceo/react-page`). Opgave 9: `/docs/react/` som
+- **2026-09-27, iteration 8** (`ceo/react-page`). Opgave 9: `/docs/react/` som
   sjette side under `Integrations`. Se "Fund fra React-iterationen" — tre
   fælder, alle læst i `react-dom@19.3.0`'s **produktionsbuild**.
   - **Metoden holdt for fjerde gang:** læs *buildet*, ikke dokumentationen.
@@ -715,6 +715,20 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/react/ (ny integrationsside, 39 sider i
+  sitemap'en) 55e975c, merge 9f59905, 2026-09-27 22:32` — næste batch-vindue er
+  **07:30 2026-09-28**. Kan verificeres i **samme kørsel som WordPress-noten
+  nedenfor** (den blev merget 22:24, otte minutter før denne). Verificér
+  **indhold**: `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/react/` med `lastmod 2026-09-28`, siden skal vise
+  de tre fældes overskrifter ("The root handlers are not development-only",
+  "An error boundary is still a class in React 19", "The two send the same
+  error twice") og teksten `react-dom@19.3.0`, `errorBoundary` og
+  `onCaughtError: () => {}`. `Integrations`-gruppen i sidebaren skal have **seks**
+  sider med `/docs/react/` først, `/docs/changelog/` skal have React-posten, og
+  de to krydslinks i side-introen skal pege på `/docs/the-form-react/` og
+  `/docs/catching-render-errors-react/` — ikke på GitHub.
 
 - `VERIFICÉR DEPLOY: /docs/wordpress/ (ny integrationsside, 38 sider i
   sitemap'en) + rettelsen i /da/kom-i-gang/ rute 2, 8bba482, merge f490b6c,
