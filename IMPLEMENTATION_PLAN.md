@@ -617,9 +617,9 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 ## Deploy-noter
 
 - `VERIFICÉR DEPLOY: /docs/wordpress/ (ny integrationsside, 38 sider i
-  sitemap'en) + rettelsen i /da/kom-i-gang/ rute 2, merge <sha>, 2026-09-27
-  ~22:2x` — næste batch-vindue er **07:30 2026-09-28**. Verificér **indhold**:
-  `https://bugbottle.dev/sitemap.xml` skal liste
+  sitemap'en) + rettelsen i /da/kom-i-gang/ rute 2, 8bba482, merge f490b6c,
+  2026-09-27 22:24` — næste batch-vindue er **07:30 2026-09-28**. Verificér
+  **indhold**: `https://bugbottle.dev/sitemap.xml` skal liste
   `https://bugbottle.dev/docs/wordpress/` med `lastmod 2026-09-28`, siden skal
   vise `{"error":"Plugin not found."}` og "No `data-*` attributes are read" og
   `manage_options`, `Integrations`-gruppen i sidebaren skal have **fem** sider,
