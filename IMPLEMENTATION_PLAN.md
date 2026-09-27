@@ -443,10 +443,12 @@ Vi arbejder kun i dette repo, så begge er forslag.
 
 ## Opgraderinger
 
-Ikke startet. `~/.local/oxloop/AFHAENGIGHEDER.md` er ikke læst endnu — gjort i
-den iteration der tager første afhængighedsopgave. Nul runtime-afhængigheder i
-biblioteket, så overfladen er devDependencies + Node-versionen i
-`site/Dockerfile` (node:22) og CI.
+**Sikkerhed tjekket 27/9 (iteration 6): `npm audit` → 0 sårbarheder**, hverken i
+dev- eller i production-afhængigheder. Det er forventeligt: biblioteket har nul
+runtime-afhængigheder, så `package-lock.json` rummer kun byggeværktøjet.
+`~/.local/oxloop/AFHAENGIGHEDER.md` er stadig ikke læst; det er den næste
+iteration, der tager første afhængighedsopgave. Overfladen er devDependencies +
+Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
