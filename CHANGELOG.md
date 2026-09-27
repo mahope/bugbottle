@@ -10,6 +10,23 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`/support/` on bugbottle.dev, and `.github/FUNDING.yml`.** The repository
+  had no funding file and the site had no support page, so the answer to "how do
+  I support this" was nowhere, and the products in this field sell exactly the
+  thing bugbottle does not have — a dashboard behind a plan. The page states the
+  position plainly instead of hiding it: there is no Pro, no team licence, no
+  seat count and no support contract to buy, and a donation unlocks nothing in
+  the product. It then answers the two questions that actually decide whether
+  somebody ships this at work — what the money goes to (the browser matrix, the
+  release cadence, answering issues, keeping the dependency count at zero) and
+  what it does not buy (no priority support, no feature, no branding) — and the
+  procurement checklist a company asks: commercial use, DPA, SLA, security
+  contact, and where the reports go. The free things come first on the page,
+  because for a library with two stars a GitHub star is worth more than a
+  donation. One link, in the footer of both landing pages and in the repository's
+  funding file; no banner, nothing in the panel, and nothing after a report is
+  sent. Nothing in the library changes, so `dist/` is untouched.
+
 - `/docs/vue/`, a documentation page for Vue applications that have no
   meta-framework around them. `bugbottle/vue` is a standalone adapter and
   `vue:error` was only documented as half of the Nuxt page, so the largest

@@ -120,6 +120,32 @@ nextjs.org, angular.dev, nuxt.com.
   (`@vue/runtime-core@3.5.43` + `vue-router@5.3.1`), ingen fra docs.
   **MÅL: `/docs/vue/` baseline 0 besøgende (siden findes ikke) pr. 2026-09-27.**
   Sammenlign 25/10 og 25/11. 40 docs-sider (fra 39), 159 søgeposter (fra 150).
+- [x] **11. `/support/` + `.github/FUNDING.yml`.** 28/9, `ceo/support-page`.
+  Datagrund: produktfasens regel om donationslinks var ikke opfyldt — planens egen
+  ❓-punkt sagde "ingen `FUNDING.yml`, ingen `/support`-side. Vi sælger intet", og
+  det er det dyreste hull i et open-core-produkt: i dette felt sælger
+  konkurrenterne præcis det bugbottle ikke har (et dashboard bag en plan), så
+  en læser, der leder efter en pris, finder i stedet ingenting og konkluderer, at
+  noget er holdt hemmeligt. Siden siger positionen: ingen Pro, ingen
+  team-licens, intet supportkontrakt, og en donation låser intet op i produktet.
+  Den svarer på de to spørgsmål, der afgør om nogen overhovedet shipper det på
+  arbejde (hvad pengene går til / hvad de ikke køber) og på procurementlisten
+  (kommerciel brug, DPA, SLA, sikkerhedskontakt, hvor rapporterne ender).
+  **MÅL: `/support/` baseline 0 besøgende (siden findes ikke) pr. 2026-09-27.**
+  Sammenlign 25/10. Effekten forventes ikke at komme som trafik — den kommer som
+  tillid i salgsfasen, på samme måde som opgave 6.
+- [ ] **12. `/docs/react-router/` — React Router v7 og Remix.** 10 suggest
+  målt 28/9 (`react router error boundary` 10, `remix error boundary` 2,
+  `sveltekit error handling` 4, `solidstart` 0, `qwik` 0) — **tredjestørste
+  efterspørgsel i rækken efter Next.js og Angular**, og de er konkrete:
+  "react router 7 error boundary", "… props", "… not working", "… 404",
+  "… redirect", "react-router declarative error boundary". Remix *blev* React
+  Router, så én side dækker begge navne, og `bugbottle/react` passer i forvejen
+  til den. Kilden bliver de publicerede builds af `react-router` v7
+  (`ErrorBoundary` i declarative mode, `errorElement`, `isRouteErrorResponse`,
+  `useRouteError`), ikke de to projekters dokumentation — metoden har holdt
+  seks gange. **MÅL: `/docs/react-router/` baseline 0 besøgende (siden findes
+  ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -608,9 +634,15 @@ udskrevet i testen, fordi de to sprog ikke deler prosa.
   noget for dem der slår den til? Det er en minor, ikke en patch, fordi det er
   et nyt mount-option. Skal jeg bygge det, eller lade applikationen selv skrive
   id'et i sin egen bekræftelse?
-- **Stripe.** Der er ingen `docs/stripe-kontrakt.md` i repoet og ingen
-  `FUNDING.yml`, ingen `/support`-side. Vi sælger intet. Skal jeg foreslå
-  betalte, licenskontrollerede open-core-tilføjelser under `❓`?
+- **Stripe.** Der er ingen `docs/stripe-kontrakt.md` i repoet, og vi sælger
+  intet. **Delvist besvaret 28/9:** `.github/FUNDING.yml` og `/support/` findes nu,
+  bygget på det ene betalingslink missionen oplyser
+  (`donate.stripe.com/7sYeVcbn50wieFM8gDbMQ0c`) — det er det **eneste** link i
+  hele koden, og der er ingen Stripe-nøgle og intet produkt oprettet. Det åbne
+  spørgsmål er uændret: skal jeg foreslå betalte, licenskontrollerede
+  open-core-tilføjelser under ❓? `/support/` er lavet som et svar på den anden
+  halvdel af spørgsmålet — en læser, der gerne vil betale, skal kunne se *at* det
+  ikke kan, uden at spørge.
 
 ## ❓ Til Mads — søstrepos
 
@@ -643,6 +675,48 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 10** (`ceo/support-page`). Opgave 11: `/support/` +
+  `.github/FUNDING.yml`. Se opgaven for datagrunden.
+  - **Valget var ikke "tilføj en donationsknap", men "svar på det spørgsmål, en
+    læser har, når der ikke står en pris".** Konkurrenterne i dette felt sælger
+    et dashboard bag en plan. bugbottle har intet af det, så en side der bare
+    sagde "donér her" ville være sværere at tro end ingen side: den ville lade
+    alle undværende spørgsmålet stå åbent. Siden starter derfor med, hvad en
+    donation **ikke** køber — ingen Pro, ingen licensnøgle, ingen prioritet i
+    en kø, intet i panelet — og først derefter med, hvad den går til. Det er
+    samme rækkefølge som privacy-siden: felt for felt, med kilden i koden.
+  - **De gratis ting står først, fordi de er det reelle signal.** Et GitHub-stjerne
+    på et repo med to stjerner er den største enkeltstående værdi her; det står
+    derfor som det første afsnit efter "hvad det ikke køber", og siden siger det
+    ærligt, at det er det, der er målt på (★2, 0 forks).
+  - **Ét link, to steder.** `site/support.md` og `.github/FUNDING.yml` peger på
+    samme Stripe-payment-link, som er det eneste link missionen oplyser. Ingen
+    nøgle i repoet, intet Stripe-produkt oprettet, ingen banner, intet i
+    panelet. Det er holdt påtrængende på afstand pr. definitionen: kun en footer-
+    linje på hver landingside + About-gruppen i sidebaren.
+  - **Ingen dansk oversættelse, med vilje.** Som changelog-siden: en `STANDALONE`
+    uden `otherUrl`, ingen `hreflang` i sitemap'en, og den danske landingpage
+    linker til den med `hreflang="en"`. En dansk side ville sige det samme i
+    samme rækkefølge, og så har vi to URL'e med samme tekst — som er præcis det,
+    `hreflang` ikke må bruges til.
+  - **Byggetjekket:** 48 URL'er i sitemap'en (fra 47), 165 søgeposter (fra 159) med
+    ét opslag pr. `##`-afsnit. `dist/` er uændret af builden, byte for byte
+    (IIFE 24 645 / 21 063 mod budgetterne 25 088 / 21 504) — ingen kode i
+    biblioteket rørte sig, så intet at `git add -f dist`.
+  - `npm run check` grøn: 880 tests, 0 fejl, 0 advarsler. CHANGELOG skrevet
+    **inden** commit, plus CLAUDE.md-layouttabellen, README's "Who makes it" og
+    `.gitignore` (den nye genererede mappe skal ignoreres, ellers lander den i
+    git).
+  - **⚠️ `npm run a11y` kunne ikke køre** (fjerde iteration i træk — `findChrome()`
+    returnerer en Windows-sti på denne maskine, så der er ingen Chrome). Siden er
+    ren Markdown: ingen nye DOM-elementer, ingen ny CSS, ingen nye controls. Den
+    er dog lagt i `scripts/a11y-site.mjs`'s `PAGES`, fordi den har et eksternt
+    link midt i en artikel — CI's `browser`-job kører den på hvert push.
+  - **Næste iteration:** opgave 12, `/docs/react-router/` (10 suggest målt i
+    denne iteration, tredjestørste i rækken efter Next.js og Angular, og de er
+    konkrete: "react router 7 error boundary", "… props", "… not working").
+    Remix blev React Router, så én side dækker begge navne.
 
 - **2026-09-27, iteration 9** (`ceo/vue-page`). Opgave 10: `/docs/vue/` som
   tredje side under `Integrations` (react, vue, nextjs, angular, nuxt, astro,
@@ -831,6 +905,22 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /support/ + footerlinket på begge landingsider +
+  .github/FUNDING.yml (48 URL'er i sitemap'en) d4458dd, merge <sha>,
+  2026-09-27 23:3x` — næste batch-vindue er **07:30 2026-09-28**. Kan
+  verificeres i **samme kørsel som de tre notes nedenfor** (Vue 23:04, React
+  22:32, WordPress 22:24 — alle i samme batch). Verificér **indhold**:
+  `https://bugbottle.dev/support/` skal have de fem afsnit ("What a donation
+  does not buy", "What it goes to", "Supporting it without money", "Donating",
+  "If you are buying this for a company"), teksten
+  `donate.stripe.com/7sYeVcbn50wieFM8gDbMQ0c` **og ingen anden
+  donate.stripe.com-adresse**, `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/support/` med `lastmod 2026-09-28`, `About`-gruppen i
+  `/docs/` skal have **tre** poster (Sammenlignet med, Changelog, Support), og
+  footeren på `/` skal have `Support bugbottle` mens footeren på `/da/` skal
+  have `Støt bugbottle`. Tjek også at der stadig står **én** betalingslink på
+  hele sitet: siden skal være det eneste sted, der beder om penge.
 
 - `VERIFICÉR DEPLOY: /docs/vue/ (ny integrationsside, 40 sider i
   sitemap'en, tredje i sidebaren) ef5a576, merge 26281b3, 2026-09-27 23:04` —

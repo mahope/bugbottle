@@ -143,6 +143,9 @@ const PAGES = [
   ["privacy-checklist", "/docs/privacy-checklist/"],
   ["privatliv", "/da/privatliv/"],
   ["changelog", "/docs/changelog/"],
+  /* The support page, because it is the one with an external link in the
+     middle of an article and a list of links in the middle of a paragraph. */
+  ["support", "/support/"],
   /* The landing page and a documentation page under
      `prefers-reduced-motion: reduce`. The landing page is the one with the
      reveal, the demo's panel and a scroll a script asks for; the documentation

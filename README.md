@@ -5190,3 +5190,8 @@ malformed or no files match. Zero dependencies — installs in about a second.
 Mads Holst Jensen, a freelance web and AI developer in Denmark. bugbottle came
 out of client projects where "the save button does nothing" arrived by email
 with nothing attached. [mahoje.dk](https://mahoje.dk) · mads@mahope.dk
+
+There is no paid tier and none is implied by the licence: the library, this
+documentation, the panel and the server half are the same for everybody. What
+a donation would go to, and what it would not buy, is written down on
+[bugbottle.dev/support](https://bugbottle.dev/support/).

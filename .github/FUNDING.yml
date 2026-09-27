@@ -1,0 +1,6 @@
+# Where a donation goes. `custom` rather than `stripe` because the money goes
+# to a Stripe payment link, not to a Stripe account with a username behind it:
+# a donation, not a GitHub Sponsors payout. The same link is on
+# https://bugbottle.dev/support/, and neither place asks for anything.
+custom:
+  - https://donate.stripe.com/7sYeVcbn50wieFM8gDbMQ0c
