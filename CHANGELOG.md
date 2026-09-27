@@ -10,6 +10,26 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- `/docs/react/`, a documentation page for React applications that have no
+  meta-framework around them. `useBugReport` and `BugReportBoundary` were
+  documented under "Get started" and the package's largest adapter had no page
+  of its own. The page is deliberately *not* a second telling of those two
+  pages: it is the three things neither of them says, all read out of
+  `react-dom@19.3.0`'s **production** bundle rather than its documentation,
+  because the documentation is where the interesting part is wrong. The root
+  handlers are **not** development-only — `logCaughtError` and
+  `logUncaughtError` call them with no `__DEV__` guard in the production build,
+  so React 19 can be a production error path (the defaults are `console.error`
+  and `reportGlobalError`), and `hydrateRoot` takes the same handlers. An error
+  boundary is **still a class** in React 19, verifiably so:
+  `initializeClassErrorUpdate` reads `fiber.type.getDerivedStateFromError` and
+  `inst.componentDidCatch`, and that is the only path to `onCaughtError`. And
+  **mounting `BugReportBoundary` together with `createRootErrorHandlers` files
+  the same render error twice** — the dedupe only remembers errors the root
+  handlers sent themselves — which the page answers with the one-key
+  `createRoot` call, since React passes the catching boundary in
+  `info.errorBoundary`.
+
 - `/docs/wordpress/`, a documentation page for the WordPress plugin — the route
   in this documentation where the receiving end is not yours to write, and the
   one sibling product with no page at all. The plugin is read as source, not

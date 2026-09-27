@@ -428,6 +428,115 @@ the client and the server share), so a component that throws on every render
 sends one report rather than a thousand. Say so in your privacy notice, and
 pass `scrub: scrubReport` if a message could carry anything personal.
 
+## React
+
+A plain React application — Vite, a build of your own, React Router with no
+framework around it — has no error hook of its own to bind to, so most of the
+work is in the two pages above: the form in
+[The form (React)](#the-form-react) and the two error paths in
+[Catching render errors (React)](#catching-render-errors-react). What is left
+is three things neither of them says, and none of them is in React's own
+documentation. Every claim below was read out of `react-dom@19.3.0`'s
+**production** bundle, because the documentation is where the interesting part
+is wrong.
+
+### The root handlers are not development-only
+
+It is widely repeated — in blog posts, and by people who have read the types —
+that `onCaughtError` and `onUncaughtError` only run in development, and that
+React 19 therefore cannot be a production error reporter. It does not. In
+`react-dom@19.3.0`'s production bundle, `logCaughtError` and
+`logUncaughtError` call the two handlers directly, with no `__DEV__` guard
+around them and no second code path in the development build that the
+production one lacks:
+
+```js
+function defaultOnCaughtError(error) {
+  console.error(error);
+}
+function defaultOnUncaughtError(error) {
+  reportGlobalError(error);
+}
+```
+
+Those are the *defaults*, which is what React installs when you pass nothing:
+a caught error is logged, an uncaught one is rethrown into the global error
+handler. `createRootErrorHandlers` replaces both with a report, and it is the
+only place in the library that sends without asking — so the privacy text that
+goes with a report belongs in your notice (see
+[Please read this part](#please-read-this-part)).
+
+`hydrateRoot` takes the same object, with the same two keys. It is the same
+`RootOptions` the render path reads, so a server-rendered app that hydrates gets
+the same reports as one that does not:
+
+```ts
+import { hydrateRoot } from "react-dom/client";
+import { createRootErrorHandlers } from "bugbottle/react";
+
+const handlers = createRootErrorHandlers({ endpoint: "/api/feedback" });
+hydrateRoot(document.getElementById("root")!, <App />, handlers);
+```
+
+### An error boundary is still a class in React 19
+
+There is still no function-component form, and the reconciler is where you can
+see it: `initializeClassErrorUpdate` reads `fiber.type.getDerivedStateFromError`
+and `inst.componentDidCatch`, and `logCaughtError` — the only path to
+`onCaughtError` — is called from those two branches and nowhere else. React
+looks for two *static-ish* members on a class, and there is nowhere else to
+look. That is why `BugReportBoundary` is built from `createElement` and ships
+without JSX: the package is built by `tsc` alone, and a component that renders
+nothing of its own should not be the reason it needs a JSX pipeline.
+
+The same function says something less obvious about timing. `logCaughtError`
+runs from the boundary's update *callback*, which means the fallback is
+already on screen when the root handler fires. A report sent from
+`onCaughtError` describes a page state the person may never have seen.
+
+### The two send the same error twice
+
+This is the trap, and it costs one extra row per render error in the inbox.
+`createRootErrorHandlers` returns the *same* function for both keys, and its
+`dedupeMs` only remembers errors **it** has already sent. `BugReportBoundary`
+sends on a click through a completely separate path. Mount both, let a component
+throw, and the reporter's button and the root handler each file the same error —
+one the moment it is caught, one when somebody presses the button.
+
+React hands you the way out. `onCaughtError` receives `info.errorBoundary`, the
+boundary instance that caught the error (and `null` when no class boundary
+did), and the caught case is precisely the one `BugReportBoundary` already
+offers to report. So pass one key and let the other through:
+
+```ts
+const root = createRootErrorHandlers({ endpoint: "/api/feedback" });
+
+createRoot(node, {
+  // A boundary caught it, and it already renders a button that asks.
+  onCaughtError: () => {},
+  onUncaughtError: root.onUncaughtError,
+}).render(<App />);
+```
+
+What React passes in `errorBoundary` is not in `RootErrorHandlers`'s type, so
+TypeScript will not hand it to you without a cast — which is why the version
+above ignores the first argument instead. The missing field is a one-line
+addition to an exported type; it is under **❓** below rather than shipped in
+a patch, because we do not change an export's signature in a patch.
+
+### What no boundary ever sees
+
+Both root handlers are called from inside the reconciler, so only errors React
+itself ran into can reach them: a throw during render, in a lifecycle, in an
+effect, or in a commit. The other half of a React application's failures
+happens where React is not — an event handler, a `setTimeout`, an `await` that
+rejects, code the framework never called. None of those are boundary work and
+React's documentation is the authority on exactly which is which; the point
+here is what catches them instead. `window.onerror` and `unhandledrejection` do,
+and the console buffer patches both from the first line of the script tag —
+which is why the script tag is a complete answer on a page with no framework,
+and why the boundary is an addition to it rather than a replacement.
+
 ## Next.js
 
 Next.js owns the error boundary in an App Router application, so
