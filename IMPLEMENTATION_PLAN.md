@@ -84,9 +84,11 @@ nextjs.org, angular.dev, nuxt.com.
   Forventning: samme mønster som nr. 1, anden framework.
   27/9, `ceo/angular-guide`. **MÅL: `/docs/angular/` baseline 0 besøgende
   (siden findes ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
-- [ ] **3. `/docs/nuxt/`** — 11 suggest. `vue:error`, `app:error`,
+- [x] **3. `/docs/nuxt/`** — 11 suggest. `vue:error`, `app:error`,
   `<NuxtErrorBoundary @error>`, `error.vue`, `fatal: true`-forskellen.
   Adapteren findes allerede, så det er ren dokumentation.
+  27/9, `ceo/nuxt-guide`. **MÅL: `/docs/nuxt/` baseline 0 besøgende
+  (siden findes ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
 - [ ] **4. `/docs/astro/`** — 1 suggest, billigst (framework-agnostisk, script
   tag). Lav prioritet.
 - [ ] **5. `/compare/`: tilføj Sentry-SDK'en** (`@sentry/react` 29,3 mio
@@ -110,7 +112,52 @@ nextjs.org, angular.dev, nuxt.com.
 - Verifikations-sektionen i hver frameworkside er et genbrugeligt mønster
   (Sentry har det på hver side). Skriv det en gang som et afsnit.
 
-## Fund fra Angular-iterationen (27/9) — genbruges af nr. 3 og 4
+## Fund fra Nuxt-iterationen (27/9) — de tre ting der gør siden bedre end de andre to
+
+Kilderne er læst i `nuxt/nuxt` på `main` (samme version som `Recipes` bruger,
+4.5.2) — `packages/nuxt/src/app/{entry.ts,nuxt.ts,composables/error.ts}`,
+`components/{nuxt-root.vue,nuxt-error-boundary.vue}` og
+`plugins/chunk-reload*.client.ts` — plus de udgivne `.d.ts` fra
+`nuxt@4.5.2` og `@nuxt/schema@4.5.2`. **Ikke** docs-siden, som er det de fleste
+koperier. Den siger for eksempel ingenting om `app:chunkError`.
+
+1. **`config.errorHandler` og `vue:error` er ikke det samme, og hvilken af
+   dem der ser en fejl afhænger af hvor fejlen opstod.** `nuxt-root.vue`'s
+   `onErrorCaptured` kalder altid `vue:error`, og returnerer `undefined` for en
+   almindelig klientfejl — så Vue *også* kalder `config.errorHandler` med det
+   **samme** objekt. Men `<NuxtErrorBoundary>` returnerer `false` og kalder
+   `vue:error` selv, så **kun** hooken ser den. Siden bruger derfor begge plus
+   en `WeakSet`, så én hændelse er én rapport. Det er samme slags fund som
+   Angular-sidens `onViewError`.
+2. **Fælden der afgør om integrationen virker overhovedet:**
+   `applyPlugins` (nuxt.ts:436-446) genkaster med det samme, medmindre
+   `payload.error` allerede er sat — og så **stopper løkken**. Alle plugins
+   efter den der kastede kører aldrig, også din. Symptomet er ikke en fejl, det
+   er `error.vue`: en fuld side med et statusnummer og ingen konsol-linje, på
+   en side ingen kan rapportere fra, fordi panelet er en af de plugins der ikke
+   blev indlæst. `enforce: "pre"` er svaret. `enforce: "post"` er værre, og
+   `dependsOn` hjælper kun mellem to plugins der begge findes.
+3. **Den fejl Nuxt håndterer med vilje og aldrig viser nogen:**
+   `app:chunkError`, typet `({ error }: { error: any }) => HookResult`, brugt af
+   tre indbyggede plugins (`nuxt:chunk-reload`, `-immediate`, `-crawler`) der
+   alle bare kalder `reloadNuxtApp`. Udløseren er en hashed chunk-URL der ikke
+   findes længere fordi et deploy kom ud — præcis den klasse fejl en person
+   melder ind, som vi ikke kan se. `experimental.emitRouteChunkError` er typet
+   `false | "manual" | "automatic" | "automatic-immediate"` i `@nuxt/schema` —
+   fire værdier, mens dokumentationen kun nævner to. Det er en konverterings-
+   og tillidsmulighed, ikke en teknisk detalje.
+
+**Bekræftet at en bruger-sat `config.errorHandler` overlever:**
+`entry.ts:71-74` fjerner Nuxts *egen* standardhandler ved `app:suspense:resolve`,
+men kun hvis den stadig er den samme reference (`handleVueError`, mærket
+`__nuxt_default`). En handler sat i en plugin står der stadig efter hydration.
+
+**Åben i18n-mismatch (ikke løst, samme som på de to andre sider):** de tre
+framework-siderseksers er kun på engelsk. `site/da/kom-i-gang/` er dansk, resten
+er ikke. Ikke en fejl, men det er den næste stor danske overbygning hvis
+Mads vil have den.
+
+## Fund fra Angular-iterationen (27/9) — genbruges af nr. 4
 
 Kilderne er læst i `@angular/core@22.2.0`'s **types og FESM-bundle** (ikke
 angular.dev, der er client-renderet og returnerer en tom skal til webfetch) samt
@@ -151,8 +198,12 @@ Verifieret: `ErrorHandler`, `provideBrowserGlobalErrorListeners()` og
   selv om den kender beskeden. Fixet er lille (en valgfri
   `open({ prefill })`, ~40 bytes på `bugbottle/ui`), men det **rører et
   eksisterende eksports signatur**, så efter vores egne navneregler er det en
-  minor, ikke en patch. Bygge det, eller lade Angular/Nuxt-siderne pege på
+  minor, ikke en patch. Bygge det, eller lade framework-siderne pege på
   `bugbottle/triggers` og lægge fejlen i `extra` i stedet?
+  **Nuxt-siden gør problemet større end de to andre:** `error.vue` er en hel
+  separat side load, hvor panelet slet ikke er mounted, så en rapport derfra er
+  nødt til at være en knap. Den beslutning tager nummer 4 (Astro) med sig, fordi
+  den har samme fejl-side.
 - **Search Console-eksport.** Uden pr. side-visninger, klik, CTR og position kan
   Fase 3 ikke måles. Én CSV-eksport pr. side, 28 dage.
 - **Deploy.** Hvordan kommer bugbottle.dev live? Intet i repoet bygger
@@ -188,6 +239,28 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-27, iteration 3** (`ceo/nuxt-guide`). Landede `/docs/nuxt/` som
+  tredje frameworkside under `Integrations`. 36 docs-sider (fra 35).
+  Læst Nuxts *kilde* (`entry.ts`, `nuxt.ts`, `composables/error.ts`,
+  `nuxt-root.vue`, `nuxt-error-boundary.vue`, `chunk-reload*.client.ts`) og de
+  udgivne `.d.ts` for `nuxt@4.5.2` — samme version `Recipes` allerede bruger.
+  Se "Fund fra Nuxt-iterationen"; de tre fund er hver især noget ingen guide
+  siger, og de gør siden bedre end de to forgangne.
+  - `dist/` er uændret af builden, byte for byte — ingen eksport rørte sig,
+    så ingen budget flyttede.
+  - **Tre ting jeg rettede i mit eget udkast,** som er værd at huske næste gang
+    en frameworkside skrives: (1) en `nuxtApp.hook("app:beforeMount", …)` som
+    "teardown" er **forkert** — den fyrer før `onNuxtReady` overhovedet har lavet
+    widgeten, så den sletter ingenting; (2) `showError` **pakker** fejlen i en
+    ny `NuxtError` før den kalder `app:error`, så en `WeakSet` på fejlobjektet
+    kan ikke fange `app:error`-dobbeltoptaget for en fatal fejl (harmløst,
+    fordi `open()` er idempotent); (3) `enforce: "pre"` er ikke kosmetik — den er
+    den eneste grund til at pluginet kører overhovedet.
+  - ⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre:** samme
+    grund som i iteration 2, ingen Chrome på maskinen. Siden er ren Markdown —
+    ingen nye DOM-elementer, ingen ny CSS, ingen nye controls — så a11y-auditten
+    rammer ikke denne ændring, og CI's `browser`-job kører den på hvert push.
 
 - **2026-09-27, iteration 2** (`ceo/angular-guide`). Landede `/docs/angular/`
   som anden frameworkside under `Integrations`. 35 docs-sider (fra 34).
@@ -233,3 +306,11 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
   2026-09-27. Begge nye sider og `nextjs`-siden kan verificeres i samme
   kørsel.
 
+
+- `VERIFICÉR DEPLOY: /docs/nuxt/ (tredje integrationsside, 36 sider i
+  sitemap'en) 118efbb, 2026-09-27 ~18:5x` — næste batch-vindue er 21:30
+  2026-09-27. Verificér **indhold**: `https://bugbottle.dev/sitemap.xml` skal
+  liste `https://bugbottle.dev/docs/nuxt/`, siden skal vise Nuxt-guiden med
+  `enforce: "pre"` og `app:chunkError`, og `Integrations`-gruppen i sidebaren
+  skal have tre sider. Sidstmod for `/docs/nuxt/` skal være 2026-09-27.
+  **Alle tre deploy-noter kan verificeres i én kørsel** (nextjs, angular, nuxt).
