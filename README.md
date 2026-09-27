@@ -813,6 +813,349 @@ reload a fresh page and throw from a constructor, before the first render: the
 panel does not exist yet, and the service's `wanted` flag is the only reason
 that report arrives at all.
 
+## Nuxt
+
+Nuxt splits the error path in two halves that most integrations wire up
+backwards. The first is `vueApp.config.errorHandler`, and it is the bigger of
+the two: Nuxt's own words are that it "will receive all Vue errors, even if they
+are handled", where the `vue:error` hook that most guides reach for is built on
+`onErrorCaptured` and therefore only fires for errors that reached the top. The
+second half is `app:error`, which covers the window before Vue exists at all —
+plugins, `app:created`, `app:beforeMount`, the mount itself, `app:mounted`. A
+plugin that reports through `vue:error` alone reports every crash and none of
+the failures, and the failures are the ones that cost a session.
+
+**One plugin, both halves.** It must be a `.client.ts` plugin, and it must be
+`enforce: 'pre'` — both halves of that sentence are load-bearing, and the second
+is explained under "The plugin that never runs" below.
+
+```ts
+// plugins/bugbottle.client.ts
+import { mountBugbottle, type BugbottleWidget } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image";
+import { da } from "bugbottle/locales";
+
+export default defineNuxtPlugin({
+  name: "bugbottle",
+  // Without this a plugin that throws stops the ones after it, and this is one
+  // of the ones after it. Read "The plugin that never runs" before removing it.
+  enforce: "pre",
+  setup(nuxtApp) {
+    const config = useRuntimeConfig();
+    let widget: BugbottleWidget | undefined;
+    let wanted = false;
+
+    // The window-level half: the message is already known, so the box is not empty.
+    const open = () => {
+      if (widget) {
+        widget.open();
+      } else {
+        // An error before this plugin's own `setup` finished still wants a panel.
+        wanted = true;
+      }
+    };
+
+    // Report each error once. `vue:error` and `config.errorHandler` are handed
+    // the same object for the same incident; this is what keeps that to one
+    // report. A thrown string has no identity to remember, so it is reported
+    // every time — which is the honest answer for a value nobody can compare.
+    const reported = new WeakSet<object>();
+    const report = (error: unknown, where: string): void => {
+      if (typeof error === "object" && error !== null) {
+        if (reported.has(error)) return;
+        reported.add(error);
+      }
+      open();
+      console.error(`[bugbottle:${where}]`, error);
+    };
+
+    // Everything Vue knows about, including errors a component caught itself.
+    // Nuxt unsets *its own* default handler once the app hydrates, and only
+    // that one — a handler set here is still installed afterwards.
+    nuxtApp.vueApp.config.errorHandler = (error, instance, info) => {
+      report(error, `vue:${info}`);
+      // Keep the console. Replacing Vue's handler silently drops it otherwise,
+      // and this library is not a monitoring agent.
+      console.error(`[vue:${info}]`, error, instance);
+    };
+
+    // `vue:error` is not redundant with the handler above. Nuxt calls it for
+    // every error that reaches the root, and `<NuxtErrorBoundary>` calls it
+    // itself and then swallows the error — so an error inside a boundary never
+    // reaches `config.errorHandler` at all. Wire both, report each once.
+    nuxtApp.hook("vue:error", (error) => report(error, "vue:error"));
+
+    // Everything that happens before Vue exists: a plugin that throws, the
+    // mount, `app:mounted`. This half arrives in production and in dev alike.
+    nuxtApp.hook("app:error", (error) => report(error, "app:error"));
+
+    // The one error Nuxt handles on purpose and never shows anybody: a hashed
+    // chunk 404s because a deploy replaced it, and Nuxt's answer is a hard
+    // reload. Read "The error that reloads itself away" below.
+    nuxtApp.hook("app:chunkError", ({ error }) => report(error, "chunkError"));
+
+    // `onNuxtReady` is the client-only, post-hydration hook. `.client.ts` already
+    // keeps the panel off the server, and this keeps it off the first paint.
+    onNuxtReady(() => {
+      widget = mountBugbottle({
+        endpoint: config.public.feedbackEndpoint as string,
+        screenshot: htmlToImage,
+        locale: da,
+        extra: { appVersion: config.public.appVersion },
+        openOnError: { prefill: true },
+      });
+      if (wanted) widget.open();
+    });
+  },
+});
+```
+
+The two Vue hooks overlap — Nuxt's root `onErrorCaptured` hands the *same* error
+to `vue:error` and then returns `undefined`, so Vue calls `config.errorHandler`
+with it too — which is what `report` is for. `app:error` is the one that can
+still open the panel twice for a single incident, because `showError` wraps the
+error in a fresh `NuxtError` before it calls the hook; `open()` is idempotent, so
+the cost is a duplicated console line rather than two panels.
+
+There is no teardown, and that is not an oversight: a `.client.ts` plugin runs
+once per page load, and every listener `mountBugbottle` installs dies with the
+document. An application that tears its Nuxt app down without leaving the page
+is a test or `experimental.componentIslands`, and both are better served by
+mounting inside the component that owns the lifetime.
+
+`isNuxtError` is the import worth keeping when a `createError` should become a
+report rather than a string. Nuxt's `NuxtError` is not a class you can
+`instanceof` — it is an interface extending `H3Error` with `status` and
+`statusText` (and the deprecated `statusCode` and `statusMessage`) on top — so
+the guard is a function, and the type is what tells TypeScript
+`error.statusCode` is a number rather than an `Error`.
+
+```ts
+// A throw like this is a report with a status on it, not an unhandled Error.
+throw createError({
+  status: 402,
+  statusText: "Payment Required",
+  message: `Plan ${planId} is not active`,
+  data: { planId },
+});
+```
+
+Note the split: `statusText` for the short HTTP phrase, `message` for anything a
+person reads. Nuxt's `statusText` is restricted to tabs, spaces and visible
+ASCII, and a `message` is what reaches your `error.vue`.
+
+### The plugin that never runs
+
+This is the part that decides whether the integration works, and it is one line
+of Nuxt's source. In `applyPlugins`, a plugin that throws is rethrown straight
+away unless `payload.error` is already set:
+
+```js
+try {
+  await applyPlugin(nuxtApp, plugin);
+} catch (e) {
+  // short circuit if we are not rendering `error.vue`
+  if (!nuxtApp.payload.error) { throw e }
+  error ||= e as Error;
+}
+```
+
+The loop stops. Every plugin after the one that threw never runs — including
+yours, if it is registered later than a plugin that fails. And when that happens
+you get `error.vue`, which is the failure mode that hides everything: a full
+page with a status number on it and no console line, on a page nobody can report
+from, because the panel is one of the plugins that did not load.
+
+`enforce: "pre"` sorts yours to the front, ahead of every `default` plugin. Two
+things do not help: `enforce: "post"` is worse, and a `dependsOn` name is only
+honoured between two plugins that both exist. The other half of the answer is
+that an error thrown *inside* `error.vue` reaches nothing at all, so keep that
+file to the one button it needs.
+
+The related trap is the one Nuxt's own docs warn about, and it is why a
+throwing plugin is worth reporting rather than reloading: `$route` and
+`useRouter` are not ready until plugins have run, so a plugin that threw "won't
+be re-run until you clear the error", and a report gathered from the error page
+has no route in it.
+
+### The error that reloads itself away
+
+Nuxt has a third hook that its error-handling page never mentions:
+`app:chunkError`, typed `({ error }: { error: any }) => HookResult`. Three
+built-in plugins subscribe to it — `nuxt:chunk-reload`,
+`nuxt:chunk-reload-immediate` and `nuxt:chunk-reload-crawler` — and all they do
+is call `reloadNuxtApp`, so the page hard-reloads and the evidence is gone. That
+is a good default for a visitor and a silent one for you: the trigger is a hashed
+chunk URL that no longer exists because a deploy went out, which is precisely
+the class of bug a person reports and you cannot see.
+
+Set `experimental.emitRouteChunkError: "manual"` to take it over, and report
+from the hook. The type in `@nuxt/schema` is
+`false | "manual" | "automatic" | "automatic-immediate"` — four values, where
+the documentation names two. With `"manual"` the built-in plugins still run
+because the event is still emitted, so the reload is a safety net under your
+report rather than instead of it.
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  experimental: { emitRouteChunkError: "manual" },
+});
+```
+
+### On the error page itself
+
+`error.vue` is a separate page load, which means route middleware runs again
+and `useError()` is the way to ask "am I looking at an error page?" from a
+middleware. It is also the one place a report can be *about* the failure rather
+than of it, because the panel is not mounted there. One button is the whole
+integration:
+
+```vue
+<!-- error.vue -->
+<script setup lang="ts">
+import type { NuxtError } from "#app";
+
+const props = defineProps({ error: Object as () => NuxtError });
+</script>
+
+<template>
+  <main>
+    <h1>{{ props.error.statusCode }}</h1>
+    <p>{{ props.error.message }}</p>
+    <NuxtLink to="/">Back to safety</NuxtLink>
+    <ReportProblem :message="`${props.error.statusCode} on the error page`" />
+  </main>
+</template>
+```
+
+`statusCode` and `statusMessage` are the deprecated spellings on `NuxtError`;
+`status` and `statusText` are the current ones, and a `NuxtError` built by hand
+only has the latter. The panel is not mounted on this page — it is a fresh
+document after a fatal error, and the plugin that mounts it is a plugin like any
+other — so a report from here is `<ReportProblem>`, defined below.
+
+For a *local* boundary instead of the whole page, `<NuxtErrorBoundary>` renders
+its `#error` slot in place and returns `false` from its own `onErrorCaptured`, so
+the error stops there: it never reaches the error page, and it never reaches
+`config.errorHandler`. It calls `vue:error` itself on the way past, which is why
+the plugin wires both hooks — and why a page that only wired the handler misses
+everything inside a boundary.
+
+```vue
+<NuxtErrorBoundary @error="onError">
+  <SomePanel />
+  <template #error="{ error, clearError }">
+    <p>{{ error.message }}</p>
+    <button type="button" @click="clearError()">Try again</button>
+  </template>
+</NuxtErrorBoundary>
+```
+
+### The form in your own markup
+
+The composable, for an application that wants a form rather than a panel. It is
+the same state machine as `The form (Vue)`, and inside a plugin it needs an
+effect scope, so call it from a component:
+
+```vue
+<!-- components/ReportProblem.vue -->
+<script setup lang="ts">
+import { buildReport, captureScreenshot, sendReport } from "bugbottle";
+import { htmlToImage } from "bugbottle/html-to-image";
+
+const props = defineProps<{ message?: string }>();
+const busy = ref(false);
+
+async function report(): Promise<void> {
+  busy.value = true;
+  try {
+    const config = useRuntimeConfig();
+    // Screenshots fail open: a render that throws costs the picture, not the report.
+    const screenshot = await captureScreenshot(htmlToImage).catch(() => null);
+    await sendReport(
+      config.public.feedbackEndpoint as string,
+      buildReport({ type: "bug", message: props.message ?? "Something broke", screenshotDataUrl: screenshot }),
+    );
+  } finally {
+    busy.value = false;
+  }
+}
+</script>
+
+<template>
+  <button type="button" :disabled="busy" @click="report">
+    {{ busy ? "Sending…" : "Report a problem" }}
+  </button>
+</template>
+```
+
+**Errors that reach no hook at all.** Nuxt's data composables do not throw.
+`useFetch` and `useAsyncData` put a failed request in `error.value` and carry on
+rendering, so a page whose only wiring is the plugin above reports every crash
+and stays quiet about a list that came back empty — which is most of what people
+write in. That half is a button, and the panel's floating trigger is already
+one.
+
+```vue
+<script setup lang="ts">
+const { data, error } = await useFetch("/api/orders");
+if (error.value) {
+  // Nobody is going to read this, and the panel will never open on its own.
+  throw createError({ status: 502, message: "Orders could not be loaded" });
+}
+</script>
+```
+
+Throwing it yourself puts it on the framework path, where the plugin sees it. Or
+render a message and put a `ReportProblem` button under it, which is the
+version that reaches a person who is not an engineer.
+
+**One script tag.** For an application that does not bundle, `One script tag` is
+the whole integration: no plugin, no `enforce`, no plugin ordering to get wrong,
+and the same `data-*` attributes as everywhere else. In a Nuxt app put it in
+`app.vue` behind `ClientOnly`, or in `nuxt.config.ts`'s `app.head.script` with
+`tagPosition: "bodyClose"`, so it lands after the app's own markup:
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  app: {
+    head: {
+      script: [
+        {
+          src: "https://cdn.jsdelivr.net/npm/bugbottle@1.0.1/dist/bugbottle.js",
+          "data-endpoint": "/api/feedback",
+          "data-open-on-error": "prefill",
+          tagPosition: "bodyClose",
+        },
+      ],
+    },
+  },
+});
+```
+
+**Receiving it.** `server/api/feedback.post.ts` is the endpoint, and `Recipes`
+has the whole snippet — the line that matters there is `toWebRequest(event)`,
+because Nitro hands you an `H3Event` and not a `Request`. Two Nuxt-specific notes
+the snippet does not need to repeat: `maxBodyBytes` is a cap you have to raise
+yourself, since Nitro's own body limit is applied before your handler sees
+anything, and the client address is `event.node.req.socket.remoteAddress` on the
+Node preset, or nothing at all on an edge preset, where `trustProxy: true` is the
+answer.
+
+**What to check before you ship it.** Four throws, and a report from each. A
+template that throws, and a click handler that throws, should both open the
+panel — that is `config.errorHandler`, and it is the path that works in dev and
+silently does nothing behind a production build if you got the name wrong. Then
+throw from a `setup()` in a plugin registered *after* the one above: nothing
+should happen, because `enforce: "pre"` is why the report is still there, and
+this is the throw that proves it. Third, `createError({ fatal: true })` from a
+click handler: the page is replaced, so confirm the report went out before it
+went. Fourth, deploy over a running tab and navigate — a chunk 404 is invisible
+unless `emitRouteChunkError: "manual"` is set, and that is the one to check on a
+phone, on a real network, with an old tab open.
+
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
