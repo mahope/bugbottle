@@ -537,6 +537,305 @@ and the console buffer patches both from the first line of the script tag —
 which is why the script tag is a complete answer on a page with no framework,
 and why the boundary is an addition to it rather than a replacement.
 
+## Vue
+
+A plain Vue application — Vite, Vue Router, no Nuxt around it — has one hook
+that sees nearly everything: `app.config.errorHandler`. What is left is four
+things Vue's own error-handling page does not say, and two of them are the kind
+of thing you only find by reading the published bundle, because the
+documentation is where the interesting part is wrong. Every claim below was
+read out of `@vue/runtime-core@3.5.43`'s **production** build and
+`vue-router@5.3.1`'s, both fetched from their npm tarballs.
+
+### One hook, and setting it deletes the console line
+
+This is the whole integration for a Vue application that is not server-rendered:
+
+```ts
+// main.ts
+import { createApp } from "vue";
+import { mountBugbottle } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+import { da } from "bugbottle/locales";
+import App from "./App.vue";
+
+const widget = mountBugbottle({
+  endpoint: "/api/feedback",
+  screenshot: htmlToImage,
+  locale: da,
+  openOnError: { prefill: true },
+});
+
+const app = createApp(App);
+
+// Everything Vue routes through its own funnel: setup, render, watchers,
+// lifecycle hooks, event handlers, and any promise those return.
+app.config.errorHandler = (error, instance, info) => {
+  widget.open();
+  // Keep the console. See below: setting this handler *replaces* Vue's own
+  // line, and this library is not a monitoring agent.
+  console.error(`[vue:${info}]`, error, instance);
+};
+
+app.use(router).mount("#app");
+```
+
+`handleError` is a single function, and the order of its branches is the whole
+subject of this page:
+
+```js
+function handleError(err, instance, type, throwInDev = true) {
+  const { errorHandler, throwUnhandledErrorInProduction } =
+    instance && instance.appContext.config || EMPTY_OBJ;
+  if (instance) {
+    let cur = instance.parent;
+    while (cur) {
+      const errorCapturedHooks = cur.ec;
+      if (errorCapturedHooks) {
+        for (let i = 0; i < errorCapturedHooks.length; i++) {
+          if (errorCapturedHooks[i](err, exposedInstance, errorInfo) === false) {
+            return;
+          }
+        }
+      }
+      cur = cur.parent;
+    }
+    if (errorHandler) {
+      callWithErrorHandling(errorHandler, null, 10, [err, exposedInstance, errorInfo]);
+      return;
+    }
+  }
+  logError(err, type, contextVNode, throwInDev, throwUnhandledErrorInProduction);
+}
+```
+
+Read the two `return`s. If any `onErrorCaptured` hook up the tree returns
+`false`, the function returns there — so `app.config.errorHandler` is never
+called. And if `errorHandler` is set at all, the function returns before
+`logError`, which is where Vue's own `console.error(err)` lives. **Installing a
+handler deletes the console line**, and this library's console ring buffer
+records exactly that line. A reporter that sets the hook and does not log
+produces a report with an empty console, and the reporter's own screenshot
+showing a page that looks fine. Hence the second line in the snippet.
+
+That is the same sentence the [Nuxt page](#nuxt) says about Nuxt's default
+handler, and it is why this is not a monitoring agent you can leave switched
+on: two lines of your code are what keeps the evidence.
+
+One more thing about that branch, because it is the question everyone asks
+first. Vue calls your handler through `callWithErrorHandling(errorHandler,
+null, …)` — with `instance` as `null`. So a handler that throws cannot recurse
+into itself: the throw goes back to `handleError` with no instance, skips the
+whole block above, and lands in `logError`, which in production is a
+`console.error` and in development rethrows. Your reporter cannot hang the
+application by failing inside the error hook.
+
+### The error that disappears without a trace
+
+`onErrorCaptured` returning `false` is the documented way to stop propagation
+to a parent, and it is also, quietly, a way to delete an error. Three
+consequences, all in the loop above:
+
+- The application handler is never called. No report.
+- `logError` is never reached, so nothing is printed either. No console entry.
+- Nothing is thrown in production, because nothing throws at all.
+
+An error that a library decided to handle — a UI kit's own boundary, a
+third-party component wrapping its children — is a bug in that application that
+no reporter on the page will ever see. If you keep a capturing hook anywhere in
+your own code, return nothing rather than `false`, and de-duplicate with a
+`WeakSet` instead; the [Nuxt plugin](#nuxt) shows the set, and a thrown string
+has no identity to remember, which is why it is reported every time.
+
+The same loop explains why the app handler is the better place than a capturing
+hook at all: `let cur = instance.parent` — the walk starts at the *parent*, so a
+hook in the component that throws never sees its own error. The root component
+has no parent to be captured by, so a hook on `App.vue` covers nothing. There
+is no gap in `app.config.errorHandler` for this reason, and there are several in
+`onErrorCaptured`.
+
+### In production nothing throws
+
+`logError` is the function that decides what an unhandled error costs you, and
+it splits on the build:
+
+```js
+function logError(err, type, contextVNode, throwInDev = true, throwInProd = false) {
+  if (__DEV__) {
+    warn(`Unhandled error${info ? ` during execution of ${info}` : ``}`);
+    if (throwInDev) { throw err; }
+    else { console.error(err); }
+  } else if (throwInProd) {
+    throw err;
+  } else {
+    console.error(err);
+  }
+}
+```
+
+In development the error is rethrown, which is why local testing looks nothing
+like production: a white screen locally, one `console.error` line in a
+production build. **There is no crash to attach a report to.** The application
+keeps running with a broken subtree, and the only place the error exists is
+the console — which is the argument for a ring buffer over a screenshot alone,
+and the reason `console.error` and `window.error` are recorded while `log` and
+`debug` are not.
+
+The `throwInProd` argument is `app.config.throwUnhandledErrorInProduction`, a
+public option in the shipped `AppConfig` type. Set it and production behaves
+like development, rethrowing instead of logging. That is a reasonable thing to
+turn on behind a flag while you are chasing something, and it means the errors
+you already have are still the ones that matter.
+
+What else the production build drops: `console.warn` appears **zero** times in
+`runtime-core.cjs.prod.js`, and `console.error` twice. Every Vue warning — a bad
+prop type, a missing key, a component that is not a `ref` — is compiled out of
+a production bundle. A console full of Vue warnings in development is a
+production console with none of them, so the warnings are not a signal you can
+ship a report against.
+
+The third argument is worth reading twice, because it changes shape between the
+two builds:
+
+```js
+const errorInfo = __DEV__ ? ErrorTypeStrings[type]
+                         : `https://vuejs.org/error-reference/#runtime-${type}`;
+```
+
+In development it is a sentence, `"component event handler"`. In production it
+is a **URL**, and the number is the index in the same array:
+
+| Number | Development text | Where it comes from |
+|---|---|---|
+| 0 | setup function | `setup()` or `<script setup>` |
+| 1 | render function | a throw in the render function or template |
+| 2 / 3 | watcher getter / callback | a `watch` source or its callback |
+| 5 / 6 | native event handler / component event handler | `@click` on a plain element, `emit`-based handlers |
+| 13 | async component loader | a `() => import("./X.vue")` that failed |
+| 14 | scheduler flush | a post-render callback that threw |
+| 16 | app unmount cleanup function | `app.unmount()` and `onUnmounted` |
+
+So a report that carries Vue's own `info` string carries a link in production
+and a phrase in development. Print it either way — the number is the one that
+survives, and `vuejs.org/error-reference/#runtime-6` is a two-second lookup for
+whoever reads the report.
+
+### A guard that throws is not a Vue error
+
+This is the one that costs an afternoon. In a Vue Router application,
+`app.config.errorHandler` never sees a failing navigation guard, because
+`vue-router` does not route it through Vue. Its `triggerError` has exactly two
+outcomes, and this is the whole function out of the production build:
+
+```js
+function triggerError(error, to, from) {
+  markAsReady(error);
+  const list = errorListeners.list();
+  if (list.length) {
+    list.forEach((handler) => handler(error, to, from));
+  } else {
+    console.error(error);
+  }
+  return Promise.reject(error);
+}
+```
+
+Three things in five lines. The error goes to `router.onError` subscribers, or
+to the console if there are none — so **registering `router.onError`, which is
+what the documentation tells you to do so you can show a toast, removes the
+console line**, the same trade `app.config.errorHandler` forces and the same
+reason the toast handler should log. Then `Promise.reject`: for a
+programmatic `router.push()` that nobody catches, that rejection is an
+`unhandledrejection`, which the console buffer patches, so you are covered. For
+a `push()` you `await` in a `try`, and for the back/forward button — where the
+navigation promise chain ends in `.catch(noop)` — it is caught by your own
+`catch` and goes nowhere at all.
+
+Wire the router's half, then, and keep the same line in it:
+
+```ts
+// Registering a listener replaces router's own console.error, so log it back.
+router.onError((error, to) => {
+  widget.open();
+  console.error(`[vue-router: ${String(to?.fullPath)}]`, error);
+});
+```
+
+If your application is on Nuxt, this is the `vue:error` half of the
+[Nuxt plugin](#nuxt) and it is already handled there.
+
+### The one Vue bug that never reaches the hook
+
+A hydration mismatch is the most common Vue-only defect there is, and it is
+invisible to everything on this page. `logMismatchError` in the production
+build is:
+
+```js
+let hasLoggedMismatchError = false;
+const logMismatchError = () => {
+  if (hasLoggedMismatchError) { return; }
+  console.error("Hydration completed but contains mismatches.");
+  ...
+};
+```
+
+A bare string, **once per application**, with no error object and no stack —
+and it never passes through `handleError`, so no handler, capturing or
+otherwise, is called. The one line it writes *is* in your report's console
+section, which makes the report for this bug a page context, a screenshot, and
+a sentence with no position in it. There is nothing to point at and no frames
+to resolve; if it matters to you, the only better evidence is the development
+build's own diff output, so keep the log of the deploy you just shipped. A
+report that says "this page hydrated wrong" and nothing else is still worth
+more than an empty inbox.
+
+### Errors that reach no hook at all
+
+Vue's funnel is closed: everything the framework caught ends up in the handler
+above. The other half of a Vue application's failures happens where Vue is not
+— an `await` in a `setTimeout` callback, a `fetch` that rejects inside a plain
+`async` function, a WebSocket error, a third-party script. Vue's
+`callWithAsyncErrorHandling` only attaches to promises **its own** hooks and
+event handlers returned, so none of that is component work. `window.onerror`
+and `unhandledrejection` are, and the console buffer patches both from the
+first line of the script tag. `openOnError: { prefill: true }` is what turns
+those two into an open panel with the message filled in; the floating trigger
+is the button for the failures nobody caught, which is the same answer the
+[Nuxt page](#nuxt) gives its own version of this problem.
+
+The form is the composable, and `The form (Vue)` above has the whole snippet;
+`v-model` works on `message` and `type` because they are writable refs.
+
+### One script tag is not enough here
+
+`One script tag` is the whole integration for a page with no framework, and on
+a Vue page it is **half** of one, for a structural reason rather than a
+framework bug: `app.config.errorHandler` lives on the app instance, and a
+script tag has no way to reach it. Everything the script tag covers — the
+console buffer, the window events, the trigger — works, and a component that
+throws in a production build leaves one `console.error` line and no crash, so
+the report arrives with the panel's evidence and nobody has to install
+anything. But the panel will not open by itself, and the report's console entry
+is the framework's `console.error` rather than a message somebody chose to
+send. For a Vue application, mounting from `main.ts` as above is the whole
+answer, and the script tag is the fallback for a marketing page, a WordPress
+theme, or the error page itself.
+
+### What to check before you ship it
+
+Four throws, and a report from the right ones. First, from a click handler:
+the panel opens, and the report's console holds the `[vue:component event
+handler]` line. Second, from `setup()` in a child component: same, and it also
+proves the `onErrorCaptured` discussion — add a hook returning `false` in a
+grandparent first, and confirm that this report *disappears*, with nothing in
+the console to show for it. Third, from a `setTimeout` callback: the handler
+sees nothing, and the report only exists if somebody presses the trigger —
+which is the half the trigger is for. Fourth, build it and serve the build,
+then throw the first one again: development rethrows and production only logs,
+and if your verification ran against `npm run dev` you have verified nothing
+about the shipping path. Throw from a `beforeEach` guard as well, since that
+one is a different funnel with its own rules.
+
 ## Next.js
 
 Next.js owns the error boundary in an App Router application, so
