@@ -268,6 +268,17 @@ restyling a real panel mounted into the page and printing the
 `mountBugbottle({ theme })` call and the CSS-variable block to copy (#76).
 Nothing in the package changed.
 
+**Unreleased** — an Angular guide at `/docs/angular/`, beside the Next.js one.
+Angular closes the error path more completely than any other framework here, so
+the page is built on the one injectable that ends it: a `Feedback` service that
+owns the panel and mounts it in the browser only, an `ErrorHandler` that keeps
+the console and offers the form instead of POSTing on the reporter's behalf,
+and both wired in `app.config.ts`. The gaps that decide whether it works are in
+the guide, because Angular's own guide does not name them — an error before the
+first render arrives before the panel exists, `onViewError` is the hook for
+errors in a component's own view, and a throwing service method or an unread
+`resource()` error reaches no handler at all. Nothing in the package changed.
+
 **Unreleased** — a Next.js guide at `/docs/nextjs/`, under a new "Integrations"
 group in the sidebar. The first of the framework pages, and the first page
 aimed at the query people actually type — "nextjs error boundary" — rather than

@@ -580,6 +580,239 @@ error arrives carrying the `digest`; and pressing "Try again" after the throw
 site is fixed clears the boundary. A boundary that never reports is worse than
 no boundary, because it looks like it works.
 
+## Angular
+
+Angular closes the error path more completely than any other framework in this
+README, and that is an advantage rather than an obstacle. Every error the
+framework catches ends in one injectable, `ErrorHandler`, and
+`provideBrowserGlobalErrorListeners()` feeds the browser's own `error` and
+`unhandledrejection` events into the same place — the JSDoc calls it "an
+environment initializer which forwards unhandled errors to the ErrorHandler".
+One class sees both halves, so that is where a report belongs. Angular's own
+guide fills it with an analytics `trackEvent` call and a `console.error`, which
+is exactly right for a developer and is not a report.
+
+**The service.** It holds the panel, mounts it in the browser and takes it down
+again with the injector. It has to exist because `handleError` is synchronous
+and happens long before anybody clicks anything:
+
+```ts
+// feedback.ts
+import {
+  DestroyRef,
+  Injectable,
+  afterNextRender,
+  inject,
+  makeEnvironmentProviders,
+  type EnvironmentProviders,
+} from "@angular/core";
+import { mountBugbottle, type BugbottleWidget } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image";
+import { da } from "bugbottle/locales";
+
+export type FeedbackConfig = {
+  endpoint: string;
+  extra?: Record<string, unknown>;
+  /** Defaults to English. */
+  locale?: typeof da;
+};
+
+@Injectable()
+export class Feedback {
+  private widget: BugbottleWidget | null = null;
+  private wanted = false;
+  private readonly destroyRef = inject(DestroyRef);
+
+  constructor(private readonly config: FeedbackConfig) {
+    // Only ever in the browser. `mountBugbottle` throws where there is no
+    // `document`, which is every SSR render and every prerender, and
+    // `afterNextRender` is the one hook that simply never runs there.
+    afterNextRender(() => {
+      this.widget = mountBugbottle({
+        endpoint: config.endpoint,
+        screenshot: htmlToImage,
+        locale: config.locale,
+        extra: config.extra,
+        // The window-level half, with the message already in the box. Read
+        // "Errors with no window event" below for why this alone is not the
+        // whole answer.
+        openOnError: { prefill: true },
+      });
+      // An error that asked for the panel before it existed still wants it.
+      // Without this the first crash of a cold page is the one crash nobody
+      // hears about, because the panel is mounted a render later.
+      if (this.wanted) this.widget.open();
+      this.destroyRef.onDestroy(() => this.widget?.destroy());
+    });
+  }
+
+  /** Open the form. Safe before the panel is mounted, and a no-op on the server. */
+  open(): void {
+    this.wanted = true;
+    this.widget?.open();
+  }
+
+  close(): void {
+    this.widget?.close();
+  }
+}
+
+export function provideBugbottle(config: FeedbackConfig): EnvironmentProviders {
+  return makeEnvironmentProviders([{ provide: Feedback, useFactory: () => new Feedback(config) }]);
+}
+```
+
+**The error handler.** Two lines of substance: keep the console, and offer the
+form. It deliberately does not POST. A report is a message from a person, and
+one sent on their behalf is telemetry, which this library is not — the person
+who just watched a page break presses the button or nobody does.
+
+```ts
+// bugbottle-error-handler.ts
+import { ErrorHandler, Injectable, inject } from "@angular/core";
+import { Feedback } from "./feedback";
+
+@Injectable()
+export class BugbottleErrorHandler implements ErrorHandler {
+  private readonly feedback = inject(Feedback);
+
+  handleError(error: unknown): void {
+    // `implements`, not `extends`: the default handler is `console.error`, and
+    // an application that replaces it silently loses the console too.
+    console.error(error);
+    this.feedback.open();
+  }
+
+  /**
+   * Optional, and called for errors thrown while a component's own view is
+   * being rendered. Angular's type is `onViewError?(error, details)`. It
+   * arrives *instead of* nothing and *before* the panel exists, so route it
+   * through the same service rather than dropping it.
+   */
+  onViewError?(error: Error): void;
+}
+```
+
+Wire both in `app.config.ts`. The listener provider is what makes the browser's
+own errors arrive at the same handler, and newer CLI applications generate it
+for you — keep it, and let `ErrorHandler` be the one place errors are handled:
+
+```ts
+// app.config.ts
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from "@angular/core";
+import { provideRouter } from "@angular/router";
+import { provideBugbottle } from "./feedback";
+import { BugbottleErrorHandler } from "./bugbottle-error-handler";
+import { ErrorHandler } from "@angular/core";
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideBrowserGlobalErrorListeners(),
+    provideRouter(routes),
+    provideBugbottle({ endpoint: "/api/feedback", extra: { appVersion: "1.4.2" } }),
+    { provide: ErrorHandler, useClass: BugbottleErrorHandler },
+  ],
+};
+```
+
+If you install your own `window.onerror` listener instead, Angular says you
+may drop `provideBrowserGlobalErrorListeners()` — but keep one of the two, or
+the errors Angular never catches are nobody's.
+
+### Errors with no window event
+
+The gap that decides whether this integration works is not a detail. Angular's
+guide is explicit about what never reaches `ErrorHandler`:
+
+- **Errors in an API you called yourself.** A service method that throws is
+  caught by nothing — not the framework, not the zone, not `window.onerror`. The
+  `try`/`catch` or the `catchError` operator is the only thing that sees it.
+- **`resource()` and `httpResource()`.** They do not throw; the error sits in
+  `status()` and `error()` until somebody reads it.
+- **Async work Angular was not waiting for.** A promise it has no contract for
+  is an unhandled rejection, which is the one group that does reach `window`.
+
+So a page whose only wiring is the handler above reports the crashes and stays
+quiet about the save button that did nothing — which is the larger half of what
+people write in. That half is a button, and the panel's floating trigger is
+already one. The plain three functions are for a button in your own chrome:
+
+```ts
+// report-button.component.ts
+import { Component, inject, signal } from "@angular/core";
+import { buildReport, captureScreenshot, sendReport } from "bugbottle";
+import { htmlToImage } from "bugbottle/html-to-image";
+
+@Component({
+  selector: "app-report-button",
+  template: `<button type="button" (click)="report()">Report a problem</button>`,
+})
+export class ReportButton {
+  private readonly busy = signal(false);
+
+  async report(): Promise<void> {
+    this.busy.set(true);
+    try {
+      // Screenshots fail open. A render that throws costs the picture, not
+      // the report — which is why this is a `catch` and not a branch.
+      const screenshot = await captureScreenshot(htmlToImage).catch(() => null);
+      await sendReport(
+        "/api/feedback",
+        buildReport({ type: "bug", message: "The save button did nothing", screenshotDataUrl: screenshot }),
+      );
+    } finally {
+      this.busy.set(false);
+    }
+  }
+}
+```
+
+**One script tag.** For an application that does not bundle, `One script tag`
+is the whole integration. It reads the same `data-*` attributes, carries the
+panel and the annotator, and needs no provider, no service and no injector —
+drop it in `index.html` and the work above is unnecessary:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/bugbottle@1.0.1/dist/bugbottle.js"
+  data-endpoint="/api/feedback"
+  data-open-on-error="prefill"
+  data-locale="da"
+></script>
+```
+
+**Receiving it.** The Angular CLI dev server has no API routes, so the
+endpoint is not a route handler — it is a small server beside it, or the
+Express one an SSR application already has. `expressHandler` builds the
+`Request` and writes the `Response` back:
+
+```ts
+import express from "express";
+import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
+
+const store = fileStore({ dir: "./reports" });
+
+app.post(
+  "/api/feedback",
+  express.json({ limit: "5mb" }),
+  expressHandler({ store, sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })] }),
+);
+```
+
+`Recipes` has the same endpoint in Hono, Cloudflare Workers, Bun and Deno, and
+`Receiving a report` is the framework-free half. Point `ng serve` at it with a
+`proxy.conf.json` while you develop, and it is the same URL in production.
+
+**What to check before you ship it.** Three throws, and a report from each. A
+component whose template throws, and a click handler that throws, should both
+open the panel — that is the framework path, and it is the one that is easy to
+get wrong because it works in dev and silently does nothing behind a production
+build. Then throw from a service method called by a component, which is the
+path no error handler sees, and confirm the button is what catches it. Finally
+reload a fresh page and throw from a constructor, before the first render: the
+panel does not exist yet, and the service's `wanted` flag is the only reason
+that report arrives at all.
+
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
