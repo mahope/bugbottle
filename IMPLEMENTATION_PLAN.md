@@ -109,26 +109,57 @@ nextjs.org, angular.dev, nuxt.com.
   på hele sitet) pr. 2026-09-27.** Sammenlign 25/10. Effekten forventes ikke at
   komme fra trafikken men fra tilliden i salgsfasen — en virksomhedskundes
   privacyfunktion spørger om denne side, før den spørger om features.
-- [ ] **7. CTR-måling.** Kræver Search Console-eksport fra Mads. Skriv
-  CTR-baseline pr. side ned, før noget ændres i en titel. Billigste vækst, når
-  vi har tallene.
-- [ ] **8. `/docs/wordpress/` + link fra `/da/kom-i-gang/`.**
-  `mahope/bugbottle-wordpress` er det mest konverterende produkt vi har — én
-  aktivering giver panel *og* modtager, altså nul eget kodearbejde for brugeren
-  — og den har 0 stjerner og ingen side i vores docs, så den kan slet ikke
-  findes fra bugbottle.dev. FETCHET via `gh api` 27/9: beskrivelsen er "WordPress
-  plugin for bugbottle: the report panel and a receiving endpoint in one
-  activation", seneste push 8/9. Vi arbejder kun i dette repo, så opgaven er
-  **dokumentationssiden** (installér, aktivér, hvor shortcode'en sidder, hvilke
-  `data-*` attributer pluginet læser) + ét link fra `kom-i-gang`, som i forvejen
-  omtaler WordPress-pluginet. Adgangskrav: pluginets `readme.txt`/`readme.md` skal
-  læses før teksten skrives, så tallene på skærmbilleder og shortcodes er rigtige
-  — må ikke gættes. **MÅL: `/docs/wordpress/` baseline 0 (siden findes ikke)
-  pr. 2026-09-27.** Kan tages før nr. 6, hvis en iteration er lille.
+- [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
+  (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
+  så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
+- [x] **8. `/docs/wordpress/` + link fra `/da/kom-i-gang/`.** 27/9,
+  `ceo/wordpress-page`. Kilden er pluginnets *kode*, ikke dets readme:
+  `class-settings.php` (indstillingsnavne + standarder), `class-assets.php`
+  (mount-kaldet), `class-rest.php` (ruter + grænse), `readme.txt` (resten).
+  Se "Fund fra WordPress-iterationen" — de tre fund, der ikke stod i planen.
+  **MÅL: `/docs/wordpress/` baseline 0 besøgende (siden findes ikke) pr.
+  2026-09-27.** Sammenlign 25/10 og 25/11. 38 docs-sider (fra 37).
+
+### Fund fra WordPress-iterationen (27/9) — tre ting, ingen af dem i readme'en
+
+Opgaven sagde "hvilke `data-*` attributer pluginet læser". **Det læser ingen.**
+Det er det første fund, og det er et godt eksempel på, hvorfor opgaven sagde at
+læse kilden: `class-assets.php`'s docblock siger det eksplicit — mount-kaldet er
+eksplicit, ikke drevet af attributer, fordi indstillingerne er et JSON-objekt med
+indlerede `theme`- og `brand`-former, og at presse dem gennem attributter kun for
+at parse dem ud igen igen køber intet. En læser der har læst "One script tag"
+oveni ville ellers have ledt efter `data-endpoint` og ikke fundet den. De
+`data-*`-attributter findes ét sted, og det er på **din egen markup**:
+`data-bugbottle-mask` og `data-bugbottle-block` i et tema.
+
+**Fund 2: pluginnet er ikke i WordPress-katalogen.** Tjekket 27/9:
+`api.wordpress.org/plugins/info/1.0/bugbottle.json` svarer
+`{"error":"Plugin not found."}`, og `wordpress.org/plugins/bugbottle/` sender
+videre til søgesiden. Readme'en siger stadig "Plugins → Add New, søg efter
+Bugbottle" først, og det er den instruktion, en ny bruger følger og ikke kommer
+videre med. Siden siger det rigtige, og `/da/kom-i-gang/` rute 2 er rettet med
+— samme fejl, to steder, én iteration.
+
+**Fund 3: en tabel, der erstatter en opsummering.** Hver indstilling på
+indstillingssiden er præcis én option fra "The panel", med standardværdien fra
+`class-settings.php`'s `defaults()`. Det er det korteste kortlægning i hele
+dokumentationen, fordi der intet står imellem. To af dem er værd at fremhæve, fordi
+de er *mindre* end de ser ud til: en tom **Keyboard shortcut** er *ingen*
+genvej, ikke standarden, og `false` er måden biblioteket får at vide det på; og
+**Only for logged-in users** og **Accept reports from visitors who are not
+logged in** er begge slået fra, hvilket tilsammen betyder at en udlogget
+besøgende slet ikke ser panelet.
+
+**Målt, ikke gengivet:** `assets/bugbottle.js` er 66 500 B / 24 648 B gzip i
+*vores* `dist/` (readme'en siger 66 496 B til pluginets kopi — fire bytes, samme
+build, og jeg gætter ikke på hvorfor). Skærmbilledescriptet er ~15 kB, 6 kB over
+ledningen, og indlæses kun når Screenshots er slået til, fordi panelbuildet
+bevidst ikke har en renderer med.
 
 ### Køen efter dette
 
-De fire frameworksider er på plads, og de ligner hinanden mere end de burde:
+De fire frameworksider er på plads, og de ligner hinanden mere end de burde
+(WordPress-siden er en anden slags, så den tæller ikke med her):
 - Script-tagonlysningen til Angular/Nuxt/Astro er den samme kode, så de fire
   sider kan deles.
 - Verifikations-sektionen i hver frameworkside er et genbrugeligt mønster
@@ -433,9 +464,16 @@ Begge findes og er ubrugte (FETET via `gh api` 27/9):
 
 - `mahope/bugbottle-wordpress` — "WordPress plugin for bugbottle: the report
   panel and a receiving endpoint in one activation", 0 ★, sidste push 8/9.
-  `/docs/github-action/` findes; **en WordPress-side mangler helt**, selv om
+  `/docs/github-action/` findes; **en WordPress-side manglede helt**, selv om
   pluginet er det mest konverterende produkt vi har (én aktivering = panel +
-  modtager). Ny side + et link fra `kom-i-gang`.
+  modtager). Landet 27/9 som `/docs/wordpress/` + rettelse i `kom-i-gang`.
+  **To ting i pluginrepoet, der bør rettes der (ikke her):** (1) `readme.txt`'s
+  Installationsafsnit siger "Plugins → Add New, søg efter Bugbottle" først, og
+  det er ikke i katalogen — API'et svarer `{"error":"Plugin not found."}` tjekket
+  27/9, så den instruktion fører en ny bruger ud i en blindgyde; (2) skal
+  pluginnet *indsendes* til wordpress.org, er det en tredjepartsansøgning, som
+  kun Mads kan lave. Den er en medvirkende grund til at siden siger det samme,
+  indtil den ligger.
 - `mahope/bugbottle-action` — "GitHub Action: validate bugbottle JSON bug
   reports in CI. Zero dependencies.", 0 ★, sidste push 7/9.
 
@@ -451,6 +489,31 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-27, iteration 7** (`ceo/wordpress-page`). Opgave 8: `/docs/wordpress/`
+  som femte side under `Integrations`, plus rettelsen i `/da/kom-i-gang/`. Se
+  "Fund fra WordPress-iterationen".
+  - **Deploy-verifikation først:** de tre åbne noter (privacy, compare, astro) er
+    alle lukkede mod indhold, 21:47 — ét kørselsvindue dækker alle tre merges.
+  - **Opgaven i planen var forkert på én punkt, og det er fundet der sparede
+    en hel side misinformation.** Den sagde "hvilke `data-*` attributer
+    pluginet læser". Svaret er *ingen*, og det står i `class-assets.php`'s
+    egen docblock. **Skriv aldrig en opgave om et fremmed repo ud fra dets
+    readme** — læs koden, som her gav tre fund og en rettelse af dansk tekst.
+  - `dist/` er uændret af builden, byte for byte (IIFE 24 645 / 21 063 mod
+    budgetterne 25 088 / 21 504) — ingen eksport rørte sig, så intet at
+    `git add -f dist`. 38 docs-sider (fra 37), 145 søgeposter.
+  - `npm run check` grøn: 880 tests, 0 fejl, 0 advarsler.
+  - ⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre:** ingen
+    Chrome på maskinen, som i iterationer 2–6. Ændringen er ren Markdown — ingen
+    nye DOM-elementer, ingen ny CSS, ingen nye controls; de to eksisterende
+    WordPress-links i README peger på en side i samme site. CI's `browser`-job
+    kører begge på hvert push.
+  - Næste iteration: `## ❓`-punkterne er de eneste åbne ting, der kræver Mads
+    (Search Console-eksport, Stripe, deploy-konfiguration, rapport-id i
+    panelet). Uden dem er den bedste brug af en iteration de fire delte
+    frameworksiders fælles afsnit (script-tag-vejen, verifikationsmønstret,
+    fejl-siden-knappen) — de er allerede betalt for, se "Køen efter dette".
 
 - **2026-09-27, iteration 6** (`ceo/privacy-erasure`). Opgave 6: ny sektion i
   begge privatlivssider om den del af spørgsmålet, checklisten ikke kunne svare
@@ -552,6 +615,28 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/wordpress/ (ny integrationsside, 38 sider i
+  sitemap'en) + rettelsen i /da/kom-i-gang/ rute 2, merge <sha>, 2026-09-27
+  ~22:2x` — næste batch-vindue er **07:30 2026-09-28**. Verificér **indhold**:
+  `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/wordpress/` med `lastmod 2026-09-28`, siden skal
+  vise `{"error":"Plugin not found."}` og "No `data-*` attributes are read" og
+  `manage_options`, `Integrations`-gruppen i sidebaren skal have **fem** sider,
+  og `/da/kom-i-gang/` skal sige at pluginnet **ikke** er i katalogen.
+
+- ✅ **DEPLOY OK 2026-09-27 21:47.** De tre notes nedenfor er alle lukkede mod
+  **indhold**, i én kørsel efter vinduet 21:30:
+  - `/docs/privacy-checklist/` viser "When somebody asks for the data you already
+    have", `/da/privatliv/` viser "Når nogen beder om de data, du allerede har" —
+    begge nye afsnit er live, og begge står i sitemap'en med `lastmod 2026-09-27`.
+  - `/compare/` har seks rækker, den sjette med `@sentry/react` og `33.2 kB` /
+    `95.8 kB`; `/da/sammenlign/` har samme række med `33,2 kB` / `95,8 kB`, og
+    tallet `29 251 063` står i afsnittet under tabellen på begge sprog.
+  - `/docs/astro/` viser guiden med `astro:hydration-error` (5 gange) og
+    `handleHydrationError` (2 gange), `Integrations`-gruppen har fire sider, og
+    `/docs/recipes/` har stadig sit Astro-afsnit. `/docs/changelog/` har posterne
+    for både Sentry-rækken og Astro-guiden.
 
 - `VERIFICÉR DEPLOY: /docs/privacy-checklist/ + /da/privatliv/ (det nye afsnit
   "When somebody asks for the data you already have") b5bc51b, merge d07c357,
