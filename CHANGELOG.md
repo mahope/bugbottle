@@ -8,6 +8,20 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Added
+
+- A Next.js guide, `/docs/nextjs/`, and an "Integrations" group in the
+  documentation sidebar. It is the first framework page that says how a report
+  leaves a Next.js application: the `error.tsx` fallback, `global-error.tsx`,
+  the React hook in a client component, and a route handler receiving it.
+  Nothing is exported and nothing in the library changed. The page is here
+  because Next.js' own `error.js` documentation stops at "log the error to an
+  error reporting service", and the reporter-facing half — "and then what" — is
+  where a library earns its place. It carries the one thing those docs warn
+  about and no example shows: in production a Server Component error reaches
+  the browser with its message replaced, and `error.digest` is the only thing
+  that ties the report back to your server log.
+
 ## 1.0.1 — 2026-09-08
 
 A patch on the day of 1.0: the offline queue could silently skip its retry
