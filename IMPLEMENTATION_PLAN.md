@@ -100,10 +100,15 @@ nextjs.org, angular.dev, nuxt.com.
   **MÅL: `/compare/` og `/da/sammenlign/` baseline 0 pr. 2026-09-27**
   (Plausible 401; Cloudflare 6 198 sidevisninger/28 d på hele sitet).
   Sammenlign 25/10.
-- [ ] **6. Privacy: "hvad gør jeg med data jeg *allerede* har sendt?"**
-  Rollbar har en stærk GDPR-sektion om også at slette allerede sendt data.
-  Vores `/docs/privacy-checklist/` dækker kun før-sending. Konverterings- og
-  tillidsemulighed, især over for virksomhedskunder.
+- [x] **6. Privacy: "hvad gør jeg med data jeg *allerede* har sendt?"**
+  Ny sektion i begge privatlivssider. Se "Fund fra privacy-iterationen" — to
+  fund, der var **ikke** i planen: `fileStore.list()` har ikke `contact`, og
+  panelet viser ikke rapport-id'et.
+  27/9, `ceo/privacy-erasure`. **MÅL: `/docs/privacy-checklist/` og
+  `/da/privatliv/` baseline 0 (Plausible 401; Cloudflare 6 198 sidevisninger/28 d
+  på hele sitet) pr. 2026-09-27.** Sammenlign 25/10. Effekten forventes ikke at
+  komme fra trafikken men fra tilliden i salgsfasen — en virksomhedskundes
+  privacyfunktion spørger om denne side, før den spørger om features.
 - [ ] **7. CTR-måling.** Kræver Search Console-eksport fra Mads. Skriv
   CTR-baseline pr. side ned, før noget ændres i en titel. Billigste vækst, når
   vi har tallene.
@@ -332,6 +337,54 @@ Verifieret: `ErrorHandler`, `provideBrowserGlobalErrorListeners()` og
   framework-fanget fejl åbner derfor panelet tomt, selv om beskeden er kendt.
   Se ❓ nedenfor.
 
+## Fund fra privacy-iterationen (27/9) — to ting ingen havde sagt
+
+Opgaven bad om Rollbars GDPR-afsnit. Det viste sig at være **for svagt igen**,
+fordi det er *biblioteket* der skal svare, ikke en leverandørs compliance-side:
+Rollbars side er om *deres* kunder, og den eneste sande påstand dér er
+"180 dages retention" og "ødelæg krypteringsnøglen". Alt det brugbare kom fra at
+læse vores egen kode for at se, hvad en modtager overhovedet kan svare på.
+
+**1. `fileStore.list()` har ikke `contact` — og det er derfor opgaven findes.**
+`StoredReport` er `id`, `file`, `title`, `type`, `url`, `receivedAt`,
+`screenshot`: alt en oversigtsside har brug for, intet der identificerer et
+menneske. Så det eneste greb en rapport har på en person er `contact` — som er
+**slået fra som standard overalt** (CLAUDE.md's regel, og den er rigtig), og som
+altså forsvinder i den kolonne, du ville lede i. Konsekvensen er skarpere end
+privatliv: hvis du lover at slette en persons rapporter, er løftet ikke opfyldeligt
+uden et index, og det er ikke en funktion i pakken. Sektionen siger det, og siger
+det i den retning der hjælper: slå `contact` til *hvis* du vil kunne svare.
+
+**2. Panelet viser ikke rapport-id'et, så en bruger kan ikke citere et nummer.**
+`handleReport` svarer `201 {"id": …}` når `store` gav et id, `sendReport` læser
+det, og `report-state` har både `onSent(id)` og `status: {kind:"sent", id}`. Men
+`src/ui/index.ts` nævner det ingen steder — panelet skriver det ikke ud. Altså:
+"reference B-4711" i din indbakke kan ikke laves om til noget, brugeren kan citere,
+uden at *din* egen bekræftelse indeholder det. Det er en linje markup i
+applikationen, ikke en mangel i biblioteket — men det er præcis den slags
+ting, der gør en afdeling spørge "kan vi overhovedet finde en rapport fra en
+kunde?" med et ja, der er lidt for let.
+
+**Tredje fund, der blev en tabel:** en sink er en kopi. Slack og Discord kan
+slettes med en bot-token men **ikke** med den webhook-adresse en sink får
+(indgående webhook kan poste, ikke slette, og ved aldrig beskedens id), en sendt
+mail kan ikke kaldes tilbage, og et issue er en rekord i et andet system. To
+af disse er hentet/verificeret i koden (sinks' egen kode, `sentrySink`'s
+attachment-item), resten er skrevet som platformejerskab, ikke som
+-API-påstande — jeg ville ikke skrive "GitHub har et DELETE-endpoint" ned uden
+at have læst det i dokumentationen, og et afgrænset opslag i REST-dokumentationen
+gav ikke svaret inden for rimelig tid, så påstanden blev taget ud.
+
+**En ting der også blev rettet:** privacy-sidens skabelon manglede hele
+sætningen om adgang og sletning. Den er der nu, og den er skrevet som en
+sætning man kan strege — fordi den er en *love* om et svar, ikke en beskrivelse
+af et felt.
+
+**Ny test:** `tests/privacy-checklist.test.ts` piner nu de to siders
+afsnitslister mod hinanden. Siderne er én side med et hreflang-par, og den
+ almindelige måde den går forkert på er et afsnit på den ene side. Parrene står
+udskrevet i testen, fordi de to sprog ikke deler prosa.
+
 ## ❓ Til Mads
 
 - **`mountBugbottle().open()` kan ikke forudfylde beskeden.** Panelets egen
@@ -361,6 +414,15 @@ Verifieret: `ErrorHandler`, `provideBrowserGlobalErrorListeners()` og
   retningen "Buge" / "Trygg" / "Skærg" — noget der ikke bare hedder "Pro",
   fordi bugbottle ikke er noget man *proficerer* på. Skal jeg skrive tre
   konkrete navne med domænetilgængelighed og prispositionering?
+- **Panelet skal vise rapport-id'et.** Fund 2 ovenfor: serveren svarer det, der
+  er plads til det i `status.id`, og panelet bruger det ikke. En synlig
+  reference ("Rapport B-4711") er præcis den slags tillid, en virksomhedskunde
+  efterspørger, og det er en ny streng i alle otte sprog — måske 100-200 bytes
+  på `bugbottle/ui` og på begge IIFE'er mod budgetterne 11 776 / 25 088 /
+  21 504. Eller er det bedre som en **option** (`showReportId`), der kun koster
+  noget for dem der slår den til? Det er en minor, ikke en patch, fordi det er
+  et nyt mount-option. Skal jeg bygge det, eller lade applikationen selv skrive
+  id'et i sin egen bekræftelse?
 - **Stripe.** Der er ingen `docs/stripe-kontrakt.md` i repoet og ingen
   `FUNDING.yml`, ingen `/support`-side. Vi sælger intet. Skal jeg foreslå
   betalte, licenskontrollerede open-core-tilføjelser under `❓`?
@@ -387,6 +449,24 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-27, iteration 6** (`ceo/privacy-erasure`). Opgave 6: ny sektion i
+  begge privatlivssider om den del af spørgsmålet, checklisten ikke kunne svare
+  på — hvad der sker, når en *person* beder om de data, de allerede har sendt.
+  Se "Fund fra privacy-iterationen".
+  - **`dist/` er uændret af builden, byte for byte** (IIFE 24 645 / 21 063 mod
+    budgetterne 25 088 / 21 504) — ingen eksport rørte sig, så ingen budget
+    flyttede, og intet at `git add -f dist`.
+  - Nyt: `tests/privacy-checklist.test.ts` har nu fire tests, hvoraf den nye
+    pinner de to siders afsnitslister mod hinanden (README `###` mod
+    `privatliv.md` `##`).
+  - **Deploy-noterne fra iteration 4 og 5 er stadig åbne og ikke forfalne:**
+    kl. 21:03 var de merget 19:35 og 20:10, og det næste batch-vindue er 21:30.
+    Denne iterations merge kommer i samme kørsel, så alle tre kan verificeres
+    sammen ved næste iterations start.
+  - Næste iteration: opgave 8 (`/docs/wordpress/`) — den mest konverterende
+    ting vi har ubeskrevet, og den har brug for pluginets `readme.txt` læst
+    først, så teksten ikke gætter. Ellers opgave 7 (Search Console, kræver Mads).
 
 - **2026-09-27, iteration 5** (`ceo/sentry-sdk-compare`). Opgave 5: den
   sjette række i `/compare/` og `/da/sammenlign/` — `@sentry/react`, målt i sted

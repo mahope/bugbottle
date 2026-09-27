@@ -4142,6 +4142,68 @@ gone to Slack or to an issue tracker has been copied — deleting your row does
 not delete the copy, and from the moment a sink posts it, it lives by that
 system's retention rather than by yours.
 
+### When somebody asks for the data you already have
+
+The question above is answered by a setting. This one arrives as a person, and
+it has three parts: which reports are theirs, what you delete, and what you
+cannot reach. None of it is a feature, because no call in this package finds a
+person's reports for you — the package never knew who sent one. What there is,
+is an honest account of where the copies are and what each one takes.
+
+**Finding them.** The only handle a report carries on a person is `contact`, and
+it is off by default in the panel, the hook and the script tag, because it is
+personal data the moment it is on. That is the right default and it has a
+consequence: a reporter who never filled it in can only be found by what they
+wrote, which means reading. So the decision is not "may we ask for an address" —
+it is "when somebody writes to us in eight months, can we find their reports at
+all". If the answer is no, do not promise them a deletion you cannot carry out.
+
+`fileStore` does not help here, and the reason is in the type. `list()` answers
+`id`, `file`, `title`, `type`, `url`, `receivedAt` and `screenshot` — everything
+a listing page needs, and nothing that identifies a person. `contact` is not in
+it, so finding one person's reports in a directory means `read()`ing them one
+at a time. A database `store` with an index on `contact` is the same job done
+once, and that is the whole of it: the library stores the field, and the index
+is yours.
+
+The id is the better handle, and it works today. `handleReport` answers `201`
+with `{"id": …}` when your `store` gave back one, `sendReport` reads it, and the
+hook and the panel hand it to you as `onSent(id)` and as `status.id` on the state
+machine. The panel does not print it, so a reporter cannot quote a report
+number unless you put it in your own confirmation — which is the whole of
+"B-4711" as a reference in your inbox.
+
+**Deleting the copy you hold.** `reports.remove(id)` deletes the JSON and the
+picture together and answers whether there was one; a database `store` is a
+`DELETE`. The inbox example wires it to a `POST /r/<id>/delete` behind the same
+password as the rest of it, so the last twenty lines are copyable.
+
+**The copies you made without deciding to.** This is the part that decides how
+honest an answer you can give. A sink is a copy, and it outlives your row:
+
+| Where the copy is | Who can delete it | What it takes |
+|---|---|---|
+| Your `store` — a database, or the `fileStore` directory | You | `DELETE`, or `reports.remove(id)`. The picture goes with the JSON; a directory nothing prunes keeps the older ones |
+| Slack, Discord | The platform, with a bot token | A `chat.delete` or a `DELETE` on the message. **Not** the webhook URL a sink is given: an incoming webhook can post and cannot delete, and it does not learn the message's id |
+| Microsoft Teams | The workflow, not the sink | A Workflows run keeps the card. Whether it can be removed is a permission question in the workflow, not a call this package can make |
+| Mail — Resend, or your own SMTP server | Nobody | A sent mail is in your provider's log, in the recipient's inbox and in every backup either side keeps. There is no recall; the honest answer is a retraction |
+| Sentry, GlitchTip, Bugsink | The provider | Its own retention, and its own organisation's setting. `sentrySink` uploads the screenshot as an attachment, so the picture is there too |
+| GitHub, GitLab, Jira, Linear | The platform, and only partly | Close the issue, comment on it, delete the attachment. The body is a copy of your report and the tracker keeps its own history of what was edited |
+| The reporter's own browser | The reporter | The queue deletes a report as soon as it is delivered. One that never went out sits in `localStorage` until it does, and `createQueue().clear()` is a button in *your* page, not something a server can call |
+| Your backups | Nobody, until they age out | A row deleted today is in yesterday's dump. Whatever you promise has to name the backup retention as well as the live one |
+
+Four decisions follow, and they are cheaper now than after the first request.
+Decide **before** you have reports whether a sink may carry anything personal, or
+its retention is now part of your answer. Prefer a sink you can delete from. Give
+the screenshot its own, shorter life than the text — it is the part that ages
+badly, and deleting it early costs little. And write down the backup retention,
+because it is the one that is always forgotten.
+
+Log the erasure as carefully as you logged the intake. `onDecision` prints one
+line per accepted report, carrying the fingerprint and nothing out of the report
+itself, and a deletion is not a report — so the line you keep for "who asked,
+which ids, when, what we answered" is one you write.
+
 ### No cookies, no fingerprinting, no third party
 
 - **No cookies.** The library sets none and reads none. The one place a cookie
@@ -4191,13 +4253,21 @@ you left off:
 > screenshot, we receive a picture of the page as you saw it, with the contents
 > of form fields hidden. We use this only to find and fix the problem you
 > reported. It is stored on our own systems, [is shared with [issue tracker],
-> which we use to track fixes,] and is deleted after [90] days.
+> which we use to track fixes,] and is deleted after [90] days. You can ask us
+> at any time for a copy of the reports you have sent us, or for them to be
+> deleted, by writing to [address]; we answer within [30] days.
 
 Three habits are worth more than the paragraph itself. Say it where the reporter
 is, next to the button, rather than only in a policy nobody opens. Describe what
 you turned on rather than what the library can do. And when the answer
 changes — turning screenshots or a replay on is a change of answer — change the
 paragraph in the same release.
+
+The last sentence is the one people leave out, and it is the only one the
+library can help you keep. It promises an answer, and an answer needs the
+[section above](#when-somebody-asks-for-the-data-you-already-have) behind it:
+without a `contact` to search on you may not be able to say which reports were
+theirs. Write the promise only where the index behind it exists.
 
 ## The payload
 
