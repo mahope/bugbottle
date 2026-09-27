@@ -178,7 +178,7 @@ const GROUPS = [
   {
     title: "Integrations",
     blurb: "Where the report goes and which framework it travels through.",
-    slugs: ["nextjs", "angular"],
+    slugs: ["nextjs", "angular", "nuxt"],
   },
   {
     title: "Evidence",

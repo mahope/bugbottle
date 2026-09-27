@@ -10,6 +10,23 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- A Nuxt guide, `/docs/nuxt/`, beside the Next.js and Angular ones. Nuxt splits
+  the error path in two halves that most integrations wire up backwards, and the
+  guide is written from Nuxt's own source rather than its documentation page:
+  `vueApp.config.errorHandler` receives every Vue error "even if they are
+  handled", while the `vue:error` hook the docs reach for is built on
+  `onErrorCaptured` and only sees what reached the top — and
+  `<NuxtErrorBoundary>` inverts that again, calling `vue:error` itself and
+  swallowing the error before `config.errorHandler` ever runs, so the page wires
+  both with a `WeakSet` keeping one incident to one report. It also names the
+  trap that decides whether the integration works at all: `applyPlugins`
+  rethrows on the first throwing plugin, so an error-handler plugin registered
+  after it never runs and the failure surfaces as an `error.vue` with no way to
+  report from — hence `enforce: "pre"`. And it documents `app:chunkError`, a
+  hook Nuxt's error-handling page never mentions and three built-in plugins use
+  to hard-reload the page, which is exactly the class of bug a person reports
+  and you cannot see.
+
 - An Angular guide, `/docs/angular/`, beside the Next.js one. Angular closes
   the error path more completely than any other framework here — every error
   the framework catches ends in the injectable `ErrorHandler`, and
