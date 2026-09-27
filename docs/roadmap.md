@@ -268,6 +268,16 @@ restyling a real panel mounted into the page and printing the
 `mountBugbottle({ theme })` call and the CSS-variable block to copy (#76).
 Nothing in the package changed.
 
+**Unreleased** — a Next.js guide at `/docs/nextjs/`, under a new "Integrations"
+group in the sidebar. The first of the framework pages, and the first page
+aimed at the query people actually type — "nextjs error boundary" — rather than
+at the category the rest of the documentation describes. It says how a report
+leaves a Next.js application: the `error.tsx` fallback, `global-error.tsx`, the
+React hook in a client component, the script tag for an application that does
+not bundle, and a route handler receiving it, plus the `error.digest` a Server
+Component error arrives with. Angular, Nuxt and Astro follow the same shape.
+Nothing in the package changed.
+
 **Unreleased** — `teamsSink`, the tenth sink and the third chat one, over a
 Microsoft Teams Workflows webhook (#78). The wait since 0.7 was the point: the
 Office 365 connector webhooks are retired, so the endpoint to write against is

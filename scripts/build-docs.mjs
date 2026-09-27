@@ -176,6 +176,11 @@ const GROUPS = [
     ],
   },
   {
+    title: "Integrations",
+    blurb: "Where the report goes and which framework it travels through.",
+    slugs: ["nextjs"],
+  },
+  {
     title: "Evidence",
     blurb: "What a report carries besides the sentence someone typed.",
     slugs: [

@@ -428,6 +428,158 @@ the client and the server share), so a component that throws on every render
 sends one report rather than a thousand. Say so in your privacy notice, and
 pass `scrub: scrubReport` if a message could carry anything personal.
 
+## Next.js
+
+Next.js owns the error boundary in an App Router application, so
+`createRootErrorHandlers` is not the way in here — Next.js calls `createRoot`
+itself, and the handlers it installs are the ones that decide what a person
+sees. What bugbottle adds is the other half: Next.js tells you *that* a segment
+broke, and only your endpoint can turn that into a report somebody can act on.
+
+Three places, in the order an error reaches them.
+
+**1. `error.tsx`, for a route segment.** This is the fallback the person is
+looking at when it throws, which makes it the one place in a Next.js
+application where a "tell us what happened" button is guaranteed to be in front
+of somebody who has just seen something go wrong:
+
+```tsx
+// app/checkout/error.tsx
+"use client";
+
+import { useState } from "react";
+import { buildReport, sendReport } from "bugbottle";
+
+export default function CheckoutError({
+  error,
+  retry,
+}: {
+  error: Error & { digest?: string };
+  retry: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+
+  return (
+    <div role="alert">
+      <h2>Checkout stopped working.</h2>
+      <p>{error.message}</p>
+      <button onClick={retry}>Try again</button>
+      <button
+        disabled={sending}
+        onClick={async () => {
+          setSending(true);
+          try {
+            // `buildReport` collects on the machine it runs on, so this has to
+            // be a client component — which error.tsx already is.
+            const { id } = await sendReport(
+              "/api/feedback",
+              buildReport({ type: "error", message: error.message }),
+            );
+            console.info("bugbottle filed", id);
+          } finally {
+            setSending(false);
+          }
+        }}
+      >
+        {sending ? "Sending…" : "Report this"}
+      </button>
+    </div>
+  );
+}
+```
+
+Two things about that snippet are worth reading twice. It sends **nothing**
+until the button is pressed: a report is a message from a person, and sending
+one on their behalf is telemetry, which this library is not. And `error.digest`
+belongs in the message when there is one — in production a Server Component
+error reaches the browser with its `message` replaced by a generic one, and
+`digest` is the only thing that ties the report to the line in your server log
+that still has the real message. Pass it on:
+
+```tsx
+buildReport({
+  type: "error",
+  message: error.digest ? `${error.message} (digest ${error.digest})` : error.message,
+});
+```
+
+**2. `global-error.tsx`, for the root layout.** Same two props, but it replaces
+the whole document, so it has to render its own `<html>` and `<body>` and it
+does not get your global styles. Keep it short — a form with a screenshot
+uploader is more than this page has room for, and the panel is a better answer
+there:
+
+```tsx
+// app/global-error.tsx
+"use client";
+
+import { buildReport, sendReport } from "bugbottle";
+
+export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
+  return (
+    <html>
+      <body>
+        <h1>Something went wrong.</h1>
+        <button
+          onClick={() =>
+            sendReport("/api/feedback", buildReport({ type: "error", message: error.message }))
+          }
+        >
+          Report this
+        </button>
+      </body>
+    </html>
+  );
+}
+```
+
+**3. The report form, where the rest of the bugs come from.** Most reports are
+not render errors — they are the save button that did nothing. That path is the
+React hook, and it wants a client component like any other:
+
+```tsx
+// app/components/ReportButton.tsx
+"use client";
+
+import { useBugReport } from "bugbottle/react";
+
+export function ReportButton() {
+  const report = useBugReport({ endpoint: "/api/feedback" });
+  return <button onClick={report.open}>Report a problem</button>;
+}
+```
+
+For an application that does not bundle, "One script tag" is the whole
+integration: one `<script>` tag reads the same `data-*` attributes, needs no
+`"use client"`, no provider and no hydration, and carries the ready-made panel
+so there is no form to write.
+
+**Receiving it.** A route handler is a `Request` in and a `Response` out, and
+`handleReport` is the one that answers:
+
+```ts
+// app/api/feedback/route.ts
+import { handleReport, fileStore, slackSink } from "bugbottle/server";
+
+const store = fileStore({ dir: "./reports" });
+const notify = slackSink({ webhookUrl: process.env.SLACK_WEBHOOK_URL! });
+
+export async function POST(request: Request) {
+  return handleReport(request, { store, sinks: [notify] });
+}
+```
+
+`"Recipes"` has the same route in Hono, Cloudflare Workers, Bun and
+Deno; nothing about `handleReport` is Next-specific.
+
+**What to check before you ship it.** Throw on purpose — `throw new Error("boom")`
+in a Server Component, and something that throws on click — and open a report
+from the fallback. Three things should be true: the report arrives with the
+route, the viewport and the recent console errors on it; a Server Component
+error arrives carrying the `digest`; and pressing "Try again" after the throw
+site is fixed clears the boundary. A boundary that never reports is worse than
+no boundary, because it looks like it works.
+
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
