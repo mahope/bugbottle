@@ -1154,7 +1154,249 @@ this is the throw that proves it. Third, `createError({ fatal: true })` from a
 click handler: the page is replaced, so confirm the report went out before it
 went. Fourth, deploy over a running tab and navigate — a chunk 404 is invisible
 unless `emitRouteChunkError: "manual"` is set, and that is the one to check on a
-phone, on a real network, with an old tab open.
+  phone, on a real network, with an old tab open.
+
+## Astro
+
+Astro has no error handler. That is the whole difference from the three
+frameworks above, and it is worth saying plainly: there is no `ErrorHandler` to
+provide, no `vue:error` to hook, no `error.tsx` to export, and Astro's English
+documentation — thirty guides, a hundred reference pages — has no
+error-handling page among them. There is nothing to wire up, because there is
+nothing to wire up *to*.
+
+What Astro does ship is one client event, and it is in neither the docs nor the
+types. It lives in `packages/astro/src/runtime/server/astro-island.ts`, in a
+private method called `handleHydrationError`, and it is the only signal Astro
+emits about a failure in the browser:
+
+```js
+private handleHydrationError(error: unknown) {
+  const componentUrl = this.getAttribute('component-url');
+  const event = new CustomEvent('astro:hydration-error', {
+    cancelable: true,
+    bubbles: true,
+    composed: true,
+    detail: { error, componentUrl },
+  });
+  const shouldLogError = this.dispatchEvent(event);
+  if (shouldLogError) {
+    console.error(`[astro-island] Error hydrating ${componentUrl}`, error);
+  }
+}
+```
+
+`astro:hydration-error` is the right event to report from in an Astro app, and
+it is worth more here than anywhere else, because of the failure it covers: **an
+island that never becomes interactive.** A `client:load` component whose import
+fails renders its server HTML and then stops. The markup is there, the button
+looks pressed-in, the counter does not move, and nothing is on the console beyond
+that one line. That is the bug a person describes as "the filter doesn't work"
+and you cannot reproduce, and it is the one failure mode an Astro site has that a
+React or Vue site cannot have.
+
+**Do not call `preventDefault()` on it.** The event is `cancelable`, and
+`dispatchEvent` returns `false` when a listener cancelled it — which is exactly
+when Astro skips its own `console.error`. That single line is most of what a
+report has in it: `console.error` and `console.warn` are what the ring buffer
+records, and it is the only place the component URL and the raw error text meet.
+Listen, report, and let Astro print its line.
+
+**One listener, in the layout.** Astro runs a `.astro` file's frontmatter on the
+server too, so the whole integration goes in a `<script>` in a layout rather
+than in the frontmatter:
+
+```astro
+---
+// src/layouts/Base.astro
+import "bugbottle/ui/style.css";
+---
+
+<html lang="da">
+  <head><slot name="head" /></head>
+  <body>
+    <slot />
+
+    <script>
+      import { mountBugbottle } from "bugbottle/ui";
+      import { htmlToImage } from "bugbottle/html-to-image";
+      import { da } from "bugbottle/locales";
+
+      const widget = mountBugbottle({
+        endpoint: "/api/feedback",
+        screenshot: htmlToImage,
+        locale: da,
+        openOnError: { prefill: true },
+      });
+
+      // `bubbles` and `composed` are both set on the event, so one listener on
+      // the document sees every island on the page, including islands inside
+      // other islands and inside a shadow root. No `preventDefault()`: that
+      // would switch off Astro's own console.error, and the console is most of
+      // the report.
+      document.addEventListener("astro:hydration-error", (event) => {
+        const { error, componentUrl } = (event as CustomEvent).detail as {
+          error: unknown;
+          componentUrl: string;
+        };
+        // `open()` takes no arguments, so the box opens empty. The console line
+        // is what carries the message into the report.
+        widget.open();
+        console.error(`[bugbottle] ${componentUrl} never hydrated`, error);
+      });
+    </script>
+  </body>
+</html>
+```
+
+The second half is `openOnError: { prefill: true }`, and it is not redundant with
+the listener above. `astro:hydration-error` fires when an island *fails to
+hydrate* — a failed import, a client directive that throws. An error *inside* an
+already-hydrated component is an ordinary framework error, and in an Astro app
+it has nowhere to go but `window.onerror`, which is what `openOnError` listens
+to. The two cover opposite halves of the same page: the islands that never
+started, and the ones that started and then broke. Leave both in.
+
+There is no teardown to write. An Astro page is a document, and every listener
+`mountBugbottle` installs dies with it; with `<ClientRouter />` the document
+survives a navigation, which is the one case where the widget must survive too —
+and it does, because `mountBugbottle` re-runs from the layout's `<script>` on
+each swap only if you let it, so in a view-transitions site mount the widget in
+`astro:page-load` rather than at module scope:
+
+```astro
+<script>
+  import { mountBugbottle } from "bugbottle/ui";
+
+  let widget: ReturnType<typeof mountBugbottle> | undefined;
+  // `astro:page-load` fires on the first load too, so this needs no "is it the
+  // first time" branch.
+  document.addEventListener("astro:page-load", () => {
+    widget ??= mountBugbottle({ endpoint: "/api/feedback" });
+  });
+</script>
+```
+
+With `<ClientRouter />` the same `astro:page-load` event is where you attach the
+hydration listener, because a listener added at module scope is attached to the
+document that `<ClientRouter />` replaced and stops firing after the first
+navigation.
+
+### The 500 page
+
+`src/pages/500.astro` is a real page with a documented prop, and the prop is the
+one thing Astro hands you about a server-side failure:
+
+```astro
+---
+// src/pages/500.astro
+// The panel is not mounted here, and cannot be: this is a fresh document
+// rendered after the error, with none of the layout above it. The one button
+// below is the whole integration.
+import ReportProblem from "../components/ReportProblem.astro";
+
+const { error } = Astro.props;
+const message = error instanceof Error ? error.message : "Unknown error";
+---
+
+<main>
+  <h1>Something broke</h1>
+  <!-- Astro's own words: the prop's type "can be anything", so narrow it. -->
+  <p>{message}</p>
+  <ReportProblem message={message} />
+</main>
+```
+
+Two things about it that the docs do not say. First, `error` is `unknown`, and
+Astro's guide types it that way on purpose — it is whatever was thrown, so a
+`throw "404"` arrives as a string. Second, **your middleware runs while this
+page renders.** In `renderDefaultError` the error render gets its own
+`FetchState` with `skipMiddleware` copied from the caller, middleware runs, and
+if the middleware *throws*, Astro catches it and re-renders `500.astro` with
+`skipMiddleware: true`. So a middleware that reads `Astro.locals.user` without
+a guard takes the 500 page down with it, and the page your visitor sees is the
+platform's bare 500 rather than yours. That is the one Astro failure that hides
+its own evidence, and it is a good reason to keep `500.astro` down to the button
+and the sentence above it.
+
+### Actions fail by returning
+
+An Astro Action is the one place in the framework where an error is a *value*.
+`action()` returns `{ data, error }` and does not throw, so a failed action
+reaches no error event at all — not `astro:hydration-error`, not `window.onerror`,
+and no panel. Astro's guide is explicit that this is the design ("all errors are
+passed to the `error` object on an action result"), and it is right for the case
+it was built for: a form that must show "that email is already registered" to the
+person who typed it.
+
+`.orThrow()` is the bridge, and Astro names the use it is for:
+
+```ts
+import { actions } from "astro:actions";
+
+const { error, data } = await actions.likePost.orThrow({ postId });
+```
+
+The docs describe `.orThrow()` as being for "prototyping or using a library that
+will catch errors for you" — that library is this one. The action's failure
+becomes a rejection at the call site, and `openOnError: { prefill: true }` is
+already listening for exactly that, with the message filled in. Where a form
+genuinely needs to handle the failure itself, keep the return and hand the
+message to `ReportProblem` instead of throwing — the outcome is a report either
+way, and only one of them is a crash you would have been told about.
+
+`ActionError` carries a `code` from a fixed set (`"BAD_REQUEST"`,
+`"UNAUTHORIZED"`, `"NOT_FOUND"`, …), a `status` derived from that code by
+`ActionError.codeToStatus`, and for a validation failure a `fields` object.
+`isInputError(error)` narrows to the validation case, and it is the one worth
+reporting: a `BAD_REQUEST` a person can fix by typing something else is not the
+same as an `INTERNAL_SERVER_ERROR`, and `extra: { actionCode: error.code }` keeps
+the two apart in the report.
+
+### One script tag
+
+`One script tag` is the whole integration for a site that does not bundle, and
+in Astro the tag belongs in the layout's body, after the `<slot />`, so it lands
+after the markup it attaches to:
+
+```astro
+<!-- src/layouts/Base.astro -->
+<html lang="en">
+  <body>
+    <slot />
+    <script
+      is:inline
+      src="https://cdn.jsdelivr.net/npm/bugbottle@1.0.1/dist/bugbottle.js"
+      data-endpoint="/api/feedback"
+      data-open-on-error="prefill"
+    ></script>
+  </body>
+</html>
+```
+
+`is:inline` is the part that trips people up. Astro bundles and hoists a `<script>`
+without it, which moves it into a module that runs before the body exists, so
+the panel mounts against a `document.body` that is not there yet. The script
+tag's own `data-*` attributes are the same eight as everywhere else.
+
+**Receiving it.** `Recipes` has the whole snippet, under `Astro`: an
+`APIRoute` in `src/pages/api/feedback.ts` with `export const prerender = false`
+— without it a static build runs the endpoint once at build time and leaves
+nothing to POST to — and `context.request` arriving as the web `Request`, so
+signing works. Pass `context.clientAddress` as `remoteAddress` and leave
+`trustProxy` alone, because the adapter already decided what the address means.
+
+**What to check before you ship it.** Four failures, and a report from each.
+First, break an island's import — a typo in a `client:load` component's path —
+and confirm the panel opens *and* that the console line is in the report; that
+is the one path where cancelling the event would have cost you the evidence.
+Second, throw inside a hydrated component, which reaches the other half of the
+setup and nothing else. Third, call an action that fails with `.orThrow()` and
+confirm the panel opens with the message already in the box — if it opens empty,
+the failure took a return path instead. Fourth, throw from a page's frontmatter
+in a site with middleware that reads `Astro.locals`: the visitor should get
+*your* 500 page and a report should exist, and if they get the platform's bare
+500 instead, the middleware threw and Astro re-rendered without it.
 
 ## Opening it without a button
 
