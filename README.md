@@ -3058,6 +3058,244 @@ add_action( 'bugbottle_report_stored', function ( int $id, array $report ): void
 before it is JSON-encoded, so anything you add there reaches the browser without
 a line of escaping.
 
+## Hono
+
+Every other page on this list is about a browser. A Hono app is not, and that
+is what makes it the one framework where both halves of bugbottle meet in the
+same process: a Worker can **receive** a report with `handleReport` and file
+**its own** crash with `buildReport` and `sendReport` — no DOM, no panel, no SDK.
+
+The second half is possible because the core is not browser-only underneath:
+`collectContext()` answers `{ url: "", viewport: "", userAgent: "" }` when there
+is no `window`, and `initConsoleBuffer` patches `console.error` and
+`console.warn` unconditionally, skipping only the `window` listeners
+(`src/capture.ts`, `src/console-buffer.ts`). A report from a Worker is a real
+report with an empty `context` and a real console ring buffer behind it.
+
+Every claim below was read out of `hono@4.13.9`'s published build, not out of
+hono.dev.
+
+### Receiving a report
+
+`handleReport` takes a `Request` and answers a `Response`, and `c.req.raw` is
+the `Request` Hono already read, so the route is one line:
+
+```ts
+import { Hono } from "hono";
+import { handleReport } from "bugbottle/server";
+import { fileStore } from "bugbottle/server";
+import { slackSink } from "bugbottle/server";
+
+const app = new Hono();
+
+app.post("/api/feedback", (c) =>
+  handleReport(c.req.raw, {
+    // Header or signature — the first thing a public endpoint needs.
+    authorize: (req) => req.headers.get("x-bugbottle-key") === REPORT_KEY,
+    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    sinks: [slackSink({ webhookUrl: SLACK_WEBHOOK })],
+  }),
+);
+
+export default app;
+```
+
+`fileStore` is the one option here that does not travel: it is the only module
+under `src/server/` that reaches for `node:fs`. On Workers, Bun and Deno,
+replace it with a function — `store` is `(report, screenshot) => ({ id })`, so
+a KV write or a row in D1 is three lines. Everything else in the options
+(`rateLimit`, `dedupe`, `signature`, `scrub`, `screenshot`, `onDecision`) is
+plain JavaScript against the `Request`, and a Worker has all of it.
+
+### Filing its own crash
+
+```ts
+import { buildReport, sendReport, initConsoleBuffer } from "bugbottle";
+
+initConsoleBuffer();
+
+app.onError(async (err, c) => {
+  // Keep the console. See below: onError replaces the only console.error(err).
+  console.error(err);
+
+  const report = buildReport({
+    type: "bug",
+    message: `${err.name}: ${err.message}`,
+    extra: { path: c.req.path, method: c.req.method, stack: err.stack },
+  });
+  await sendReport(env.FEEDBACK_URL, report, { timeoutMs: 2000 }).catch(() => {});
+
+  return c.text("Internal Server Error", 500);
+});
+
+export default app;
+```
+
+There is no `"error"` report type — `REPORT_TYPES` is `bug`, `idea`, `other` —
+so a server-side crash is a `bug` with the stack in `extra`, and `type` is what
+the triage column and the sink colour are built from. `sendReport` is one
+`fetch` with a timeout, and the `.catch` matters: a reporter that can take the
+app down with it is worse than no reporter, so the report is the last thing
+that happens and it is allowed to fail silently.
+
+**Do not point `FEEDBACK_URL` at a route on the same app.** The reporter runs
+inside `onError`; a failure *there* is another error, and the second report
+fails the same way. A separate host, or a route that cannot throw.
+
+### A route that forgets to return is a 404, not a 500
+
+This is the finding on this page, and it is not in Hono's documentation. Look
+at what a single matched handler does with its return value:
+
+```js
+// src/hono-base.ts
+return res instanceof Promise ? res.then(
+  (resolved) => resolved || (c.finalized ? c.res : this.#notFoundHandler(c))
+).catch((err) => this.#handleError(err, c)) : res ?? this.#notFoundHandler(c);
+```
+
+A handler that returns `undefined`, and did not finalise the context, gets
+`#notFoundHandler` — a `c.text("404 Not Found", 404)`. So this:
+
+```ts
+app.get("/api/orders", async (c) => {
+  const orders = await db.orders(c.req.query("id")); // no `return`
+});
+```
+
+answers **404 with an empty body** in production. No throw, no `console.error`,
+no `onError`, no report. It is the one failure mode on this page that leaves
+nothing to report *and* nothing to notice: the route is registered, the router
+matched it, and Hono's own answer is a 404, which looks exactly like a wrong
+URL. A reporter cannot help here, so the check that catches it is a test, and
+it belongs in the list at the bottom of this page.
+
+### "Context is not finalized" is Hono's own error, and it is worth a report
+
+The same `catch` covers the composed path, and there Hono manufactures the
+error itself:
+
+```js
+const context = await composed(c);
+if (!context.finalized) {
+  throw new Error(
+    "Context is not finalized. Did you forget to return a Response object or `await next()`?"
+  );
+}
+```
+
+Middleware that forgets `await next()`, or a handler that returns nothing after
+`next()` has already finalised the response, produces an `Error` — so it *does*
+reach `onError` and it *does* deserve a report. The string exists only in the
+build; searching Hono's docs for it finds nothing, which is why it shows up in
+production as a 500 nobody can place.
+
+### `throw "not an Error"` skips `onError` entirely
+
+```js
+#handleError(err, c) {
+  if (err instanceof Error) {
+    return this.errorHandler(err, c);
+  }
+  throw err;
+}
+```
+
+Everything that is not an `Error` instance is **re-thrown out of the app**. A
+`throw "database down"` from a route, a rejected promise carrying a string, a
+library rejecting with `{ code: 500 }` — none of them reach `app.onError`, so a
+reporter wired there sees nothing, and what the platform reports is an
+unhandled rejection instead of your 500. There is no option that changes this;
+the fix is a `try`/`catch` at the throw site, or a process-level handler
+(`unhandledRejection` on Node and Bun) for the ones you cannot reach.
+
+### A thrown `HTTPException` never reaches the console
+
+The default handler checks the error before it logs it:
+
+```js
+var errorHandler = (err, c) => {
+  if ("getResponse" in err) {
+    const res = err.getResponse();
+    return c.newResponse(res.body, res);
+  }
+  console.error(err);
+  return c.text("Internal Server Error", 500);
+};
+```
+
+`HTTPException` — the class Hono gives you for a deliberate 401, 403 or 404 —
+carries `getResponse()`, so it is returned verbatim and `console.error` never
+runs. That is correct behaviour, and it has one consequence for a reporter: if
+your `onError` reports everything it is handed, **every 404 you throw becomes a
+filed bug**. Skip the exception:
+
+```ts
+import { HTTPException } from "hono/http-exception";
+
+app.onError(async (err, c) => {
+  if (err instanceof HTTPException) return err.getResponse();
+  // …report
+});
+```
+
+### `onError` replaces the console line
+
+`onError` assigns over the module-level default, and the default is the only
+place in the framework that logs:
+
+```js
+onError = (handler) => {
+  this.errorHandler = handler;
+  return this;
+};
+```
+
+So an `onError` without a `console.error(err)` of its own leaves a Worker with
+no error output anywhere — not in `wrangler tail`, not in the platform log.
+This is the fourth framework in a row where the documented handler *replaces*
+the console line rather than adding to it (Vue's `errorHandler`, Nuxt's
+`app:error`, React's `onCaughtError`, now Hono's `onError`), and the snippet
+above keeps the line for the same reason each of the other pages does.
+
+### Which export each runtime needs
+
+`Hono` is a `fetch` handler itself — `fetch = (request, ...rest) => …` is a
+property on the class — so on every Fetch-API platform the app *is* the
+export. This is where people get stuck, because the adapter packages are named
+after runtimes and most of them do not contain a server:
+
+| Runtime | What to export | From |
+|---|---|---|
+| Cloudflare Workers, Deno, any Fetch API | `export default app` | — |
+| Cloudflare Pages | `export default app` | — |
+| Bun | `serve({ fetch: app.fetch, ...getBunServer(c) })` | `hono/bun` |
+| Vercel, AWS Lambda | `export const GET = handle(app)` | `hono/vercel`, `hono/aws-lambda` |
+| Node | `serve(app)` | `@hono/node-server` |
+
+`hono/cloudflare-workers` and `hono/deno` export `getConnInfo`, `serveStatic`,
+`upgradeWebSocket` and `toSSG` — and **no HTTP handler at all**, because
+`export default app` is the whole story on those two. The three that do export
+one are tiny wrappers: `handle` is `(app) => (req) => app.fetch(req)`, and
+`getBunServer` is `(c) => "server" in c.env ? c.env.server : c.env`.
+
+For a reporter, one more thing follows from the same column: a Worker has no
+durable filesystem, so a report filed from one is only as durable as whatever
+you send it to. Point `FEEDBACK_URL` at a host that stores, and let
+[`fileStore`](#receiving-a-report) be the thing on the receiving end.
+
+### What to check before you ship
+
+- A test that asserts a `404` for a URL that *should* work. The forgotten
+  `return` is the only failure here that leaves nothing to report.
+- A route that `throw`s a string or an object, so you know it is not reaching
+  `onError`.
+- `console.error(err)` still in your `onError` — check `wrangler tail`, not
+  the source.
+- `HTTPException` filtered out, or your inbox is full of 404s.
+- `sendReport` given a `timeoutMs`, and its promise caught.
+- The endpoint pointed somewhere that cannot itself fail.
+
 ## One script tag
 
 For a site with no build step — a WordPress theme, a static page, a client

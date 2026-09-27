@@ -204,6 +204,7 @@ const GROUPS = [
       "astro",
       "react-router",
       "wordpress",
+      "hono",
     ],
   },
   {
