@@ -89,8 +89,11 @@ nextjs.org, angular.dev, nuxt.com.
   Adapteren findes allerede, så det er ren dokumentation.
   27/9, `ceo/nuxt-guide`. **MÅL: `/docs/nuxt/` baseline 0 besøgende
   (siden findes ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
-- [ ] **4. `/docs/astro/`** — 1 suggest, billigst (framework-agnostisk, script
-  tag). Lav prioritet.
+- [x] **4. `/docs/astro/`** — 1 suggest, billigst (framework-agnostisk, script
+  tag). Lav prioritet. 27/9, `ceo/astro-guide`. **MÅL: `/docs/astro/`
+  baseline 0 besøgende (siden findes ikke) pr. 2026-09-27.** Sammenlign
+  25/10 og 25/11. Se "Fund fra Astro-iterationen" — den stærkeste af de
+  fire, fordi kilden er en *uundokumenteret* API.
 - [ ] **5. `/compare/`: tilføj Sentry-SDK'en** (`@sentry/react` 29,3 mio
   downloads/uge mod vores 191 — FETCHET fra npm-downloads-API'en) som
   sammenligningsobjekt. `/compare/` sammenligner i dag produkter (Marker.io,
@@ -107,10 +110,80 @@ nextjs.org, angular.dev, nuxt.com.
 
 ### Køen efter dette
 
+De fire frameworksider er på plads, og de ligner hinanden mere end de burde:
 - Script-tagonlysningen til Angular/Nuxt/Astro er den samme kode, så de fire
   sider kan deles.
 - Verifikations-sektionen i hver frameworkside er et genbrugeligt mønster
   (Sentry har det på hver side). Skriv det en gang som et afsnit.
+- **Alle fire sider har en fejl-side, hvor panelet ikke er mounted** — Next.js
+  `error.tsx`/`global-error.tsx`, Angular/Nuxt/Astro's 500-side. Alle fire
+  løser det med det samme: én knap. Det er ét afsnit, ikke fire.
+- **Astro-siden viste, at frameworkernes fejlveje danner tre klasser:**
+  (1) kast i frameworket, som har en krog; (2) **en fejl i din egen kode som
+  ingen krog ser** — Angulars `resource()`, Nuxts `useFetch().error.value`,
+  Astros `action()`; (3) fejl i en *fejl-side*, hvor frameworket er væk.
+  Sorter fremover nye sider efter den inddeling. Den er mere brugbar end
+  frameworklisten, fordi den fortæller hvilken slags opsætning siden kræver,
+  og den er allerede betalt for.
+
+## Fund fra Astro-iterationen (27/9) — den stærkeste af de fire sider
+
+Kilden er `withastro/astro` på tag `astro@7.3.5` (Astro 7 er den aktuelle
+store minor; 7.3.5 var `latest` 27/9) — `packages/astro/src/runtime/server/astro-island.ts`,
+`core/errors/default-handler.ts`, `core/middleware/astro-middleware.ts`,
+`core/routing/internal/astro-designed-error-pages.ts`,
+`actions/runtime/{client,server,types}.ts` — **ikke** docs-siden, som for
+Astro er den eneste, der findes. Og det er pointen:
+
+- **Astro har ingen fejlhåndtering overhovedet at koble til.** Ingen
+  `ErrorHandler`, ingen `error.tsx`, ingen `vue:error`, og **ingen
+  error-handling-guide blandt de 30 engelske guider** (tjekket i hele
+  `withastro/docs`-treeet). Sådan er siderne i den række bygget op forskudt:
+  de tre foregående slog alle en krog i frameworket, og her findes den ikke.
+  Det er derfor siden vinder på noget andet.
+- **`astro:hydration-error` er en rigtig, offentlig, uundokumenteret
+  begivenhed.** `handleHydrationError` i `astro-island.ts:122-137` sender en
+  `CustomEvent` med `cancelable: true`, `bubbles: true`, `composed: true` og
+  `detail: { error, componentUrl }`. Nævnt **0 gange** i hele `withastro/docs`.
+  Den dækker præcis den fejlkunike kun en Astro-side har: **en island der
+  aldrig bliver interaktiv.** Den tegner server-HTML, ligner virksom, gør
+  intet — "filteret virker ikke", umulig at reproducere. Det er den bedre
+  halvdel af opsætningen, fordi den dækker en fejltype de tre andre sider
+  ikke kan have.
+- **Fælden der ødelægger beviset: `preventDefault()`.** `dispatchEvent`
+  returnerer `false` når en lytter annullerer, og da springer Astro sin egen
+  `console.error("[astro-island] Error hydrating …")` over. Den linje er
+  præcis hvad `console`-ringbufferen optager, altså det meste af rapporten.
+  Siden siger eksplicit "lyt, rapportér, og lad Astro skrive sin linje".
+  Helt samme slags fælde som Angular-sidens `onViewError`.
+- **Fælden der skjuler sit eget bevis: `500.astro` køres med din middleware.**
+  I `renderDefaultError` får fejlrenderingen sin egen `FetchState` med
+  `skipMiddleware` kopieret fra kalleren, middleware kører, og *kaster
+  middleware*, fanger Astro det og renderer `500.astro` igen med
+  `skipMiddleware: true`. En middleware der læser `Astro.locals.user` uden
+  guard tager altså din egen 500-side med, og besøgeren får platformens nøgne
+  500. `errorState.initialProps = { error }`, så proppen er dokumenteret;
+  `error` er `unknown` med vilje, fordi alt kan kastes.
+- **Actions fejler ved at *returnere*, ikke at kaste.** `action()` giver
+  `{ data, error }` og kaster ikke, så en fejlet action når ingen
+  fejlbegivenhed overhovedet. Astro siger det selv ("all errors are passed to
+  the `error` object on an action result") og kalder `.orThrow()` til
+  "prototyping or using a library that will catch errors for you" — det er os.
+  `ActionError` har `code` (fast sæt), `status` fra `ActionError.codeToStatus`,
+  og `fields` ved valideringsfejl; `isInputError` er den snævre. Samme klasse
+  problem som Nuxt-sidens `useFetch().error.value`.
+- **Script-tagen har én fælde de andre sider ikke har: `is:inline`.** Astro
+  bundler og hæver en `<script>` uden den, så den kører før `<body>` findes.
+- **Med `<ClientRouter />` overlever dokumentet en navigation.** Alt ovenfor
+  skal derfor sidde på `astro:page-load`, som fyrer på første load også, så
+  der skal ikke være en "første gang"-gren. Det er den samme tanke som
+  Nuxt-sidens `onNuxtReady`.
+
+⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre** (igen ingen
+Chrome på maskinen, `findChrome()` returnerer en Windows-sti). Siden er ren
+Markdown — ingen nye DOM-elementer, ingen ny CSS, ingen nye controls — så
+a11y-auditten rammer ikke ændringen, og CI's `browser`-job kører den på hvert
+push.
 
 ## Fund fra Nuxt-iterationen (27/9) — de tre ting der gør siden bedre end de andre to
 
@@ -194,16 +267,21 @@ Verifieret: `ErrorHandler`, `provideBrowserGlobalErrorListeners()` og
 - **`mountBugbottle().open()` kan ikke forudfylde beskeden.** Panelets egen
   `openOnError: { prefill: true }` kan det, men kun for vinduesfejl, og kun
   fordi panelet selv ringer `openForError`. Ethvert andet kald — en
-  framework-`ErrorHandler`, en `onShortcut`, din egen knap — får et tomt felt,
-  selv om den kender beskeden. Fixet er lille (en valgfri
-  `open({ prefill })`, ~40 bytes på `bugbottle/ui`), men det **rører et
-  eksisterende eksports signatur**, så efter vores egne navneregler er det en
-  minor, ikke en patch. Bygge det, eller lade framework-siderne pege på
-  `bugbottle/triggers` og lægge fejlen i `extra` i stedet?
-  **Nuxt-siden gør problemet større end de to andre:** `error.vue` er en hel
-  separat side load, hvor panelet slet ikke er mounted, så en rapport derfra er
-  nødt til at være en knap. Den beslutning tager nummer 4 (Astro) med sig, fordi
-  den har samme fejl-side.
+  framework-`ErrorHandler`, en `onShortcut`, `astro:hydration-error`, din egen
+  knap — får et tomt felt, selv om den kender beskeden. Fastslået i `src/ui`
+  (linje 218: `open(): void`), så det er ikke en forglemt mulighed.
+  Fixet er lille (en valgfri `open({ prefill })`, ~40 bytes på `bugbottle/ui`),
+  men det **rører et eksisterende eksports signatur**, så efter vores egne
+  navneregler er det en minor, ikke en patch. Og det er ikke længere et
+  hjørnesag: **alle fire frameworksider rammer det**, og Astro-siden rammes
+  hårdest, fordi `componentUrl` + fejlteksten er hele pointen med at lytte på
+  begivenheden. Bygge det, eller lade siderne pege på `bugbottle/triggers` og
+  lægge fejlen i `extra` i stedet?
+- **Fejl-siden-problemet er besvaret, så det behøver ikke en beslutning mere.**
+  Alle fire sider løser det samme sted: en fejl-side er en separat side load
+  uden layout, så panelet kan ikke være mountet, og integrationen er én knap.
+  Siderne siger det eksplicit. Det eneste åbne spørgsmål er om knappen skal
+  kunne forudfylde beskeden — altså punktet ovenfor.
 - **Search Console-eksport.** Uden pr. side-visninger, klik, CTR og position kan
   Fase 3 ikke måles. Én CSV-eksport pr. side, 28 dage.
 - **Deploy.** Hvordan kommer bugbottle.dev live? Intet i repoet bygger
@@ -239,6 +317,20 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-27, iteration 4** (`ceo/astro-guide`). Landede `/docs/astro/`
+  som fjerde frameworkside under `Integrations`. 37 docs-sider (fra 36).
+  Læst `withastro/astro@7.3.5`'s kilde og hele `withastro/docs`-treeet. Se
+  "Fund fra Astro-iterationen".
+  - **Deploy-verifikation først:** alle tre åbne `VERIFICÉR DEPLOY`-noter er
+    lukkede — nextjs, angular og nuxt er **alle live** (sitemap'en lister dem,
+    `lastmod 2026-09-27`, og indholdet er det nye: `error.digest`,
+    `provideBrowserGlobalErrorListeners`, `enforce: "pre"` og
+    `app:chunkError`). `Integrations`-gruppen har tre sider i live-sidebaren.
+  - `dist/` er uændret af builden, byte for byte — ingen eksport rørte sig,
+    så ingen budget flyttede. IIFE'en målte 24 645 / 21 063 gz mod budgetterne
+    25 088 / 21 504.
+  - Næste iteration: opgave 5 (Sentry-SDK'en i `/compare/`).
 
 - **2026-09-27, iteration 3** (`ceo/nuxt-guide`). Landede `/docs/nuxt/` som
   tredje frameworkside under `Integrations`. 36 docs-sider (fra 35).
@@ -288,13 +380,30 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 
 ## Deploy-noter
 
+- ✅ **DEPLOY OK 2026-09-27.** Alle tre notes nedenfor er verificeret mod
+  **indhold**, ikke HTTP 200, kl. 19:1x: `https://bugbottle.dev/sitemap.xml`
+  lister `/docs/nextjs/`, `/docs/angular/` og `/docs/nuxt/` med
+  `lastmod 2026-09-27`, de tre sider viser hver deres nye kode
+  (`error.digest` / `provideBrowserGlobalErrorListeners` / `enforce: "pre"` +
+  `app:chunkError`), og `Integrations`-gruppen i live-sidebaren har tre sider.
+  Deployeren kørte altså engang mellem 17:47 og 19:1x — ét kørselsvindue
+  dækker alle tre merges, som noterne forudså.
+
+- `VERIFICÉR DEPLOY: /docs/astro/ (fjerde integrationsside, 37 sider i
+  sitemap'en) 20ec0c6, merge a264630, 2026-09-27 ~19:35` — næste
+  batch-vindue er 21:30 2026-09-27. Verificér **indhold**:
+  `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/astro/` med `lastmod 2026-09-27`, siden skal vise
+  Astro-guiden med `astro:hydration-error` og `handleHydrationError`,
+  `Integrations`-gruppen i sidebaren skal have fire sider, og
+  `/docs/recipes/` skal stadig have sit `### Astro`-afsnit.
+
 - `VERIFICÉR DEPLOY: /docs/nextjs/ + Integrations-gruppen i sidebaren
   20867c0 2026-09-27 ~15:57` — første batch-vindue efter merge er 17:30
   2026-09-27. Verificér **indhold**, ikke HTTP 200: siden skal findes i
   `https://bugbottle.dev/sitemap.xml`, og `https://bugbottle.dev/docs/nextjs/`
   skal vise guiden med `error.tsx`-eksemplet og "Integrations" i sidebaren.
-  Sidstmod for `/docs/nextjs/` i sitemap'en skal være 2026-09-27.
-  *(Skrevet 16:24; vinduet er ikke gået endnu, så intet at verificere.)*
+  Sidstmod for `/docs/nextjs/` skal være 2026-09-27.
 
 - `VERIFICÉR DEPLOY: /docs/angular/ (ny integrationsside, 35 sider i
   sitemap'en) 937367d, merge f0d23c1, 2026-09-27 17:47` — vinduet 17:30 var
