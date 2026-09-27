@@ -109,6 +109,10 @@ nextjs.org, angular.dev, nuxt.com.
   på hele sitet) pr. 2026-09-27.** Sammenlign 25/10. Effekten forventes ikke at
   komme fra trafikken men fra tilliden i salgsfasen — en virksomhedskundes
   privacyfunktion spørger om denne side, før den spørger om features.
+- [x] **9. `/docs/react/` — React uden meta-framework.** 28/9, `ceo/react-page`.
+  Se "Fund fra React-iterationen" — de tre fælder, ingen af dem i Reacts egen
+  dokumentation. **MÅL: `/docs/react/` baseline 0 besøgende (siden findes ikke)
+  pr. 2026-09-27.** Sammenlign 25/10 og 25/11. 39 docs-sider (fra 38).
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -119,6 +123,64 @@ nextjs.org, angular.dev, nuxt.com.
   Se "Fund fra WordPress-iterationen" — de tre fund, der ikke stod i planen.
   **MÅL: `/docs/wordpress/` baseline 0 besøgende (siden findes ikke) pr.
   2026-09-27.** Sammenlign 25/10 og 25/11. 38 docs-sider (fra 37).
+
+### Fund fra React-iterationen (28/9) — dokumentationen er forkert, ikke bare tynd
+
+Opgaven var formuleret som "React mangler en side". Det viste sig at være det
+for svage krav, fordi to React-sektioner allerede findes i "Get started" (formen
+og renderfejlene), så en side der genfortalte dem ville være den sjette side
+der ligner de andre fem. Siden blev derfor bygget som **tre fælder og intet
+andet**, og alle tre er læst i `react-dom@19.3.0`'s **produktionsbuild**
+(react 19.3.0, hentet fra npm-tarballen og grebet med `tar -xzO` — ingen
+installation, ingen filer uden for repoet). Det er samme metode som de tre
+forgående framework-iterationer, og den er betalt for.
+
+**1. `onCaughtError`/`onUncaughtError` er IKKE dev-only.** Påstanden er
+udbredt ( blogs, og folk der har læst typerne). I produktionsbuildet kalder
+`logCaughtError` og `logUncaughtError` handlerne direkte, ingen `__DEV__`-guard,
+og der er ingen anden sti i dev-builden som prod mangler. Standarderne er
+`defaultOnCaughtError` → `console.error(error)` og `defaultOnUncaughtError` →
+`reportGlobalError(error)`. **Konsekvens for os:** React 19 *kan* være en
+produktions-fejlsti, så `createRootErrorHandlers` er ikke en dev-legetøj, og
+den tekst der skal med i privatlivsnotatet er den rigtige. `hydrateRoot`
+tager de samme to nøgler (samme `RootOptions`), verificeret på linje 18612.
+
+**2. En error boundary er stadig en klasse i React 19** — og det er *kildefil*:
+`initializeClassErrorUpdate` læser `fiber.type.getDerivedStateFromError` og
+`inst.componentDidCatch`, og `logCaughtError` nås kun fra de to grene. Det er
+også hvorfor `BugReportBoundary` er bygget med `createElement` uden JSX, så
+den samme fund-flade kan genbruges i en kommende ❓-svar. Samme funktion siger
+noget om *tidspunkt*: `logCaughtError` kaldes fra boundaryens update-**callback**,
+altså **efter** at fallback er tegnet. En rapport fra `onCaughtError` beskriver
+et sidestade brugeren aldrig har set.
+
+**3. Den fælde der koster en række i indbakken pr. renderfejl:** monteres
+`BugReportBoundary` sammen med `createRootErrorHandlers`, sendes den samme
+fejl **to gange**. `createRootErrorHandlers` returnerer den *samme* funktion for
+begge nøgler, og `dedupeMs` husker kun fejl den selv har sendt; boundaryen
+sender på klik gennem en helt anden sti. React giver svaret:
+`onCaughtError` får `info.errorBoundary` (boundary-instansen, `null` når ingen
+klasse-boundary fangede den), og caught-casen er præcis den `BugReportBoundary`
+allerede tilbyder at rapportere. Siden løser det med **én nøgle**
+(`onCaughtError: () => {}`).
+
+**API-gap fundet (ikke bygget, samme slags som `open({ prefill })`):** React
+sender `errorBoundary` i info-objektet, men `RootErrorHandlers`' type i
+`src/react/boundary.ts:190-191` erklærer kun `componentStack`. Siden skriver
+derfor en one-liner der *ignorerer* første argument i stedet for at læse det,
+og siger eksplicit hvorfor. En valgfri felt-tilføjelse til en eksisterende
+eksporteret type er en **minor** efter vores egne navneregler, ikke en patch,
+så den ligger under ❓.
+
+**Baseline for rækken (Google Suggest, hentet 28/9, samme metode som
+27/9-iterationen):** `react error boundary` **10**, `vue error handling` 10,
+`sveltekit error handling` 7, `svelte error handling` 6, `remix error handling`
+2, `solid start error handling` **0**. React valgt over Vue fordi vi *allerede*
+har den største adapter (5,6 kB budget) og to sektioner om den, men ingen side
+— og fordi `vue:error` allerede er dokumenteret på Nuxt-siden. **Vue er det
+næste emne, hvis tiden er til det**, fordi 10 suggest er lige så højt og
+`bugbottle/vue` er en selvstænd adapter; `solid start` er bevidstsprunget over
+(0 forslag).
 
 ### Fund fra WordPress-iterationen (27/9) — tre ting, ingen af dem i readme'en
 
@@ -436,6 +498,15 @@ udskrevet i testen, fordi de to sprog ikke deler prosa.
   uden layout, så panelet kan ikke være mountet, og integrationen er én knap.
   Siderne siger det eksplicit. Det eneste åbne spørgsmål er om knappen skal
   kunne forudfylde beskeden — altså punktet ovenfor.
+- **`RootErrorHandlers` mangler `errorBoundary`.** React 19 sender den catching
+  boundary i `info.errorBoundary` (`onCaughtError`), så det er den måde man
+  undgår at `BugReportBoundary` + `createRootErrorHandlers` sender den samme
+  renderfejl to gange — fund fra React-iterationen. Vores type erklærer kun
+  `componentStack`, så siden bruger en one-liner der ignorerer argumentet.
+  En valgfri felt-tilføjelse til en eksporteret type er en **minor** efter
+  `docs/api-audit-1.0.md`'s regler, så den er ikke shippet i en patch. Samme
+  spørgsmål som `open({ prefill })` ovenfor: bygge den nu til 1.1.0, eller
+  lade den ligge til en minor der samler begge?
 - **Search Console-eksport.** Uden pr. side-visninger, klik, CTR og position kan
   Fase 3 ikke måles. Én CSV-eksport pr. side, 28 dage.
 - **Deploy.** Hvordan kommer bugbottle.dev live? Intet i repoet bygger
@@ -489,6 +560,35 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 8** (`ceo/react-page`). Opgave 9: `/docs/react/` som
+  sjette side under `Integrations`. Se "Fund fra React-iterationen" — tre
+  fælder, alle læst i `react-dom@19.3.0`'s **produktionsbuild**.
+  - **Metoden holdt for fjerde gang:** læs *buildet*, ikke dokumentationen.
+    Som i Nuxt- og Astro-iterationen er den bedste påstand en, kilden modsiger,
+    og den er her dobbelt så stærk fordi det er en korrigering af en påstand
+    folk faktisk tror. Verificeret uden at installere noget: `curl` på
+    npm-tarballen + `tar -xzO` til stdout (den første forsøg med `npm i` i en
+    scratch-mappe blev blokeret af rettighederne, så læsningen skete i stedet
+    som et greb i strømmen — samme resultat, nul filer).
+  - **To React-sektioner findes allerede** i "Get started", så siden er bevidst
+    kun de tre fælder og *linker* til dem. Det er grunden til at den ikke er
+    "den sjette side der ligner de andre fem" — de to krydslinks er skrevet
+    som `#the-form-react` / `#catching-render-errors-react` og buildens
+    ankerkort gør dem til rigtige `/docs/…/`-URL'er (tjekket i den genererede
+    HTML).
+  - `dist/` er uændret af builden, byte for byte (IIFE 24 645 / 21 063 mod
+    budgetterne 25 088 / 21 504) — ingen eksport rørte sig, så intet at
+    `git add -f dist`. 39 docs-sider (fra 38), 150 søgeposter (fra 145).
+  - `npm run check` grøn: 880 tests, 0 fejl, 0 advarsler.
+  - CHANGELOG-entry skrevet **inden** commit — iteration 5's lære.
+  - ⚠️ `npm run a11y` og `npm run smoke:annotate` kunne ikke køre: ingen Chrome
+    på maskinen, som i iteration 2–7. Siden er ren Markdown — ingen nye
+    DOM-elementer, ingen ny CSS, ingen nye controls. CI's `browser`-job kører
+    begge på hvert push.
+  - Næste iteration: **Vue** (10 suggest, `bugbottle/vue` er en selvstænd
+    adapter, og `vue:error` er kun dokumenteret som en del af Nuxt-siden).
+    Ellers ❓-punkterne, som kræver Mads.
 
 - **2026-09-27, iteration 7** (`ceo/wordpress-page`). Opgave 8: `/docs/wordpress/`
   som femte side under `Integrations`, plus rettelsen i `/da/kom-i-gang/`. Se
