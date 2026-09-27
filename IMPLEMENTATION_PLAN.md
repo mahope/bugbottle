@@ -923,6 +923,34 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
+- **2026-09-28, iteration 13** (`ceo/hono-page`). Opgave 14: `/docs/hono/` —
+  **den første server-side i rækken**, niende side under `Integrations`, og
+  dermed en helt ny trafikakse: *backend- og Workers-søgninger*, hvor vi før
+  havde nul sider. 43 docs-sider (fra 42), 194 søgeposter (fra 184).
+  - **Hvorfor Hono og ikke Fastify,** selvom begge målte 10: `handleReport` er
+    `Request`→`Response`, så Hono og Cloudflare Workers kræver nul lim, mens
+    Fastify kræver et nyt `fastifyHandler`-export før siden overhovedet kan
+    være sand. En side der dokumenterer kode vi ikke har skrevet, er den
+    tyndeste slags side, og Fase 3 siger eksplicit at tynde sider kan skade
+    hele domænet.
+  - Se "Fund fra Hono-iterationen" — fire fund i `hono@4.13.9`'s build. Det
+    første er en fejl **der ikke kan rapporteres overhovedet** (en glemt
+    `return` giver 404, ikke 500), så siden ender med en kontrolliste hvor det
+    første punkt er en *test* og ikke en rettelse. Det er et andet slags
+    afsnit end de andre sider har, og det er ærligt: en reporter kan ikke
+    løse alt.
+  - `dist/` er uændret af builden, byte for byte — ingen eksport rørte sig, så
+    ingen budget flyttede. IIFE'en målte 24 645 / 21 063 gz mod budgetterne
+    25 088 / 21 504.
+  - ⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre:** ingen
+    Chrome på maskinen (samme grund som iteration 2 og 3). Siden er ren
+    Markdown plus én tabel — ingen nye DOM-elementer, ingen ny CSS, ingen nye
+    controls — så a11y-auditten rammer ikke denne ændring, og CI's
+    `browser`-job kører den på hvert push.
+  - Næste iteration: kategorien er åben, se "Næste kandidater" i
+    Hono-afsnittet. `fastifyHandler` er den eneste af dem der kræver kode først,
+    og den er en minor.
+
 - **2026-09-28, iteration 12** (`ceo/svelte-page`). Opgave 13: `/docs/svelte/`
   som **tredje** adapter-side (react, vue, svelte) og **otte** side under
   `Integrations`. 42 docs-sider (fra 41), 184 søgeposter (fra 176). Læst
@@ -1242,6 +1270,20 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/hono/ (43 sider i sitemap'en, ny integrationsside
+  under Integrations, **første server-side** i rækken) b33195a, merge f40c4f2,
+  2026-09-28 ca. 02:0x` — næste batch-vindue er **07:30 2026-09-28**. Kan
+  verificeres i **samme kørsel som de syv notes nedenfor** (svelte 00:54,
+  react-router 00:2x, support 23:3x, vue 23:04, react 22:32, wordpress 22:24 —
+  alle merge før 07:30). Verificér **indhold**:
+  `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/hono/` med `lastmod 2026-09-28`, siden skal vise
+  de fire fund (`res ?? this.#notFoundHandler(c)`,
+  `Context is not finalized`, `#handleError`/`instanceof Error`,
+  `"getResponse" in err`) og teksten `c.req.raw`, `HTTPException`,
+  `getBunServer`, `export default app`, og `Integrations`-gruppen i sidebaren
+  skal have **ni** sider med `/docs/hono/` som nr. 9.
 
 - `VERIFICÉR DEPLOY: /docs/svelte/ (42 sider i sitemap'en, ny integrationsside
   under Integrations, tredje i sidebaren efter React og Vue) d35f86d, merge
