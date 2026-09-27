@@ -1827,8 +1827,171 @@ stylesheet the browser has already overridden: the picture proves the trigger
 still has an edge, the selected type still differs from the two beside it, its
 label still reads as a word and the focus ring still shows. Run the
 audit yourself with `npm run build && npm run a11y` (Chrome and
-`puppeteer-core` required). All of the announced text comes from the locale,
-so it is announced in the reporter's language.
+  `puppeteer-core` required). All of the announced text comes from the locale,
+  so it is announced in the reporter's language.
+
+## WordPress
+
+A WordPress site gets both halves from one activation. The plugin
+[github.com/mahope/bugbottle-wordpress](https://github.com/mahope/bugbottle-wordpress)
+mounts this panel, adds the route that receives it, and stores what arrives as a
+private `bugbottle_report` post type with an admin list, a detail screen and an
+optional email through whatever SMTP plugin the site already has. There is no
+route to write, no script tag to add, and no build step: the plugin is PHP and
+two JavaScript files. It is the only route in this documentation where the
+receiving end is not yours to write.
+
+It requires WordPress 6.4 or later and PHP 8.1, and is tested to WordPress 7.1.
+The bundled panel is this package's `dist/bugbottle.js`, unmodified, so what a
+visitor downloads is the build documented under "Two builds" — 66 500 bytes, 24.6
+kB gzipped. The screenshot renderer is a second file of about 15 kB (6 kB over
+the wire) and is loaded only while the Screenshots setting is on, because the
+panel build deliberately carries no renderer.
+
+### Installing it
+
+**It is not in the WordPress plugin directory yet**, so "Add New → search for
+Bugbottle" finds nothing. Checked 27 September 2026:
+`api.wordpress.org/plugins/info/1.0/bugbottle.json` answers
+`{"error":"Plugin not found."}`, and `wordpress.org/plugins/bugbottle/` redirects
+to the search page. The plugin's own readme still leads with the directory, so
+this section is where the correction lives. Download the zip from
+[the latest release](https://github.com/mahope/bugbottle-wordpress/releases/latest)
+(v1.0.0, which bundles the library at 1.0.0) and install it with **Plugins → Add
+New → Upload Plugin**. Updating replaces the plugin directory; reports and
+settings live in the database and survive it.
+
+Then open **Bug reports → Settings**. At a minimum set a recipient under **Email
+recipient**, or the reports only ever exist in wp-admin.
+
+### The settings are the mount options
+
+Every setting on that screen is one option from "The panel", and the defaults
+are the ones in this table. It is the shortest mapping in this documentation,
+because there is nothing between the two: the plugin builds one JSON object from
+the settings and calls `window.bugbottle.mount(options)` with it.
+
+| Setting | What it becomes | Default |
+|---|---|---|
+| Enabled | Whether the panel is printed at all. Nothing in the settings is read on a site that has it off. | on |
+| Language | `locale`. `auto` is the site's own language, `da_DK` rewritten to the `da-DK` the library resolves. | `auto` |
+| Primary colour, Position | `theme.primary` and `theme.position`. | `#2563eb`, `bottom-right` |
+| Brand name, Logo URL | `brand.name` and `brand.logo`. Empty keys are left out of the object rather than sent as empty strings. | empty |
+| Trigger selector | `trigger` — a CSS selector for your own button. Empty keeps the floating one. | none |
+| Keyboard shortcut | `shortcut`. An empty field is *no shortcut*, not the default, and `false` is how the library is told so. | `mod+shift+b` |
+| Open the panel on an uncaught error | `openOnError`. | off |
+| Contact field | `contact`, in three states: off, optional, and required — `false`, `true` and `"required"`. Personal data you asked for, so it is off. | off |
+| Scrub | `scrub`, handed in as this library's own `scrubReport`. | on |
+| Offline queue | `queue`, handed in as `createQueue` with the endpoint and headers, and the signer when you have a key. | on |
+| Network log | `network`, handed in as `initNetwork`. Your own endpoint is passed to it so the panel does not log its own POST. | on |
+| Breadcrumbs | `breadcrumbs`, handed in as `initBreadcrumbs`. | on |
+| Timings and storage snapshot | `perf`, handed in as `initPerf`. Both halves are simplifications and the library says which. | off |
+| Shake to report | `shake`, handed in as `onShake`. On iOS nothing arrives until your own button calls `requestShakePermission()`, and the plugin never puts that prompt up for you. | off |
+| Screenshots | `screenshot`, handed in from the second script, and what puts the picture editor under the preview. | off |
+| Signing key(s) | `signKey` → `createSigner`. Only the first key is sent to the browser. | empty |
+| Only for logged-in users, Accept reports from visitors who are not logged in | Whether the panel is printed for a visitor with no session. Both false is the default, and it is the safe one: a visitor who gets no panel cannot send an anonymous screenshot nobody can be asked about later. | both off |
+| Email recipient, Email on submit | `wp_mail` with the report as Markdown and a link into wp-admin. | off |
+
+**No `data-*` attributes are read.** If you have read "One script tag", this is
+the part that differs: the plugin assembles one config object and calls
+`mount()` explicitly, because the settings carry nested theme and brand shapes
+that would have to be squeezed through attributes and parsed straight back out
+again. The `data-*` attributes appear in one place only, and they are the ones
+you put on your own markup — see the screenshots below.
+
+### The route
+
+`POST /wp-json/bugbottle/v1/report` takes the ordinary JSON body, so your own
+form can post to it with the panel switched off. Anonymous reports are rate
+limited to ten an hour per IP address. With a signing key set, the route
+requires the library's `X-Bugbottle-Signature` header, verified over the raw body
+within five minutes of the server clock in either direction, in constant time,
+and refused if that digest has already been accepted inside the window — missing,
+malformed, wrong, expired and replayed all answer `401` alike. One key per line
+is how a key is rotated: add the new one, wait for cached pages carrying the old
+one to expire, then remove the old one.
+
+A key that is sent to a browser is public. Signing raises the cost of posting
+junk from a script that never read your page; it is spam deterrence beside the
+rate limit, not authentication.
+
+### Screenshots
+
+Off until you turn it on, and with it off the renderer is not loaded at all, so
+no report can carry a picture — that is a complete answer rather than a
+half-measure. When it is on:
+
+- Files are written under `wp-content/uploads/bugbottle/` with a random name,
+  never registered as attachments, and the directory ships with an `.htaccess`
+  deny rule. **That rule only works on Apache.** On nginx, add it yourself:
+  `location ~* /wp-content/uploads/bugbottle/ { deny all; }`
+- They are served back only through `GET /wp-json/bugbottle/v1/screenshot/<id>`,
+  which requires `manage_options`. The `<id>` is the report, and the file name
+  is looked up from that row rather than taken from the request, so an id cannot
+  be used to walk the directory.
+- What was typed into a field, textarea or `contenteditable` region is replaced
+  with bullets for the length of one render and put straight back. Anything else
+  that must stay out of the picture is marked in your own templates:
+
+  ```php
+  <?php // A template with something in it that must not be photographed. ?>
+  <div data-bugbottle-mask><?php echo $customer_name; ?></div>
+  <div data-bugbottle-block><?php echo $order_summary; ?></div>
+  ```
+
+  `data-bugbottle-mask` bullets the text, `data-bugbottle-block` covers the
+  region outright. Nothing else is hidden.
+- The reporter can mark the picture before sending it — a rectangle, an arrow,
+  and a blur that reads the region back out of the canvas, so the original
+  pixels leave with it.
+
+Deleting a report deletes the row and deliberately leaves the file on disk: an
+accidental delete is recoverable, and a directory nobody can reach over HTTP is
+a smaller problem than an unrecoverable one. Clear the directory yourself when
+you mean it.
+
+Before you turn it on, read [A privacy checklist](/docs/privacy-checklist/) —
+the four questions to answer first, and the two places a screenshot is most
+likely to carry somebody else's name, an order or a half-written message.
+
+### What arrives, and what is deliberately dropped
+
+A session replay — the rrweb recording of the seconds before the report — is
+stored without it and never refused for carrying one. Post meta is the wrong
+place for a megabyte of nested JSON, and nothing in wp-admin can play a replay
+back, so keeping it would be storage nobody can use.
+
+The `notes` lines the library writes about a report itself are kept and shown
+above the evidence, so a reader who sees no picture is told why before they go
+looking for one. Today there is one: a report the browser had to keep while it
+was offline, and could not keep in full, is stored without its picture and says
+so.
+
+### Hooks
+
+Two filters and one action, which is the whole extension surface:
+
+```php
+// Hide the panel on the front end of a page type nobody reports from.
+add_filter( 'bugbottle_show_panel', function ( bool $show ): bool {
+  return $show && ! is_checkout();
+} );
+
+// Add to the configuration handed to mount().
+add_filter( 'bugbottle_panel_config', function ( array $config ): array {
+  $config['extra'] = [ 'plan' => current_user_can( 'manage_options' ) ? 'admin' : 'free' ];
+  return $config;
+} );
+
+// Fires after a report is stored, with the post id and the report.
+add_action( 'bugbottle_report_stored', function ( int $id, array $report ): void {
+  error_log( sprintf( 'bugbottle report %d: %s', $id, $report['type'] ) );
+}, 10, 2 );
+```
+
+`bugbottle_panel_config` is filtered after the plugin has built the object and
+before it is JSON-encoded, so anything you add there reaches the browser without
+a line of escaping.
 
 ## One script tag
 
@@ -3336,6 +3499,7 @@ The client mounts wherever your HTML is served from; Hono only serves it.
 No recipe: the plugin at
 [github.com/mahope/bugbottle-wordpress](https://github.com/mahope/bugbottle-wordpress)
 is the endpoint, the panel and an admin list of what arrived. One activation.
+See [WordPress](#wordpress) for the settings, the route and the screenshots.
 
 ## Sending it somewhere
 
@@ -4394,7 +4558,8 @@ warns about once on the console. See "Two builds".
 **WordPress** — the plugin at
 [github.com/mahope/bugbottle-wordpress](https://github.com/mahope/bugbottle-wordpress)
 bundles this build, adds the receiving endpoint, stores reports as a private
-post type with an admin list, and emails them if you want. One activation.
+post type with an admin list, and emails them if you want. One activation. See
+[WordPress](#wordpress).
 
 **`bugbottle/annotate`** — `createAnnotator`, and the `Annotator`,
 `AnnotatorOptions` and `AnnotateTool` types. See "Marking the picture".

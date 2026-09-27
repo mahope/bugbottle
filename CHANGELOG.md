@@ -10,6 +10,25 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- `/docs/wordpress/`, a documentation page for the WordPress plugin — the route
+  in this documentation where the receiving end is not yours to write, and the
+  one sibling product with no page at all. The plugin is read as source, not
+  summarised: `includes/class-settings.php` for the setting names and their
+  defaults, `includes/class-assets.php` for the mount call, `includes/class-rest.php`
+  for the routes and the rate limit, and `readme.txt` for the rest. Three things
+  the page says that nothing else did. **The plugin is not in the WordPress
+  directory yet** — `api.wordpress.org/plugins/info/1.0/bugbottle.json` answers
+  `{"error":"Plugin not found."}` and `wordpress.org/plugins/bugbottle/`
+  redirects to the search page as of 27 September 2026, so the install is the
+  release zip, and the plugin's own readme, which still leads with "search for
+  Bugbottle", is corrected rather than repeated. **No `data-*` attribute is
+  read**: the settings carry nested theme and brand shapes, so the plugin
+  assembles one config object and calls `mount()` explicitly, which is a
+  difference from "One script tag" a reader needs told. And **every setting is
+  a mount option with a stated default**, in one table — the shortest mapping in
+  these docs, because there is nothing between the two. `site/da/kom-i-gang.md`
+  route 2 gains the same correction and a link to the page.
+
 - A new section on both privacy pages, "When somebody asks for the data you
   already have" — the half of the question the checklist could not answer. Every
   existing section described what a report carries and how long it is kept; none

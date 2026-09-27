@@ -101,10 +101,11 @@ Er det WordPress, er der et plugin, og så skal du hverken skrive en rute eller
 et script-tag. Panelet og den rute, der tager imod, følges ad i én aktivering,
 og rapporterne lander som en privat indholdstype i wp-admin.
 
-1. Gå til **Plugins → Tilføj nyt** i wp-admin, søg efter »Bugbottle«,
-   installér og aktivér. Eller hent `bugbottle.zip` fra den
+1. Hent `bugbottle.zip` fra den
    [seneste udgivelse på GitHub](https://github.com/mahope/bugbottle-wordpress/releases/latest)
-   og læg den op under **Plugins → Tilføj nyt → Upload plugin**.
+   og læg den op under **Plugins → Tilføj nyt → Upload plugin**. **Plugin'et er
+   end ikke i WordPress' egen katalog**, så »søg efter Bugbottle« finder intet:
+   API'et svarer `{"error":"Plugin not found."}` (tjekket 27. september 2026).
 2. Gå til **Bug reports → Settings**, og sæt som minimum en modtager under
    **Email recipient** — ellers ligger rapporterne kun i wp-admin.
 
@@ -132,8 +133,10 @@ JSON-legeme, så din egen formular kan sende til den, selv hvis du slår panelet
 fra. Vil du hænge noget på, er der to filtre, `bugbottle_show_panel` og
 `bugbottle_panel_config`, og handlingen `bugbottle_report_stored`, når en
 rapport er gemt. Det hele står i
-[pluginnets README](https://github.com/mahope/bugbottle-wordpress) — v0.5.0 er
-den nyeste, og den har det samme panel med som biblioteket her.
+[pluginnets README](https://github.com/mahope/bugbottle-wordpress) — v1.0.0 er
+den nyeste, og den har det samme panel med som biblioteket her. Hver
+indstilling, hvad den bliver til i `mount()`, og hvad skærmbillederne gør med
+filer og nginx, står i [WordPress](/docs/wordpress/).
 
 ## Rute 3: med en bundler
 
