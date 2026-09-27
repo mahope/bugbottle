@@ -144,6 +144,14 @@ export function createRootErrorHandlers(options) {
     const dedupeMs = options.dedupeMs ?? 60_000;
     const seen = new Map();
     const handle = (error, info) => {
+        // React's own default for this key is one `console.error(error)` — in the
+        // production build as well as the development one — and handing it a
+        // function *replaces* that, so without this line the error leaves no
+        // console entry at all. The console ring buffer records exactly that entry,
+        // and it is the evidence on every other report this page sends, so the
+        // reporter is added and the logging stays. Same rule as the framework
+        // integrations: this library is not a monitoring agent.
+        console.error(error);
         const componentStack = info?.componentStack ?? null;
         const message = describeRenderError(error, componentStack);
         if (dedupeMs > 0) {
