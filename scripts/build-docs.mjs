@@ -197,6 +197,7 @@ const GROUPS = [
     slugs: [
       "react",
       "vue",
+      "svelte",
       "nextjs",
       "angular",
       "nuxt",
