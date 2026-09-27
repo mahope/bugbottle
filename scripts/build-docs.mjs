@@ -131,6 +131,22 @@ const STANDALONE = [
        looking at both should be told they are one page in two languages. */
     otherUrl: "/docs/privacy-checklist/",
   },
+  {
+    id: "support",
+    lang: "en",
+    source: join("site", "support.md"),
+    out: join("support"),
+    url: "/support/",
+    title: "Support bugbottle",
+    navTitle: "Support",
+    eyebrow: "About",
+    heading: "Support bugbottle",
+    /* No `otherUrl`, and none claimed: it is English only, like the changelog,
+       and the Danish landing page links to it with `hreflang="en"` for the
+       same reason. A Danish translation would say the same thing in the same
+       order, and a crawler told two URLs are one page in two languages would
+       be told it is two pages with the same text. */
+  },
 ];
 
 /* The changelog. Also its own Markdown file rather than a README section, but
@@ -232,6 +248,12 @@ const GROUPS = [
         url: "/docs/changelog/",
         navTitle: "Changelog",
         description: "Every release, what it added, what it fixed and what it cost in bytes.",
+      },
+      {
+        url: "/support/",
+        navTitle: "Support",
+        description:
+          "There is no paid tier. What a donation goes to, what it does not buy, and how to help without money.",
       },
     ],
   },
@@ -1050,6 +1072,14 @@ function sitemapXml(pages) {
     {
       loc: `${ORIGIN}${CHANGELOG.url}`,
       source: CHANGELOG.source,
+      alternates: [],
+    },
+    /* The support page, like the changelog: English only, so it claims no
+       alternate. It is in the sitemap because a crawler is exactly who needs to
+       be told that buying a licence here is not a thing. */
+    {
+      loc: `${ORIGIN}/support/`,
+      source: "site/support.md",
       alternates: [],
     },
     { loc: `${ORIGIN}/docs/`, source: "README.md", alternates: [] },
