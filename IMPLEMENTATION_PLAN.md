@@ -551,6 +551,17 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 
 ## Deploy-noter
 
+- `VERIFICÉR DEPLOY: /docs/privacy-checklist/ + /da/privatliv/ (det nye afsnit
+  "When somebody asks for the data you already have") b5bc51b, merge d07c357,
+  2026-09-27 21:08` — næste batch-vindue er 21:30 2026-09-27. Kan verificeres i
+  **samme kørsel** som de to notes nedenfor. Verificér **indhold**: begge sider
+  skal have det nye afsnit, `/docs/privacy-checklist/` med overskriften "When
+  somebody asks for the data you already have" og tabellen med otte rækker
+  (Slack/Discord, Teams, mail, Sentry, issue-system, brugerens `localStorage`,
+  backups), `/da/privatliv/` med "Når nogen beder om de data, du allerede har"
+  og samme otte rækker, og begge skal have den nye sætning i politik-skabelonen
+  om at bede om en kopi eller en sletning.
+
 - ✅ **DEPLOY OK 2026-09-27.** Alle tre notes nedenfor er verificeret mod
   **indhold**, ikke HTTP 200, kl. 19:1x: `https://bugbottle.dev/sitemap.xml`
   lister `/docs/nextjs/`, `/docs/angular/` og `/docs/nuxt/` med
