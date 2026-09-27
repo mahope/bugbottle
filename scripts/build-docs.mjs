@@ -194,7 +194,16 @@ const GROUPS = [
   {
     title: "Integrations",
     blurb: "Where the report goes and which framework it travels through.",
-    slugs: ["react", "vue", "nextjs", "angular", "nuxt", "astro", "wordpress"],
+    slugs: [
+      "react",
+      "vue",
+      "nextjs",
+      "angular",
+      "nuxt",
+      "astro",
+      "react-router",
+      "wordpress",
+    ],
   },
   {
     title: "Evidence",
