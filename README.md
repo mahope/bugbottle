@@ -847,6 +847,190 @@ and if your verification ran against `npm run dev` you have verified nothing
 about the shipping path. Throw from a `beforeEach` guard as well, since that
 one is a different funnel with its own rules.
 
+## Svelte
+
+A Svelte 5 application has one thing React and Vue do not have: an element you
+put in the markup. `<svelte:boundary>` is a wall around a piece of the tree,
+it takes an `onerror`, and since 5.3.0 that is the whole per-component answer.
+What is left is four things Svelte's own `<svelte:boundary>` page does not say,
+and two of them decide whether your report arrives with a stack in it. Every
+claim below was read out of `svelte@5.57.1` and `@sveltejs/kit@2.70.3`, both
+fetched from their npm tarballs.
+
+### The integration
+
+```svelte
+<!-- App.svelte, or the one component that wraps the app -->
+<script>
+  import { mountBugbottle } from "bugbottle/ui";
+  import { htmlToImage } from "bugbottle/html-to-image"; // optional
+  import { da } from "bugbottle/locales";
+
+  const widget = mountBugbottle({
+    endpoint: "/api/feedback",
+    screenshot: htmlToImage,
+    locale: da,
+    openOnError: { prefill: true },
+  });
+</script>
+
+<svelte:boundary
+  onerror={(error) => {
+    widget.open();
+    // Keep the console. See below: a boundary is not a logger.
+    console.error(error);
+  }}
+>
+  <Router />
+</svelte:boundary>
+```
+
+`<svelte:boundary>` is not an error *handler* in the sense the other pages
+describe. It replaces the content it wraps, which is the point of it, and it
+reports what happened on the way. Both at once is the whole integration for a
+client-rendered Svelte app; the store from [`bugbottle/svelte`](#the-form-svelte)
+is the alternative if you want your own markup instead of the panel.
+
+### A boundary with only a `pending` snippet is invisible
+
+This is the Svelte version of Vue's `onErrorCaptured` trap, and it has the
+opposite shape. Vue's hook *swallows* the error; a Svelte boundary *passes it
+on*. The runtime says so in the first three lines of its error method:
+
+```js
+// src/internal/client/dom/blocks/boundary.js
+error(error) {
+	// If we have nothing to capture the error, or if we hit an error while
+	// rendering the fallback, re-throw for another boundary to handle
+	if (!this.#props.onerror && !this.#props.failed) {
+		throw error;
+	}
+```
+
+So a boundary added for its loading state, with no `onerror` and no `failed`,
+is not in the error path at all — the error goes straight past it to the
+parent boundary, and if there is no parent it reaches the window, where the
+console ring buffer still sees it but your handler never ran. The same comment
+is the second half of the trap: **an error thrown while rendering the `failed`
+snippet is re-thrown too**, so a fallback that reads a property of the error
+that does not exist there throws again, and the second throw is not caught by
+the boundary that just failed.
+
+### The error your `onerror` receives on a server-rendered page is a copy
+
+If the page was server-rendered and the server failed inside the boundary, the
+client does not get the `Error`. It gets what the server serialised into a
+hydration comment, and your handler is called with that:
+
+```js
+#hydrate_failed_content(error) {
+	const failed = this.#props.failed;
+	const { reset, invoke_onerror } = this.#create_reset(error);
+
+	// `onerror` may mutate state, which is disallowed while hydrating
+	queue_micro_task(invoke_onerror);
+```
+
+Svelte's own docs put it in one sentence: *"If the boundary has an onerror
+handler, it will be called upon hydration with the deserialized error object."*
+So on a server-rendered page the report carries whatever `transformError`
+returned — usually a `{ message }`, no stack, no `name`, and an `Error`-shaped
+object that is not an `Error`. Two consequences worth designing for: a
+`console.error(error)` in the handler prints the copy rather than the original,
+and code that does `error instanceof TypeError` is false on the client and true
+on the server for the same failure.
+
+### A boundary does nothing on the server, and `reset` is a no-op the second time
+
+Two smaller facts from the same file, both read rather than documented.
+
+**Nothing is caught server-side by default.** Svelte's docs: *"By default,
+error boundaries have no effect on the server — if an error occurs during
+rendering, the render as a whole will fail."* Since 5.51 `render()` takes a
+`transformError`, and the docs are explicit that a framework has to wire it up:
+*"SvelteKit will add support for this in the near future, via the handleError
+hook."* As of `@sveltejs/kit@2.70.3` that is still in the future, so in a
+SvelteKit app a render error is a 500 and your `onerror` is not involved.
+
+**`reset` is idempotent.** `#create_reset` guards on `did_reset` and returns
+after a dev-only `svelte_boundary_reset_noop()` warning, so a "try again"
+button that fires twice re-renders once. That is worth knowing because the
+second `onerror` call is a separate report: the server's `dedupe` on the report
+fingerprint is the second half of the answer.
+
+### SvelteKit's `handleError` skips a deliberate `error()`
+
+`handleError` is the hook for a SvelteKit application — `handleError` in
+`src/hooks.server.ts` for the server, the same name in `src/hooks.ts` for
+client-side navigation. It is not called for every failure:
+
+```js
+// src/runtime/client/client.js
+function handle_error(error, event) {
+	if (error instanceof HttpError) {
+		return error.body;
+	}
+	// …
+	return (
+		app.hooks.handleError({ error, event, status, message }) ??
+			/** @type {any} */ ({ message })
+	);
+}
+```
+
+An `error(404, "Not found")` is an `HttpError`, so it returns at the first
+line and your hook never sees it — which is correct, and the reason a SvelteKit
+app must not treat `handleError` as a report-everything switch. What the hook
+returns is also the shape `+error.svelte` renders, and when it returns nothing
+that shape is `{ message }`: the status code and the original stack are not in
+it. Send the report from inside the hook and return nothing, rather than
+returning a value you also want reported.
+
+The other half of the rule from the other framework pages holds here too: the
+client runtime's two `console.error` calls in its error paths are both inside
+`if (DEV)` — one for a failing `reroute` hook, one for *"An error occurred while
+loading the page. This will cause a full page reload."* — and `handle_error`
+itself has none. So a client-side navigation error is logged by your hook or
+by nobody.
+
+**A rejected promise is not a SvelteKit error.** `unhandledrejection` appears
+zero times in `@sveltejs/kit@2.70.3`. A failed `fetch` in a `load` function
+that nobody awaits reaches the window, and the ring buffer is already patched
+for it.
+
+### The page where the framework is gone
+
+`+error.svelte` is a separate page load without the layout, so the panel is
+not mounted on it, and `src/error.html` is a static file the framework serves
+when the app cannot boot at all. Same answer as the other four frameworks: one
+button, mounted in the error page itself.
+
+```svelte
+<!-- src/routes/+error.svelte -->
+<script>
+  import { mountBugbottle } from "bugbottle/ui";
+
+  const widget = mountBugbottle({ endpoint: "/api/feedback" });
+</script>
+
+<h1>Something went wrong.</h1>
+<button onclick={() => widget.open()}>Report it</button>
+```
+
+### What to check before you ship it
+
+Five throws, and a report from the right ones. First, from a child component's
+render: the panel opens and the report has a stack. Second, from a `setTimeout`
+callback and third, from an `onclick` handler: **no boundary sees either of
+them** — that is the documented rule, and the reports only exist if somebody
+presses the trigger, which is the half the trigger is for. Fourth, add a
+boundary with a `pending` snippet and no `onerror` around a component that
+throws, and confirm the handler you wrote earlier does not run. Fifth, build
+and serve the build, then throw inside a server-rendered page: the client
+handler is called with a deserialised copy, and printing it is the only way to
+see that. Throw from the `failed` snippet too, since the runtime re-throws that
+one on purpose.
+
 ## Next.js
 
 Next.js owns the error boundary in an App Router application, so

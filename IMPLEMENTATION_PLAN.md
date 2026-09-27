@@ -151,6 +151,25 @@ nextjs.org, angular.dev, nuxt.com.
   (anden commit end `ceo/keep-react-console-line`, samme iteration). Se "Fund fra
   React-Router-iterationen" — otte fund, og **den stærkeste af alle siderne,
   fordi den eneste, der fik os til at finde en fejl i vores egen kode.**
+- [x] **13. `/docs/svelte/` — Svelte 5 og SvelteKit.** 28/9,
+  `ceo/svelte-page`. Den **eneste adapter uden egen side**
+  (`bugbottle/svelte` har 1536 B marginalt budget og to halve sektioner i
+  "Get started", ingen `/docs/svelte/`). Efterspørgslen målt 28/9 00:5x
+  (Google Suggest, samme metode som 27/9): `sveltekit error handling` 4,
+  `svelte error handling` 3, `svelte error boundary` 3, `sveltekit onerror` 0,
+  `svelte 5 error handling` 0. **Lavere end de sider vi allerede har lavet**
+  (nextjs/angular 15, nuxt 11, react/vue/react-router 10), så den er skrevet
+  på adapter-gapet, ikke på efterspørgslen — og det er et ægte hull: to
+  sider der ligner hinanden mere og mere, fordi de er de eneste der *ikke*
+  handler om den adapter. Målt i samme kørsel og **ikke** valgt:
+  `laravel error handling` **10** (højere!), men forslagene er PHP undtagelse,
+  ikke en JS-reporter, så en side der svarer på den søgning ville være
+  tynd og emaljeagtig; `solid error handling` 0; `inertia js error
+  handling` 1. Se "Fund fra Svelte-iterationen" — fire fund fra
+  `svelte@5.57.1`'s boundary-runtime, og de er **alle fire i kode, ingen i
+  docs**. **MÅL: `/docs/svelte/` baseline 0 besøgende (siden findes ikke)
+  pr. 2026-09-28.** Sammenlign 25/10 og 25/11. 42 docs-sider (fra 41), 184
+  søgeposter (fra 176).
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -357,7 +376,8 @@ De fire frameworksider er på plads, og de ligner hinanden mere end de burde
   fem kast i træk i stedet for fire, fordi der er to sider, der *ikke* kan have
   en fælles kode (de er forskellige frameworks). Den tredje opgave —
   "skriv script-tagonlysningen en gang" — er **stadig ikke gjort**: den er nu
-  betalt for to gange (Vue + React Router) og er næste iteration.
+  betalt for **tre** gange (Vue + React Router + Svelte) og er næste
+  iteration, hvis intet med større trafik-effekt står foran.
 - **Ny klasse fundet 28/9, som hører hjemme i inddelingen:** en framework der
   **ikke** har en krog i en bestemt mode. React Router har to af tre, Astro
   har nul, Vue har én der sletter konsollen. En side skal derfor starte med
@@ -666,6 +686,63 @@ Plus: deres `docs/how-to/error-reporting.md` siger "make sure to still log the
 error" — hvilket er den samme halve sandhed Vue-siden skrev om. Vi siger
 hvorfor, og vi siger at `console.error` er den linje ringbufferen læser.
 
+## Fund fra Svelte-iterationen (28/9) — fire fund i boundary-runtime'en, ingen i docs
+
+Kilderne er `svelte@5.57.1`'s **publicerede kilde** (ikke builden, men de er
+samme filer — `src/internal/client/dom/blocks/boundary.js` og
+`src/internal/server/renderer.js`) og `@sveltejs/kit@2.70.3`'s
+`src/runtime/client/client.js` + `src/exports/internal/index.js`. Plus
+`svelte.dev/docs/svelte/svelte-boundary`, som er den *ene* officielle kilde og
+**bekræfter alle fire fund** — det er første gang de to siger det samme, så
+denne side er bygget på "kilden modsiger" og endte med "kilden bekræfter".
+Bemærk at domænet siger **5.3.0** for elementet, ikke 5.0: en læser der læser
+migraveguiden og bruger 5.2 har ikke boundary'en.
+
+**1. En boundary uden `onerror` og uden `failed` kaster fejlen videre.**
+`boundary.js:446-451`, kommentaren er Sveltes egen: *"If we have nothing to
+capture the error, or if we hit an error while rendering the fallback, re-throw
+for another boundary to handle"* → `if (!this.#props.onerror &&
+!this.#props.failed) throw error;`. **Modsat form af Vue-fundet:** der
+sluger hooken, her slipper boundary'en. Konsekvens for en side: en boundary
+tilføjet for sit `pending`-snippet er **ikke i fejlstien**, så en læser der
+har monteret den og troer den dækker, sender ingen rapporter. Samme kommentar
+er halvdel to: **en fejl i `failed`-snippet'en kastes videre** — altså en
+fallback der læser en egenskab på en serialiseret fejl (fund 2) kaster selv.
+
+**2. På en SSR-side kaldes `onerror` med en KOPI.** `#hydrate_failed_content`
+tager *"the deserialized error from the server's hydration comment"* og
+`queue_micro_task(invoke_onerror)` — kommentaren er igen Sveltes: *"`onerror`
+may mutate state, which is disallowed while hydrating"*. Docs bekræfter:
+*"called upon hydration with the deserialized error object"*. Rapporten
+indeholder altså `{ message }` og ingen stack, og `instanceof TypeError` er
+**falsk på clienten og sand på serveren for samme fejl** — den slags der
+ikke kan findes ved at læse docs.
+
+**3. Boundary'en gør intet på serveren, og SvelteKit har ikke lukket hullet.**
+Docs: *"By default, error boundaries have no effect on the server"*; siden 5.51
+er der `transformError` på `render()`, og docs siger at *frameworket* skal
+koble den på: *"SvelteKit will add support for this in the near future, via
+the handleError hook"*. Verificeret 28/9 i `@sveltejs/kit@2.70.3`:
+`transformError` står **0 gange** i hele pakken. Så en renderfejl i en
+SvelteKit-app er en 500, og boundary'en er ikke indblandet.
+
+**4. `reset` er idempotent.** `#create_reset` vogter på `did_reset` og
+returnerer efter et dev-kun `svelte_boundary_reset_noop()`. En "prøv igen"-knap
+der dobbeltklikkes renderer altså én gang — og den *anden* `onerror` er en
+rapport mere, som serverens `dedupe` på fingerprint er svaret på. Samme
+slags som React-Router-fund 5.
+
+**SvelteKit-delen (kort, men den er præcis de andre sideres regel):**
+`handle_error` i `client.js` har `if (error instanceof HttpError) return
+error.body;` på **første linje** — en bevidst `error(404, …)` når aldrig
+`handleError`, hvilket er rigtigt og grunden til at hooken ikke må være en
+"rapportér alt"-kontakt. `?? { message }` er hvad `+error.svelte` får at
+rendere, når hooken returnerer intet. De **to** `console.error` i klientens
+fejlveje (`client.js:1574` reroute-hook, `client.js:2077` "This will cause a
+full page reload") er **begge `DEV`-guardede**, og `handle_error` har nul
+— så en client-navigationsfejl logges af din hook eller af ingen.
+`unhandledrejection` står **0 gange** i `@sveltejs/kit@2.70.3`.
+
 ## ❓ Til Mads
 
 - **`createRootErrorHandlers` slettede konsollinjen den erstattede — rettet
@@ -766,6 +843,33 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 12** (`ceo/svelte-page`). Opgave 13: `/docs/svelte/`
+  som **tredje** adapter-side (react, vue, svelte) og **otte** side under
+  `Integrations`. 42 docs-sider (fra 41), 184 søgeposter (fra 176). Læst
+  `svelte@5.57.1` + `@sveltejs/kit@2.70.3` (npm-tarballer, ingen installation)
+  og `svelte.dev/docs/svelte/svelte-boundary`. Se opgaven og "Fund fra
+  Svelte-iterationen".
+  - **Første gang de to kilder er enige.** Alle fire fund er læst i boundary'ens
+    runtime (`boundary.js:446-451`, `#hydrate_failed_content`,
+    `#create_reset`) **og** bekræftet af svelte.dev — efter fire iterationer
+    hvor den bedste påstand var en kilden modsiger. Bevares som metode: læs
+    runtime'en, men få bekræftelsen fra den officielle side, fordi den
+    officielle side også siger **hvornår** (`5.3.0`, ikke 5.0) og hvad den
+    *ikke* dækker (event handlers, `setTimeout`).
+  - `npm run check` grøn: 881 tests, 42 docs-sider, `dist/` **uændret** byte for
+    byte (IIFE 24 645 / 21 063 mod budgetterne 25 088 / 21 504) — ingen eksport
+    rørte sig, så ingen budget flyttede.
+  - **Ingen deploy-verifikation i denne iteration:** de fem åbne noter er alle
+    merget **efter** vinduet 21:30 (22:24–00:2x), og næste vindue er 07:30
+    2026-09-28. De er ikke forfalne, så de lukkes i morgen aften.
+  - Næste iteration: **"skriv script-tagonlysningen en gang"**, betalt for tre
+    gange nu (Vue, React Router, Svelte). Den er DRY, ikke trafik, så den tages
+    først når køen er tom — medmindre der dukker en side op med mere end de
+    3-4 suggest Svelte har.
+  - Målt i samme kørsel, **ikke valgt**: `laravel error handling` 10 (højere
+    end Svelte, men forslagene er PHP-undantagelser, ikke en JS-reporter),
+    `solid error handling` 0, `inertia js error handling` 1, `solidstart` 0.
 
 - **2026-09-28, iteration 11, anden del** (`ceo/react-router-guide`). Opgave 12:
   `/docs/react-router/`. Se opgaven og "Fund fra React-Router-iterationen".
@@ -1059,6 +1163,19 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/svelte/ (42 sider i sitemap'en, ny integrationsside
+  under Integrations, tredje i sidebaren efter React og Vue) d35f86d, merge
+  ca. 01:2x, 2026-09-28` — næste batch-vindue er **07:30 2026-09-28**. Kan
+  verificeres i **samme kørsel som de fem notes nedenfor** (react-router
+  00:2x, support 23:3x, vue 23:04, react 22:32, wordpress 22:24 — alle merge
+  før 07:30). Verificér **indhold**: `https://bugbottle.dev/sitemap.xml` skal
+  liste `https://bugbottle.dev/docs/svelte/` med `lastmod 2026-09-28`, siden
+  skal vise de fire fund (`!this.#props.onerror && !this.#props.failed`,
+  "deserialised error object"/"deserialized error object", `transformError`,
+  `did_reset`) og teksten `HttpError`, `unhandledrejection` og
+  `svelte_boundary_reset_noop`, og `Integrations`-gruppen i sidebaren skal have
+  **otte** sider med `/docs/svelte/` som nr. 3.
 
 - `VERIFICÉR DEPLOY: /docs/react-router/ (41 sider i sitemap'en, ny
   integrationsside under Integrations) + `createRootErrorHandlers`' konsollinje

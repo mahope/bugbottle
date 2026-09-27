@@ -10,6 +10,23 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`/docs/svelte/` — a page for Svelte 5 and SvelteKit.** The one adapter with
+  no page of its own, and the only framework here whose error API is an
+  element in the markup rather than a hook. Read out of `svelte@5.57.1` and
+  `@sveltejs/kit@2.70.3`, and the four things the page adds are the ones the
+  boundary's own documentation does not say: **a boundary with neither
+  `onerror` nor `failed` re-throws** (so one added for its `pending` snippet is
+  not in the error path, and an error in the `failed` snippet is re-thrown too);
+  **on a server-rendered page `onerror` is called upon hydration with the
+  deserialised error object**, so the report carries `{ message }` and no stack;
+  **boundaries do nothing server-side by default** and SvelteKit's `handleError`
+  has still not wired up `transformError`; and **`reset` is idempotent**, so a
+  double-clicked "try again" re-renders once. Plus SvelteKit's own half:
+  `handleError` returns at the first line for an `HttpError`, so a deliberate
+  `error(404, …)` never reaches your hook, both `console.error` calls in the
+  client runtime's error paths are `DEV`-guarded, and `unhandledrejection`
+  appears zero times in the package.
+
 - **`/docs/react-router/` — a page for React Router v7, v8 and Remix.** The
   framework with the most careful error handling of the ones documented here, and
   the only one that has already answered the question: the published package
