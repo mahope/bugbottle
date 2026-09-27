@@ -10,6 +10,45 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- `@sentry/react` as a sixth row on the comparison pages, measured rather than
+  cited. `/compare/` said "not published" in the size column for every row that
+  was not bugbottle, which is true and useless to a reader deciding between a
+  12 kB panel and an SDK whose size they have never seen — so the one row where
+  we quote somebody else's number is now a number we can reproduce:
+  `scripts/measure-competitors.mjs` installs the package and bundles two
+  entries with the esbuild version CI already uses for our own budgets. On
+  `@sentry/react@11.0.0` that is 33.2 kB gzipped for `init` before it has
+  recorded anything, and 95.8 kB once `replayIntegration()` and
+  `captureFeedback` are in the bundle — two and a half times bugbottle's whole
+  panel, and eight times it. The row also carries the download counts the
+  decision turns on, 29 251 063 for `@sentry/react` against 191 for bugbottle in
+  the week to 26 September, and Sentry's own 50 session replays a month on
+  every plan. The page says plainly that the download gap is not a score, and
+  says the opposite thing too: if you already pay for Sentry, the bytes and the
+  quota are bought and none of this is an argument. Dev-only and deliberately
+  outside `npm run check` — it installs from the network, and the figure only
+  needs refreshing when a major lands. Nothing is exported and nothing in the
+  library changed.
+
+- An Astro guide, `/docs/astro/`, beside the other three framework pages. Astro
+  is the one framework here with no error handling to hook into: no
+  `ErrorHandler`, no `error.tsx`, no `vue:error`, and no error-handling guide
+  among the thirty-odd in its docs tree, so the page cannot be built the way the
+  other three were. It is built on `astro:hydration-error` instead — a real,
+  public, cancelable `CustomEvent` from `handleHydrationError` carrying
+  `{ error, componentUrl }`, mentioned zero times in Astro's documentation, and
+  it covers the one failure mode only an Astro page can have: an island that
+  never becomes interactive, which renders server HTML, looks fine and does
+  nothing. Two traps decide whether such a listener is worth having, and both
+  are documented: calling `preventDefault()` makes Astro skip its own
+  `console.error`, which is the line the console ring buffer records; and
+  `500.astro` is rendered *with* your middleware, so a middleware that reads
+  `Astro.locals.user` without a guard takes your own error page down with it.
+  Actions fail by *returning* rather than throwing, so `action()`'s `{ error }`
+  never raises an event at all, and the script tag needs `is:inline` because
+  Astro hoists a `<script>` without it above `<body>`. Nothing is exported and
+  nothing in the library changed.
+
 - A Nuxt guide, `/docs/nuxt/`, beside the Next.js and Angular ones. Nuxt splits
   the error path in two halves that most integrations wire up backwards, and the
   guide is written from Nuxt's own source rather than its documentation page:
