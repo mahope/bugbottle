@@ -224,11 +224,12 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
   *(Skrevet 16:24; vinduet er ikke gået endnu, så intet at verificere.)*
 
 - `VERIFICÉR DEPLOY: /docs/angular/ (ny integrationsside, 35 sider i
-  sitemap'en) <sha> 2026-09-27 ~17:4x` — samme batch som ovenfor, hvis den
-  stadig ikke er kørt; ellers næste vindue. Verificér **indhold**:
+  sitemap'en) 937367d, merge f0d23c1, 2026-09-27 17:47` — vinduet 17:30 var
+  lukket da vi mergede, så næste er 21:30. Verificér **indhold**:
   `https://bugbottle.dev/sitemap.xml` skal liste
   `https://bugbottle.dev/docs/angular/`, siden skal vise Angular-guiden med
   `provideBugbottle`/`BugbottleErrorHandler`, og `Integrations`-gruppen i
   sidebaren skal have to sider. Sidstmod for `/docs/angular/` skal være
-  2026-09-27.
+  2026-09-27. Begge nye sider og `nextjs`-siden kan verificeres i samme
+  kørsel.
 
