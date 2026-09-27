@@ -833,7 +833,7 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 ## Deploy-noter
 
 - `VERIFICÉR DEPLOY: /docs/vue/ (ny integrationsside, 40 sider i
-  sitemap'en, tredje i sidebaren) <sha>, merge <sha>, 2026-09-27 ~23:0x` —
+  sitemap'en, tredje i sidebaren) ef5a576, merge 26281b3, 2026-09-27 23:04` —
   næste batch-vindue er **07:30 2026-09-28**. Kan verificeres i **samme
   kørsel som de to notes nedenfor** (WordPress 22:24, React 22:32). Verificér
   **indhold**: `https://bugbottle.dev/sitemap.xml` skal liste
