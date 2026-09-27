@@ -708,11 +708,17 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
     **inden** commit, plus CLAUDE.md-layouttabellen, README's "Who makes it" og
     `.gitignore` (den nye genererede mappe skal ignoreres, ellers lander den i
     git).
-  - **⚠️ `npm run a11y` kunne ikke køre** (fjerde iteration i træk — `findChrome()`
+  - **`npm run a11y` kunne ikke køre** (fjerde iteration i træk — `findChrome()`
     returnerer en Windows-sti på denne maskine, så der er ingen Chrome). Siden er
     ren Markdown: ingen nye DOM-elementer, ingen ny CSS, ingen nye controls. Den
     er dog lagt i `scripts/a11y-site.mjs`'s `PAGES`, fordi den har et eksternt
     link midt i en artikel — CI's `browser`-job kører den på hvert push.
+  - **Fandt en overdrivelse i min egen tekst ved selve gennemlæsningen, og den er
+    rettet:** jeg havde skrevet at browserne testes "på hver ændring af panelet".
+    CI kører *ét* browserjob — Chrome på `ubuntu-latest` — og ingen Firefox- eller
+    Safari-kørsel findes. Bulletten siger nu det, der er sandt, og gør en
+    Safari-bug til den konkrete vej den kommer ind ad. Det er præcis den slags
+    påstand, siden bliver dømt på, så den skal være den rigtige slags.
   - **Næste iteration:** opgave 12, `/docs/react-router/` (10 suggest målt i
     denne iteration, tredjestørste i rækken efter Next.js og Angular, og de er
     konkrete: "react router 7 error boundary", "… props", "… not working").

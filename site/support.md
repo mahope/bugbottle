@@ -24,11 +24,13 @@ that work is what keeps a library trustworthy three years from now.
 
 ## What it goes to
 
-- **The browser matrix.** Chrome, Firefox, Safari and their mobile versions,
-  plus the two V8 stack formats and the Firefox/Safari one, tested in a real
-  browser on every change to the panel or the capture path. The screenshot
-  pipeline is the part that breaks on someone else's operating system update,
-  and it is the part a customer notices.
+- **The browser matrix, honestly described.** Every push runs the accessibility
+  audits, the panel's states and an annotation smoke test in a real Chrome, and
+  the stack parser reads the V8 format and the Firefox/Safari one because both
+  are in the wild. But there is **no automated Firefox or Safari run** — one
+  browser in CI, not three. A Safari-only bug is found by somebody with a Mac
+  filing an issue, and it is fixed because it is filed. If you run this in a
+  browser nobody else does, that is worth knowing before you ship it.
 - **The version cadence.** 1.0 was released in September 2026 and the public API
   is frozen: removing or renaming an export needs a major version, and every
   release says what it cost in bytes. Keeping that promise is calendar work.
