@@ -79,9 +79,11 @@ nextjs.org, angular.dev, nuxt.com.
   og route handler-modtageren. Plus en "hvad skal du tjekke før du shipper".
   Forventning: første indeksering, og en side der fanger søgninger vi ellers
   taber til Sentry-doksen.
-- [ ] **2. `/docs/angular/`** — 15 suggest. `ErrorHandler` +
+- [x] **2. `/docs/angular/`** — 15 suggest. `ErrorHandler` +
   `provideBrowserGlobalErrorListeners()`, script tag (ingen adapter nødvendig).
   Forventning: samme mønster som nr. 1, anden framework.
+  27/9, `ceo/angular-guide`. **MÅL: `/docs/angular/` baseline 0 besøgende
+  (siden findes ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
 - [ ] **3. `/docs/nuxt/`** — 11 suggest. `vue:error`, `app:error`,
   `<NuxtErrorBoundary @error>`, `error.vue`, `fatal: true`-forskellen.
   Adapteren findes allerede, så det er ren dokumentation.
@@ -108,8 +110,49 @@ nextjs.org, angular.dev, nuxt.com.
 - Verifikations-sektionen i hver frameworkside er et genbrugeligt mønster
   (Sentry har det på hver side). Skriv det en gang som et afsnit.
 
+## Fund fra Angular-iterationen (27/9) — genbruges af nr. 3 og 4
+
+Kilderne er læst i `@angular/core@22.2.0`'s **types og FESM-bundle** (ikke
+angular.dev, der er client-renderet og returnerer en tom skal til webfetch) samt
+`adev/src/content/best-practices/error-handling.md` i angular/angular.
+Verifieret: `ErrorHandler`, `provideBrowserGlobalErrorListeners()` og
+`afterNextRender` er alle eksporterede offentlige API'er i 22.2.0.
+
+- **Det mønster, der gør Angular-siden bedre end Next.js-siden:** Angular
+  *lukker* fejlvejen. Alt frameworket fanger ender i `ErrorHandler`, og
+  `provideBrowserGlobalErrorListeners()` føder vinduets `error` og
+  `unhandledrejection` ind i samme sted — JSDoc'en kalder det "an environment
+  initializer which forwards unhandled errors to the ErrorHandler". Ét
+  injectable ser altså begge halvdele. Angulars egen guide fylder det med
+  `trackEvent` + `console.error`, som er rigtigt for en udvikler og ikke er
+  en rapport.
+- **Fælden, ingen guide nævner, og som afgør om det virker:** en fejl i en
+  service-metode du selv kalder, og en `resource()`-fejl nobody læser, når
+  *ingen* handler. Frameworkets egen tekst siger det. Derfor er reporterens
+  egen knap den større halvdel af opsætningen, ikke `ErrorHandler`.
+- **Fælden nr. 2:** `ErrorHandler` findes ikke endnu, når der kastes fra en
+  constructor før første render. `afterNextRender` løser mount-tidspunktet
+  (og kører aldrig på serveren, hvilket er gratis SSR-beskyttelse), så tjenesten
+  må huske et `open()`-kald og åbne ved mount.
+- **Fælden nr. 3:** `onViewError?` er en optional hook på `ErrorHandler` for
+  fejl i en components egen view. Dropper man den, taber man de mest synlige.
+- **API-gap fundet (ikke bygget, kræver major/minor):** `mountBugbottle` har ingen
+  public måde at forudfylde beskeden på for en anden kalder end sin egen
+  `onUncaughtError`-lytter — `open()` tager ingen argumenter. En
+  framework-fanget fejl åbner derfor panelet tomt, selv om beskeden er kendt.
+  Se ❓ nedenfor.
+
 ## ❓ Til Mads
 
+- **`mountBugbottle().open()` kan ikke forudfylde beskeden.** Panelets egen
+  `openOnError: { prefill: true }` kan det, men kun for vinduesfejl, og kun
+  fordi panelet selv ringer `openForError`. Ethvert andet kald — en
+  framework-`ErrorHandler`, en `onShortcut`, din egen knap — får et tomt felt,
+  selv om den kender beskeden. Fixet er lille (en valgfri
+  `open({ prefill })`, ~40 bytes på `bugbottle/ui`), men det **rører et
+  eksisterende eksports signatur**, så efter vores egne navneregler er det en
+  minor, ikke en patch. Bygge det, eller lade Angular/Nuxt-siderne pege på
+  `bugbottle/triggers` og lægge fejlen i `extra` i stedet?
 - **Search Console-eksport.** Uden pr. side-visninger, klik, CTR og position kan
   Fase 3 ikke måles. Én CSV-eksport pr. side, 28 dage.
 - **Deploy.** Hvordan kommer bugbottle.dev live? Intet i repoet bygger
@@ -146,6 +189,23 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 
 ## Log
 
+- **2026-09-27, iteration 2** (`ceo/angular-guide`). Landede `/docs/angular/`
+  som anden frameworkside under `Integrations`. 35 docs-sider (fra 34).
+  Læst Angulars egen fejlhåndteringsguide og verificérede hver API-reference
+  mod `@angular/core@22.2.0`'s typer i stedet for mod angular.dev, som er
+  client-renderet. Se "Fund fra Angular-iterationen" — den er skrevet til at
+  genbruges af Nuxt- og Astro-siderne.
+  - ⚠️ **`npm run a11y` kunne ikke køre her:** ingen Chrome på maskinen
+    (`findChrome()` returnerer en Windows-sti, `/Applications/Google Chrome.app`
+    findes ikke, ingen `CHROME_BIN`). `npm run smoke:annotate` heller ikke.
+    Begge er ikke en del af `npm run check` og CI's `browser`-job kører dem på
+    hvert push — så de fanges der, ikke her. Jeg har bevidst ikke tilføjet
+    uauditérede DOM-elementer for at komme uden om det: det `<a id>`-anker jeg
+    først havde lagt på "Errors with no-window-event" var hverken linket til
+    eller nødvendigt (headingslug'en giver samme id) og blev fjernet.
+  - `dist/` er uændret af builden, byte for byte — ingen eksport rørte sig, så
+    ingen budget flyttede.
+
 - **2026-09-27, iteration 1** (research + første opgave). Planen oprettet.
   Fund: kategorien har nul søgning, framework-integrationssiderne mangler.
   Landede `/docs/nextjs/` som ny README-sektion + ny `Integrations`-gruppe i
@@ -161,4 +221,14 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
   `https://bugbottle.dev/sitemap.xml`, og `https://bugbottle.dev/docs/nextjs/`
   skal vise guiden med `error.tsx`-eksemplet og "Integrations" i sidebaren.
   Sidstmod for `/docs/nextjs/` i sitemap'en skal være 2026-09-27.
+  *(Skrevet 16:24; vinduet er ikke gået endnu, så intet at verificere.)*
+
+- `VERIFICÉR DEPLOY: /docs/angular/ (ny integrationsside, 35 sider i
+  sitemap'en) <sha> 2026-09-27 ~17:4x` — samme batch som ovenfor, hvis den
+  stadig ikke er kørt; ellers næste vindue. Verificér **indhold**:
+  `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/angular/`, siden skal vise Angular-guiden med
+  `provideBugbottle`/`BugbottleErrorHandler`, og `Integrations`-gruppen i
+  sidebaren skal have to sider. Sidstmod for `/docs/angular/` skal være
+  2026-09-27.
 

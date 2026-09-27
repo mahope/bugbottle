@@ -10,6 +10,26 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- An Angular guide, `/docs/angular/`, beside the Next.js one. Angular closes
+  the error path more completely than any other framework here — every error
+  the framework catches ends in the injectable `ErrorHandler`, and
+  `provideBrowserGlobalErrorListeners()` feeds the browser's own `error` and
+  `unhandledrejection` events into the same place — so the page is built on
+  that one class: a `Feedback` service that owns the panel and mounts it in the
+  browser only, an `ErrorHandler` that keeps the console and offers the form
+  rather than POSTing on the reporter's behalf, and both in `app.config.ts`.
+  It carries the three gaps that decide whether such an integration works, and
+  none of which a framework's own guide mentions: an error thrown before the
+  first render arrives while the panel does not exist yet, so the service keeps
+  the request and opens it on mount; `onViewError` is the hook for errors in a
+  component's own view, and dropping it loses the most visible ones; and a
+  service method that throws, or a `resource()` whose `error()` is never read,
+  reaches no error handler at all — which is why the reporter's own button is
+  the larger half of the wiring. Nothing is exported and nothing in the library
+  changed. `mountBugbottle` has no public way to prefill the message for a
+  caller other than its own uncaught-error listener, so a framework-caught
+  error opens the panel empty; the window path keeps `openOnError: { prefill:
+  true }` and fills the box.
 - A Next.js guide, `/docs/nextjs/`, and an "Integrations" group in the
   documentation sidebar. It is the first framework page that says how a report
   leaves a Next.js application: the `error.tsx` fallback, `global-error.tsx`,
