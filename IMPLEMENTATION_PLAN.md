@@ -152,3 +152,13 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
   sidebaren (`scripts/build-docs.mjs` `GROUPS`).
   Bemærk: `## Next.js` slugifierer til `nextjs`, så siden hedder
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
+
+## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/nextjs/ + Integrations-gruppen i sidebaren
+  20867c0 2026-09-27 ~15:57` — første batch-vindue efter merge er 17:30
+  2026-09-27. Verificér **indhold**, ikke HTTP 200: siden skal findes i
+  `https://bugbottle.dev/sitemap.xml`, og `https://bugbottle.dev/docs/nextjs/`
+  skal vise guiden med `error.tsx`-eksemplet og "Integrations" i sidebaren.
+  Sidstmod for `/docs/nextjs/` i sitemap'en skal være 2026-09-27.
+
