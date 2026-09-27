@@ -113,6 +113,13 @@ nextjs.org, angular.dev, nuxt.com.
   Se "Fund fra React-iterationen" — de tre fælder, ingen af dem i Reacts egen
   dokumentation. **MÅL: `/docs/react/` baseline 0 besøgende (siden findes ikke)
   pr. 2026-09-27.** Sammenlign 25/10 og 25/11. 39 docs-sider (fra 38).
+- [x] **10. `/docs/vue/` — Vue uden meta-framework.** 28/9, `ceo/vue-page`.
+  10 suggest, `bugbottle/vue` er en selvstænd adapter, og `vue:error` var kun
+  dokumenteret som halvdelen af Nuxt-siden. Se "Fund fra Vue-iterationen" —
+  fire fund, alle fra de **publicerede produktionsbuilds**
+  (`@vue/runtime-core@3.5.43` + `vue-router@5.3.1`), ingen fra docs.
+  **MÅL: `/docs/vue/` baseline 0 besøgende (siden findes ikke) pr. 2026-09-27.**
+  Sammenlign 25/10 og 25/11. 40 docs-sider (fra 39), 159 søgeposter (fra 150).
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -124,7 +131,82 @@ nextjs.org, angular.dev, nuxt.com.
   **MÅL: `/docs/wordpress/` baseline 0 besøgende (siden findes ikke) pr.
   2026-09-27.** Sammenlign 25/10 og 25/11. 38 docs-sider (fra 37).
 
-### Fund fra React-iterationen (28/9) — dokumentationen er forkert, ikke bare tynd
+### Fund fra Vue-iterationen (28/9) — den billigste side med de hårdeste fund
+
+Kilderne er `@vue/runtime-core@3.5.43`'s **publicerede build**
+(`dist/runtime-core.esm-bundler.js` for læsbarheden, `dist/runtime-core.cjs.prod.js`
+til at bevise at fundene overlever en produktionsbuild) og
+`@vue/server-renderer@3.5.43` — ikke `vuejs.org`, og ikke
+`vue-router`'s dokumentation. Metoden er den sjette gang den holder: den bedste
+påstand er en, kilden modsiger.
+
+**1. `app.config.errorHandler` *sletter* Vues egen konsollinje.** `handleError`
+gør `return` i `if (errorHandler) { … return; }` **før** `logError`, som er
+hvor `console.error(err)` ligger. Det er den linje ringbufferen optager, så en
+handler uden `console.error` giver en rapport med tom konsol. Samme fælde som
+Nuxt-siden, og derfor siger snippet'et det samme to gange. **Bonusfund fra
+samme gren:** Vue kalder din handler med `instance: null`
+(`callWithErrorHandling(errorHandler, null, 10, …)`), så en handler der *kaster*
+ikke kan løbe ind i sig selv — den falder forbi hele blokken ovenfor og lander
+i `logError`. Det er svaret på "kan min reporter hænge appen?".
+
+**2. `onErrorCaptured` der returnerer `false` sletter fejlen helt.** Sløjfen er
+`let cur = instance.parent` og `if (hook(...) === false) return;`. Altså: app-
+handleren kaldes aldrig, `logError` nås aldrig, intet kastes i production.
+Ingen rapport, ingen konsol, intet. **Samme sløjf siger hvorfor app-handleren
+er bedre end en capturing hook overhovedet:** den starter ved *forældren*, så en
+krog i den komponent der kaster aldrig ser sin egen fejl, og rodkomponenten har
+ingen forælder at blive fanget af. `onErrorCaptured` på `App.vue` dækker
+intet.
+
+**3. I production kaster intet.** `logError` kaster i dev (`throwInDev`) og
+gør `console.error(err)` i en build. **Der er ingen crash at hænge en rapport
+op på** — det er argumentet for ringbufferen over et screenshot alene.Og
+`console.warn` står **0 gange** i `runtime-core.cjs.prod.js` (`console.error`
+2 gange): alle Vue-warnings er kodet ud af en production build, så en konsol
+fuld af warnings i dev er en produktionskonsol uden én af dem. Tredje
+argument ændrer form: `errorInfo` er en sætning i dev
+(`"component event handler"`) og en **URL** i production
+(`https://vuejs.org/error-reference/#runtime-${type}`), og nummeret er
+indekset i samme array — siden giver tabellen 0/1/2/3/5/6/13/14/16, fordi det
+er den ene ting i en rapport der overlever buildet.
+
+**4. En `beforeEach`-guard der kaster er ikke en Vue-fejl overhovedet.**
+`vue-router@5.3.1`'s `triggerError` har to udfald og ingenting mere: kalder
+`router.onError`-abonnenter, **eller** `console.error(error)` hvis der ikke er
+nogen. Så at montere den dokumenterede `router.onError`-toast **fjerner
+konsollinjen** — samme bytte som `errorHandler`. Derefter
+`Promise.reject(error)`: en `router.push()` uden catch bliver en
+`unhandledrejection` (ringbufferen dækker den), en `await`et `push()` i en
+`try` forsvinder i din egen catch, og **tilbage/fremad-knappen ender i
+`.catch(noop)`**. Siden har den halvdel som sit eget afsnit, fordi den er en
+helt anden tragt med sine egne regler.
+
+**5. Den eneste Vue-fejl ingen krog ser: hydration mismatch.**
+`logMismatchError` i production builden er `console.error("Hydration completed
+but contains mismatches.")` — en nøgen streng, **én gang pr. app**, uden
+error-objekt og uden stack, og den går **aldrig gennem `handleError`**. Den
+ligger i rapportens konsolsektion, og det er alt: ingen stack, ingen position.
+Siden siger det ærligt frem for at love en pointer.
+
+**SSR-grænsen (samme som de andre sider, men skarpere):**
+`@vue/server-renderer`'s `renderComponentVNode` gør
+`Promise.resolve(res).then(…).catch(shared.NOOP)` på den asynkrone gren — så
+et afvist `async setup()` eller `onServerPrefetch` **slipses på serveren**, og
+undertræet renderer alligevel, altså HTML med et hul og 200. Synkrone
+renderfejl gør derimod `Vue.handleError(err, instance, 1)` på en
+*server*-instance, som en browser-reporter aldrig ser.
+
+**⚠️ `npm run a11y` og `npm run smoke:annotate` kunne ikke køre** (igen ingen
+Chrome på maskinen). Siden er ren Markdown — ingen nye DOM-elementer, ingen ny
+CSS, ingen nye controls. CI's `browser`-job kører begge på hvert push.
+
+**Næste iteration:** de fire (nu fem) frameworksider har hver et afsnit om
+fejlsiden, hvor panelet ikke kan være mountet, og de løser det alle med den
+samme knap. `open({ prefill })` er stadig det mest genbrugelige fund i hele
+planen — **det rammer nu fem sider**, ikke fire.
+
+## Fund fra React-iterationen (28/9) — dokumentationen er forkert, ikke bare tynd
 
 Opgaven var formuleret som "React mangler en side". Det viste sig at være det
 for svage krav, fordi to React-sektioner allerede findes i "Get started" (formen
@@ -484,12 +566,13 @@ udskrevet i testen, fordi de to sprog ikke deler prosa.
   `openOnError: { prefill: true }` kan det, men kun for vinduesfejl, og kun
   fordi panelet selv ringer `openForError`. Ethvert andet kald — en
   framework-`ErrorHandler`, en `onShortcut`, `astro:hydration-error`, din egen
-  knap — får et tomt felt, selv om den kender beskeden. Fastslået i `src/ui`
+  knap, **og nu også `app.config.errorHandler` og `router.onError`** — får et
+  tomt felt, selv om den kender beskeden. Fastslået i `src/ui`
   (linje 218: `open(): void`), så det er ikke en forglemt mulighed.
   Fixet er lille (en valgfri `open({ prefill })`, ~40 bytes på `bugbottle/ui`),
   men det **rører et eksisterende eksports signatur**, så efter vores egne
   navneregler er det en minor, ikke en patch. Og det er ikke længere et
-  hjørnesag: **alle fire frameworksider rammer det**, og Astro-siden rammes
+  hjørnesag: **alle fem frameworksider rammer det**, og Astro-siden rammes
   hårdest, fordi `componentUrl` + fejlteksten er hele pointen med at lytte på
   begivenheden. Bygge det, eller lade siderne pege på `bugbottle/triggers` og
   lægge fejlen i `extra` i stedet?
@@ -560,6 +643,39 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-27, iteration 9** (`ceo/vue-page`). Opgave 10: `/docs/vue/` som
+  tredje side under `Integrations` (react, vue, nextjs, angular, nuxt, astro,
+  wordpress). Se "Fund fra Vue-iterationen" — fire fund fra de publicerede
+  produktionsbuilds.
+  - **Metoden holdt for sjette gang.** De tre stærkeste fund er alle
+    *rettelser* af noget, læseren troede: at man kan sætte
+    `app.config.errorHandler` uden at miste konsollen, at `onErrorCaptured`
+    med `false` sletter fejlen, og at en kastende router-guard aldrig når
+    Vues handler. Ingen af dem står i vuejs.org eller vue-router's docs, og
+    alle tre er verificeret i `cjs.prod.js` — ikke bare i den læsbare build.
+  - **`vue-router` er en devDependency-bygning, jeg læste den publicerede
+    ud:** `vue-router.esm-bundler.js` er 163 bytes og re-eksporterer fire
+    chunk-filer, så det første grep gav **nul resultater**. Den fulde kode
+    ligger i `dist/vue-router.esm-browser.js` og i den minificerede
+    `…prod.js`, hvor `triggerError` hedder `L`. **Et nul-resultat i et grep er
+    ikke et "findes ikke"** — det var det, der næsten kostede fund 4.
+  - **Tre sider deler nu én fejl.** `app.config.errorHandler` erstatter
+    konsollen (Vue), `router.onError` erstatter konsollen (vue-router), og
+    Nuxt fjerner sin egen default-handler ved hydration. Alle tre er samme
+    bytte i tre lag, og det er derfor snippet'et logger linjen tilbage.
+  - `dist/` er uændret af builden, byte for byte (IIFE 24 645 / 21 063 mod
+    budgetterne 25 088 / 21 504) — ingen eksport rørte sig, så intet at
+    `git add -f dist`. 40 docs-sider (fra 39), 159 søgeposter (fra 150).
+  - `npm run check` grøn: 880 tests, 0 fejl, 0 advarsler. CHANGELOG skrevet
+    **inden** commit.
+  - Deploy-noterne for `/docs/react/` og `/docs/wordpress/` er stadig åbne og
+    **ikke forfalne**: de blev merget 22:24 og 22:32, og det seneste
+    batch-vindue (21:30) lå *før* begge. Næste er 07:30 28/9.
+  - Næste iteration: `open({ prefill })` er det mest genbrugelige fund i
+    hele planen (det rammer fem sider nu), **men** det rører et eksisterende
+    eksports signatur, så det er en minor og en beslutning under ❓. Alternativt
+    de fem frameworksiders fælles fejlside-afsnit, som er allerede betalt for.
 
 - **2026-09-27, iteration 8** (`ceo/react-page`). Opgave 9: `/docs/react/` som
   sjette side under `Integrations`. Se "Fund fra React-iterationen" — tre
@@ -715,6 +831,19 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/vue/ (ny integrationsside, 40 sider i
+  sitemap'en, tredje i sidebaren) <sha>, merge <sha>, 2026-09-27 ~23:0x` —
+  næste batch-vindue er **07:30 2026-09-28**. Kan verificeres i **samme
+  kørsel som de to notes nedenfor** (WordPress 22:24, React 22:32). Verificér
+  **indhold**: `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/vue/` med `lastmod 2026-09-28`, siden skal vise
+  de fire fund (`app.config.errorHandler` *sletter* konsollinjen,
+  `onErrorCaptured` med `false`, `throwUnhandledErrorInProduction`,
+  `router.onError`), teksten `vuejs.org/error-reference/#runtime-6` og
+  `Hydration completed but contains mismatches.`,
+  `Integrations`-gruppen i sidebaren skal have **syv** sider med `/docs/vue/`
+  som nr. 2, og `/docs/changelog/` skal have Vue-posten.
 
 - `VERIFICÉR DEPLOY: /docs/react/ (ny integrationsside, 39 sider i
   sitemap'en) 55e975c, merge 9f59905, 2026-09-27 22:32` — næste batch-vindue er

@@ -10,6 +10,31 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- `/docs/vue/`, a documentation page for Vue applications that have no
+  meta-framework around them. `bugbottle/vue` is a standalone adapter and
+  `vue:error` was only documented as half of the Nuxt page, so the largest
+  framework-specific funnel in the library had no page of its own. It is
+  built from `@vue/runtime-core@3.5.43` and `vue-router@5.3.1` — their
+  **published production builds**, not their documentation. Four findings, none
+  of them in the docs. **Setting `app.config.errorHandler` deletes Vue's own
+  `console.error`**, because `handleError` returns before `logError` when a
+  handler exists, and that console line is what this library's ring buffer
+  records — so the page's snippet logs it back, and says why. **An
+  `onErrorCaptured` hook returning `false` deletes the error entirely**: the
+  walk in `handleError` returns there, so the app handler is never called *and*
+  `logError` never runs, which means no report, no console entry, and no throw
+  in production. **In production nothing throws** — `logError` rethrows in
+  development and calls `console.error(err)` in a build, so there is no crash
+  for a report to attach to; and `console.warn` appears zero times in the
+  production bundle, so every Vue warning is compiled out. **A failing
+  navigation guard is not a Vue error at all**: `vue-router`'s `triggerError`
+  goes to `router.onError` subscribers or, if there are none, to
+  `console.error` — so wiring the documented `router.onError` toast removes the
+  console line, and the promise it rejects into is swallowed by the
+  back/forward path. Plus the one Vue bug no hook can see: the hydration
+  mismatch line is a bare string, once per application, with no error object,
+  and it never passes through `handleError`.
+
 - `/docs/react/`, a documentation page for React applications that have no
   meta-framework around them. `useBugReport` and `BugReportBoundary` were
   documented under "Get started" and the package's largest adapter had no page
