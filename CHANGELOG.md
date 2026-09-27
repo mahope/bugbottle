@@ -10,6 +10,33 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`/docs/react-router/` — a page for React Router v7, v8 and Remix.** The
+  framework with the most careful error handling of the ones documented here, and
+  the only one that has already answered the question: the published package
+  ships a whole guide to it, `docs/how-to/error-reporting.md`, and it ends at
+  `myReportError(error, location, errorInfo)`. The page is that guide with the
+  hole filled in, plus eight things it does not say, read out of
+  `react-router@8.4.0`'s production build, `react-router@7.18.4` for the v7 line,
+  `@remix-run/react@2.17.5` and `react-dom@19.3.0`'s. **React Router 8 is out**
+  and the page says so. The findings, none of them in the guide:
+  **declarative mode has no hook at all** — `useRoutes` passes no
+  `dataRouterOpts`, so `RenderErrorBoundary` is never mounted and React Router
+  catches nothing. **`onError` is a swap on the data path and an addition on the
+  render path** — `console.error` appears zero times in `router.js`, so a loader
+  error has no log of its own and the handler's own line is the only one, while a
+  render error is logged by React 19's `defaultOnCaughtError` either way. **A
+  `Response` you threw on purpose arrives as a crash**, and
+  `isRouteErrorResponse` is the discriminator. **`info.params` is the root
+  match's params**, so it is `{}` in almost every application; `pattern` is the
+  field to use. **A boundary holds its error until the location changes or a
+  revalidation returns to idle**, so a retry button that re-renders clears
+  nothing. **The framework's own error page unmounts the panel and prints "💿
+  Hey developer" to every visitor**, while the console line — and therefore the
+  report — survives. **Remix v2 has no `onError` at all**: `RemixBrowserProps` is
+  an empty interface. The server half is six lines, because `validateReport`
+  requires nothing but a `message` and puts an unknown top-level key into
+  `extra`. Nothing is exported and nothing in the library changed.
+
 - **`/support/` on bugbottle.dev, and `.github/FUNDING.yml`.** The repository
   had no funding file and the site had no support page, so the answer to "how do
   I support this" was nowhere, and the products in this field sell exactly the

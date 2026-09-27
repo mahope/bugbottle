@@ -134,21 +134,23 @@ nextjs.org, angular.dev, nuxt.com.
   **MÅL: `/support/` baseline 0 besøgende (siden findes ikke) pr. 2026-09-27.**
   Sammenlign 25/10. Effekten forventes ikke at komme som trafik — den kommer som
   tillid i salgsfasen, på samme måde som opgave 6.
-- [ ] **12. `/docs/react-router/` — React Router v7 og Remix.** 10 suggest
+- [x] **12. `/docs/react-router/` — React Router v7, v8 og Remix.** 10 suggest
   målt 28/9 (`react router error boundary` 10, `remix error boundary` 2,
   `sveltekit error handling` 4, `solidstart` 0, `qwik` 0) — **tredjestørste
   efterspørgsel i rækken efter Next.js og Angular**, og de er konkrete:
   "react router 7 error boundary", "… props", "… not working", "… 404",
   "… redirect", "react-router declarative error boundary". Remix *blev* React
   Router, så én side dækker begge navne, og `bugbottle/react` passer i forvejen
-  til den. Kilden bliver de publicerede builds af `react-router` v7
-  (`ErrorBoundary` i declarative mode, `errorElement`, `isRouteErrorResponse`,
-  `useRouteError`), ikke de to projekters dokumentation — metoden har holdt
-  seks gange. **MÅL: `/docs/react-router/` baseline 0 besøgende (siden findes
-  ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
-  **I GANG 28/9.** Forskningen er færdig, fundene står i "Fund fra
-  React-Router-iterationen", og **den afslørede en fejl i vores egen kode, som er
-  rettet og merged først** (se loggen, iteration 11).
+  til den. Kilden er de publicerede builds af `react-router@8.4.0` +
+  `7.18.4`, `@remix-run/react@2.17.5` og `react-dom@19.3.0` — **ikke** deres
+  dokumentation, men den *ene* undtagelse: deres egen
+  `docs/how-to/error-reporting.md` er konkurrentens svar, og siden starter med
+  den og siger hvor den holder op. **MÅL: `/docs/react-router/` baseline 0
+  besøgende (siden findes ikke) pr. 2026-09-27.** Sammenlign 25/10 og 25/11.
+  41 docs-sider (fra 40), 176 søgeposter (fra 165). 28/9, `ceo/react-router-guide`
+  (anden commit end `ceo/keep-react-console-line`, samme iteration). Se "Fund fra
+  React-Router-iterationen" — otte fund, og **den stærkeste af alle siderne,
+  fordi den eneste, der fik os til at finde en fejl i vores egen kode.**
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -347,6 +349,20 @@ De fire frameworksider er på plads, og de ligner hinanden mere end de burde
   Sorter fremover nye sider efter den inddeling. Den er mere brugbar end
   frameworklisten, fordi den fortæller hvilken slags opsætning siden kræver,
   og den er allerede betalt for.
+- **React-Router-siden har nu betalt de to første punkter ovenfor, så de er
+  ikke længere "bør skrives" — de er skrevet.** (1) Den færdige
+  fejl-side-knap ligger i `root.tsx` med `BugReportBoundary` +
+  `useRevalidator().revalidate()`, og **grunden er læst ud af deres egen kilde**
+  (`BoundaryShell` skriver sit eget `<html>`). (2) Verifikations-sektionen er
+  fem kast i træk i stedet for fire, fordi der er to sider, der *ikke* kan have
+  en fælles kode (de er forskellige frameworks). Den tredje opgave —
+  "skriv script-tagonlysningen en gang" — er **stadig ikke gjort**: den er nu
+  betalt for to gange (Vue + React Router) og er næste iteration.
+- **Ny klasse fundet 28/9, som hører hjemme i inddelingen:** en framework der
+  **ikke** har en krog i en bestemt mode. React Router har to af tre, Astro
+  har nul, Vue har én der sletter konsollen. En side skal derfor starte med
+  "hvor mange kroge har den her framework, og hvilke", ikke med "hvilken
+  krog".
 
 ## Fund fra Sentry-SDK-rækken (27/9) — hvorfor tallene er målt
 
@@ -751,6 +767,39 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
+- **2026-09-28, iteration 11, anden del** (`ceo/react-router-guide`). Opgave 12:
+  `/docs/react-router/`. Se opgaven og "Fund fra React-Router-iterationen".
+  - **Siden skriver sig selv oveni konkurrentens egen guide.** Pakken kommer med
+    `docs/how-to/error-reporting.md` — en hel side om præcis dette emne — som
+    ender i `myReportError(error, location, errorInfo)`. **Det er det sted, hvor
+    bugbottle hører hjemme**, og det er derfor siden er bygget som "deres guide
+    med hullet lukket" fremad for som en konkurrence. Sådan rammer man også
+    konkurrentens *egne* brugere: de lander på deres side, og vores side er den
+    der svarer.
+  - **Den eneste frameworkside, der fandt en fejl i vores egen kode** (se
+    punktet ovenfor). Mønsteret er tre gange bekræftet nu, så det er skrevet
+    ind som en regel for de næste sider i ❓.
+  - **To klasser blandt de otte fund er nye for planen** og er lagt i "Køen
+    efter dette" som en regel: (1) en frameworks **modes** — declarative mode
+    i React Router har nul kroge, så opsætningen afhænger af *hvilken mode* appen
+    bruger, ikke af hvilket framework; (2) en framework der **ikke** har en krog
+    i en bestemt situation, som Astro viste først. Begge er mere brugbare for en
+    læser end frameworklisten, fordi de fortæller hvilken slags opsætning siden
+    kræver.
+  - `npm run check` grøn: 881 tests, 0 fejl, 0 advarsler. 41 docs-sider (fra 40),
+    176 søgeposter (fra 165). `dist/` uændret af builden byte for byte
+    (IIFE 24 645 / 21 063) — ingen kode i biblioteket rørte sig i denne commit,
+    så intet at `git add -f dist` (den første commit i iterationen gjorde det for
+    `dist/react/boundary.*`).
+  - ⚠️ **`npm run a11y` kunne ikke køre:** ingen Chrome på maskinen, femte
+    iteration i træk. Siden er ren Markdown med **nul eksterne links** (derfor
+    ingen `a11y-site.mjs`-tilføjelse nødvendig — support-siden havde en, fordi
+    den har et payment-link), ingen nye DOM-elementer, ingen ny CSS. CI's
+    `browser`-job kører begge dele på hvert push.
+  - Næste iteration: **script-tagonlysningen som ét afsnit** (se køen — nu betalt
+    for to gange), og så de åbne `VERIFICÉR DEPLOY`-noter hvis 07:30-vinduet er
+    kørt.
+
 - **2026-09-28, iteration 11** (`ceo/keep-react-console-line`). Opgave 12
   forsøgt, men først fundet: **en fejl i vores egen kode**, rettet og merged
   uden at siden er skrevet endnu. Se "Fund fra React-Router-iterationen" for de
@@ -1010,6 +1059,19 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/react-router/ (41 sider i sitemap'en, ny
+  integrationsside under Integrations) + `createRootErrorHandlers`' konsollinje
+  (den giver sig i en rapport, ikke på siden) ceo/react-router-guide og
+  ceo/keep-react-console-line, merge 4d6edfb og ca. 00:2x, 2026-09-28` — næste
+  batch-vindue er **07:30 2026-09-28**. Kan verificeres i **samme kørsel som de
+  fire notes nedenfor** (support 23:3x, vue 23:04, react 22:32, wordpress 22:24
+  — alle merge før 07:30). Verificér **indhold**: `/docs/react-router/` skal
+  indeholde `Three modes, three different answers` og
+  `RemixBrowserProps`, og `/docs/react/` skal have den nye sætning om
+  `onError`. Tilføj `VERIFICÉR DEPLOY: 1d800b9` hvis biblioteket skal tjekkes
+  særskilt — `bugbottle/react` er det kun i `dist/react/boundary.js`, og
+  IIFE'en er uændret, så en ren kontrol af sitet kan ikke se den.
 
 - `VERIFICÉR DEPLOY: /support/ + footerlinket på begge landingsider +
   .github/FUNDING.yml (48 URL'er i sitemap'en) e00a09c, merge e26cba2,

@@ -434,7 +434,9 @@ A plain React application — Vite, a build of your own, React Router with no
 framework around it — has no error hook of its own to bind to, so most of the
 work is in the two pages above: the form in
 [The form (React)](#the-form-react) and the two error paths in
-[Catching render errors (React)](#catching-render-errors-react). What is left
+[Catching render errors (React)](#catching-render-errors-react). (If your React
+Router is v7 or later there is one hook of its own, `onError`, and
+[React Router](#react-router) is that page.) What is left
 is three things neither of them says, and none of them is in React's own
 documentation. Every claim below was read out of `react-dom@19.3.0`'s
 **production** bundle, because the documentation is where the interesting part
@@ -1814,6 +1816,468 @@ the failure took a return path instead. Fourth, throw from a page's frontmatter
 in a site with middleware that reads `Astro.locals`: the visitor should get
 *your* 500 page and a report should exist, and if they get the platform's bare
 500 instead, the middleware threw and Astro re-rendered without it.
+
+## React Router
+
+React Router is the framework with the most careful error handling of the ones
+above, and the only one that has already answered the question this page asks —
+`docs/how-to/error-reporting.md` in the published package is a whole guide to it.
+It ends like this:
+
+```tsx
+const onError: ClientOnErrorFunction = (error, { location, params, pattern, errorInfo }) => {
+  myReportError(error, location, errorInfo);
+  // make sure to still log the error so you can see it
+  console.error(error, errorInfo);
+};
+```
+
+`myReportError` is a hole in the page, and it is the hole this library is
+written for. What follows is the same guide with the hole filled in, plus eight
+things it does not say, all read out of `react-router@8.4.0`'s **production**
+build (with `react-router@7.18.4` for the v7 line, where the API is identical,
+and `@remix-run/react@2.17.5` for Remix itself, where it is not).
+
+One thing to know before the rest: **React Router 8 is out.** `npm view
+react-router versions` ends `7.18.4, 8.0.0, 8.1.0, 8.2.0, 8.3.0, 8.3.1, 8.4.0`.
+Everything below was read out of 8.4.0 and the parts that matter —
+`ClientOnErrorFunction`, `onError`, `useRouteError`, `isRouteErrorResponse` —
+were checked in 7.18.4 as well, so the snippet works on either.
+
+### Three modes, three different answers
+
+This is the first thing to get right, because it decides where the code goes and
+it is not in the guide. React Router has three modes and **only two of them have
+a hook**:
+
+| Mode | You wrote | Hook |
+|---|---|---|
+| Framework | `@react-router/dev` config, `app/root.tsx` | `onError` on `HydratedRouter`, in `entry.client.tsx` |
+| Data | `createBrowserRouter` | `onError` on `RouterProvider` |
+| Declarative | `<Routes>` / `useRoutes` | **none** |
+
+The declarative row is not a gap in the documentation, it is the code.
+`useRoutes` is two lines:
+
+```js
+function useRoutes(routes, locationArg) {
+	return useRoutesImpl(routes, locationArg);
+}
+```
+
+No `dataRouterOpts`, and the boundary is mounted under a condition that starts
+with it:
+
+```js
+return dataRouterState && (match.route.ErrorBoundary || match.route.errorElement || index === 0)
+	? /* @__PURE__ */ React.createElement(RenderErrorBoundary, { … })
+	: getChildren();
+```
+
+So in declarative mode **React Router catches nothing**. No `onError`, no
+boundary, no `console.error` of its own — the error goes to the nearest React
+error boundary, which is `Catching render errors (React)` above, or your own. The
+console buffer still has it, because React 19 logs every error a boundary
+catches, so a declarative-mode application needs *half* this page: the panel,
+and nothing else. A data-mode application needs the other half, below.
+
+### The one handler, in both of the modes that have one
+
+Same function, two places. This is the whole integration for a data-mode
+application:
+
+```ts
+// report.ts
+import { isRouteErrorResponse, type ClientOnErrorFunction } from "react-router";
+import { mountBugbottle } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+import { da } from "bugbottle/locales";
+
+const widget = mountBugbottle({
+  endpoint: "/api/feedback",
+  screenshot: htmlToImage,
+  locale: da,
+  openOnError: { prefill: true },
+});
+
+export const onRouteError: ClientOnErrorFunction = (error, { location, pattern }) => {
+  // A Response thrown on purpose is a 404 somebody wrote, not a crash. Sending
+  // it fills the inbox with the application's own routing.
+  if (isRouteErrorResponse(error)) {
+    console.error(`[bugbottle] ${pattern} returned ${error.status}`, error);
+    return;
+  }
+
+  // `open()` takes no arguments, so the box opens empty. The console line below
+  // is what carries the message into the report — see the next section.
+  widget.open();
+  console.error(`[bugbottle] ${pattern} at ${location.pathname}`, error);
+};
+```
+
+```tsx
+// main.tsx — data mode
+import { createBrowserRouter, RouterProvider } from "react-router";
+import { onRouteError } from "./report";
+
+const router = createBrowserRouter(routes);
+createRoot(document.getElementById("root")!).render(
+  <RouterProvider router={router} onError={onRouteError} />,
+);
+```
+
+```tsx
+// entry.client.tsx — framework mode. The same function, the other prop.
+import { startTransition, StrictMode } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { HydratedRouter } from "react-router/dom";
+import { onRouteError } from "./report";
+
+startTransition(() => {
+  hydrateRoot(
+    document,
+    <StrictMode>
+      <HydratedRouter onError={onRouteError} />
+    </StrictMode>,
+  );
+});
+```
+
+`onError` is the right hook and the documentation says why, in the prop's own
+doc comment: it "will be called for any middleware, loader, action, or render
+errors that are encountered in your application… useful for logging or reporting
+errors instead of in the `ErrorBoundary` because it's not subject to re-rendering
+and will only run one time per error." It is the only place in the library that
+sees a middleware or loader error outside the component tree, and in v8
+`middleware` is a first-class route property rather than an `unstable_` export,
+so there is one more error class to catch than there was two majors ago.
+
+### The console line: an addition on one path, a swap on the other
+
+Their guide says "make sure to still log the error so you can see it", which is
+right and does not say what is at stake. This library's console ring buffer
+records `console.error` and `console.warn` and nothing else, so that line *is*
+the report's console section.
+
+On the render path, React Router logs the line itself and `onError` replaces it:
+
+```js
+componentDidCatch(error, errorInfo) {
+	if (this.props.onError) this.props.onError(error, errorInfo);
+	else console.error("React Router caught the following error during render", error);
+}
+```
+
+Read the `else`. With no `onError`, a render error leaves
+`"React Router caught the following error during render"` in the console. With
+`onError`, it does not — but React 19 puts it back, because its own default for
+`onCaughtError` is a log. In `react-dom@19.3.0`'s **production** bundle:
+
+```js
+function defaultOnCaughtError(error) {
+  console.error(error);
+}
+```
+
+So a render error reaches the ring buffer either way. That is React's doing, not
+React Router's, and it is worth knowing which of the two you are relying on.
+
+On the data path there is nothing behind you. `console.error` appears **zero
+times** in `router.js` — a loader, action or middleware error is not a render, so
+no boundary caught it, so React never heard of it, and the single line of the
+snippet above is the only log it will ever have. An application that wires
+`onError` and forgets that line produces a report with a URL, a pattern, a
+screenshot and an empty console.
+
+The framework-mode default makes the same point from the other side. Without a
+root `ErrorBoundary`, this is what catches a render error — and note both lines:
+
+```js
+function RemixRootDefaultErrorBoundary({ error, isOutsideRemixApp }) {
+  console.error(error);
+  let heyDeveloper = React.createElement("script", {
+    dangerouslySetInnerHTML: { __html: `
+        console.log(
+          "💿 Hey developer 👋. You can provide a way better UX than this when your app throws errors. Check out https://reactrouter.com/how-to/error-boundary for more information."
+        );
+      ` }
+  });
+  …
+```
+
+A string with a disk emoji, printed to every visitor's console, from a boundary
+whose purpose is to catch the error you never saw. You should not ship that, and
+its own source is the argument for exporting your own `ErrorBoundary` — see
+"the error page where the panel is not mounted" below.
+
+### A 404 you threw on purpose arrives as a crash
+
+`throw new Response("Not found", { status: 404 })` in a loader is a documented,
+ordinary thing to write, and React Router hands it to your `ErrorBoundary` and
+to `onError` through the same door as a `TypeError`. Nothing in the error says
+which it was: both are `unknown` with a stack.
+
+`isRouteErrorResponse` is the discriminator, it is still exported in v8, and it
+is the first line of the handler above. A `Response` becomes an `ErrorResponse`
+with `status`, `statusText`, `data` and `internal`, and the check is a plain
+property test:
+
+```js
+function isRouteErrorResponse(error) {
+	return error != null && typeof error.status === "number" && typeof error.statusText === "string" && typeof error.internal === "boolean" && "data" in error;
+}
+```
+
+What to do with one is your choice, and logging it is not the interesting part —
+a 404 that a *person* hit is worth knowing about. It is the only thing that
+reaches the boundary with no stack, so the report has nothing to point at; the
+route pattern and the request URL are the whole of it. If your application throws
+Responses for things that are genuinely wrong, send them with a different
+`type` from the handler so they do not read as crashes in the inbox.
+
+A `redirect()` is not one of these: `isRedirectResult` is checked before the
+result becomes an error, so a redirect never reaches `onError`. A promise you
+`await` in a `useEffect` is a third thing again, and reaches neither — that is
+"errors no hook sees" below.
+
+### `info.params` is the root match's params, and it is usually `{}`
+
+The handler's second argument is worth reading closely, because two of its four
+fields are good and one is a trap:
+
+```js
+Object.values(newErrors).forEach((error) => onError(error, {
+  location: newState.location,
+  params: newState.matches[0]?.params ?? {},
+  pattern: getRoutePattern(newState.matches)
+}));
+```
+
+`location` is the one you want — the URL at the time of the error, so a report
+says which page broke rather than which page the report was sent from. `pattern`
+is the route's path pattern, which is the most useful field of the three: it is
+the same for every visit to `/orders/:orderId`, so a hundred failures on one
+route are one thing rather than a hundred URLs.
+
+`params` is `matches[0]`, the **root** match. A root route has no dynamic
+segment unless you gave it one, so `info.params` is `{}` in almost every
+application, including one with `/orders/:orderId` all over it. Use `pattern` for
+the route and `useParams()` inside the `ErrorBoundary` for the values.
+
+The fourth field, `errorInfo`, is React's own `{ componentStack }` and is only
+present for render errors. It is the component stack from
+`componentDidCatch`, so it is worth storing — but note what
+`Catching render errors (React)` says about timing: the root handler fires from
+the boundary's update *callback*, which means the fallback is already on screen
+when it runs. `errorInfo.componentStack` describes the tree that threw, not the
+one the person is looking at.
+
+### A route with no boundary of its own is caught by the root one
+
+The condition from the first section has two consequences worth knowing before
+you test anything.
+
+First, a route without an `ErrorBoundary` or `errorElement` has no boundary:
+the error walks up to the nearest ancestor that has one, and in framework mode
+that is `root.tsx`. A layout route's boundary covers its children, so the usual
+shape is one boundary per section rather than one per page — and a report from
+`onError` says which route failed in `pattern` either way, so the *reporting* is
+unaffected by where the boundary sits.
+
+Second, a boundary holds its error. `getDerivedStateFromProps` is the whole of
+it:
+
+```js
+static getDerivedStateFromProps(props, state) {
+  if (state.location !== props.location || state.revalidation !== "idle" && props.revalidation === "idle") return {
+    error: props.error,
+    location: props.location,
+    revalidation: props.revalidation
+  };
+  return {
+    error: props.error !== void 0 ? props.error : state.error,
+    location: state.location,
+    revalidation: props.revalidation || state.revalidation
+  };
+}
+```
+
+Two ways out: a location change, or a revalidation that goes back to `idle`. A
+"try again" button that only calls `setState` re-renders the same error page
+forever. `useRevalidator().revalidate()` is what clears it — and if the route
+throws again, that is another `onError`, another report. A route that fails on
+every visit and a person who keeps pressing the button is a report flood, and
+the answer is the server's own: `dedupe` keys on the report's fingerprint, so
+the same error is stored once. Nothing to configure.
+
+### The error page where the panel is not mounted
+
+`Next.js`, `Angular`, `Nuxt` and `Astro` all have the same problem, and the same
+one-line answer: an error page is a *different page*, without your layout, so the
+widget you mounted in the layout is gone. React Router's version of that page is
+in its own source, and the reason is visible in the `BoundaryShell` helper
+beside it — when there is no root layout to render into, it writes a whole
+document itself:
+
+```js
+return React.createElement("html", { lang: "en" },
+  React.createElement("head", null, …),
+  React.createElement("body", null, React.createElement("main", { style: { fontFamily: "system-ui, sans-serif", padding: "2rem" } }, children)));
+```
+
+Note what survives that: `console.error(error)` ran before it, and the console
+buffer is not React. **The evidence outlives the panel.** So the report you want
+from this page is one somebody sends, not one that opens by itself, and the
+integration is a button in the boundary:
+
+```tsx
+// app/root.tsx
+import { isRouteErrorResponse, useRouteError, useRevalidator } from "react-router";
+import { BugReportBoundary } from "bugbottle/react";
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const { revalidate } = useRevalidator();
+  const message = isRouteErrorResponse(error)
+    ? `${error.status} ${error.statusText}`
+    : error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error);
+
+  return (
+    <BugReportBoundary
+      endpoint="/api/feedback"
+      fallback={(err, report, sending) => (
+        <main>
+          <h1>Something went wrong</h1>
+          <pre>{message}</pre>
+          <button onClick={report} disabled={sending}>
+            {sending ? "sending…" : "tell us what happened"}
+          </button>
+          <button onClick={() => revalidate()}>try again</button>
+        </main>
+      )}
+    >
+      <p>we kept your place</p>
+    </BugReportBoundary>
+  );
+}
+```
+
+`BugReportBoundary` catches what the *button's own* subtree throws, so the
+`children` is a placeholder and the real job is the fallback: it sends nothing
+until somebody presses the button, which is the rule for every report a person
+chose to send. `try again` is `revalidate()`, and the paragraph above is why that
+is not `setState`. The typed fallback is a `BugReportBoundary` prop
+(`fallback: (error, report, sending) => ReactNode`) and the string is yours,
+which is the one thing on a page like this that should be in your own words.
+
+### Server errors, and why Remix is not the same page
+
+The guide's server half is right and short. Export `handleError` from
+`entry.server.tsx` and skip the requests you interrupted:
+
+```tsx
+// entry.server.tsx
+import { type HandleErrorFunction } from "react-router";
+
+export const handleError: HandleErrorFunction = (error, { request }) => {
+  // React Router may abort some interrupted requests, don't log those
+  if (request.signal.aborted) return;
+  console.error(error);
+  // There is no browser here, so there is no panel. See below.
+  void fetch(process.env.FEEDBACK_URL!, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "error",
+      message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    }),
+  });
+};
+```
+
+That `fetch` is a report in the shape `handleReport` accepts, and the shape is
+smaller than it looks: `validateReport` returns `null` for a payload with no
+`message` and nothing else is required, and every **unknown top-level key**
+becomes an entry in `extra` — so the stack above arrives as `extra.stack`
+without a field being invented for it. The client sends more; the server cannot
+send a screenshot it does not have, and the report says so in the same way a
+failed capture does. `Receiving a report` has the receiver, and the privacy text
+for a server-side send is the same one as for the browser.
+
+`request.signal.aborted` is not optional and the reason is the same on the
+client: an interrupted navigation is not a bug. On the client it is handled
+before it can become an error — the loader's result is `{ type: "aborted" }` and
+`onError` is never called — which is why a fast user clicking through a list
+does not fill your inbox.
+
+**Remix v2 is the same framework with one API missing.** `@remix-run/react`'s
+`RemixBrowser` is the framework-mode client entry, and its props are empty:
+
+```ts
+export interface RemixBrowserProps {
+}
+```
+
+No `onError`, in the last Remix release. `onError` arrived with React Router
+v7, which is Remix merged into it, so an application on `@remix-run/react@2`
+cannot use the handler above. It has two options that both work: the route's own
+`ErrorBoundary` with the button from the previous section — which is where a
+Remix application should have had it all along — or React's root handlers from
+`Catching render errors (React)`, which catch render errors anywhere in the tree
+and know nothing about loaders. Everything else on this page applies unchanged:
+`RemixRootDefaultErrorBoundary` is the same `console.error` and the same
+💿-script as v8's, `useRouteError` and `isRouteErrorResponse` are the same, and
+`handleError` in `entry.server.tsx` is spelled the same.
+
+### Errors that reach no hook at all
+
+React Router's funnel covers what it routes: loaders, actions, middleware,
+render errors under a boundary. It does not cover a `fetch` in a `useEffect`, a
+`setTimeout` callback, an event handler in your own component, a WebSocket, or a
+third-party script. None of those are React Router's business, and none of them
+will ever reach `onError`.
+
+Two things catch them, and the second is why they are not a hole. React 19's
+`onUncaughtError` is called for an error that reached the root, and this
+library's `createRootErrorHandlers` is the implementation of it. And
+`openOnError: { prefill: true }` in the snippet above listens to `window.onerror`
+and `unhandledrejection` directly, so a rejected promise in an effect opens the
+panel **with the message already in the box** — which is the one path where the
+reporter is a better answer than a hook, because there is no hook to write.
+
+A declarative-mode application needs exactly this and nothing else: no
+`onError`, no `ErrorBoundary` export, just the panel and the two window events.
+A framework-mode application needs all of it, and the four files are `root.tsx`
+(the boundary), `entry.client.tsx` (`onError`), `entry.server.tsx`
+(`handleError`) and the widget.
+
+### What to check before you ship it
+
+Five throws, and a report from the right four. First, from a loader:
+`throw new Error("orders failed")` in the route's `loader` and confirm the panel
+opens, and that the report's console holds the `[bugbottle]` line — **if the
+console is empty, you forgot the `console.error`**, and that is the failure this
+section exists for. Second, add `throw new Response("Not found", { status: 404 })`
+to the same loader and confirm **no** report arrives and one console line does.
+Third, throw from a component's render: the panel opens, the console line is
+yours, and the same error thrown twice inside `dedupeMs` files one report while
+logging twice. Fourth, break the root `ErrorBoundary` itself — throw inside the
+`ErrorBoundary` component — and confirm the visitor gets *your* page and not
+the 💿 one; that is the test for the boundary actually being exported. Fifth,
+throw in a `useEffect` callback, where no hook exists: the panel opens from
+`openOnError` with the message filled in, which is the one case where the box is
+prefilled and worth saying so out loud in the code you keep.
+
+Then build it and serve the build. A React Router application in development
+takes a different path through all five — React's `defaultOnCaughtError` there
+is a sentence ("The above error occurred in the `<Orders>` component. React will
+try to recreate this component tree…"), where the production build logs the
+error object alone, so a report that carries React's own line looks different
+depending on how it was built. If your verification ran against `npm run dev`
+you have verified nothing about the shipping path.
 
 ## Opening it without a button
 
