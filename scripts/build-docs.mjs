@@ -783,6 +783,8 @@ ${alternates}
 <link rel="preload" href="/fonts/newsreader-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/docs.css">
+<script src="/plausible-init.js" defer></script>
+<script async src="https://analytics.holstjensen.eu/js/pa-HQm6yfTYvkvAY6ARnXmPp.js"></script>
 </head>
 <body class="docs">
 
@@ -833,8 +835,8 @@ function foot(page) {
     }</p>
     <p>${
       da
-        ? "Siden sætter ingen cookies, kører ingen statistik og henter ingenting udefra."
-        : "This page sets no cookies, runs no analytics and makes no external request."
+        ? "Siden sætter ingen cookies og indsamler ingen persondata. Besøg tælles med Plausible, en cookiefri statistiktjeneste hostet i EU."
+        : "This page sets no cookies and collects no personal data. Visits are counted with Plausible, a cookieless analytics service hosted in the EU."
     }</p>
     <div class="lang lang-footer">
       <a href="${enUrl}" lang="en" hreflang="en"${da ? "" : ' aria-current="page"'}>English</a>

@@ -61,6 +61,9 @@ COPY site/index.html site/style.css site/docs.css site/demo.js site/docs.js site
 # line rather than the list above, because it belongs to one page and the
 # generated documentation is what asks for it.
 COPY site/playground.js /usr/share/nginx/html/
+# The queue stub for the Plausible script every page loads; a file because the
+# Content-Security-Policy allows no inline script.
+COPY site/plausible-init.js /usr/share/nginx/html/
 
 # The two faces the page is set in, served from this host so the footer's
 # promise about external requests stays true.
