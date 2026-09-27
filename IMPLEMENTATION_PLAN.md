@@ -94,12 +94,12 @@ nextjs.org, angular.dev, nuxt.com.
   baseline 0 besøgende (siden findes ikke) pr. 2026-09-27.** Sammenlign
   25/10 og 25/11. Se "Fund fra Astro-iterationen" — den stærkeste af de
   fire, fordi kilden er en *uundokumenteret* API.
-- [ ] **5. `/compare/`: tilføj Sentry-SDK'en** (`@sentry/react` 29,3 mio
-  downloads/uge mod vores 191 — FETCHET fra npm-downloads-API'en) som
-  sammenligningsobjekt. `/compare/` sammenligner i dag produkter (Marker.io,
-  Jam, Sentry User Feedback, BugPin, rrweb), ikke biblioteker.
-  Bemærk: det kræver kildeangivelse + dato, ellers er det en udokumenteret
-  påstand.
+- [x] **5. `/compare/`: tilføj Sentry-SDK'en** (`@sentry/react`) som
+  sammenligningsobjekt. 27/9, `ceo/sentry-sdk-compare`. Se "Fund fra
+  Sentry-SDK-rækken" — og bemærk at tallene er **målt, ikke citeret**.
+  **MÅL: `/compare/` og `/da/sammenlign/` baseline 0 pr. 2026-09-27**
+  (Plausible 401; Cloudflare 6 198 sidevisninger/28 d på hele sitet).
+  Sammenlign 25/10.
 - [ ] **6. Privacy: "hvad gør jeg med data jeg *allerede* har sendt?"**
   Rollbar har en stærk GDPR-sektion om også at slette allerede sendt data.
   Vores `/docs/privacy-checklist/` dækker kun før-sending. Konverterings- og
@@ -107,6 +107,19 @@ nextjs.org, angular.dev, nuxt.com.
 - [ ] **7. CTR-måling.** Kræver Search Console-eksport fra Mads. Skriv
   CTR-baseline pr. side ned, før noget ændres i en titel. Billigste vækst, når
   vi har tallene.
+- [ ] **8. `/docs/wordpress/` + link fra `/da/kom-i-gang/`.**
+  `mahope/bugbottle-wordpress` er det mest konverterende produkt vi har — én
+  aktivering giver panel *og* modtager, altså nul eget kodearbejde for brugeren
+  — og den har 0 stjerner og ingen side i vores docs, så den kan slet ikke
+  findes fra bugbottle.dev. FETCHET via `gh api` 27/9: beskrivelsen er "WordPress
+  plugin for bugbottle: the report panel and a receiving endpoint in one
+  activation", seneste push 8/9. Vi arbejder kun i dette repo, så opgaven er
+  **dokumentationssiden** (installér, aktivér, hvor shortcode'en sidder, hvilke
+  `data-*` attributer pluginet læser) + ét link fra `kom-i-gang`, som i forvejen
+  omtaler WordPress-pluginet. Adgangskrav: pluginets `readme.txt`/`readme.md` skal
+  læses før teksten skrives, så tallene på skærmbilleder og shortcodes er rigtige
+  — må ikke gættes. **MÅL: `/docs/wordpress/` baseline 0 (siden findes ikke)
+  pr. 2026-09-27.** Kan tages før nr. 6, hvis en iteration er lille.
 
 ### Køen efter dette
 
@@ -125,6 +138,63 @@ De fire frameworksider er på plads, og de ligner hinanden mere end de burde:
   Sorter fremover nye sider efter den inddeling. Den er mere brugbar end
   frameworklisten, fordi den fortæller hvilken slags opsætning siden kræver,
   og den er allerede betalt for.
+
+## Fund fra Sentry-SDK-rækken (27/9) — hvorfor tallene er målt
+
+Opgaven sagde "kræver kildeangivelse + dato". Det viste sig at være det *for
+svage* krav, fordi hele problemet med at sammenligne et bibliotek med et
+produkt er et tal, ingen har målt.
+
+**Før:** `/compare/` sagde "Ikke oplyst" i størrelseskolonnen for alle rækker
+der ikke var bugbottle, og det var sandt og ubrugeligt. En læser der skal vælge
+mellem et panel på 12 kB og et SDK den aldrig har set størrelsen på, kan ikke
+tage det valg. Så den ene celle hvor vi citerer en konkurrent, må vi kunne
+reproducere.
+
+**Derfor `scripts/measure-competitors.mjs`.** Samme opskrift som
+`measure-sinks.mjs` og som `ci.yml` bruger: `esbuild@0.24.0` (CI's egen
+pindede version, ikke devDependency'ens 0.28.2 — mål skal kunne sammenlignes),
+`--bundle --minify --format=esm --platform=browser`, gzip. To entries, for ét
+tal ville skjule valget: den blotte `init` er hvad en app betaler den dag den
+tilføjer SDK'et, og den anden tilføjer de to integrationer en
+sammenligning om fejlrapportering faktisk handler om.
+
+**Målt 27/9 på `@sentry/react@11.0.0`:**
+
+| Entry | gzip |
+|---|---|
+| `init` alene | 33 997 B (33,2 kB) |
+| `init` + `replayIntegration()` + `captureFeedback` | 98 145 B (95,8 kB) |
+
+Altså **2,8 × hele bugbottle-panelet** (12 kB) for at intet er optaget endnu, og
+**8 ×** med replay og `captureFeedback` i bundtet. Det er det tal, der flytter
+beslutningen, og det var derfor ukendt.
+
+**To ting der viste sig at være værre end forventet, begge med kilde:**
+
+- **Session replay er 50 optagelser pr. måned på *alle* planer** — også den
+  gratis udviklerplan og også Team til 26 $/md. ([sentry.io/pricing](https://sentry.io/pricing/),
+  hentet 27/9). Replay er den halvdel af Sentry der er dyrest i bandwidth, og
+  det er ikke en ekstra der kan købes ud over et abonnement. Det står i
+  plandefinitionen, ikke i prislisten.
+- **`captureFeedback` ligger i SDK'et** (verificeret ved at bundle den og ved
+  eksportlisten: `captureFeedback`, `feedbackIntegration`, `sendFeedback` …).
+  Så den Sentry User Feedback-række ovenfor ikke længere beskriver en widget
+  der lægger sig oven på en større pakke — den er *i* pakken. Den påstand er
+  ændret til det præcise.
+
+**Downloads, med den forbehold de har fortjent:** `@sentry/react` 29 251 063 og
+`@sentry/browser` 38 408 910 i ugen 20.–26. september, mod bugbottles 191
+(npm-downloads-API'en, samme uge for begge). Siden skriver udtrykkeligt at det
+**ikke er en pointscore** — CI-kørsler og transitive installationer blæser det
+store tal op, og ét npm-pakke er ikke et produkt. Det er derfor også den
+modsatte halvdel, der står eksplicit: betaler du allerede Sentry, er de bytes
+og den kvote købt, og intet af det er et argument. En sammenligningsside der
+kun kan argumentere den ene vej, er en reklame.
+
+**Live-stjernen er 2, så det her er ikke et selvskud.** Sentry er det største
+navn i feltet; det er derfor den række, en læser sammenligner os imod. Vi
+skal ikke udpege fire små værktøjer og håbe på at ingen læser regner.
 
 ## Fund fra Astro-iterationen (27/9) — den stærkeste af de fire sider
 
@@ -318,6 +388,27 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
 
 ## Log
 
+- **2026-09-27, iteration 5** (`ceo/sentry-sdk-compare`). Opgave 5: den
+  sjette række i `/compare/` og `/da/sammenlign/` — `@sentry/react`, målt i sted
+  for citeret. Ny dev-script `scripts/measure-competitors.mjs`. Se "Fund fra
+  Sentry-SDK-rækken".
+  - **En reel mangel fundet og rettet:** Astro-guiden (iteration 4) var
+    landet **uden CHANGELOG-entry**, så den ville have været væk i
+    udgivelsesnoterne for 1.0.1→1.1.0. CLAUDE.md's "definition of done" siger
+    at kode, tests *og* dokumentation lander samlet, og en frameworkside er
+    dokumentation. Rettet her, fordi det er samme slags dokumentation og det
+    var billigere end en ren plan-commit. **Til næste iteration: kør
+    `rg -n <sidetitel> CHANGELOG.md` som en del af gaten på enhver docs-side.**
+  - `dist/` er uændret af builden, byte for byte (IIFE 24 645 / 21 063 mod
+    budgetterne 25 088 / 21 504) — ingen eksport rørte sig, så ingen budget
+    flyttede.
+  - Deploy-noten fra iteration 4 (`/docs/astro/`) er stadig åben og ** ikke
+    forfalden**: merge 19:35, det næste batch-vindue er 21:30, og ingen kørsel
+    har været siden merge-tidspunktet. Denne iterations merges (denne række og
+    CHANGELOG) kommer i samme batch og kan verificeres sammen med Astro.
+  - Næste iteration: opgave 6 (privacy: "hvad gør jeg med data jeg *allerede*
+    har sendt?"), som er konverterings- og tillidsmulighed for virksomheder.
+
 - **2026-09-27, iteration 4** (`ceo/astro-guide`). Landede `/docs/astro/`
   som fjerde frameworkside under `Integrations`. 37 docs-sider (fra 36).
   Læst `withastro/astro@7.3.5`'s kilde og hele `withastro/docs`-treeet. Se
@@ -388,6 +479,15 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
   `app:chunkError`), og `Integrations`-gruppen i live-sidebaren har tre sider.
   Deployeren kørte altså engang mellem 17:47 og 19:1x — ét kørselsvindue
   dækker alle tre merges, som noterne forudså.
+
+- `VERIFICÉR DEPLOY: /compare/ + /da/sammenlign/ (den sjette række,
+  `@sentry/react`) og CHANGELOG, 2026-09-27 ~20:1x` — næste batch-vindue er
+  21:30 2026-09-27. Kan verificeres i **samme kørsel** som Astro-noten
+  nedenfor. Verificér **indhold**: `https://bugbottle.dev/compare/` skal have
+  seks rækker i tabellen, den sjette skal starte med `@sentry/react` og vise
+  `33.2 kB` og `95.8 kB`, og `/da/sammenlign/` skal have den samme række med
+  `33,2 kB` og `95,8 kB`. Tallet 29 251 063 skal stå i afsnittet under
+  tabellen på begge sprog.
 
 - `VERIFICÉR DEPLOY: /docs/astro/ (fjerde integrationsside, 37 sider i
   sitemap'en) 20ec0c6, merge a264630, 2026-09-27 ~19:35` — næste

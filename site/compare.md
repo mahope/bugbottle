@@ -1,8 +1,9 @@
 bugbottle is one small piece of a crowded field, and it is not the most
-capable thing in it. This page places it next to five tools people actually
+capable thing in it. This page places it next to six tools people actually
 reach for, so you can tell in a minute whether you want a library or a
 product. Every figure below was checked on 7 September 2026 against the page
-linked in its row; prices and features move, so follow the link before you
+linked in its row, except the `@sentry/react` row, which was checked on
+27 September 2026; prices and features move, so follow the link before you
 decide anything.
 
 | Tool | Licence | Hosted or your endpoint | What it captures | Size in your bundle | Price |
@@ -11,6 +12,7 @@ decide anything.
 | **[Marker.io](https://marker.io)** | Commercial | Hosted. Reports land in Marker.io and are pushed to your tracker | Annotated screenshot, session replay, console and network logs, browser and environment details ([console logs](https://marker.io/blog/console-logs)) | Not published | From $39/mo; console, network and replay start on the $149/mo Team plan ([pricing](https://marker.io/pricing)) |
 | **[Jam](https://jam.dev)** | Commercial | Hosted. A Jam is a link on jam.dev | Screen recording, console, network, device and browser details, the actions leading up to the bug, all from the moment you press record ([jam.dev](https://jam.dev)) | Nothing — it is a browser extension, not a script in your app | Free tier, then $14 per creator per month ([pricing](https://jam.dev/pricing)) |
 | **[Sentry User Feedback](https://docs.sentry.io/platforms/javascript/user-feedback/)** | SDK is MIT ([sentry-javascript](https://github.com/getsentry/sentry-javascript)) | Sentry's ingest. The widget is yours to replace, the backend is not | The message plus screenshot and attachments, joined to the error, the release, the trace and the replay Sentry already has ([docs](https://docs.sentry.io/platforms/javascript/user-feedback/)) | Not published as one number: the widget is loaded on top of the browser SDK, which is the larger part | Free developer plan, then from $26/mo ([pricing](https://sentry.io/pricing/)) |
+| **[`@sentry/react`](https://www.npmjs.com/package/@sentry/react)** | MIT ([licence](https://github.com/getsentry/sentry-javascript/blob/main/LICENSE.md)) | Sentry's ingest. Self-hosting Sentry is a separate product and a separate bill | Every unhandled error, unhandled rejection and console call with breadcrumbs, the release and the environment; `captureFeedback` attaches a typed report to the error it happened next to ([docs](https://docs.sentry.io/platforms/javascript/)) | **33.2 kB gzipped** for `init` alone, **95.8 kB** with `replayIntegration()` and `captureFeedback` in the bundle — 2.8× the whole bugbottle panel, and 8× it ([measured](https://github.com/mahope/bugbottle/blob/main/scripts/measure-competitors.mjs)) | Free developer plan, then $26/mo Team; **50 session replays a month** on every plan ([pricing](https://sentry.io/pricing/)) |
 | **[BugPin](https://github.com/aranticlabs/bugpin)** | AGPL-3.0 server, MIT widget ([repository](https://github.com/aranticlabs/bugpin)) | Self-hosted: its own Bun, Hono and SQLite service, or nothing | Annotated screenshot, console errors, network activity, page metadata, with an offline queue in front of the send ([repository](https://github.com/aranticlabs/bugpin)) | Under 150 kB gzipped for the widget, in a shadow root ([repository](https://github.com/aranticlabs/bugpin)) | Free; you run the server |
 | **[rrweb](https://github.com/rrweb-io/rrweb)** | MIT ([repository](https://github.com/rrweb-io/rrweb)) | Neither. It is a recording primitive with no backend and no UI | Every DOM mutation and input event, as a stream you replay later ([repository](https://github.com/rrweb-io/rrweb)) | Tens of kilobytes for the recorder, and the events keep arriving for as long as you record | Free |
 
@@ -37,6 +39,23 @@ it is the only one in this table that ties the sentence someone typed to the
 stack trace, the release and the session replay of the same moment. bugbottle
 sends a report; Sentry sends a report into a case file that was already open.
 
+The SDK underneath it is the one everybody actually installs: `@sentry/react`
+took 29 251 063 downloads in the week to 26 September 2026, and bugbottle took
+191 in the same week ([npm's download API](https://github.com/npm/download-counts),
+queried 27 September 2026). That comparison is not a score — CI runs and
+transitive installs inflate the large number, and one npm package is not a
+product — but it is the honest answer to "what does a JavaScript team reach for
+when it wants users to report bugs". The costs of that reach are the ones this
+page is for. It weighs 33.2 kB gzipped before it has recorded anything, which
+is two and a half times bugbottle's entire panel, and 95.8 kB once session
+replay and `captureFeedback` are in the bundle — eight times the panel, sent
+to somebody else's ingest, billed per event, with 50 session replays a month
+included on every plan including the free one. If you already pay for Sentry,
+none of that is an argument: you have bought those bytes and that quota
+already, and running a second store of reports next to the one you read every
+morning is a store nobody reads. If you do not, it is the cost of finding out
+that it is worth it.
+
 BugPin gives you the dashboard and the triage that bugbottle deliberately
 does not ship, and you can still run it on your own hardware. rrweb records
 far more than bugbottle ever will: it is the recorder underneath several of
@@ -47,8 +66,8 @@ bug, nothing here replaces it.
 
 Pick Jam or Marker.io if the people reporting bugs are not developers and what
 unblocks them is a place the report lands in — a queue, an owner, a status —
-rather than a route in your own application. Pick Sentry User Feedback if you
-already pay Sentry, because a second store of reports
+rather than a route in your own application. Pick Sentry, the SDK or the
+product, if you already pay for it, because a second store of reports
 next to the one you check every morning is a store nobody checks. Pick BugPin
 or another self-hosted product if you want a dashboard and are happy to run a
 service and its database. Pick rrweb if the question is "what did they do
@@ -64,7 +83,7 @@ this library is for.
 
 ## The wider field
 
-The five above are the ones worth standing next to; the September 2026 survey
+The six above are the ones worth standing next to; the September 2026 survey
 they came from covers about twenty more — Userback, BugHerd, Gleap,
 OpenReplay, Highlight.io, FasterFixes and the rest — with the same figures and
 the same sources. It lives in the repository as
