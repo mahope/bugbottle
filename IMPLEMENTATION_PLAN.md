@@ -907,7 +907,7 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 ## Deploy-noter
 
 - `VERIFICÉR DEPLOY: /support/ + footerlinket på begge landingsider +
-  .github/FUNDING.yml (48 URL'er i sitemap'en) d4458dd, merge <sha>,
+  .github/FUNDING.yml (48 URL'er i sitemap'en) e00a09c, merge e26cba2,
   2026-09-27 23:3x` — næste batch-vindue er **07:30 2026-09-28**. Kan
   verificeres i **samme kørsel som de tre notes nedenfor** (Vue 23:04, React
   22:32, WordPress 22:24 — alle i samme batch). Verificér **indhold**:
