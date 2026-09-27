@@ -481,13 +481,14 @@ biblioteket, så overfladen er devDependencies + Node-versionen i
   dækker alle tre merges, som noterne forudså.
 
 - `VERIFICÉR DEPLOY: /compare/ + /da/sammenlign/ (den sjette række,
-  `@sentry/react`) og CHANGELOG, 2026-09-27 ~20:1x` — næste batch-vindue er
-  21:30 2026-09-27. Kan verificeres i **samme kørsel** som Astro-noten
-  nedenfor. Verificér **indhold**: `https://bugbottle.dev/compare/` skal have
-  seks rækker i tabellen, den sjette skal starte med `@sentry/react` og vise
-  `33.2 kB` og `95.8 kB`, og `/da/sammenlign/` skal have den samme række med
-  `33,2 kB` og `95,8 kB`. Tallet 29 251 063 skal stå i afsnittet under
-  tabellen på begge sprog.
+  `@sentry/react`) og CHANGELOG, ce1a6c0, merge 5eee1aa, 2026-09-27 ~20:10` —
+  næste batch-vindue er 21:30 2026-09-27. Kan verificeres i **samme kørsel**
+  som Astro-noten nedenfor. Verificér **indhold**:
+  `https://bugbottle.dev/compare/` skal have seks rækker i tabellen, den
+  sjette skal starte med `@sentry/react` og vise `33.2 kB` og `95.8 kB`, og
+  `/da/sammenlign/` skal have den samme række med `33,2 kB` og `95,8 kB`.
+  Tallet 29 251 063 skal stå i afsnittet under tabellen på begge sprog, og
+  `/docs/changelog/` skal have begge de nye poster.
 
 - `VERIFICÉR DEPLOY: /docs/astro/ (fjerde integrationsside, 37 sider i
   sitemap'en) 20ec0c6, merge a264630, 2026-09-27 ~19:35` — næste
