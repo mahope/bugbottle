@@ -70,6 +70,70 @@ videre til Slack eller til et issue-system, er blevet kopieret — sletter du di
 egen række, forsvinder kopien ikke, og fra det øjeblik en sink har sendt den af
 sted, lever den efter det systems regler og ikke efter dine.
 
+## Når nogen beder om de data, du allerede har
+
+Spørgsmålet ovenfor besvares af en indstilling. Det her kommer som et menneske, og
+det har tre dele: hvilke rapporter deres er, hvad du sletter, og hvad du ikke kan
+komme til. Intet af det er en funktion, for ingen af opkaldene i pakken kan finde
+en persons rapporter for dig — pakken vidste aldrig, hvem der sendte den. Det,
+der er, er en ærlig opgørelse over, hvor kopierne er, og hvad det koster at få
+hver af dem væk.
+
+**At finde dem.** Det eneste greb en rapport har på et menneske, er `contact`, og
+det er slået fra som standard i panelet, i hooket og i script-tagget, for det er
+personoplysninger i det øjeblik, det er slået til. Det er den rigtige standard, og
+den har en følge: en bruger, der aldrig har udfyldt feltet, kan kun findes på det,
+vedkommende har skrevet, altså ved at læse. Så spørgsmålet er ikke "må vi bede
+om en adresse" — det er "kan vi finde deres rapporter, når nogen skriver til os om
+otte måneder". Er svaret nej, så lov ikke en sletning, du ikke kan gennemføre.
+
+`fileStore` hjælper ikke her, og grunden står i typen. `list()` svarer med `id`,
+`file`, `title`, `type`, `url`, `receivedAt` og `screenshot` — alt hvad en
+oversigtsside har brug for, og intet der identificerer et menneske. `contact` er
+ikke med, så den skal finde én persons rapporter i en mappe ved at `read()` dem én
+ad gangen. En `store` mod en database med et index på `contact` er det samme
+arbejde gjort en gang, og det er hele historien: biblioteket gemmer feltet, og
+indexet er dit.
+
+Id'et er det bedre greb, og det virker i dag. `handleReport` svarer `201` med
+`{"id": …}`, når din `store` har givet et id tilbage, `sendReport` læser det, og
+hooket og panelet giver det videre som `onSent(id)` og som `status.id` på
+tilstandsmaskinen. Panelet skriver det ikke ud, så en bruger kan ikke citere et
+rapportnummer, medmindre du selv sætter det ind i din bekræftelse — og det er hele
+betydningen af "B-4711" som reference i din indbakke.
+
+**At slette den kopi, du selv har.** `reports.remove(id)` sletter JSON'en og
+billedet sammen og svarer, om der var noget; en `store` mod en database er et
+`DELETE`. Indbakke-eksemplet binder det til en `POST /r/<id>/delete` bag den
+samme adgangskode som resten, så de sidste tyve linjer er at kopiere.
+
+**De kopier, du lavede uden at bestemme dig for det.** Det er den del, der
+afgør, hvor ærligt et svar du kan give. En sink er en kopi, og den lever længere
+end din egen række:
+
+| Hvor kopien er | Hvem kan slette den | Hvad det kræver |
+|---|---|---|
+| Din `store` — en database eller `fileStore`-mappen | Du | `DELETE` eller `reports.remove(id)`. Billedet følger JSON'en med; en mappe, intet pruner, beholder de ældre |
+| Slack, Discord | Platformen, med en bot-token | Et `chat.delete` eller et `DELETE` på beskeden. **Ikke** den webhook-adresse, en sink får: en indgående webhook kan poste og ikke slette, og den ved aldrig beskedens id |
+| Microsoft Teams | Workflowet, ikke sinken | En Workflows-kørsel beholder kortet. Om det kan fjernes er et spørgsmål om tilladelser i workflowet, ikke et kald pakken kan lave |
+| Mail — Resend eller din egen SMTP-server | Ingen | En sendt mail ligger i din udbyders log, i modtagerens postkasse og i hver backup, nogen af parterne gemmer. Der er ingen tilbagekaldelse; det ærlige svar er en tilbagetaget |
+| Sentry, GlitchTip, Bugsink | Udbyderen | Dens egen opbevaring, og din egen organisations indstilling. `sentrySink` uploader skærmbilledet som vedhæftet fil, så billedet er med dér også |
+| GitHub, GitLab, Jira, Linear | Platformen, og kun delvist | Luk issue, skriv en kommentar, slett vedhæftningen. Brødteksten er en kopi af din rapport, og trackeren gemmer sin egen historik over, hvad der blev redigeret |
+| Brugerens egen browser | Brugeren | Køen sletter en rapport, så snart den er afsendt. En der aldrig kom ud ligger i `localStorage`, indtil den gør, og `createQueue().clear()` er en knap i *din* side, ikke noget en server kan kalde |
+| Dine backups | Ingen, indtil de bliver for gamle | En række, der slettes i dag, lå i gårsdags dump. Uanset hvad du lover skal du nævne holdbarheden i backuppen lige så vel som den i liveversionen |
+
+Fire beslutninger følger heraf, og de er billigere nu end efter den første
+anmodning. Beslut **før**, du har rapporter, om en sink må bære noget personligt,
+for ellers er dens opbevaring en del af dit svar. Vælg helst en sink, du kan
+slette fra. Giv skærmbilledet sin egen, kortere levetid end teksten — det er den
+del, der bliver dårligst, og det koster ikke meget at slette den tidligt. Og skriv
+holdbarheden i backuppen ned, for det er den, der altid bliver glemt.
+
+Skriv sletningen lige så omhyggeligt op, som du skrev modtagelsen ned. `onDecision`
+printer én linje per modtaget rapport, med fingerprint'et og intet ud af rapporten
+selv, og en sletning er ikke en rapport — så den linje, du gemmer om "hvem der
+spurgte, hvilke id'er, hvornår, og hvad vi svarede", skriver du selv.
+
 ## Ingen cookies, ingen fingeraftryk, ingen tredjepart
 
 - **Ingen cookies.** Biblioteket sætter ingen og læser ingen. Det eneste sted,
@@ -124,13 +188,21 @@ være slået fra:
 > indholdet af formularfelter er skjult. Vi bruger det udelukkende til at finde
 > og rette den fejl, du har meldt. Det bliver gemt på vores egne systemer, [bliver
 > delt med [issue-system], som vi bruger til at holde styr på rettelser,] og
-> bliver slettet efter [90] dage.
+> bliver slettet efter [90] dage. Du kan altid bede om en kopi af de rapporter, du
+> har sendt os, eller om at få dem slettet, ved at skrive til [adresse]; vi svarer
+> inden for [30] dage.
 
 Tre vaner er mere værd end selve afsnittet. Sig det dér, hvor brugeren står,
 lige ved knappen, og ikke kun i en politik, ingen åbner. Beskriv det, du har
 slået til, og ikke det, biblioteket kan. Og når svaret ændrer sig — at slå
 skærmbilleder eller optagelser til er en ændring af svaret — så ret afsnittet i
 samme release.
+
+Den sidste sætning er den, folk springer over, og den er den eneste, biblioteket
+kan hjælpe dig med at holde. Den lover et svar, og et svar kræver
+[afsnittet ovenfor](#når-nogen-beder-om-de-data-du-allerede-har) bag sig: uden et
+`contact` at søge på kan du måske ikke sige, hvilke rapporter deres var. Skriv
+lovet kun, hvor indexet bag det findes.
 
 Vil du have det hele på engelsk, med resten af dokumentationen omkring sig,
 ligger den samme side som [A privacy checklist](/docs/privacy-checklist/). Er du

@@ -79,3 +79,35 @@ test("the two checklists are in the same order", () => {
   const danish = checklistFields(read("site/da/privatliv.md"), "Felt");
   assert.deepEqual(danish, english);
 });
+
+test("the Danish page has a section for every section of the English one", () => {
+  // The README's `##` becomes the page's title, so its subsections are the
+  // Danish file's `##`. The two are one page with an hreflang pair, and a
+  // section added in one language and forgotten in the other is the ordinary
+  // way this goes quietly wrong. The two languages share no prose, so the pairs
+  // are written out here: the test cannot tell whether a Danish heading is a
+  // good translation, only that every section on both sides is accounted for
+  // and that the two lists walk the same path.
+  const pairs: [string, string][] = [
+    ["What a report can carry", "Hvad en rapport kan indeholde"],
+    ["How long it is kept", "Hvor længe det bliver liggende"],
+    ["When somebody asks for the data you already have", "Når nogen beder om de data, du allerede har"],
+    [
+      "No cookies, no fingerprinting, no third party",
+      "Ingen cookies, ingen fingeraftryk, ingen tredjepart",
+    ],
+    ["What to write in your privacy policy", "Hvad du kan skrive i din privatlivspolitik"],
+  ];
+  const english = headings(section(read("README.md"), "A privacy checklist"), 3);
+  const danish = headings(read("site/da/privatliv.md"), 2);
+  assert.deepEqual(english, pairs.map(([heading]) => heading));
+  assert.deepEqual(danish, pairs.map(([, heading]) => heading));
+});
+
+/** The headings of one page, at the level the file uses for them. */
+function headings(markdown: string, level: number): string[] {
+  return markdown
+    .split("\n")
+    .filter((line) => line.startsWith("#".repeat(level)) && line[level] === " ")
+    .map((line) => line.slice(level + 1).trim());
+}

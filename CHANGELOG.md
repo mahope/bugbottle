@@ -10,6 +10,29 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- A new section on both privacy pages, "When somebody asks for the data you
+  already have" — the half of the question the checklist could not answer. Every
+  existing section described what a report carries and how long it is kept; none
+  of them said what happens when a person asks for their own data back, which is
+  the request a business customer's privacy officer actually makes. The new
+  section answers it in three parts: what identifies their reports, what you
+  delete, and what you cannot reach. It states the two facts a promise needs and
+  that nothing in the package had said — the only handle a report has on a person
+  is `contact`, off by default, so a reporter who never filled it in can only be
+  found by reading; and `fileStore.list()` answers `id`, `file`, `title`, `type`,
+  `url`, `receivedAt` and `screenshot`, but not `contact`, so finding one
+  person's reports in a directory means `read()`ing them one at a time. A table
+  then walks every other copy a sink made — Slack and Discord, Teams, mail,
+  Sentry, an issue tracker, the reporter's own `localStorage` and your backups —
+  with who can delete each and what it takes, including the two places a webhook
+  URL is not enough: an incoming webhook can post and cannot delete, and a sent
+  mail cannot be recalled. The policy template gains the sentence that promises
+  an answer, and a closing note says to write that promise only where the index
+  behind it exists. Both languages, in the same change: `/docs/privacy-checklist/`
+  and `/da/privatliv/` are one page with an hreflang pair, and
+  `tests/privacy-checklist.test.ts` now pins the two lists of sections against
+  each other so a section added in one language cannot be forgotten in the other.
+
 - `@sentry/react` as a sixth row on the comparison pages, measured rather than
   cited. `/compare/` said "not published" in the size column for every row that
   was not bugbottle, which is true and useless to a reader deciding between a
