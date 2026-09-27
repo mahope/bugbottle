@@ -169,6 +169,19 @@ async function audit(name, path, scheme, state) {
   tab.on("pageerror", (error) => noise.push(`pageerror: ${error.message}`));
   tab.on("requestfailed", (request) => noise.push(`request failed: ${request.url()}`));
 
+  /* The Plausible script is answered with an empty one. The request still has
+     to pass the Content-Security-Policy, which is what this audit is for, but
+     the real script would count a visit from CI and warn that it ignores
+     127.0.0.1 — a console warning this audit rightly treats as a failure. */
+  await tab.setRequestInterception(true);
+  tab.on("request", (request) => {
+    if (new URL(request.url()).hostname === "analytics.holstjensen.eu") {
+      void request.respond({ status: 200, contentType: "text/javascript", body: "" });
+    } else {
+      void request.continue();
+    }
+  });
+
   /* Chrome logs a blocked resource as a console error, so the listener above
      would already catch one, but a violation names the directive it broke and
      that is the line worth reading. Installed before the document runs so the
