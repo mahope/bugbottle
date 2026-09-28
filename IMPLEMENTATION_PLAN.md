@@ -1962,8 +1962,8 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 - `VERIFICÉR DEPLOY: /docs/global-errors/ (47 sider i sitemap'en, ny side som
   nummer to i `Get started` — `window.onerror` og `unhandledrejection`, de to
-  events ringbufferen lytter på, skrevet på MDN læst 28/9) 2df3bd8, merge
-  (denne) ~06:4x, 2026-09-28` — næste batch-vindue er **07:30 2026-09-28**, samme som de
+  events ringbufferen lytter på, skrevet på MDN læst 28/9) 9f1d5e8, merge
+  d078b28 ~06:4x, 2026-09-28` — næste batch-vindue er **07:30 2026-09-28**, samme som de
   elleve notes nedenfor, så **én kørsel dækker alle tolv**. Verificér
   **indhold**: `https://bugbottle.dev/docs/global-errors/` skal vise de to
   signaturer, de **fem** ting under "Five things that decide whether what you
