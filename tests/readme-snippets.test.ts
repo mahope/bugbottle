@@ -226,3 +226,61 @@ test("both pinned install snippets in the opening name the version this build is
       "if one was edited by hand.",
   );
 });
+
+/**
+ * The one thing in the README a reader can *run* pointed at a directory the
+ * tarball does not contain. `examples/vanilla-js` and `examples/inbox` are in
+ * the repository and not in the package, and `npm pack` ships `dist/` and
+ * nothing else, so the reader who arrived from npmjs.com — which is the only
+ * channel that measurably finds this package, its description ranking first
+ * for its own phrase — read `cd examples/vanilla-js` and had no such
+ * directory. The three commands are correct for a clone and were verified as
+ * such; what was missing is the sentence that says which reader they are for.
+ *
+ * So the two ways to see a report point at each other: the example names the
+ * two files in the reader's own app, and the opening names the example. The
+ * anchors are read out of the headings rather than written here, because a
+ * renamed heading would otherwise leave a dead link that still looks right on
+ * all three readers — the docs site, GitHub and npm all render these anchors
+ * from the same text, and none of them 404s a link they cannot check.
+ */
+test("the two ways to see a report find each other, and the example says it is not in the tarball", () => {
+  const slug = (heading: string): string =>
+    heading
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-");
+
+  const exampleSection = readme.slice(readme.indexOf("## A working example"));
+  const opening = readme.slice(0, readme.indexOf("## Recording console errors"));
+  const exampleSlug = slug(
+    /^## (.+)$/m.exec(readme.slice(readme.indexOf("## A working example")))![1]!,
+  );
+  const firstReportSlug = slug(
+    /^### (.+)$/m.exec(opening.slice(opening.indexOf("### A first report")))![1]!,
+  );
+
+  assert.match(
+    exampleSection.slice(0, 900),
+    new RegExp(`\\(#${firstReportSlug}\\)`),
+    `the example section must link #${firstReportSlug}, the two-file round trip a ` +
+      "reader with only the installed package can actually follow. It is the " +
+      "only runnable proof in the README and it is 8 000 lines further down.",
+  );
+  assert.match(
+    opening,
+    new RegExp(`\\(#${exampleSlug}\\)`),
+    `the opening must link #${exampleSlug}, or a reader who arrived to be ` +
+      "convinced is never told that the repository has something they can run.",
+  );
+
+  const { files } = JSON.parse(readFileSync(root + "package.json", "utf8")) as { files: string[] };
+  assert.deepEqual(
+    files,
+    ["dist"],
+    "the paragraph that says the examples are not in the tarball is only true " +
+      `while files is ["dist"]; it now is ${JSON.stringify(files)}. Either the ` +
+      "sentence is wrong or the package grew — do not change one without the other.",
+  );
+});

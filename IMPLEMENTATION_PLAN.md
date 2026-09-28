@@ -459,6 +459,182 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   downloads/uge, ★2 pr. 28/9) — effekten er dækning af en shippet adapter.
 **MÅL: npm downloads 210/uge, ★2 pr. 2026-09-28.** Sammenlign 5/10 og 12/11.
 
+### Research-iteration 28/9 22:0x — download-kurven er 21 dage gammel, og
+### den MÅL tre opgaver er målt på, er støj
+
+**Køen var tom** undtagen opgave 7 (blocket på din Search Console-eksport), så
+denne iteration er en research-iteration — og den har leveret en rettelse
+til den *ene* kanal, der reelt er målbar, plus tre fund der ændrer hvordan de
+næste iterationer skal prioritere.
+
+**Baseline målt i denne kørsel (28/9 22:0x–22:1x), alle tal fra npm's eget
+API, ikke fra et snapshot i prompten:**
+
+| Tal | Kilde | Værdi |
+|---|---|---|
+| npm downloads, **hele historien** | `api.npmjs.org/downloads/range/2026-03-01:2026-09-27` | **434** — og **0 før 2026-09-07** |
+| Første publicerede version | `npm view bugbottle time` | `0.3.0` **2026-09-07 08:43Z** |
+| Seneste publicerede version | samme | `1.0.1` 2026-09-08 11:42Z |
+| Uge 1 (7.-13.9) | samme, summeret pr. uge | **182** |
+| Uge 2 (14.-20.9) | samme | **42** |
+| Uge 3 (21.-27.9) | samme | **210** |
+| Tarball | `npm pack --dry-run` | 211 filer, 1,7 MB — **ingen `examples/`, `site/` eller `scripts/`** |
+| Plausible / Cloudflare / GitHub | prompten | uændret: 1 besøgende/28 d, 5 135 unikke/28 d, ★2 |
+
+**MÅL: uge 3 = 210 downloads, uge 2 = 42, uge 1 = 182, pr. 2026-09-28.**
+Sammenlign 5/10 (uge 1,2,3,4) og 12/11 (uger 5-8). Et tal der svinger 5x
+mellem to ens uger tåler ingen ændring på sig.
+
+#### Fund 1 — opgave 37, 38 og 40 måler på en støjet størrelse, og det er
+#### deres *falske* værdi der har styret prioriteringen
+
+De tre opgaver har alle `npm downloads` som MÅL. Den størrelse er målt på
+**én uge** i prompten, og kurven viser at en uge ikke er en enhed her:
+
+- **Uge 1 var 182, uge 2 var 42, uge 3 var 210.** Uge 2 er ikke et
+  sammenbrud — den indeholder dage med 21, 9, 3, 3 og to nuller.
+- **Dagene er 0 eller 30-100.** Næsten ingen tal imellem. 15. og 17. september
+  er **0 på en tirsdag og en torsdag**, og lørdag den 26. er 31. Det er ikke
+  en ugedagskurve; en kurve med ~6 dage på 30-100 og ~15 dage på 0-6 er
+  **geninstallationer fra få forbrugere**, ikke en salgstragt.
+- **Der er ingen lang hale at redde.** Pakken er 21 dage gammel. De 434
+  downloads er *hele* historien, så "downloads falder" kan ikke være
+  forklaringen på noget — der er ingen faldkurve at vende.
+
+**Konklusionen for prioriteringen:** et MÅL på uge-downloads kan flytte sig
+5x på en klynge af CI-geninstallationer uden at ét menneske er kommet
+til. Det har gjort de tre seneste opgaver umålelige, og en iteration der
+ikke kan måle sin effekt, bør ikke få den næste. **Bemærk at det ikke
+ophæver opgaverne** — de var gode rettelser i sig selv — men deres MÅL skal
+ikke bruges til at rangordne fremtidige opgaver.
+
+#### Fund 2 — npm's søgeindeks kan ikke finde os på noget som hedder "bug"
+#### eller "report", og det er navnet, ikke keywords
+
+Fund 1 fra 13:3x sagde "keywords er ikke værd at ændre". Målingen i denne
+iteration siger *hvorfor*, og det er et strukturelt svar, ikke et optimistisk:
+
+| Søgning (28/9 22:0x) | Resultater | bugbottles plads |
+|---|---|---|
+| `bugbottle` | 1 | **1** |
+| `bug-report` | 82 939 | ikke i top 250 |
+| `bug-reporting` | 49 088 | ikke i top 250 |
+| `feedback-widget` | 91 867 | ikke i top 250 |
+| `error-context` | 1 218 778 | ikke i top 250 |
+| `sentry-alternative` | 21 014 | ikke i top 250 |
+| `self-hosted sentry alternative` | 106 031 | ikke i top 250 |
+
+**Den negative halvdel er dyr, så den blev testet to gange.** `bug-report` og
+`feedback-widget` er *eksakte* publicerede keywords, og bugbottle er stadig
+ikke i top 250 for dem. Det kan ikke være en popularitetsvæg: **top 25 for
+`bug-report` er `riteway` (0 keywords), `flint-react` (0 keywords) og
+`@mhosaic/feedback` (0 keywords)** — pakker uden ét keyword og uden ét
+download-tal i nærheden af bugbottle's. **Navnematch vejer tungere end
+keywords**, og `bugbottle` er **ét sammensat ord**: det afgiver hverken
+token'et `bug` eller `report` på navnefeltet. Derfor ender ethvert søgeord,
+der indeholder de to ord, i en liste bugbottle ikke kan komme på.
+
+**Hvad det *ikke* er:** det er ikke en fejl i repoet. `npm view bugbottle`
+svarer komplet — 12 publicerede keywords, beskrivelse, version, alle 20 entry
+points. **Det er heller ikke løseligt herfra:** at ændre navnet er en major
+version og en gebrudsbrudt sti for 434 downloads' kunder, og det er Mads'
+beslutning. **Og det er ikke løseligt med en release:** opgave 38's nye
+`description` og `keywords` ligger i samme kø, men de rammer beskrivelsens og
+keywords' *vægt*, ikke det forhold at navnet er ét ord. **Mål 5/10 og se
+om den nye beskrivelse flytter `self-hosted sentry alternative` — det er det
+eneste af fundets søgninger, hvor beskrivelsen kan gøre en forskel.**
+
+#### Fund 3 — den eneste kørbare ting i en README på 8 206 linjer peger på
+#### et katalog, tarballen ikke har
+
+README'en er **8 206 linjer / 386 kB** og er *tre* læseres tekst: npm's
+pakkeside, GitHub og `/docs/install/`. Den eneste måde at se en rapport
+*køre* er `## A working example` på **linje 8 140** — altså de sidste 0,8 %.
+
+Og den siger `cd examples/vanilla-js`. **Målt:** `npm pack --dry-run` giver
+**211 filer** og **intet `examples/`** — kun `dist/`. Den læser der kom fra
+npmjs.com, som er den eneste kanal funderne viser der virker, har altså læst
+en instruktion til et katalog han ikke ejer.
+
+**Mine tre kommandoer var ikke forkerte — det blev testet, ikke antaget.**
+Efter `npm install` i `examples/vanilla-js` svarer `node server.mjs` 200 med
+siden på 4 081 byte og titlen *bugbottle — vanilla JS example*. **De tre
+kommandoer er korrekte for et klon.** Det der manglede, var den ene sætning
+der siger hvilken læser de er skrevet til — og det er den slags fejl der er
+usynlig, fordi det eneste sted nogen har fulgt dem er et lokalt klon.
+
+#### Leveret 28/9 22:3x — opgave 45: de to veje til en rapport peger på
+#### hinanden, og eksemplet siger at det ikke er i tarballen
+
+**Branch `ceo/npm-tarball-example`.** Rettelsen er to afsnit og en test:
+
+1. **`A working example` siger hvor de ligger.** Før `cd`-kommandoen: begge
+   eksempler ligger i repoet, ikke i tarballen, fordi `npm pack` sender
+   `dist/` og intet andet — og en læser der kun har pakken, har den samme
+   runde tur som to filer i sin *egen* app, med et link dertil.
+2. **Åbningen peger den anden vej.** *A first report, end to end* (README
+   linje 78, altså `/docs/install/`) har nu en linje om at
+   [A working example](#a-working-example) er den samme tur med en andens
+   to filer.
+
+Begge links er **in-page-ankere**, som de tre læsere alle renderer fra den
+samme tekst, og de er skrevet i den idiom README'en allerede bruger
+(`#receiving-a-report` stod der allerede). **Ingen ny URL, ingen ny side,
+ingen ændring i sitemap'en eller søgeindekset.**
+
+**Testen læser ankerne ud af overskrifterne i stedet for at skrive dem** — så
+en omdøbt overskrift efterlader et dødt link, der stadig ser rigtigt ud på
+alle tre læsere, og ingen af dem 404'er et link de ikke kan tjekke. Den
+tredje påstand pinner `package.json#files` til `["dist"]`: **sætningen "ikke i
+tarballen" er kun sand mens den er det**, så en pakke der vokser uden at
+sætningen følger med, gørvagten rød. **Bevis at den bider:** med
+`files: ["dist","examples/vanilla-js"]` bliver den rød med præcis den
+besked, og efter revert er den grøn igen.
+
+**Målt:** `npm run check` grøn — **935 tests** (fra 934, én ny), typecheck
+grøn, **52 docs-sider** (uændret), **249 søgeposter** (uændret), sitemap
+**61** `<loc>` (uændret), `check-dist` grøn på 208 filer, IIFE'erne
+**24 895 / 21 324** mod budgetterne 25 088 / 21 504 (uændrede — ingen
+bibliotekskode rørtes). **De to links er målt på den byggede side, i begge
+retninger:** på `/docs/install/` skriver rendereren
+`/docs/a-working-example/`, og på `/docs/a-working-example/`
+`/docs/install/#a-first-report-end-to-end` — altså netop de to veje, fordi
+den ene side er en del af den anden. **På npm og GitHub overlever det
+råe ankere** `[A working example](#a-working-example)`, fordi begge
+renderer danner overskrifts-id'er; det er samme idiom som den
+`#receiving-a-report`-links, der allerede stod i åbningen. **Ingen ny URL,
+ingen ny side, ingen ændring i sitemap'en eller søgeindekset.**
+`npm run a11y` er **ikke** kørt: maskinen har hverken `puppeteer-core` elær
+Chrome (jf. 13:4x), og ændringen rører ingen markup — CI's `browser`-job
+kører begge dele på hvert push.
+
+#### Køen efter denne iteration
+
+- [x] **45. De to veje til en rapport peger på hinanden.** 28/9 22:3x,
+  `ceo/npm-tarball-example`. Datagrund: fund 3 — `npm pack` har 211 filer og
+  intet `examples/`, og den eneste kørbare instruktion i README'en lå 8 000
+  linjer nede og pegede på et katalog læseren ikke har. **Accept:** begge
+  veje linkes, ankrene læses ud af overskrifterne, `files` er pinet til
+  `["dist"]`. **MÅL: npm downloads uge 3 = 210, uge 2 = 42 pr. 2026-09-28**
+  — uændret fra opgave 37/38/40, og det er bevidst: fund 1 siger den størrelse
+  ikke kan bære denne opgaves effekt. Sammenlign 5/10. *Den reelle effekt er
+  at en læser der installerede pakken kan se en rapport virke uden at klone
+  noget; det er ikke et tal vi kan tælle, kun det vi kan gøre rigtigt.*
+- [ ] **46. Find et adoption-tal der ikke er støj, før flere opgaver får
+  MÅL.** Datagrund: fund 1 — uge 2 (42) mod uge 3 (210) er 5x uden at der
+  er kommet ét menneske til, så `npm downloads pr. uge` kan ikke afgøre om
+  en ændring virkede. **Accept:** ét tal pr. side eller pr. funktion, med en
+  metode, der kan skelne nye forbrugere fra geninstallationer — og skrevet
+  i planen som MÅL for den næste opgave der overhovedet har adoption som
+  formål. *Kan ikke løses alene:* npm's API giver kun aggreger, GitHub's 4
+  repo-visninger/14 d er for små til at tælle på, og Search Console er
+  stadig bloket. Se ❓.
+- [ ] **47. `npm search` er lukket for et navn der er ét ord, og det kræver
+  en beslutning Mads ikke har truffet.** Datagrund: fund 2 — tre *eksakte*
+  publicerede keywords, ingen plads i top 250, og top-25 listen er små
+  pakker uden keywords, så det er navnets vægt og `bugbottle` er ét ord.
+  **Accept:** en beslutning — ikke en kodeændring. Se ❓; **byg den ikke selv.**
+
 ### Fund fra Solid-iterationen (28/9 20:5x) — fire fælder i ryggraden af
 ### `solid-js`, og tre af dem er tavse
 
@@ -497,6 +673,21 @@ logge den: en fanget fejl er en rapport med tom konsolsektion.
 repo-vagter plus deres følgevirkning), 52 docs-sider (fra 51), 249 søgeposter
 (fra 242), **sitemap 61 `<loc>`** (fra 60), `check-dist` grøn på 208 filer.
 Ingen bibliotekskode rørtes, så ingen bundle-budget flyttede sig.
+
+✅ **DEPLOY OK 2026-09-28 22:0x.** `/docs/solid/` (opgave 44, `ceo/solid-guide`,
+merge `7a9a75b` 20:59) er målt **mod indhold** i det første vindue efter
+mergeen (21:30): siden svarer **200** med titlen *Solid — bugbottle docs*,
+`<h1>Solid</h1>`, canonical `https://bugbottle.dev/docs/solid/` og **alle fire**
+kildeuddrag (`catchError` 3 forekomster, `onError` 16, `eventHandler` 1,
+`castError` 3) plus seks kodeblokke. `https://bugbottle.dev/sitemap.xml`
+tæller **61** `<loc>` mod 60 før mergeen, og `/docs/solid/` er i den.
+Krok-tabellen på `/docs/every-framework-one-table/` har **13 `<tr>`** = tolv
+frameworks + overskriftsrække, og Solid-rækken er med.
+`https://bugbottle.dev/docs/search.json` har **249** poster (242 før), hvoraf
+**7** er Solid. **Bemærk til næste måling:** `/docs/solid/` har *ingen*
+`<table>` — krok-tabellen bor på one-table-siden, så en måling der leder
+efter den på frameworksiden siger "mangler" uden at noget mangler. Alle
+tolv fund-noter er dermed lukket.
 
 **VERIFICÉR DEPLOY: `/docs/solid/` (den tolvte frameworkside) `ceo/solid-guide`
 28/9 20:5x.** Accepter mod indhold på `https://bugbottle.dev/sitemap.xml`: den
@@ -3110,6 +3301,34 @@ nyt batch-vindue siden målingen kl. 09:2x (næste er 12:30), så det er ikke en
 ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
 
 ## ❓ Til Mads
+
+- **🔴 Jeg har brugt `npm downloads pr. uge` som MÅL i tre opgaver, og det
+  tal kan ikke bære en vægt.** Uge 2 var 42 og uge 3 var 210 — 5x uden at ét
+  menneske er kommet til, fordi dagene er 0 eller 30-100 (geninstallationer
+  fra få forbrugere). Pakken er 21 dage gammel og de 434 downloads er hele
+  historien, så der er heller ingen faldkurve at forklare. **Spørgsmålet:**
+  hvilket tal skal derfra afgøre om en ændring flytter adoption? Mine
+  kandidater er (a) npm downloads over **4 uger** ad gangen i stedet for 1,
+  (b) GitHub repo-visninger, som er 4 på 14 dage og altså for små endnu, eller
+  (c) en tæller i `sendReport` — dvs. at *applikationen* fortæller hvor mange
+  rapporter den har sendt, hvilket er det eneste tal der tæller mennesker og
+  ikke maskiner. **(c) kræver en beslutning om privacy**: et tal sendt til
+  bugbottle.dev er en brugsstatistik, og missionen siger at vi ikke sender
+  sådan noget. Se opgave 46.
+
+- **🟡 `npm search` er lukket for et navn der er ét ord, og det kan ikke
+  løses uden en beslutning fra dig.** Målt 28/9 22:0x: `bug-report` har
+  82 939 resultater og bugbottle er ikke i top 250 — selv om `bug-report` er
+  et *eksakt* publiceret keyword. Det er ikke en popularitetsvæg: top 25
+  listen rummer `riteway` og `flint-react`, som har **0 keywords**. Navnet
+  vejer tungere end keywords, og `bugbottle` er ét sammensat ord, så det
+  afgiver hverken token'et `bug` eller `report`. **Det betyder at fundet fra
+  13:3x ("keywords er ikke værd at ændre") var rigtigt af en grund ingen
+  havde noteret.** Inden det løses skal du vide: et navnskif er en major
+  version *og* en gebrudsbrudt sti for de 434 kunder vi har, så det er ikke
+  noget en agentiteration skal beslutte. **Min vurdering: lad være.** 434
+  downloads/måned er et tidligt bibliotek, og det er værd mere at få flere
+  brugere ind i det nu end at ramme et søgeindeks. Se opgave 47.
 
 - **🟡 GitHub har ingen topics på `mahope/bugbottle`, og det er den
   billigste discovery der findes.** ★2 stjerner, 0 watchers, 4 visninger på 14

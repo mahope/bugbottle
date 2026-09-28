@@ -127,6 +127,8 @@ when you want the screenshot, reach for
 [`bugbottle/ui`](#the-ready-made-panel) when you would rather not write the
 form, and read [Receiving a report](#receiving-a-report) when you want the
 sinks that turn the file into a Slack message, a GitHub issue or an email.
+[A working example](#a-working-example) is the same round trip you can run,
+if you would rather read someone else's two files than write yours first.
 
 ## Recording console errors
 
@@ -8136,6 +8138,13 @@ CI publishes to npm and creates the GitHub release.
 MIT
 
 ## A working example
+
+Both examples live in the repository, not in the tarball: `npm pack` ships
+`dist/` and nothing else, so a reader who came here from npmjs.com does not
+have them. The round trip they show is the two files in
+[A first report, end to end](#a-first-report-end-to-end), which is in this
+page and needs nothing but the package you just installed. Clone the
+repository to run the example itself.
 
 `examples/vanilla-js` is a complete round trip with no build step: a Node
 http server that receives and validates a report using `bugbottle/server`,

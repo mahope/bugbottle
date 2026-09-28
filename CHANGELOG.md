@@ -38,6 +38,19 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **The only runnable thing in the README pointed at a directory the package
+  does not contain.** `A working example` is the one place a reader can see a
+  report actually go somewhere, and it starts with `cd examples/vanilla-js` —
+  but `npm pack` ships `dist/` and nothing else, so of the 8 206 lines of
+  README a reader on npmjs.com meets, the runnable one was unreachable for
+  the reader who had just installed the package. The three commands were
+  never wrong (verified by running them from a clone: 200, the example's own
+  title); what was missing was the sentence that says who they are for. It is
+  there now, with a link to the same round trip as two files in the reader's
+  own app, and the opening points back at the example. Both links are
+  in-page anchors, so all three readers of the README — the docs site, GitHub
+  and npm — resolve them from the same text.
+
 - **The panel's confirmation was never announced.** The status line the panel
   writes to is inside the form, and the form is hidden the moment the report
   is sent, so the thank-you sentence reached sighted reporters and no screen
