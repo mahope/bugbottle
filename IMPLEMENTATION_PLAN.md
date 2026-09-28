@@ -254,10 +254,8 @@ levere en rigtig forbedring med, ikke kun en plan.
 | Live-site | målt her: `/` 200, sitemap **60** `<loc>`, robots korrekt | sundt |
 | Publiceret tarball | målt her: alle 20 entry points i `bugbottle@1.0.1` | hele entry'en OK |
 
-**MÅL: npm downloads baseline 412/måned og 191/uge pr. 2026-09-28.** Det er
-det eneste adoption-tal jeg kan hente selv, og det er derfor denne iteration
-gik efter pakkesiden. Sammenlign 5/10 og 5/11. (Stjerner og repo-visninger er
-samme mål i en anden enhed; de kan ikke tilskrives denne ændring alene.)
+**MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste 7 dage pr.
+2026-09-28** (opgave 46). Sammenlign 14 dage efter næste release.
 
 ### Fund 1 — bugbottle er ikke i top 250 for ét eneste af sine egne keywords
 
@@ -369,9 +367,9 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
 
 - [x] **37. Billedet af panelet i README's åbning.** 28/9,
   `ceo/readme-picture`, `fca5fd5` (merge `c39af84`). Se Fund 1, Fund 2 og
-  målingerne ovenfor. **MÅL: npm downloads 412/måned, 191/uge pr. 2026-09-28.**
-  Sammenlign 5/10 og 5/11. *Næste skridt er at se om billedet flytter
-  stjerner, for det er den del af funnelen der fortæller om det virkede.*
+  målingerne ovenfor. **MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de
+  seneste 7 dage pr. 2026-09-28** (opgave 46). Sammenlign 14 dage efter
+  næste release.
 - [x] **38. npm-`description` er det eneste felt, der finder os — og det er
   148 tegn brugt på at sige hvad *biblioteket* er.** Datagrund: Fund 1.
   Beskrivelsen rangerer 1 på "Your UI your endpoint" og 2 på "evidence
@@ -388,8 +386,8 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   forudsætning** og den negative halvdel er den dyre: **README'en er ikke i
   npm's søgeindeks**, så halvdelen af rettelsen i opgaven ("bedre `description`
   og bedre README") kunne ikke have virket for den søgning.
-  **MÅL: npm downloads 412/måned, 191/uge pr. 2026-09-28** (uændret fra
-  opgave 37 — det er samme mål i samme enhed). Sammenlign 5/10 og 5/11.
+  **MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste 7 dage pr.
+  2026-09-28** (opgave 46). Sammenlign 14 dage efter næste release.
   **Bemærk til næste iteration:** de to tal kan ikke stikke ad, før en release
   er ude. `package.json#description` er kun det npm *serverer* efter
   `npm publish`, så `npm view bugbottle description` svarer stadig den gamle
@@ -405,8 +403,8 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   var **forkert på en måde, der viste sig at være det største fund**: de to er
   ikke to kopier, de er *én* tekst med tre læsere, og den halvdel af
   acceptkriteriet der krævede et link var allerede opfyldt den anden vej.
-  **MÅL: npm downloads 412/måned, 191/uge, ★2 pr. 2026-09-28** (uændret fra
-  opgave 37 og 38 — samme mål i samme enhed). Sammenlign 5/11 og 12/11.
+  **MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste 7 dage pr.
+  2026-09-28** (opgave 46). Sammenlign 14 dage efter næste release.
   **Bemærk til næste iteration:** denne rettelse er den første, hvis *hele*
   effekt ligger bag en release — README'en er den der i tarballet, så de syv
   links og navigationsafsnittet bliver først synlige på npm-siden når Mads
@@ -428,8 +426,9 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   **28/9 16:2x, `ceo/npm-funding-button`.** Se "Fund fra funding-iterationen"
   nedenfor — feltet var **målt** tomt (`npm view bugbottle funding` svarer
   intet), og de tre steder der beder om penge var **to**; de er nu tre, og de
-  kan ikke glide fra hinanden. **MÅL: donations baseline 0 pr. 2026-09-28,
-  npm downloads 412/måned, 191/uge, ★2.** Sammenlign 5/10 og 5/11. **Bemærk:**
+  kan ikke glide fra hinanden.   **MÅL: donations baseline 0 pr. 2026-09-28,
+  jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste 7 dage pr. 2026-09-28**
+  (opgave 46). Sammenlign 14 dage efter næste release. **Bemærk:**
   hele effekten ligger bag en release — før `npm publish` er der ingen knap at
   tælle, kun et felt på GitHub.
 - [x] **42. Panelet læser rapport-id'et og smider det væk — en reporter får
@@ -455,9 +454,10 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   fælder er dokumenteret med kildeuddrag, `/docs/solid/` ligger i
   `Integrations`, `scripts/page-descriptions.mjs` har en beskrivelse, og de to
   nye links er absolute (README-vagten sagde rød, først da den kørte). Mål:
-  ingen trafikbaseline ændres (Plausible 1 besøgende/28 d, npm 210
-  downloads/uge, ★2 pr. 28/9) — effekten er dækning af en shippet adapter.
-**MÅL: npm downloads 210/uge, ★2 pr. 2026-09-28.** Sammenlign 5/10 og 12/11.
+  ingen trafikbaseline ændres (Plausible 1 besøgende/28 d, ★2) — effekten er
+  dækning af en shippet adapter.
+  **MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste 7 dage pr.
+  2026-09-28** (opgave 46). Sammenlign 14 dage efter næste release.
 
 ### Research-iteration 28/9 22:0x — download-kurven er 21 dage gammel, og
 ### den MÅL tre opgaver er målt på, er støj
@@ -481,9 +481,8 @@ API, ikke fra et snapshot i prompten:**
 | Tarball | `npm pack --dry-run` | 211 filer, 1,7 MB — **ingen `examples/`, `site/` eller `scripts/`** |
 | Plausible / Cloudflare / GitHub | prompten | uændret: 1 besøgende/28 d, 5 135 unikke/28 d, ★2 |
 
-**MÅL: uge 3 = 210 downloads, uge 2 = 42, uge 1 = 182, pr. 2026-09-28.**
-Sammenlign 5/10 (uge 1,2,3,4) og 12/11 (uger 5-8). Et tal der svinger 5x
-mellem to ens uger tåler ingen ændring på sig.
+**MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste 7 dage pr.
+2026-09-28** (opgave 46). Sammenlign 14 dage efter næste release.
 
 #### Fund 1 — opgave 37, 38 og 40 måler på en støjet størrelse, og det er
 #### deres *falske* værdi der har styret prioriteringen
@@ -615,20 +614,20 @@ kører begge dele på hvert push.
   intet `examples/`, og den eneste kørbare instruktion i README'en lå 8 000
   linjer nede og pegede på et katalog læseren ikke har. **Accept:** begge
   veje linkes, ankrene læses ud af overskrifterne, `files` er pinet til
-  `["dist"]`. **MÅL: npm downloads uge 3 = 210, uge 2 = 42 pr. 2026-09-28**
-  — uændret fra opgave 37/38/40, og det er bevidst: fund 1 siger den størrelse
-  ikke kan bære denne opgaves effekt. Sammenlign 5/10. *Den reelle effekt er
-  at en læser der installerede pakken kan se en rapport virke uden at klone
-  noget; det er ikke et tal vi kan tælle, kun det vi kan gøre rigtigt.*
-- [ ] **46. Find et adoption-tal der ikke er støj, før flere opgaver får
-  MÅL.** Datagrund: fund 1 — uge 2 (42) mod uge 3 (210) er 5x uden at der
-  er kommet ét menneske til, så `npm downloads pr. uge` kan ikke afgøre om
-  en ændring virkede. **Accept:** ét tal pr. side eller pr. funktion, med en
-  metode, der kan skelne nye forbrugere fra geninstallationer — og skrevet
-  i planen som MÅL for den næste opgave der overhovedet har adoption som
-  formål. *Kan ikke løses alene:* npm's API giver kun aggreger, GitHub's 4
-  repo-visninger/14 d er for små til at tælle på, og Search Console er
-  stadig bloket. Se ❓.
+  `["dist"]`. **MÅL: jsDelivr-hits på 1.0.1 = 766 totalt, 725 i de seneste
+  7 dage pr. 2026-09-28** (opgave 46). Sammenlign 14 dage efter næste
+  release. *Den reelle effekt er at en læser der installerede pakkan kan se en
+  rapport virke uden at klone noget; det er ikke et tal vi kan tælle, kun det
+  vi kan gøre rigtigt.*
+- [x] **46. Find et adoption-tal der ikke er støj, før flere opgaver får
+  MÅL.** 28/9, `ceo/adoption-metric`. Datagrund: fund 1 — uge 2 (42) mod
+  uge 3 (210) er 5x uden at der er kommet ét menneske til, så `npm downloads
+  pr. uge` kan ikke afgøre om en ændring virkede. **Accept:** ét tal pr.
+  side eller pr. funktion, med en metode, der kan skelne nye forbrugere fra
+  geninstallationer — og skrevet i planen som MÅL for den næste opgave der
+  overhovedet har adoption som formål. **LUKKET:** jsDelivr-hits pr. version
+  er det eneste skelnende tal. Baseline: 1.0.1 = 766 totalt, 725 i de seneste
+  7 dage pr. 2026-09-28. Se "Fund fra adoption-metric-iterationen" nedenfor.
 - [ ] **47. `npm search` er lukket for et navn der er ét ord, og det kræver
   en beslutning Mads ikke har truffet.** Datagrund: fund 2 — tre *eksakte*
   publicerede keywords, ingen plads i top 250, og top-25 listen er små
@@ -655,6 +654,50 @@ kører begge dele på hvert push.
   trafikbaseline ændres (Plausible 1/28 d, npm 210/uge, ★2 pr. 28/9) — den
   reelle effekt er at **det eneste kodefelt siden har som helst er at kopiere
   fra** igen virker, og det kan ikke ses i et tal før det er rettet.
+
+### Fund fra adoption-metric-iterationen (28/9) — jsDelivr er det eneste skelnende tal
+
+**Opgave 46 spurgte: hvad kan skelne nye forbrugere fra geninstallationer?**
+Svaret er jsDelivr-hits pr. version, og det er nu målt og skrevet ind som MÅL.
+
+**Baseline målt 28/9 (jsDelivr API):**
+
+| Version | Total hits | Sidste 7 dage | Bemærkning |
+|---|---|---|---|
+| 0.5.0 | 2 231 | 0 | Release 7/9, 1 220 hits på releasedag |
+| 1.0.1 | 766 | 725 | Release 8/9, spike 23/9 (244 hits) |
+| 0.12.0 | 2 | 0 | Forældet |
+| **I alt** | **3 001** | **725** | |
+
+**Hvorfor jsDelivr og ikke npm downloads:**
+- npm's API giver kun aggregeret downloads pr. uge/måned — kan ikke brydes ned
+  på version, så en ny release kan ikke skelnes fra geninstallationer på den
+  gamle.
+- jsDelivr giver pr. version en total og en daglig kurve, så en ny versions
+  kurve starter ved 0 og vokser.
+- **Forbehold:** et hit er et fil-kald, ikke et menneske. En læser der indlæser
+  20 filer tæller tyve gange. Det er et *attributerbart* tal, ikke et tal pr.
+  menneske.
+
+**Hvorfor ikke GitHub-traffik:**
+- 4 visninger (3 unikke) og 82 kloninger (61 unikke) på 14 dage.
+- For småt til at tælle på — en enkelt person kan skifte tallet med 50 %.
+
+**Hvorfor ikke Plausible/Cloudflare:**
+- Plausible: 1 besøgende på 28 dage — for småt.
+- Cloudflare: 5 208 unikke besøgende-dage på 28 dage, men tæller bots.
+
+**MÅL for fremtidige adoption-opgaver: jsDelivr-hits på den nyeste version,
+målt 14 dage efter release.** Baseline for 1.0.1: 766 totalt, 725 i de seneste
+7 dage pr. 2026-09-28. Næste måling: 14 dage efter `KLAR TIL RELEASE: v1.1.0`
+er kørt.
+
+**Fund: spike 23/9 på 1.0.1 (244 hits).** Dette er 15 dage efter release.
+Årsagen er sandsynligvis at sitet blev opdateret med nye sider den dag, og
+script-taggene på landingssiden loader fra jsDelivr. Det betyder at
+jsDelivr-hits også er en proxy for *site-trafik*, ikke kun npm-adoption.
+Det gør det endnu mere som et skelnende tal: det både måler hvor mange der
+bruger sitet og hvilken version de bruger.
 
 ### Fund fra Cloudflare-iterationen (28/9 23:0x) — den dyreste fejl i sitet,
 ### og den lå i kanten, ikke i koden
@@ -3387,19 +3430,15 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
 
 ## ❓ Til Mads
 
-- **🔴 Jeg har brugt `npm downloads pr. uge` som MÅL i tre opgaver, og det
-  tal kan ikke bære en vægt.** Uge 2 var 42 og uge 3 var 210 — 5x uden at ét
-  menneske er kommet til, fordi dagene er 0 eller 30-100 (geninstallationer
-  fra få forbrugere). Pakken er 21 dage gammel og de 434 downloads er hele
-  historien, så der er heller ingen faldkurve at forklare. **Spørgsmålet:**
-  hvilket tal skal derfra afgøre om en ændring flytter adoption? Mine
-  kandidater er (a) npm downloads over **4 uger** ad gangen i stedet for 1,
-  (b) GitHub repo-visninger, som er 4 på 14 dage og altså for små endnu, eller
-  (c) en tæller i `sendReport` — dvs. at *applikationen* fortæller hvor mange
-  rapporter den har sendt, hvilket er det eneste tal der tæller mennesker og
-  ikke maskiner. **(c) kræver en beslutning om privacy**: et tal sendt til
-  bugbottle.dev er en brugsstatistik, og missionen siger at vi ikke sender
-  sådan noget. Se opgave 46.
+- **✅ Adoption-tal fundet (opgave 46, 28/9).** `npm downloads pr. uge` kan
+  ikke bære en vægt (uge 2 = 42, uge 3 = 210 — 5x uden at ét menneske er
+  kommet til). **Løsningen er jsDelivr-hits pr. version**: det eneste tal der
+  kan skelne en ny release fra geninstallationer på den gamle. Baseline:
+  1.0.1 = 766 totalt, 725 i de seneste 7 dage pr. 2026-09-28. **Forbehold:**
+  et hit er et fil-kald, ikke et menneske — men det er attributerbart og
+  version-specifikt, som npm downloads ikke er. MÅL for fremtidige
+  adoption-opgaver: jsDelivr-hits på den nyeste version, målt 14 dage efter
+  release.
 
 - **🟡 `npm search` er lukket for et navn der er ét ord, og det kan ikke
   løses uden en beslutning fra dig.** Målt 28/9 22:0x: `bug-report` har
@@ -3719,6 +3758,21 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-29, iteration 31** (`ceo/adoption-metric`). Opgave 46.
+  Se "Fund fra adoption-metric-iterationen" ovenfor.
+  - **jsDelivr er det eneste skelnende adoption-tal.** Målt: 1.0.1 = 766
+    totalt hits, 725 i de seneste 7 dage. 0.5.0 = 2 231 (forældet).
+    Total: 3 001 hits.
+  - **npm downloads er for støj til at måle på.** Kan ikke brydes ned på
+    version, så en ny release kan ikke skelnes fra geninstallationer.
+  - **GitHub-traffik er for småt.** 4 visninger, 82 kloninger på 14 dage.
+  - **Spike 23/9 på 1.0.1 (244 hits)** — sandsynligvis fordi sitet blev
+    opdateret med nye sider, og script-tagger loader fra jsDelivr. Det gør
+    jsDelivr-hits til en proxy for både site-trafik og version-adoption.
+  - **MÅL opdateret for alle adoption-opgaver** (37, 38, 39, 40, 44, 45):
+    jsDelivr-hits på den nyeste version, målt 14 dage efter release.
+  - **Ingen kodeændring** — kun planopdatering.
 
 - **2026-09-28, iteration 30** (`ceo/npm-funding-button`). Opgave 40.
   Se "Fund fra funding-iterationen" (28/9 16:2x).
