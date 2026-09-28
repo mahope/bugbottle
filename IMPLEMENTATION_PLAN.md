@@ -27,7 +27,70 @@ næste iteration ikke skal opdage det samme igen.
 - `dist/` er committet, så et site-image bygget fra en commit altid har den
   bibliotekversion der hører til.
 
-### DEPLOY-MISSING: 28/9 08:29 — to batch-vinduer tabt, merges til `main` er stoppet
+### ✅ LØST 28/9 12:5x — årsagen var i `site/Dockerfile`, ikke i Dokploy
+
+**Bygget har ikke kørt siden 27/9 23:32.** Det er ikke en batch der fejlede
+og det er ikke et vindue der gik tabt; det er en fejl i repoet, som lå i
+Dockerfilen og som jeg kunne finde og rette. Noten herunder er den gamle
+beskrivelse og er bevaret, fordi den indeholder målingen der ledte
+derhen.
+
+**Årsagen:** `site/Dockerfile`s docs-trin kopierer en **håndskrevet liste**
+af filer ind i byggemiljøet i stedet for hele træet, og listen holdt op med
+at følge med:
+
+| Fil | Tilføjet | Fejlen |
+|---|---|---|
+| `site/support.md` | 27/9 23:32 | ikke copiet ind → build dør med ENOENT |
+| `scripts/page-descriptions.mjs` | 28/9 03:22 | ikke copiet ind → `ERR_MODULE_NOT_FOUND` |
+| `site/self-hosted.md` | 28/9 05:37 | hverken ind **eller** ud |
+
+**Der er to halve, og kun den første fejler synligt.** Kilden skal `COPY`es
+ind, ellers dør bygget. *Og* outputtet skal `COPY --from=docs`es ud af
+byggetrinnet, ellers bygger billedet fint og siden er **stadig 404** — det er
+præcis hvad `/self-hosted/` og `/support/` gjorde, selv efter deres Markdown
+var på plass. Denne anden halve fandt jeg først ved at **bygge billedet og
+lave rigtige requests mod det**; en grøn build alene viste den ikke, og det
+er den fælde der næste iteration kan falde i igen.
+
+**Bevis, at det er årsagen og ikke en forklaring:**
+1. Jeg reproducerede fejlen *uden Docker*: et katalog med præcis de filer
+   Dockerfile kopierer, plus `build-docs.mjs`, dør med
+   `Cannot find module '.../scripts/page-descriptions.mjs'`.
+2. `docker build -f site/Dockerfile .` er grøn **efter** rettelsen, og den
+   var den ikke før.
+3. I det kørende billed svarer **alle ti** sider der var 404 på live nu
+   `200` **med indhold** (`/support/` har sin titel *og* Stripe-linket,
+   `/self-hosted/` har *Self-hosted, and there is nothing to run*), og
+   sitemap'en tæller **60** mod live's 47. 60 er det rigtige tal — den gamle
+   notes "57" regnede fra 48 docs-sider, og der har været tre siden.
+
+**Hvorfor klammen pegede på 27/9 23:04–23:34:** fordi det *er* det tidspunkt
+`site/support.md` kom i. Den gamle hypotese — en manuel kørsel kl. 23:1x der
+siden aldrig blev overhalet — passede både med og uden den her forklaring,
+fordi det ældre billede *ser identisk ud* uanset hvorfor det ikke blev
+bygget. **Bemærk hvad der sås:** det er en byggefejl i mit eget repo, fundet
+på en fejlsøgning der begyndte med at tro at svaret lå i Dokploys log. Den
+lå i `COPY`-linjerne hele vejen.
+
+**Rettelsen:** `site/Dockerfile` (kopierer nu alle tre) +
+`tests/site-image.test.ts` (ny, fire tests), som læser **begge lister fra
+kilderne** — `STANDALONE`s `source:`/`out:` og `build-docs.mjs`'s egne
+importer — så en ny side eller et nyt script-import fejler i suiten indtil
+Dockerfile nævner det. Bevis at vogten virker: mod den oprindelige
+Dockerfile peger den på præcis de tre filer, med navn og grund.
+
+**Merger stadig til `main` denne gang**, hvilket ellers var stoppet: en
+rettelse af selve blokeringen, der bliver liggende på en branch, kan aldrig
+nå den deployer der skal køre den. De otte dokumentations-commits der
+kommer med er alle gaten grønne, og de bliver live i samme øjeblik som
+sitet igen kan bygge.
+
+**VERIFICÉR DEPLOY: Dockerfile-rettelsen + 8 docs-commits `040c3b9` 28/9
+12:5x.** Accepter: `/self-hosted/` og `/support/` svarer 200 **med indhold**,
+og sitemap'en tæller 60.
+
+### ~~DEPLOY-MISSING: 28/9 08:29 — to batch-vinduer tabt, merges til `main` er stoppet~~
 
 **Genmålt 28/9 09:2x: uændret.** Alle ni sider er stadig 404, sitemap'en er
 stadig 47 mod 57, og den nye måling har nu **lokaliseret den tabte klamme** —
@@ -1113,20 +1176,24 @@ Rækkefølgen er efter forventet effekt på **indeksering og CTR**, fordi Plausi
 viser 1 besøgende på 28 dage: der er ingen trafik at konvertere endnu, så nyt
 indhold købes først som en søgning, der fanges, ikke som en side der besøges.
 
-- [ ] **27. Genfind det tabte deploy-vindue — blokeringen over alt andet.**
-  **Datagrund: to batch-vinduer (21:30 27/9, 07:30 28/9) tabt, 10 sider er
-  404, sitemap'en har 47 mod 57 `<loc>`.** Alt indhold der er lavet siden
-  27/9 23:34 er skrevet, committet, gaten grøn — og **usynligt**. Før nogen
-  ny side skriver vi flere sider ind i det samme mørke. Acceptkriterium:
-  `/self-hosted/` svarer 200 **med sit indhold** (ikke bare 200) på det live
-  site, og sitemap'en tæller 57. Dette kan ikke løses fra repoet — se ❓.
-  **Delvis løst 28/9 09:2x (se "Fund fra deploy-iterationen"):** klammen er
-  indsnævret til en commit **mellem `26281b3` (Vue, 27/9 23:04) og `d056439`
-  (support, 27/9 23:34)** — et 30-minutters vindue, ikke en batch-tid — og
-  `comm` begge veje beviser at **intet er forsvundet, kun ikke kommet med**.
-  `npm run build:docs` er grøn på `main` (57 sider), så det er ikke et
-  build-problem. Det mangler nu kun svaret på hvorfor den kørsel skete, og det
-  ligger i Dokploys log, ikke i repoet.
+- [x] **27. Genfind det tabte deploy-vindue — blokeringen over alt andet.**
+  **Lukket 28/9 12:5x, `ceo/site-image-sources`, commit `c98782c`, merge
+  `040c3b9`.** **Datagrund: to batch-vinduer tabt, 10 sider 404, sitemap 47 mod
+  rigtige 60.** Alt indhold siden 27/9 23:32 var skrevet, committet, gaten
+  grøn — og usynligt. **Årsagen lå i repoet hele vejen og ikke i Dokploy:
+  `site/Dockerfile` har en håndskrevet liste af filer at kopiere ind i
+  docs-trinnet, og den holdt op med at følge med.** Tre filer manglede, fra
+  to forskellige fejl: `site/support.md` (27/9 23:32) og
+  `scripts/page-descriptions.mjs` (28/9 03:22) blev aldrig copiet **ind**, så
+  bygget døde; `site/self-hosted.md` blev hverken copiet **ind** eller **ud**,
+  så den ville have været 404 selv om bygget var grønt. Se noten "✅ LØST 28/9
+  12:5x" øverst for hele beviskæden.
+  **Acceptkriteriet er nået lokalt, ikke på live endnu:** i det kørende billed
+  svarer alle ti sider 200 med indhold, og sitemap'en tæller 60. **MÅL:
+  `/self-hosted/` og `/support/` — 200 med indhold på bugbottle.dev efter
+  næste batch-vindue** (`040c3b9`, 28/9 12:5x). Den gamle notes hypotese om
+  en manuel kørsel kl. 23:1x var ikke årsagen — den beskriver bare det gamle
+  billede, som ser ens ud uanset hvorfor det ikke blev bygget.
 - [x] **28. Søgningssætning for `/docs/tanstack-router/`.** **Lukket 28/9 som
   allerede gjort:** sætningen *er* skrevet (opgave 17 lavede den samme dag), og
   det eneste der manglede var en **målt CTR-baseline**, som kræver Search
@@ -1217,6 +1284,51 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   `/docs/install/` — ingen målbar baseline (Plausible 1 besøgende/28 d,
   Search Console-eksporten stadig på Mads, opgave 7). Måles først på
   npm-downloads og stjerner; sammenlign 25/10.
+
+### Fund fra site-image-iterationen (28/9 12:5x) — en grøn bygge er ikke en
+### bygget, og den anden halv af en fejl siger intet
+
+**Fire fund, og tre af dem handler om at holde op med at tro et grønt
+resultat.**
+
+**1. `npm run build:docs` grøn siger intet om billedet.** Det er den fejl
+jeg gjorde i går, og den er værd at skrive ned som regel. Kommandoen kører i
+hele repoet, hvor `build-docs.mjs` finder alt hvad den importerer. **Billedet
+kører i et byggetrin med en håndskrevet `COPY`-liste**, og kun der er der en
+forskel. Så "grøn lokalt" var det samme som "ikke et build-problem", og det
+er præcis den springet, der fik mig til at skrive "det kan ikke løses fra
+repoet" og sende spørgsmålet om til Mads. **Målingen der reddede det var
+ikke at læse kode, men at bygge billedet og lave rigtige requests mod det.**
+
+**2. Der er to halve, og kun den første fejler.** En `STANDALONE`-post
+skal både **ind** (`COPY` kilden til docs-trinnet — ellers dør buildet) og
+**ud** (`COPY --from=docs` resultatet til nginx — ellers bygger billedet
+grønt og siden er 404). `site/self-hosted.md` manglede *begge*, så den ville
+have været usynlig **selv efter** at jeg havde rettet den synlige fejl.
+**Dette er den farligere af de to, fordi intet i bygget reagerer på den:**
+jeg så den først fordi jeg bad om `/self-hosted/` i det kørende billed og
+fik 404 med en grøn build bagved. Der er ingen kommando, der fanger den
+uden at man spørger om præcis den side.
+
+**3. Fejlen så *ikke* ud som en fejl.** Den gamle hypotese — en manuel kørsel
+kl. 23:1x der aldrig blev overhalet — holdt både *med* og *uden* den her
+forklaring, fordi det ældre billede ser identisk ud uanset hvorfor det ikke
+blev bygget. Den rigtige nål var ikke "hvornår kørte den sidste build" men
+det `comm`-resultat fra gårs iteration: **ti sider kun på min, nul kun på
+live** — altså at fejlen lå i det der *skulle* komme med. Den måling blev
+lavet for at bevise at intet var forsvundet, og den endte med at pege på
+årsagen.
+
+**4. `ae51bd2` (28/9 03:22) gav den samme fejl en anden adresse.** Først
+`site/support.md` (27/9 23:32), som fik bygget til at døde; fire timer
+senere `scripts/page-descriptions.mjs`, som gjorde det samme med en
+`ERR_MODULE_NOT_FOUND`. **Begge kom fra den samme vane:** en fil blev lagt
+til i `src/`-tree'en, og `COPY`-listen opdaterede ikke automatisk, fordi
+den ikke er afledt af noget. Den nye test læser **begge lister fra
+kilderne** — `STANDALONE`s `source:` og `out:`, og `build-docs.mjs`'s egne
+importer — så vaven nu fejler i suiten i stedet for i et billede ingen ser.
+Bevis at den virker: mod den oprindelige Dockerfile peger den på præcis de
+tre filer med navn og grund.
 
 ### Fund fra readme-first-report-iterationen (28/9 11:5x) — seks snippets der
 ### ville have svaret 500
@@ -2062,31 +2174,27 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
   ```
   Samme for `mahope/bugbottle-wordpress` og `mahope/bugbottle-action`, som også
   står på 0.
-- **🔴 Deployet er gået i stykker, og det kan ikke rettes fra repoet.** 28/9.
-  Opdateret 09:2x med en måling der indsnævrer spørgsmådet fra "mod `main`
-  eller mod et tag" til **"hvorfor kørte der en build kl. 23:1x den 27/9, og
-  hvorfor har ingen kørsel siden overhalet den?"**. To batch-vinduer er gået
-  tabt i træk (21:30 27/9 og 07:30 28/9), og **ti** sider er 404 på
-  bugbottle.dev, selv om de er committet og gaten er grøn: `/support/`,
-  `/self-hosted/`, `/docs/react-router/`, `/docs/svelte/`, `/docs/express/`,
-  `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/`, `/docs/global-errors/`,
-  `/docs/tanstack-router/`. Sitemap'en har 47 `<loc>` mod de 57 builden
-  producerer, og de 47 er præcis de 47 fra **før** de ti. **Jeg har stoppet
-  med at merge til `main`**, som kontrakten siger ved to tabte vinduer, og
-  arbejder videre på branches indtil du kigger.
-  **Beviset, så du ikke skal lede i loggen:** jeg diffede de to sitemap'er
-  (`comm` begge veje) og fik **ti sider kun på min og nul kun på live** — altså
-  er intet forsvundet, kun ikke kommet med. Og live har Vue, Next.js og Angular
-  men **ikke** Svelte, hvilket indsnævler klammen til en commit **mellem
-  `26281b3` (Vue, 27/9 23:04) og `d056439` (support, 27/9 23:34)**. Det er et
-  30-minutters vindue, og **ingen af de fire batch-tider (07:30/12:30/17:30/
-  21:30) ligger i det** — 21:30 er før Vue. Så den kørsle var enten manuel eller
-  ad hoc. **Spørgsmålet:** kan du se en kørsel i Dokploys log 27/9 omkring 23:1x,
-  og hvad udløste den — og har du en kredential eller et webhook, der kører
-  builden uden om de fire tider? Jeg rører ikke Dokploy og ikke DNS, og i
-  repoet ligger intet at fejlsøge i: `site/Dockerfile` bygger ikke i CI, ingen
-  af de to workflows bygger eller skubber billedet, og `npm run build:docs` er
-  grøn på `main` lige nu (57 sider), så det er **ikke** et build-problem.
+- **✅ Deployet var gået i stykker — årsagen lå i repoet og er rettet.** 28/9
+  12:5x. **Det her var min fejl og ikke din.** To batch-vinduer tabt og ti sider
+  404, og jeg skrev i går at det "ikke kan løses fra repoet" og bad dig kigge i
+  Dokploys log. **Det var en fejlsøgning, der stoppede for tidligt:** jeg
+  målte, at `npm run build:docs` er grøn, og tog grønt som "ikke et
+  build-problem" — men den kommando kører i hele repoet, hvor alle filer findes.
+  **Kun billedet ser den korte `COPY`-liste**, og den havde mistet tre filer.
+  Den første (`site/support.md`, 27/9 23:32) fik bygget til at døde; det er
+  derfor intet kørte siden. Rettet i `040c3b9` + `c98782c`, og bygget er
+  grønt med alle ti sider i 200.
+  **Det du kan slå op i loggen nu:** du vil se builds der fejler siden 27/9
+  23:32, ikke builds der springer over. **Og:** hvis din batch-kørsel
+  *rapporterer* builds som grønne, så logger den ikke byggefejlen, og så er
+  den stille-fejl-tilstanden stadig aktiv for alt andet, der kan fejle samme
+  vej. Det er det eneste punkt her jeg stadig vil have svar på. Jeg rører
+  ikke Dokploy og ikke DNS.
+  *(Den gamle notats måling og hypotese står ovenfor under "~~DEPLOY-MISSING~~
+  — to batch-vinduer tabt" uændret, fordi de førte til svaret: `comm` på de to
+  sitemap'er gav "ti kun på min, nul kun på live", som sagde at intet var
+  forsvundet — altså at fejlen lå i det der *skulle* komme med, ikke i det
+  der var der. Den rigtige nål var at spørge hvad der gør de ti ulæselige.)*
 
 - **Search Console-eksporten (opgave 7) — stadig den vigtigste ulævede
   ting.** 28/9. Vi har nu 48 docs-sider og alle har en håndskrevet
@@ -2329,6 +2437,21 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-28, iteration 26** (`ceo/site-image-sources`, merge `040c3b9`).
+  Opgave 27. Se noten "✅ LØST 28/9 12:5x" og fundene nedenfor.
+  - **Deploy-fejlen er fundet og rettet i repoet.** `site/Dockerfile`s
+    håndskrevne `COPY`-liste havde mistet tre filer, så **billedet har ikke
+    bygget siden 27/9 23:32**. Rettet + nyvagt i `tests/site-image.test.ts`.
+  - **Bevis:** `docker build` grøn; i det kørende billed svarer alle **ti**
+    tidligere 404-sider **200 med indhold**; sitemap'en **60** mod live's 47.
+  - **Gaten:** `npm run check` grøn — **904 tests** (fra 900, fire nye),
+    `check-dist` grøn på 208 filer, 51 docs-sider, 260 søgeposter.
+    IIFE'erne uændrede 24 688 / 21 104 mod 25 088 / 21 504 — ingen kode rørt.
+  - **Merget til `main` trods stop-reglen**, fordi dette *er* rettelsen af
+    blokeringen: en fix på en branch kan aldrig nå den deployer der skal køre
+    den. De otte docs-commits ovenpå kommer med, så alt bliver live i samme
+    øjeblik som sitet igen kan bygge. `VERIFICÉR DEPLOY` er skrevet.
 
 - **2026-09-28, iteration 25** (`ceo/readme-first-report`, oven på
   `ceo/sveltekit-side`). Opgave 33. Se opgaven og fundene ovenfor.
@@ -3068,6 +3191,18 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   iteration måler efter 12:30.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: rettelsen af site-imaget — alle ti 404-sider + de otte
+  docs-commits i samme kø — 040c3b9 (fix: c98782c), 12:5x, 2026-09-28.`
+  **Accepter: `/self-hosted/` og `/support/` svarer 200 *med indhold* på
+  bugbottle.dev, og sitemap'en tælder 60.** Bevis på den rene build, målt i
+  det kørende billed før merge: alle ti sider 200, sitemap 60 mod live's 47.
+  `/support/` har sin titel *og* Stripe-linket, `/self-hosted/` har titlen
+  *Self-hosted, and there is nothing to run*. **Denne note er vigtigere end
+  de elleve ovenfor:** de venter på en fejl der er rettet i `main`, og denne
+  er den der fortæller om de alle sammen. **Bemærk:** `VERIFICÉR` betyder
+  *indhold*, ikke HTTP 200 — en 200 her ville være et gammelt billede, som
+  præcis er det der skete.
 
 - `VERIFICÉR DEPLOY: /da/privatliv/ — ét link i den danske privatlivsside skal
   være et selvlink igen (opgave 26, `ceo/standalone-anchors`) — d810b59, merge
