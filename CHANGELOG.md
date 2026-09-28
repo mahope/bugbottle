@@ -10,6 +10,27 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`widget.open({ message })` — open the panel with the text already in the
+  box.** The panel's `open()` took no arguments, so every caller that already
+  knew why it was opening — a framework's `ErrorHandler`,
+  `app.config.errorHandler`, `router.onError`, Astro's `astro:hydration-error`,
+  `onRouteError` — put an empty message box in front of somebody who was
+  watching a page break. That is the one moment a reporter is least inclined to
+  type, and the twelve framework pages documented the gap in their own comments
+  ("`open()` takes no arguments, so the box opens empty"). The new argument is
+  the message, not a flag, and it obeys two rules: it is clipped to
+  `MAX_MESSAGE_LENGTH` — which is the number the server keeps anyway, so
+  nothing is lost — and it never overwrites a draft, because somebody who was
+  already typing was there first. `openOnError: { prefill: true }` now fills the
+  box through the same code, so the two can no longer drift apart. The five
+  framework pages whose snippets call `open()` from an error hook (Vue, Nuxt,
+  Astro, SvelteKit, Angular) were corrected to use it, and a comment that has
+  been true on this repository since two of those pages were written is now
+  false.
+  A **minor**, not a patch: it changes the signature of an existing export, per
+  the naming rules in `docs/api-audit-1.0.md`. Non-text is ignored rather than
+  stringified, because an `ErrorHandler` is handed `unknown` and `[object
+  Object]` in the box is worse than an empty one.
 - **`/docs/express/` — a page for the export the package has used most and
   documented least.** `expressHandler` is the most-used export in
   `bugbottle/server`, `express error handling middleware` has 10 Google Suggest

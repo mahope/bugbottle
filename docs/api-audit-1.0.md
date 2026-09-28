@@ -351,7 +351,7 @@ needs a major version, and adding an entry point needs a minor one.
 
 ### `bugbottle/server`
 
-230 exports.
+233 exports.
 
 | Name | Kind | Source |
 |---|---|---|
@@ -411,6 +411,9 @@ needs a major version, and adding an entry point needs a minor one.
 | `expressHandler` | function | `src/server/express.ts` |
 | `ExpressRequestLike` | type | `src/server/express.ts` |
 | `ExpressResponseLike` | type | `src/server/express.ts` |
+| `fastifyHandler` | function | `src/server/fastify.ts` |
+| `FastifyReplyLike` | type | `src/server/fastify.ts` |
+| `FastifyRequestLike` | type | `src/server/fastify.ts` |
 | `FetchLike` | type | `src/sinks/error.ts` |
 | `fileStore` | function | `src/server/file-store.ts` |
 | `FileStore` | type | `src/server/file-store.ts` |
@@ -426,11 +429,11 @@ needs a major version, and adding an entry point needs a minor one.
 | `HandleReportResult` | type | `src/server/handle.ts` |
 | `InvalidScreenshotError` | class | `src/report-core.ts` |
 | `isReportType` | function | `src/report-core.ts` |
+| `jiraAuthHeader` | function | `src/sinks/jira.ts` |
 | `jiraBaseUrl` | function | `src/sinks/jira.ts` |
 | `jiraSink` | function | `src/sinks/jira.ts` |
 | `JiraSink` | type | `src/sinks/jira.ts` |
 | `JiraSinkOptions` | type | `src/sinks/jira.ts` |
-| `jiraAuthHeader` | function | `src/sinks/jira.ts` |
 | `looksLikeEmail` | function | `src/report-core.ts` |
 | `MarkdownOptions` | type | `src/markdown.ts` |
 | `MAX_BREADCRUMB_TEXT_LENGTH` | const | `src/report-core.ts` |

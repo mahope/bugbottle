@@ -15,7 +15,7 @@
 import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement } from "../element-picker.js";
 import { en } from "../locales.js";
-import { MAX_ELEMENTS, REPORT_TYPES, } from "../report-core.js";
+import { MAX_ELEMENTS, MAX_MESSAGE_LENGTH, REPORT_TYPES, } from "../report-core.js";
 import { buildReport, sendReport, SendFailedError, } from "../send.js";
 import { DEFAULT_SHORTCUT, onShortcut, onUncaughtError } from "../triggers.js";
 const POSITIONS = {
@@ -665,9 +665,17 @@ export function mountBugbottle(options) {
             'canvas:not([tabindex="-1"])');
         return [...nodes].filter((n) => !n.hidden && !n.closest("[hidden]"));
     }
-    function open() {
+    function open(opts) {
         if (isOpen)
             return;
+        // Seeded here rather than in each caller, so `openOnError` and a
+        // framework's own hook fill the box by the same two rules. The clip is
+        // lossless: the server keeps `MAX_MESSAGE_LENGTH` characters either way.
+        const message = opts?.message;
+        if (typeof message === "string" && message && !textarea.value.trim()) {
+            textarea.value =
+                message.length > MAX_MESSAGE_LENGTH ? message.slice(0, MAX_MESSAGE_LENGTH) : message;
+        }
         isOpen = true;
         const was = document.activeElement;
         // The host is what `document.activeElement` reports when focus is already
@@ -774,10 +782,9 @@ export function mountBugbottle(options) {
         openedByError = true;
         if (types.includes("bug"))
             setType("bug");
-        // Never overwrite what somebody has already written: they were here first.
-        if (prefill && !textarea.value.trim())
-            textarea.value = message;
-        open();
+        // `open` never overwrites what somebody has already written: they were
+        // here first, and an error arriving afterwards is not a reason to lose it.
+        open(prefill ? { message } : undefined);
     }
     const unsubscribes = [];
     if (options.shortcut !== false) {

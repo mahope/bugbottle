@@ -26,6 +26,7 @@ import type { initNetwork, NetworkOptions } from "../network.ts";
 import type { initPerf, PerfOptions } from "../perf.ts";
 import {
   MAX_ELEMENTS,
+  MAX_MESSAGE_LENGTH,
   REPORT_TYPES,
   type BugReport,
   type ElementRef,
@@ -215,7 +216,18 @@ export type MountOptions = {
 };
 
 export type BugbottleWidget = {
-  open(): void;
+  /**
+   * Opens the panel, and `message` seeds the text box for a caller that
+   * already knows why it is opening: a framework's error hook, a route change
+   * that failed, a 500 page. A reporter looking at a broken page is the one
+   * person who is least inclined to type, so the error text they were never
+   * shown is put in front of them to write about.
+   *
+   * It is clipped to `MAX_MESSAGE_LENGTH`, which is the number the server
+   * keeps anyway, and it never overwrites a draft: somebody who was already
+   * typing keeps what they wrote.
+   */
+  open(options?: { message?: string }): void;
   close(): void;
   toggle(): void;
   /** Removes the widget and its listeners. */
@@ -903,8 +915,16 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     return [...nodes].filter((n) => !n.hidden && !n.closest("[hidden]"));
   }
 
-  function open() {
+  function open(opts?: { message?: string }) {
     if (isOpen) return;
+    // Seeded here rather than in each caller, so `openOnError` and a
+    // framework's own hook fill the box by the same two rules. The clip is
+    // lossless: the server keeps `MAX_MESSAGE_LENGTH` characters either way.
+    const message = opts?.message;
+    if (typeof message === "string" && message && !textarea.value.trim()) {
+      textarea.value =
+        message.length > MAX_MESSAGE_LENGTH ? message.slice(0, MAX_MESSAGE_LENGTH) : message;
+    }
     isOpen = true;
     const was = document.activeElement as HTMLElement | null;
     // The host is what `document.activeElement` reports when focus is already
@@ -1005,9 +1025,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     if (isOpen) return;
     openedByError = true;
     if (types.includes("bug")) setType("bug");
-    // Never overwrite what somebody has already written: they were here first.
-    if (prefill && !textarea.value.trim()) textarea.value = message;
-    open();
+    // `open` never overwrites what somebody has already written: they were
+    // here first, and an error arriving afterwards is not a reason to lose it.
+    open(prefill ? { message } : undefined);
   }
 
   const unsubscribes: (() => void)[] = [];

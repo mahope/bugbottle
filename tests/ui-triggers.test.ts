@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import { Window } from "happy-dom";
 
 /**
- * The panel's two button-free ways in: the keyboard shortcut and the opt-in
- * auto-open. Both need a real document — a shadow root, a keydown that
- * bubbles, a window that dispatches an error event — so this file puts a
- * happy-dom window on `globalThis` before the widget is imported, the same way
- * the hook's tests do.
+ * The panel's three ways in that need no button of the reporter's own: the
+ * keyboard shortcut, the opt-in auto-open, and `open({ message })` — the one a
+ * framework's error hook calls, having caught something the window never saw.
+ * All three need a real document — a shadow root, a keydown that bubbles, a
+ * window that dispatches an error event — so this file puts a happy-dom window
+ * on `globalThis` before the widget is imported, the same way the hook's tests
+ * do.
  */
 const win = new Window({ url: "https://example.test/orders?tab=open" });
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -43,6 +45,7 @@ for (const key of Object.getOwnPropertyNames(win)) {
 
 const { mountBugbottle } = await import("../src/ui/index.ts");
 const { en } = await import("../src/locales.ts");
+const { MAX_MESSAGE_LENGTH } = await import("../src/report-core.ts");
 const { DEFAULT_SHORTCUT, parseShortcut } = await import("../src/triggers.ts");
 const { onShake } = await import("../src/shake.ts");
 
@@ -127,6 +130,77 @@ test("nothing opens by itself unless openOnError is asked for", () => {
   const { panel } = parts(widget.host);
   throwOnPage(new Error("unwatched"));
   assert.equal(panel.hidden, true);
+  widget.destroy();
+});
+
+/** One turn of the event loop, which is all a stubbed fetch needs. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("a framework's own hook opens the panel with the message already in it", async () => {
+  // What Angular's `ErrorHandler`, `app.config.errorHandler`,
+  // `router.onError` and Astro's `astro:hydration-error` all lack: a window
+  // event. A reporter watching a page break is the one person least inclined
+  // to type, so the text is put in front of them rather than asked for.
+  const { fn, bodies } = fakeFetch();
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn });
+  const { panel, textarea, intro, types } = parts(widget.host);
+
+  widget.open({ message: "Cannot read properties of undefined (reading 'id')" });
+  assert.equal(panel.hidden, false);
+  assert.equal(textarea.value, "Cannot read properties of undefined (reading 'id')");
+  assert.equal(
+    intro.textContent,
+    en.ui.intro,
+    "it opened because the application asked, so the reporter is not told about an error",
+  );
+  assert.equal(
+    types[0]?.getAttribute("aria-checked"),
+    "true",
+    "the type is left to the reporter, who is answering a bug and the default is bug",
+  );
+
+  const send = widget.host.shadowRoot!.querySelector<HTMLButtonElement>(".send")!;
+  send.click();
+  await settle();
+  assert.equal(bodies[0]?.message, "Cannot read properties of undefined (reading 'id')");
+  widget.destroy();
+});
+
+test("a seeded message never overwrites what the reporter is already writing", () => {
+  const { fn } = fakeFetch();
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn });
+  const { panel, textarea } = parts(widget.host);
+
+  widget.open();
+  textarea.value = "mine";
+  widget.close();
+  // The panel keeps a draft across a close on purpose, so this is the case a
+  // framework hook lands in: the reporter was here first, and an error
+  // arriving afterwards is not a reason to throw their words away.
+  widget.open({ message: "Hydration failed" });
+  assert.equal(panel.hidden, false);
+  assert.equal(textarea.value, "mine");
+  widget.destroy();
+});
+
+test("a seeded message is clipped to the length the server keeps, and odd input is ignored", () => {
+  const { fn } = fakeFetch();
+  const widget = mountBugbottle({ endpoint: ENDPOINT, fetch: fn });
+  const { textarea } = parts(widget.host);
+
+  widget.open({ message: "x".repeat(MAX_MESSAGE_LENGTH + 500) });
+  assert.equal(textarea.value.length, MAX_MESSAGE_LENGTH, "the rest was never going to be sent");
+
+  // A hook that hands over something that is not text — `unknown` caught from
+  // a framework, a number, an object — must not put `[object Object]` in front
+  // of a reporter. The window's own `error.message` is a string by
+  // specification; an `ErrorHandler`'s argument is `unknown`.
+  for (const odd of [undefined, null, 42, {}, ["boom"], true] as unknown[]) {
+    widget.close();
+    textarea.value = "";
+    widget.open({ message: odd as unknown as string });
+    assert.equal(textarea.value, "", `a ${typeof odd} seeds nothing`);
+  }
   widget.destroy();
 });
 
