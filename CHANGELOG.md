@@ -31,6 +31,26 @@ attribute needs a major version, and a new entry point needs a minor one.
   the naming rules in `docs/api-audit-1.0.md`. Non-text is ignored rather than
   stringified, because an `ErrorHandler` is handed `unknown` and `[object
   Object]` in the box is worse than an empty one.
+- **`/docs/global-errors/` — the two events a browser fires when nothing caught
+  the error, which had no page.** `window.onerror` and `unhandledrejection` are
+  the mechanism the console buffer is built on, and the thirteen framework pages
+  all start one level above them, at the framework's own hook. Measured with
+  Google Suggest on 2026-09-28: `window.onerror` 10, `javascript error handling`
+  10, `catch javascript errors` 6, `uncaught exception javascript` 6,
+  `onunhandledrejection` 5 — the largest uncovered cluster in the whole
+  measurement, and the only one where the query is a line of code the reader
+  intends to write rather than the name of a framework. The page documents the
+  asymmetry between `onerror`'s five arguments and `addEventListener`'s one
+  `ErrorEvent`, and the five things that decide whether what you captured is any
+  use: a resource `error` fired on an element that does not bubble, `Script
+  error.` and no stack for a cross-origin script, a cross-origin rejection that
+  fires **no event at all** because it would leak the reason, a worker's separate
+  global scope, and `event.error` being whatever was thrown rather than an
+  `Error`. It ends with what an uncaught error actually puts in a report — one
+  line for the reader and at most ten frames, which are positions and never
+  source — and the vanilla snippet the search implies. Facts from MDN, read
+  2026-09-28. No code change: both script-tag builds weigh what they weighed
+  before.
 - **`/docs/express/` — a page for the export the package has used most and
   documented least.** `expressHandler` is the most-used export in
   `bugbottle/server`, `express error handling middleware` has 10 Google Suggest

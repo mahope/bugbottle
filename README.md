@@ -105,6 +105,128 @@ const stop = initConsoleBuffer();
 stop(); // the real console back, the buffer empty
 ```
 
+## window.onerror and unhandledrejection
+
+The browser has two events for an error nothing in your code caught, and they
+split the work. `error` fires for a script error thrown synchronously — during
+load, or inside an event handler. A promise that is rejected with no handler
+attached fires `unhandledrejection` **instead of** `error`, never both. Both are
+dispatched on `window`, and neither bubbles: they exist so that something
+outside the stack can listen, which is exactly what a reporter is.
+
+That is the mechanism the console buffer is built on, and this page is mostly
+about what the two events do *not* tell you, because that is where a captured
+error stops being useful.
+
+### Two signatures, and one of them is a trap
+
+```ts
+window.addEventListener("error", (event) => {
+  // one ErrorEvent: message, filename, lineno, colno, error
+});
+
+window.onerror = (message, source, lineno, colno, error) => {
+  // five arguments, for historical reasons
+  return true; // stop the browser printing it — the script still stops
+};
+```
+
+The handler *property* is the only event handler on `window` that receives more
+than one argument, and that asymmetry is thirty years old: `addEventListener`
+gives you an `ErrorEvent`, `onerror` gives you the same five fields loose. The
+other trap is the return value — `true` cancels the console output, where every
+other handler property cancels by returning `false`.
+
+`unhandledrejection` arrives as a `PromiseRejectionEvent` whose `reason` is
+whatever was rejected, and it is cancelable too: `event.preventDefault()` keeps
+the browser from printing it. Both pages are on MDN, read 28 September 2026:
+[Window: error event](https://developer.mozilla.org/en-US/docs/Web/API/Window/error_event)
+and
+[Window: unhandledrejection event](https://developer.mozilla.org/en-US/docs/Web/API/Window/unhandledrejection_event).
+
+### Five things that decide whether what you captured is any use
+
+**1. `error` on an element is a different event.** A resource that fails to load
+— an `<img>` that 404s, a `<script>` with a bad `src` — fires `error` on that
+element, and it does not bubble, so a `window` listener without
+`capture: true` never sees it. Nothing in it describes a script throwing, and
+`event.error` is `undefined`, so a handler written for the window form reads
+nothing at all.
+
+**2. A cross-origin script tells you nothing, and a cross-origin rejection
+tells you nothing at all.** For an error thrown in a script served from another
+origin, the browser reports `Script error.` and withholds the message, the file
+and the stack, because handing them to the page would leak that origin's
+internals. The fix is on the serving side: `crossorigin="anonymous"` on the
+`<script>` tag and a CORS header on the response. For rejections the browser
+goes further — a rejection originating in a cross-origin script **does not fire
+`unhandledrejection` at all**, because the event carries the reason. That one is
+not fixable from the page, and it is the only place where an error is hidden on
+purpose.
+
+**3. A Worker is a different global scope.** A `window` listener sees nothing
+from a web worker, a service worker or a worklet — they have their own global
+with the same two events. `initConsoleBuffer` adds its two listeners only when
+`window` is there, so a report carries no worker errors unless you pass them in
+yourself; the same is true of `onUncaughtError` in
+[bugbottle/triggers](#opening-it-without-a-button), which listens on whatever
+host you hand it.
+
+**4. `event.error` is whatever was thrown.** `throw "no seat"` and
+`throw { code: 409 }` reach the listener as a string and as a plain object,
+neither of which has a `.stack`. The console buffer reads `e.error?.stack` and
+its parser answers "no frames" for anything that is not a stack string, so the
+entry still lands — with the message and no frames, which is the correct answer
+and not a bug.
+
+**5. The console line may never have existed.** An error hook that *replaces*
+`console.error` takes the entry the ring buffer would have recorded, so a report
+built around a global handler can come out with nothing in the console section.
+This is the sixth place we have had to write this down, and it is the first
+thing to check when a report arrives with an empty console: Vue, Nuxt, React
+Router and Hono all do it, and the
+[React page](#react), the [Nuxt page](#nuxt) and the
+[Hono page](#hono) each say so where it happens.
+
+### What an uncaught error puts in a report
+
+One line for the reader — `Uncaught: <message> (<file>:<line>)` — and up to ten
+frames parsed out of `e.error.stack`, in the V8, Firefox and Safari shapes. A
+frame is `file`, `line`, `col` and an optional function name: a position and
+nothing else, because no line of source is ever read, and resolving a frame
+against your own source maps is your side of the deal. An unhandled rejection
+contributes the serialised reason the same way, from `reason.stack`.
+
+Those entries sit in the same ring buffer as `console.error` and `console.warn`,
+which is the point of a report: the ten lines before the crash are usually what
+makes it reproducible.
+
+### The short version
+
+The whole browser API, if you are wiring it up yourself:
+
+```ts
+window.addEventListener("error", (event) => {
+  console.warn(`Uncaught: ${event.message} (${event.filename}:${event.lineno})`, event.error);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.warn(`Unhandled rejection: ${event.reason}`);
+});
+```
+
+Or the one line that also keeps the ring buffer, the frames and the position:
+
+```ts
+import { initConsoleBuffer } from "bugbottle";
+
+initConsoleBuffer(); // returns the stop, as every recorder in the package does
+```
+
+Have the panel open by itself, and queue the report while the network is down,
+with `openOnError` and [the queue](#when-the-network-is-down) — both are
+described under [Opening it without a button](#opening-it-without-a-button).
+
 ## The form (React)
 
 ```tsx
