@@ -360,8 +360,24 @@ attribute needs a major version, and a new entry point needs a minor one.
   error reporting service", and the reporter-facing half — "and then what" — is
   where a library earns its place. It carries the one thing those docs warn
   about and no example shows: in production a Server Component error reaches
-  the browser with its message replaced, and `error.digest` is the only thing
+  the   browser with its message replaced, and `error.digest` is the only thing
   that ties the report back to your server log.
+- **`/self-hosted/` on the site.** The twelve framework pages and
+  `/compare/` answered every question in this field except the one the queries
+  with the most commercial intent arrive on: "sentry alternative", "self hosted
+  error tracking", "open source error tracking". A table is a poor answer to
+  "what do I run myself", so the site now has a page for it — and it answers
+  honestly in the direction nobody else does, that there is **nothing to
+  self-host**: no container, no database and no version to track, because the
+  server half is two exports and a route the reader already has. It lists the
+  three ways to receive a report (a route in the application they already run,
+  `examples/inbox` in a container, the WordPress plugin), gives the operational
+  numbers from the constants in the code rather than estimating them (2 000
+  reports by default, retention off until you ask for it and `prune()` on a
+  schedule you write, 2 MiB of base64 inside a 4 MiB body), collects the five
+  receiver-side traps the framework pages each found once, and says plainly
+  what they do not get: no queue, no alerting, no time series, replay only with
+  their own rrweb, and one browser in CI.
 
 ### Fixed
 

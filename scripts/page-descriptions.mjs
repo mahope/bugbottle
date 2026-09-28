@@ -93,6 +93,8 @@ export const PAGE_DESCRIPTIONS = {
   "replay-with-rrweb":
     "attachRrweb(record) puts the last half-minute of your own rrweb events in the report, masked, and trimmed to the window and the byte cap.",
   sammenlign: "bugbottle sammenlignet med Marker.io, Jam, Sentry User Feedback, BugPin og rrweb, med størrelserne målt af det samme buildværktøj.",
+  "self-hosted":
+    "Self-hosted error reporting with no server to run: a route in your own app, a container, or the WordPress plugin. What it costs.",
   screenshots: "captureScreenshot takes a renderer rather than importing one, so html-to-image stays optional. Field values are masked for the render.",
   "sending-it-somewhere":
     "Eleven sinks in bugbottle/server: Slack, Discord, Teams, mail, GitHub, Linear, Jira, GitLab, Sentry, SMTP and a plain webhook.",

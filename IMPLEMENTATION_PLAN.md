@@ -276,6 +276,39 @@ nextjs.org, angular.dev, nuxt.com.
   for at rette. `message` er rapportens eget felt, så nøglen siger hvad den
   indeholder. Det er en **minor** (signaturen på en eksisterende export), ikke en
   patch.
+- [x] **22. `/self-hosted/` — siden der svarer på "sentry alternative" og
+  "self hosted error tracking".** 28/9, `ceo/self-hosted-page`.
+  **Datagrund:** målt 28/9 05:3x (Google Suggest, samme metode som de ni
+  forgående iterationer) — `sentry alternative` **10** (første forslag er
+  "sentry alternatives", derefter "sentry alternatives open source", "… free",
+  "sentry alternative self hosted"), `open source error tracking` **10**
+  ("open source error monitoring", "open source error logging tools"),
+  `bug report tool` **10** ("bug report tool open source", "bug reporting tools
+  in software testing"), `self hosted error tracking` **7** ("self hosted error
+  monitoring", "self hosted error logging", "self hosted vs hosted"),
+  `error reporting javascript` 6 ("javascript error reporting library").
+  Altså: den **eneste** kategori vi har en række sider i (tolv frameworksider
+  + `/compare/`) uden en side til. Og den er den mest **købsintente** i hele
+  målingen — en læser der skriver "sentry alternatives open source" er ved at
+  vælge en erstatning, ikke ved at lære noget. `/compare/` er en tabel, og en
+  tabel er et svart svar på "hvad skal jeg køre selv"; spørgsmålet handler om
+  drift. **Siden** siger det ærligt modsat de fleste: der er **intet at
+  self-hoste** (ingen container, ingen database, ingen version), fordi
+  bagenden er to eksporterede funktioner og en rute du allerede har. Den har de
+  tre former (rute i eksisterende app / `examples/inbox` i en container /
+  WordPress-plugin'et, én aktivering), de **operationsmål** der er sande
+  (2000 rapporter i `DEFAULT_MAX_REPORTS`, retention fra som 0 og `prune()` er
+  noget *du* schedulerer, 2 MiB base64 i `MAX_SCREENSHOT_BYTES` under et loft på
+  4 MiB), de **fem fælder** der er egenskaber ved *din* deployment og ikke
+  ved frameworket (samme fem som på Express-, Fastify-, NestJS-siderne, samlet
+  i én tabel med links), og en ærlig "hvad du får ikke" (ingen kø, ingen
+  alarmering, ingen tidsserier, replay kun hvis du medbringer rrweb, ét browser-
+  kørsel i CI). Alt med tal fra konstanter i koden, ingen vendor-påstande. 55
+  URL'er i sitemap'en (fra 54), 6 søgeposter (side + 5 headings), sidebar-post i
+  About, link fra BugPin-afsnittet i `/compare/`. **MÅL: `/self-hosted/`
+  baseline 0 besøgende (siden findes ikke) pr. 2026-09-28.** Sammenlign 25/10
+  og 25/11. Se "Fund fra self-hosted-iterationen" i loggen.
+
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -1235,6 +1268,22 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
+- **2026-09-28, iteration 18** (`ceo/self-hosted-page`). Opgave 22. Se opgaven.
+  Metoden holdt for tiende gang: målt først (Google Suggest), skrevet på
+  konstanter i koden, og **ikke** gentaget fra en sibling-side. Den nye klasse
+  her er ikke en framework men en **deploymentform** — de fem fælder i
+  Express-, Fastify- og NestJS-iterationerne (body-limit, rå krop på en
+  signeret rute, `trustProxy` mod ratelimitten, PNG-signatur i bytene,
+  `store` som utroværdigt input) er hverken frameworks eller bibliotekets
+  skyld, men egenskaber ved *din* udrulning. De lå i tre sider, som en læser
+  først efter at have læst to andre sider ville finde dem; nu ligger de i én
+  tabel på den side, en "self hosted"-søgning lander på. **Næste mål er derfor
+  ikke en fjortonde frameworkside** (sådan som det stod i køen efter
+  NestJS), og den tredje punkt-punkt i "Køen efter dette" — *skriv
+  script-tagonlysningen en gang* — er stadig betalt for tre gange (Vue, React
+  Router, Svelte) og ulavet. Den er næste iteration hvis intet med større
+  trafik-effekt står foran; den er **ikke** trafik, den er kvalitet i de sider
+  vi allerede har.
 - **2026-09-28, iteration 17** (`ceo/open-prefill`). Opgave 21. Se opgaven.
   - **Køen var tom, så valget var mellem to ting planen selv navngiver:** den
     fælles script-tag-opløsning (betalt for tre gange, DRY, ingen trafik) og
@@ -1788,6 +1837,21 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /self-hosted/ (55 sider i sitemap'en, ny side under About
+  — den sjette side med sin egen Markdown, og den første der svarer på
+  "sentry alternative" / "self hosted error tracking") — merge <sha> ~06:2x,
+  2026-09-28` — næste batch-vindue er **07:30 2026-09-28**, samme som de ti
+  notes nedenfor, så **én kørsel dækker alle elleve**. Verificér **indhold**:
+  `https://bugbottle.dev/self-hosted/` skal vise de tre former (rute,
+  `examples/inbox`, WordPress-plugin), tabellen med de fem fælder, teksten
+  `DEFAULT_MAX_REPORTS` og `MAX_SCREENSHOT_BYTES`, `description`-taggen skal
+  begynde `Self-hosted error reporting with no server to run` (ikke klippet),
+  sitemap'en skal liste siden med `lastmod 2026-09-28`, og `About`-gruppen i
+  sidebaren skal have **fire** poster (Compared with, Changelog, Support,
+  Self-hosted). **Ingen ny URL ud over denne** — de øvrige 54 er uændrede,
+  og `dist/` rørte denne ændring slet ikke, så IIFE'erne og budgetterne er
+  uændrede (24 688 / 21 104 gzipped, `check-dist` grøn på 208 filer).
 
 - `VERIFICÉR DEPLOY: /docs/express/ og /docs/fastify/ — to afsnit i
   "X-Powered-By er på" og "Hvilken adresse ratelimitten tæller" er skrevet om

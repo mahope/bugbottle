@@ -137,6 +137,22 @@ const STANDALONE = [
     otherUrl: "/docs/privacy-checklist/",
   },
   {
+    id: "self-hosted",
+    lang: "en",
+    source: join("site", "self-hosted.md"),
+    out: join("self-hosted"),
+    url: "/self-hosted/",
+    title: "Self-hosted",
+    navTitle: "Self-hosted",
+    eyebrow: "About",
+    heading: "Self-hosted, and there is nothing to run",
+    /* No `otherUrl`, and none claimed: it is English only, like the support
+       page. A Danish version would say the same thing in the same order — the
+       five traps in the table are the same five either way — and a crawler
+       told two URLs are one page in two languages would be told it is two pages
+       with the same text. */
+  },
+  {
     id: "support",
     lang: "en",
     source: join("site", "support.md"),
@@ -273,6 +289,12 @@ const GROUPS = [
         navTitle: "Support",
         description:
           "There is no paid tier. What a donation goes to, what it does not buy, and how to help without money.",
+      },
+      {
+        url: "/self-hosted/",
+        navTitle: "Self-hosted",
+        description:
+          "There is no server to run. Three ways to receive a report yourself, what it costs to operate, and five traps.",
       },
     ],
   },
@@ -1120,6 +1142,16 @@ function sitemapXml(pages) {
     {
       loc: `${ORIGIN}/support/`,
       source: "site/support.md",
+      alternates: [],
+    },
+    /* The self-hosted page, for the same reason and one more: "sentry
+       alternative self hosted" and "self hosted error monitoring" are the two
+       queries with the most commercial intent this field gets, and the answer
+       to both is a page rather than a row in a table. English only, so it
+       claims no alternate. */
+    {
+      loc: `${ORIGIN}/self-hosted/`,
+      source: "site/self-hosted.md",
       alternates: [],
     },
     { loc: `${ORIGIN}/docs/`, source: "README.md", alternates: [] },
