@@ -332,6 +332,43 @@ nextjs.org, angular.dev, nuxt.com.
   søgeposter (fra 217). **Ingen kodeændring** — begge IIFE'er vejer 24 688 /
   21 104 gzipped, uændrede, `check-dist` grøn på 208 filer, 896 tests grønne.
 
+- [x] **25. Docs-links der landede på den forkerte side — 10 af dem.**
+  28/9, `ceo/script-tag-once`. **Datagrund:** ikke trafik, men den
+  konverteringsfejl der går forud for alt andet. `scripts/build-docs.mjs`
+  slog ethvert `#anchor` op i **én flad Map** over alle 47 sider, så den
+  side der *sidst* havde en overskrift med det slug vandt. Bevis, målt i den
+  byggede HTML før rettelsen: **Vue-sidens fire "Nuxt page"/"Nuxt plugin"**
+  pegede på `/docs/recipes/#nuxt` (Recipes' opskrift) frem for
+  `/docs/nuxt/`, Fastify' "Hono page" på `/docs/recipes/#hono`,
+  global-errors' "Nuxt page" og "Hono page" samme sted, API'ens
+  `[WordPress](#wordpress)` på Recipes' `### WordPress`, Recipes' eget
+  `[Receiving a report](#receiving-a-report)` på Fastifys `### Receiving a
+  report`, og NestJS' `[one script tag](#one-script-tag)` på **Astros**
+  `### One script tag` frem for `/docs/one-script-tag/`. Ti links, hvor
+  læseren bliver sendt et sted hen, der ligner det rigtige.
+  **Rettelsen følger GitHub selv:** en sides `##`-slug vinder over ethvert
+  under-overskrifts-slug, så `#nuxt` er Nuxt-siden — også på GitHub, hvor
+  `## Nuxt` er den første overskrift med den tekst. Er anchor'et kun på denne
+  side, bliver det en `#self`-link (renere HTML end `/docs/…/#…`); findes det
+  på præcis én anden side, peger det dér (`#masking` → Please-read-this-part,
+  uændret). **Og to sider med samme under-overskrift kan ingen regel svare på**,
+  så bygningen stopper nu og navngiver dem: *"`[fileStore](#storing-it)` on
+  /docs/recipes/ — /docs/hono/ has "Storing it" and /docs/fastify/ has
+  "Storing it", so no rule can say which one it means; write the page: …"*.
+  Bevis for at vagten virker: den erprovokeret med to lydige
+  `### Storing it` i Hono og Fastify + et link fra Recipes, og builden
+  fejler med netop den besked. Samme slags som de tre andre byggevåbner
+  (ugrupperet `##`, spøgelses-slug, dobbelt slug). **Ingen ny URL, ingen ny
+  side, ingen ændring i sitemap'en, ingen kode** — de ti links er de eneste
+  forskel i den byggede HTML. 896 tests grønne, `check-dist` grøn på 208
+  filer, IIFE'erne uændrede (24 688 / 21 104 mod budgetterne 25 088 /
+  21 504). **Bemærk til næste iteration:** den samme `#anchor`-flade findes
+  på de **STANDALONE**-sider (`site/*.md`), som går gennem rendereren med
+  tomme kort — deres `#anchor` går derfor stadig til GitHub-README'en, også
+  når overskriften findes på den side selv (fx `/da/privatliv/`). Ikke rettet
+  her: det er et spørgsmål om **sprog** (skal et dansk `#anchor` pege på den
+  danske side eller på den engelske?), ikke om opløsning, og det er bedre
+  besvaret end gættet.
 - [ ] **24. `typescript` 5.9.3 → 7.0.2 — den én major der ligger.**
   **BLOCKED (28/9, `ceo/typescript-7`, rullet tilbage efter 55 min): tre
   forhindringer, en af dem reel. Se "Fund fra TypeScript 7-iterationen" —
@@ -1552,6 +1589,54 @@ flyttede sig** (24 688 / 21 104 gzipped, uændrede).
 
 ## Log
 
+- **2026-09-28, iteration 20** (`ceo/script-tag-once`). Opgave 25. Se opgaven.
+  - **Fundet ved at læse den byggede HTML, ikke koden.** Jeg ville skrive
+    "script-tagonlysningen en gang" (køens tredje punkt, betalt for fire
+    gange) og greb i stedet for en diff `site/docs/*/index.html` mod de
+    links `build-docs.mjs` laver. Det er den rigtige metode samme sted som
+    de otte framework-sider: **læs output, ikke kilde** — og den afslørede
+    en fejl, der lå i ti links på fem sider og som ingen måtte have set,
+    fordi koden *ligner* rigtig. En `Map` med én indgang per slug, fyldt i
+    siderækkefølgen, er ikke en fejl man ser ved at læse den; den er en
+    fejl man ser ved at læse `href`.
+  - **Hvorfor det ikke blev opdaget før:** de forkerte links er *alle*
+    plausible. `/docs/recipes/#nuxt` er en rigtig URL, `#nuxt` slug'ifies
+    fra en rigtig overskrift, og de hænger på de sider der omtaler Nuxt.
+    Der er ingen rød linje nogen steder — kun en læser, der lander forbi.
+  - **Rettelsen er en regel, ikke en liste.** Ti rettede links ville være
+    samme slags fejl igen ved den næste side, så reglen er skrevet som den
+    er: **GitHub selv svarer `#nuxt` med `## Nuxt`**, fordi det er den
+    første overskrift i filen med den tekst. Den regel er altså ikke en
+    heuristik valgt af mig — den er den adfærd, en læser der klikker det
+    samme link på GitHub ser. `### Nuxt` længere nede i Recipes er hverken
+    det GitHub eller denne build svarer med.
+  - **Den fjerde mulighed er en byggefejl.** `#storing-it` på to sider kan
+    ingen regel svare på, og det er præcis det tilfælde hvor builden før
+    valgte "den sidste" i stedet for at sige "ved jeg ikke". Nu stopper den.
+    Bevis for at vagten virker: provokeret med to `### Storing it` i Hono
+    og Fastify + ét link fra Recipes → builden fejler med beskeden ovenfor.
+    Jeg prøvede først med linket **på** en af de to sider (der er det
+    korrekte svar, så den bygde grønt) — det siger noget om hvor let den
+    fejl er at overse.
+  - **⚠️ Ikke gjort, fordi det er et spørgsmål og ikke en fejl:** de seks
+    STANDALONE-sider (`/compare/`, `/support/`, `/self-hosted/`, `/da/…`)
+    går gennem samme renderere med **tomme kort**, så *deres* `#anchor`
+    går til GitHub-README'en, også når overskriften findes på siden selv.
+    Det er ikke en `#anchor`-opløsningsfejl, det er et **sprogspørgsmål**:
+    skal et `[scrubbing](#scrubbing)` på `/da/privatliv/` pege på
+    privatlivssiden selv eller på den engelske? Skrevet under opgaven, så
+    næste iteration ikke "løser" det ved at gætte.
+  - Deploy-noterne fra de foregående otte iterationer er stadig åbne og
+    **kun 07:30-vinduet** er gået siden de fleste blev skrevet; de er ikke
+    verificeret i denne iteration (merge-tidspunktet for denne er ~08:0x,
+    så næste batch er 12:30). De tælles sammen med de nye.
+  - Næste iteration: **verificér de ni åbne `VERIFICÉR DEPLOY`-noter** i ét
+    kald (HTTP + indhold på de nye sider, `lastmod` i sitemap'en, sidebarens
+    rækkefølge). Ellers: opgave 24's veje A–C — og **A kræver intet svar
+    fra Mads** (skriv fundene fra TypeScript 7-undersøgelsen ind i
+    `CLAUDE.md` som grunden til at den står på 5.9.3), så den kan laves
+    uden at vente.
+
 - **2026-09-28, iteration 19** (`ceo/global-error-events`). Opgave 23. Se opgaven
   og "Fund fra global-errors-iterationen". **Første gang metoden var en anden:**
   målt som altid med Google Suggest, men kilden var MDN og ikke et publiceret
@@ -2139,6 +2224,24 @@ flyttede sig** (24 688 / 21 104 gzipped, uændrede).
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: de ti kryds-side-links i den byggede HTML (Vue ×4,
+  global-errors ×2, Fastify, NestJS, API, Recipes) — 7503b81, merge
+  <sha>, ~08:0x, 2026-09-28` — næste batch-vindue er **12:30 2026-09-28**,
+  samme som de otte notes ovenfor, så **én kørsel dækker alle ni**.
+  Verificér **indhold**: `https://bugbottle.dev/docs/vue/` skal linke "Nuxt
+  page" og "Nuxt plugin" til `/docs/nuxt/` (ikke `/docs/recipes/#nuxt`),
+  `/docs/global-errors/` skal linke "Nuxt page" og "Hono page" til
+  `/docs/nuxt/` og `/docs/hono/`, `/docs/fastify/` skal linke "Hono page"
+  til `/docs/hono/`, `/docs/nestjs/` skal linke "one script tag" til
+  `/docs/one-script-tag/`, `/docs/api/` skal linke "WordPress" til
+  `/docs/wordpress/`, og `/docs/recipes/` skal linke "Receiving a report"
+  til `/docs/receiving-a-report/`. Bevis på den rene build: `grep -o
+  'href="/docs/recipes/#' site/docs/*/index.html` skal finde **intet**.
+  **Ingen ny URL, ingen ændring i sitemap'en, ingen ændring i
+  `description`-tags** (teksten er den samme), og `dist/` rørte denne
+  ændring slet ikke — det er `scripts/build-docs.mjs` og den HTML den
+  skriver, så IIFE'erne er uændrede (24 688 / 21 104 gzipped).
 
 - **Ingen deploy-note for devDependency-runden** (13aeeb3, merge c01d22a
   ~06:19, 2026-09-28). Otte patch/minor i byggeværktøjet, ingen kode, ingen
