@@ -235,8 +235,180 @@ vi har lavet, står med **0 i trafik-baseline hver** indtil den kommer.
 
 ## Fase 3 — trafik-drevet
 
-### Det vigtigste fund
+### Research-iteration 28/9 13:3x — npm-siden er det eneste sted med
+målbare tal, og den havde ingen billeder
 
+**Køen var tom** undtagen opgave 7 (blocket på din Search Console-eksport), så
+denne iteration er en research-iteration — og den har ifølge kontrakten skullet
+levere en rigtig forbedring med, ikke kun en plan.
+
+**Baseline først, alle målt i denne kørsel (28/9 13:2x–13:4x):**
+
+| Tal | Kilde | Værdi |
+|---|---|---|
+| npm downloads | promptens produktsignaler | **412/måned, 191/uge** |
+| npm downloads efter denne ændring | prompten, næste iteration | **?** (genmål 5/10) |
+| GitHub | prompten | ★2, 0 watchers, 4 visninger/14 d, 82 kloninger |
+| Plausible | prompten | 1 besøgende/28 d |
+| Cloudflare | prompten | 5 074 unikke besøgende-dage/28 d (tæller bots) |
+| Live-site | målt her: `/` 200, sitemap **60** `<loc>`, robots korrekt | sundt |
+| Publiceret tarball | målt her: alle 20 entry points i `bugbottle@1.0.1` | hele entry'en OK |
+
+**MÅL: npm downloads baseline 412/måned og 191/uge pr. 2026-09-28.** Det er
+det eneste adoption-tal jeg kan hente selv, og det er derfor denne iteration
+gik efter pakkesiden. Sammenlign 5/10 og 5/11. (Stjerner og repo-visninger er
+samme mål i en anden enhed; de kan ikke tilskrives denne ændring alene.)
+
+### Fund 1 — bugbottle er ikke i top 250 for ét eneste af sine egne keywords
+
+Målt med npm's egen søge-API (`registry.npmjs.org/-/v1/search`, `size=250`),
+28/9 13:2x. Ikke en antagelse om et søgemaskerangsalg — et kald:
+
+| Søgning | Total | bugbottles plads |
+|---|---|---|
+| `bugbottle` | 1 | **1** |
+| `Your UI your endpoint` (beskrivelsen) | 1 155 126 | **1** |
+| `evidence attached` (beskrivelsen) | 20 859 | **2** |
+| `bug-report` (keyword #1) | 82 818 | **ikke i top 250** |
+| `feedback-widget` (keyword #2) | 91 829 | **ikke i top 250** |
+| `error-context` (keyword #8) | 1 218 487 | **ikke i top 250** |
+| `user-feedback` | 2 935 384 | **ikke i top 250** |
+| `screenshot` | 28 739 | **ikke i top 250** |
+| `headless` | 27 144 | **ikke i top 250** |
+
+**Konklusionen er dobbelt, og den negative halvdel er den dyre:** keywords er
+**ikke** værd at ændre. `bugbottle` rangerer 1 og 2 på *sin egen beskrivelse* og
+er væk på 82 818 resultater for sit eget første keyword — altså er teksten i
+beskrivelsen det der finder os, ikke keyword-feltet. npm's `score.detail` er
+`{popularity, quality, maintenance}`, alle `1` på de søgninger jeg kunne se,
+så det vi kan påvirke er matchet — og det er skrevet i `description` og i det
+README, der ligger under den.
+
+**Det er grunden til at næste iteration ikke skal bruge tid på keywords.**
+Den forventede effekt var ændret til "bedre `description` og bedre README", og
+det er opgave 38.
+
+### Fund 2 — `bugbottle/server` kaster ikke `ERR_MODULE_NOT_FOUND` på npm
+
+Jeg hentede den publicerede tarball og importerede **alle 20 entry points** fra
+den, fordi planen bærer en advarsel om at `bugbottle/server` har været brudt
+siden 28/9 kl. 02:4x. Målingen siger noget andet, og den er værd at stå i
+planen fordi den modsiger en note:
+
+- **Publiceret 1.0.1: alle 20 entry points findes**, og hver `.js` og `.d.ts`
+  er med i tarballen (207 filer). `import()` fejler kun på `react`, `vue`,
+  `solid-js` og `html-to-image` — og det er de **valgfrie peers**, der
+  korrekt ikke følger med i et tarball. Ikke en fejl: det er peer- og
+  optionalDependency-semantik.
+- **`fastifyHandler` findes ikke i publiceret 1.0.1** — fordi den blev
+  tilføjet *efter* den udgave. Det er ikke en mangel, det er en 1.0.1.
+- **Fejlen i opgave 20 var derfor aldrig på npm.** Den lå i det **committede
+  `dist`**, altså i de to veje der *ikke* bruger npm:
+  `npm install github:mahope/bugbottle#v1.0.1` og jsDelivr, som begge tager
+  dist fra git. Den var altså reel, men dens **ofte** er den, jeg har antaget.
+  Bemærk til Mads: 191 downloads/uge gik altsig gennem en tarball, der var
+  hel; de to GitHub-veje var dem, der var brudt.
+
+### Leveret 28/9 13:4x — opgave 37: billedet i README's åbning
+
+**Branch `ceo/readme-picture`, commit `fca5fd5`, merge `c39af84`.**
+
+**Datagrund:** 191 downloads/uge mod **0 stjerner og 4 repo-visninger på 14
+dage**. Downloads uden stjerner er et tal, man kan købe sig ned i, og pakken
+for et * visuelt* produkt uden ét billede beder læseren tro på teksten: der er
+191 gange om ugen truffet en person, som har læst "a few kilobytes, your UI,
+your endpoint" om et panel de ikke har set. Billedet lå allerede i repoet —
+`site/panel-narrow.png`, taget af det rigtige panel af `npm run shot:panel` —
+så dette er ikke et nyt screenshot, det er et der var ubrugt.
+
+**Rettelsen har to halve, og den anden er den overraskende:**
+
+1. **README's åbning** fik billedet. Den åbning er *to* sider — den er
+   npmjs.com-pakkesiden, og den er `/docs/install/`. Absolute URL
+   (`https://bugbottle.dev/panel-narrow.png`), fordi en rodrelativ sti betyder
+   intet uden for dette site, så npm og GitHub får den samme fil.
+2. **Rendereren holdt billedet væk.** `scripts/build-docs.mjs` svarede på
+   *alle* `![]()` med alt-teksten, fordi footeren lover at sitet ikke laver en
+   ekstern request. **Det løfte handler om vært, ikke om billeder** — et
+   billede fra bugbottle.dev er sitet, der beder sig selv om en fil, præcis som
+   landingssidens panel-skud altid har gjort. Reglen er nu "ingen *fremmed*
+   request": eget src renderes, shields.io bliver alt-tekst, og de 51 sider
+   laver stadig **nul** tredjepartsanmodinger.
+
+**Fund undervejs, i min egen ændring:** det første `<img>` havde ingen
+`width`/`height`, hvilket betyder at det ingen størrelse har før det er
+indlæst, og teksten under det hopper. CLAUDE.md har en Lighthouse-gulv, og et
+billede der flytter afsnittet under sig er den billigste måde at miste det på.
+Bredde og højde læses nu ud af **PNG'ens IHDR** frem for at stå i rendereren,
+og testen sammenligner dem med filen, så en ny optagelse ikke kan få den til at
+lyve.
+
+**`tests/docs-images.test.ts` driver den rigtige build** i en midlertidig kopi
+af repoet, fordi rendereren ikke er eksporteret — en test der gentager dens
+betingelse ville kun bevise gentagelsen. **Bevis at vagterne virker, begge
+veje:** `own = true` gør den ene rød (et fremmed billede renderer), `own =
+false` gør den anden rød (vores eget billede forsvinder). Den tredje test
+spørger den halv, der er nemmest at glemme: et src rendereren *vil* vise skal
+være en fil, der faktisk er committet, for et billede ingen har gemt er en 404
+på hver side linjen er indsat i.
+
+**Målt:** `npm run check` grøn — **911 tests** (fra 904, syv nye),
+`check-dist` grøn på 208 filer, IIFE'erne **24 688 / 21 104** mod budgetterne
+25 088 / 21 504 (uændrede — intet i pakken rørte), 51 docs-sider, 260
+søgeposter, sitemap **60** `<loc>`. **Ingen ny URL**, ingen ny side, ingen
+ændring i sitemap'en eller søgeindekset.
+
+**⚠️ Kan ikke måles her, og det er ærligt sagt:** `npm run a11y` kræver
+`puppeteer-core` og en Chrome, og **denne maskine har ingen af dem**
+(`chrome.mjs` svarer `C:/Program Files/...`, `puppeteer-core` er ikke
+installeret). CI's `browser`-job kører begge dele på hvert push, så de er
+dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
+`width`/`height` nu i stedet for efter en måling.
+
+### Køen efter research-iterationen — prioriteret, med datagrund
+
+- [x] **37. Billedet af panelet i README's åbning.** 28/9,
+  `ceo/readme-picture`, `fca5fd5` (merge `c39af84`). Se Fund 1, Fund 2 og
+  målingerne ovenfor. **MÅL: npm downloads 412/måned, 191/uge pr. 2026-09-28.**
+  Sammenlign 5/10 og 5/11. *Næste skridt er at se om billedet flytter
+  stjerner, for det er den del af funnelen der fortæller om det virkede.*
+- [ ] **38. npm-`description` er det eneste felt, der finder os — og det er
+  157 tegn brugt på at sige hvad *biblioteket* er.** Datagrund: Fund 1.
+  Beskrivelsen rangerer 1 på "Your UI your endpoint" og 2 på "evidence
+  attached", altså **læseren finder os via beskrivelsens sætninger, ikke via
+  keywords**. Den nævner i dag ingen af de ord, en søgning faktisk indeholder
+  (`error`, `reporting`, `sentry`, `self-hosted`, `user feedback`), fordi den
+  bruger dem på at fortælle *hvad der sker* i stedet for *hvad man leder
+  efter*. **Accept:** en beskrivelse der stadig siger hvad pakken er, og som
+  rammer de fem søgeord; `npm view bugbottle description` efter build, og en
+  test der siger at den ikke bliver klippet af npm's egen grænse. Mål:
+  downloads 5/10 mod 412.
+- [ ] **39. `/docs/install/` og npm-siden skal pege på hinanden, så de to
+  veje hænger sammen.** Datagrund: de er i dag to *kopier* af samme åbning,
+  og de kan glide fra hinanden — præcis som de otte framework-sider gjorde
+  med `open()` (opgave 21). **Accept:** hver af de to har et link til den anden,
+  og `tests/readme-snippets.test.ts` dækker de snippets de deler, så en
+  rettelse kun kan ske i den ene.
+- [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
+  Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
+  måles.
+
+### Det nye billede på de 27 opgaver, og hvorfor Fase 3's rækkefølge holdt
+
+Fase 3 sagde "tag opgaverne i rækkefølge efter forventet effekt på trafik". De
+27 var alle skrevet ud fra **søgninger** — Google Suggest-tal, målt 27/9 og 28/9
+— fordi Search Console-eksporten ikke var kommet. **Den aflede forkerede, og
+det er fundet i denne iteration:** de 27 sider er SEO-form, og **sitet har nul
+menneskelige besøgende**, så ingen af dem kan forventes at flytte noget målbart
+inden eksporten kommer. Det betyder ikke at de var spildte — de er det, der
+gør siden findelig *når* Search Console åbner — men det betyder at **den næste
+iteration skal lede efter den type opgave, der flytter adoption, ikke den der
+leder efter flere sider**: distribution, konvertering og pakkesiden. Fund 1
+og Fund 2 er begge fundet ved at se på npm i stedet for på Google.
+
+### Den oprindelige Fase 3-research (27/9–28/9) — de 27 søge-drevne sider
+
+### Det vigtigste fund
 **Vi skriver om en kategori, ingen autocompletter på, og mangler sider i den
 kategori, der har efterspørgsel.** Google Suggest-tællinger (hentet 27/9 via
 `suggestqueries.google.com`, FETCHED):
@@ -2322,6 +2494,22 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
   baseline) og enhver fremtidig CTR-ændring umålelig, og jeg kan ikke se om
   beskrivelserne virker.
 
+- **Et spørgsmål om de 191 downloads om ugen, som du måske har et svar på.**
+  28/9 13:4x. Publiceret `1.0.1` er målt og **helt i orden** — alle 20 entry
+  points, hver `.js` og `.d.ts` med i tarballen; de eneste `import`-fejl er de
+  fire *valgfrie* peers, som korrekt ikke følger med. Så de 191 er ikke brudte
+  installs. **Spørgsmålet:** ser du dem i Cloudflare- eller npm-tallene som
+  CI, en Dependabot-bot eller en Dockerfile, der trækker `bugbottle`? Hvis ja,
+  så er tallet ikke adoption, og det ville forklare 0 stjerner ved 191
+  downloads/uge bedre end nogen hypotese jeg kan måle her. Jeg kan ikke se det
+  fra repoet, og det er den eneste måling her der skiller *hvor* de 191 kommer
+  fra. *Det er ikke en anklage om noget — det er det tal, resten af
+  trafik-arbejdet skal regnes på, og jeg vil hellere have det rigtigt end
+  optimere mod et forkert tal.*
+  *(Opfølger: hvis de er reelle installs, er næste skridt billedet i
+  pakkesiden — opgave 37, lagt 28/9 — og det er det, vi kan se virkningen af
+  i downloads 5/10.)*
+
 - **TypeScript 5.9.3 → 7.0.2: vil du have Go-compileren, og er du villig til at
   betale for den med en omskrevet `api-table.mjs`?** 28/9. Jeg gennemførte
   opgraderingen, fik porten grøn, og rullede den tilbage — se "Fund fra
@@ -2552,6 +2740,44 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-28, iteration 27** (`ceo/readme-picture`, merge `c39af84`).
+  Opgave 37. Research-iteration, fordi køen var tom undtagen opgave 7.
+  Se "Research-iteration 28/9 13:3x" og fundene ovenfor.
+  - **To fund, og det negative er det dyre.** **Keywords er ikke
+    flaskehalsen:** `bugbottle` er **ikke i top 250** for ét eneste af sine egne
+    keywords (`bug-report`: 82 818 resultater), men rangerer **1** og **2** på
+    sin egen *beskrivelse*. Så det vi kan påvirke er `description` og
+    README'en under den — opgave 38 er skrevet på den måling.
+  - **`bugbottle/server` har aldrig været brudt på npm.** Jeg hentede
+    publiceret `1.0.1` og importerede alle 20 entry points: hele entry'en er
+    der, og de eneste fejl er de fire *valgfrie* peers. Opgave 20s
+    `ERR_MODULE_NOT_FOUND` lå i det **committede `dist`**, altså i
+    GitHub-/jsDelivr-vejen, ikke i tarballen. Den var reel, dens **ofte** var
+    min egen antagelse — og det er derfor jeg efterhånden måler de veje, jeg
+    skriver om, i stedet for at regne dem ud.
+  - **Leveret:** billedet af panelet i README's åbning, som er både
+    npm-pakkesiden og `/docs/install/`. 191 downloads/uge mod 0 stjerner og 4
+    repo-visninger/14 dage, for et *visuelt* produkt uden ét billede.
+  - **Rettelsen havde to halve, og den anden var den overraskende:**
+    rendereren svarede på *alle* `![]()` med alt-tekst, fordi footeren lover
+    "ingen ekstern request" — men det løfte handler om **vært**, ikke om
+    billeder. Eget src renderes nu, shields.io er stadig alt-tekst, og de 51
+    sider laver stadig nul tredjepartsanmodinger.
+  - **Fund i min egen ændring:** det første `<img>` havde ingen
+    `width`/`height`, altså ingen størrelse før indlæsning og et hop i teksten
+    under. Målt ikke, **rettet direkte** — bredde og højde læses nu ud af
+    PNG'ens IHDR, og testen sammenligner dem med filen.
+  - **Vagterne er provokerede begge veje:** `own = true` gør den ene rød,
+    `own = false` gør den anden. En test der kun passer, er ingen vagt.
+  - **Gaten:** `npm run check` grøn — **911 tests** (fra 904, syv nye),
+    `check-dist` grøn på 208 filer, 51 docs-sider, 260 søgeposter, sitemap 60
+    `<loc>`. IIFE'erne uændrede 24 688 / 21 104 mod 25 088 / 21 504 — intet i
+    pakken rørte. Ingen ny URL, ingen ny side.
+  - **⚠️ `npm run a11y` kunne ikke køres her:** hverken `puppeteer-core` eller
+    Chrome findes på denne maskine. CI's `browser`-job kører begge dele på
+    hvert push, så det er dækket der — men det er ikke kørt lokalt, og det er
+    grunden til at `width`/`height` blev rettet frem for målt.
 
 - **2026-09-28, iteration 26** (`ceo/site-image-sources`, merge `040c3b9`).
   Opgave 27. Se noten "✅ LØST 28/9 12:5x" og fundene nedenfor.
