@@ -225,6 +225,7 @@ const GROUPS = [
       "nuxt",
       "astro",
       "react-router",
+      "tanstack-router",
       "wordpress",
       "hono",
       "fastify",

@@ -2597,6 +2597,368 @@ error object alone, so a report that carries React's own line looks different
 depending on how it was built. If your verification ran against `npm run dev`
 you have verified nothing about the shipping path.
 
+## TanStack Router
+
+TanStack Router is the one framework on this list with **no page of its own for
+four releases running**, and it is the largest unclaimed search demand we have
+measured. Google Suggest, fetched 28/9:
+
+| Search | Suggestions |
+|---|---|
+| `tanstack error boundary` | **9** |
+| `tanstack router error boundary` | 7 of them |
+| `tanstack query error boundary` | |
+| `tanstack start error boundary` | |
+| `tanstack start error handling` | **5** |
+
+Nine, against `sveltekit error handling`'s seven and everything else in the
+range — and zero pages here, zero mentions of the word in this README before
+this section. Its documentation is also the thinnest of the frameworks above:
+the error-handling page ends at `errorComponent: ({ error }) => <div>{error.message}</div>`
+and `onCatch` gets a paragraph, and **neither of them is where a report goes**.
+Everything below was read out of `@tanstack/react-router@1.170.40` and
+`@tanstack/router-core@1.170.40` — the **published** `dist/esm` build, not the
+prose — because the two are not the same document and the build is the one that
+runs. Two things in it contradict the documentation, and both are quiet.
+
+One thing to know before the rest: **`onCatch` is not a global handler.** It is
+`componentDidCatch` on a boundary that is only mounted if you gave that route an
+`errorComponent`. Set `onCatch` and forget the component and it does not fire
+once, on any error, and nothing tells you. That is the whole reason this page
+exists, so it is the first section.
+
+### `onCatch` without an `errorComponent` never runs
+
+This is the trap, and it is in the compiled boundary mount. `Match.js`:
+
+```js
+const routeErrorComponent = route.options.errorComponent ?? router.options.defaultErrorComponent;
+const routeOnCatch = route.options.onCatch ?? router.options.defaultOnCatch;
+const ResolvedCatchBoundary = routeErrorComponent ? CatchBoundary : SafeFragment;
+```
+
+`onCatch` is passed **as a prop of `CatchBoundary`**, and `CatchBoundary` is the
+thing the conditional threw away. `SafeFragment` is a render-passthrough with no
+`props.onCatch` to read, so the callback the router just resolved is never
+reached. The whole of the mechanism is one line inside the component:
+
+```js
+componentDidCatch(error, errorInfo) {
+  this.props.onCatch?.(error, errorInfo);
+}
+```
+
+`componentDidCatch` — so it is a **render** handler, and it only exists on a
+boundary that is mounted. The documentation reads "The default `onCatch` handler
+for errors caught by the Router ErrorBoundary" and that is exactly right, taken
+literally: no error component, no ErrorBoundary, no `onCatch`. Write the
+snippet below as `onCatch` alone and it will pass every test that throws
+something you can see the effect of, because the effect of a loader error with
+no boundary is *nothing*.
+
+The fix is one property, and it is the same property the error page needs
+anyway:
+
+```ts
+const rootRoute = createRootRoute({
+  // Without this line onCatch is never called — see above.
+  errorComponent: RouteError,
+  onCatch: reportRouteError,
+});
+```
+
+`defaultErrorComponent` on the `createRouter` options does the same job for
+every route at once, and is what the snippet below uses, so that a route added
+next month cannot be the one that silently stops reporting. Note that
+`defaultOnCatch` has the identical trap and the identical fix: it is read as
+`route.options.onCatch ?? router.options.defaultOnCatch`, and both halves are
+only ever handed to a boundary that exists.
+
+### The report, in a boundary that receives a real error
+
+With an `errorComponent` present, the client path hands your component the
+error and a `reset`, and **that is all**:
+
+```js
+const element = React$1.createElement(this.props.errorComponent ?? ErrorComponent, {
+  error: error[0],
+  reset: this.reset
+});
+```
+
+So `ErrorComponentProps` declares an `info` and, on the client, nothing ever
+fills it in. The type is real — `ErrorComponentProps` in `router-core` has
+`error`, `info?` and `reset` — and the only place the build passes an `info` is
+the *server* branch, where it passes the empty string:
+
+```js
+const errorElement = jsx((route.options.errorComponent ?? router.options.defaultErrorComponent) || ErrorComponent, {
+  error: match.error,
+  reset: void 0,
+  info: { componentStack: "" }
+});
+```
+
+Three facts in five lines. `reset` is **`undefined` during SSR**, so a reset
+button rendered on the server is dead until hydration replaces it. `info` is an
+empty `componentStack`, never React's real one, so an error component that
+renders `info?.componentStack` renders nothing and looks like a bug in your
+code. And it is `void 0` rather than a function, so a component that calls
+`reset()` unguarded throws *inside the error page*, which is the one place
+where a throw is invisible. This library's report does not need any of the
+three — which is the argument for the one below.
+
+```tsx
+// report.tsx
+import { useEffect, useRef } from "react";
+import { isNotFound, useRouterState, type ErrorComponentProps } from "@tanstack/react-router";
+import { mountBugbottle } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+import { da } from "bugbottle/locales";
+
+const widget = mountBugbottle({
+  endpoint: "/api/feedback",
+  screenshot: htmlToImage,
+  locale: da,
+  openOnError: { prefill: true },
+});
+
+// Takes the error and the route it happened on. The `onCatch` on the root route
+// below is the same call with React's errorInfo in hand.
+export function reportRouteError(error: unknown, routeId: string) {
+  // `notFound()` is a decision, not a crash. Sending it fills the inbox with
+  // the application's own routing — see the section below.
+  if (isNotFound(error)) return;
+
+  const text = error instanceof Error ? error.message : String(error);
+  widget.open({ message: `${routeId} failed: ${text}` });
+  // The console ring buffer records console.error and console.warn and nothing
+  // else, so this line *is* the report's console section. Without it the report
+  // has a URL and an empty console.
+  console.error(`[bugbottle] ${routeId}`, error);
+}
+
+export function RouteError({ error, reset }: ErrorComponentProps) {
+  const sent = useRef(false);
+  const routeId = useRouterState({ select: (s) => s.matches.at(-1)?.routeId ?? "" });
+
+  useEffect(() => {
+    // StrictMode runs effects twice in development and a loader error can
+    // re-render the boundary. One report per error, not one per attempt.
+    if (sent.current) return;
+    sent.current = true;
+    reportRouteError(error, routeId);
+  }, [error, routeId]);
+
+  return (
+    <div>
+      <h1>Something went wrong</h1>
+      <button onClick={() => reset?.()}>Try again</button>
+    </div>
+  );
+}
+```
+
+The `useRef` guard is not decoration. `CatchBoundary` is a class with error in
+state, and it re-renders on every navigation, so without the guard a report can
+be filed per re-render rather than per error. `reset?.()` is optional chaining
+for the SSR `void 0` above — in a page that renders on the server it is the
+difference between a button that works and a button that throws.
+
+Register the boundary on the root, where it covers every route beneath it:
+
+```ts
+// router.tsx
+import { createRouter, createRootRoute } from "@tanstack/react-router";
+import { RouteError, reportRouteError } from "./report";
+
+const rootRoute = createRootRoute({
+  errorComponent: RouteError,     // this line is what makes onCatch work
+  onCatch: (error) => reportRouteError(error, "/"),
+  notFoundComponent: RouteNotFound,
+});
+
+const routeTree = rootRoute.addChildren([...]);
+export const router = createRouter({ routeTree });
+declare module "@tanstack/react-router" { interface Register { router: typeof router } }
+```
+
+### A loader error arrives at the boundary as a `throw`, not a prop
+
+The `match.status === "error"` branch of `Match.js` is the one that decides
+where a loader's failure actually surfaces, and it is worth reading, because the
+client and the server disagree:
+
+```js
+if (match.status === "notFound") return renderRouteNotFound(router, route, match.error);
+if (match.status === "error") {
+  if (isServer ?? router.isServer) {
+    const errorElement = jsx((route.options.errorComponent ?? router.options.defaultErrorComponent) || ErrorComponent, { … });
+    return …;
+  }
+  throw match.error;
+}
+```
+
+On the client the router **throws** the loader's error rather than rendering the
+error component directly, and the `CatchBoundary` above it catches the throw and
+renders your component. So the loader error, the `beforeLoad` error, the search
+validator error and the render error all arrive by the same road, through one
+boundary, and the one you write is the one that sees them. That is a better
+design than most of the frameworks above, and it is the reason the integration
+is this short.
+
+It also means **a route with no `errorComponent` and no `defaultErrorComponent`
+catches nothing of its own.** The throw walks up to the root's boundary, and if
+there is no root boundary either it reaches the catch boundary in `Matches.js` —
+which exists, and logs, and does nothing else:
+
+```js
+children: router.options.disableGlobalCatchBoundary ? matchComponent : jsx(CatchBoundary, {
+  onCatch: process.env.NODE_ENV !== "production" ? (error) => {
+    console.warn(`Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute!`);
+  } : undefined,
+  …
+```
+
+Read the condition. That warning is `NODE_ENV !== "production"` and nothing
+else, so **in the build you ship, the global boundary is silent** — it swallows
+the error and prints nothing. A loader error in production with no
+`errorComponent` anywhere is invisible: no page, no console, no report. The
+console buffer cannot save you either, because there is no `console.error` on
+that path at all. Setting one `errorComponent` on the root is the entire fix,
+and the reason it is the first thing in this page.
+
+### `notFound()` is a routing answer, and it is a different door
+
+`notFound()` from `router-core` is the documented way to answer "no such thing"
+from a loader, and it is marked with one property:
+
+```js
+function notFound(options = {}) {
+  options.isNotFound = true;
+  if (options.throw) throw options;
+  return options;
+}
+function isNotFound(obj) { return obj?.isNotFound === true; }
+```
+
+The router sorts it out **before** your error component is consulted, on the
+same line that handles a real error:
+
+```js
+if (match.status === "notFound") return renderRouteNotFound(router, route, match.error);
+```
+
+and the boundary's own `onCatch` re-throws it rather than treating it as a
+crash:
+
+```js
+onCatch: (error, errorInfo) => {
+  if (isNotFound(error)) {
+    error.routeId ??= match.routeId;
+    throw error;          // goes to notFoundComponent, not errorComponent
+  }
+  …
+```
+
+So a `notFound()` never reaches your `errorComponent` and never reaches the
+`isNotFound(error)` line in `reportRouteError` above — the guard is for the
+case where you call `reportRouteError` yourself from a `loader` catch, not for
+this. The practical consequence is the one that matters for a bug inbox: a
+`notFound()` is a 404 somebody designed, so it is not a report. Wire
+`notFoundComponent` to your own page and leave the report path out of it.
+
+### `reset` clears the error, and the boundary clears itself on navigation
+
+`reset` is one line, and it is worth knowing it is not the only way the error
+goes away:
+
+```js
+this.reset = () => { this.setState({ error: 0 }); };
+```
+
+`error: 0` is falsy, so the next render takes the `children` path. But there is
+a second door, and it is the one that surprises people — a **new match** clears
+it without `reset` being called at all:
+
+```js
+static getDerivedStateFromProps(props, state) {
+  const resetKey = props.getResetKey();
+  if (state.error && state.resetKey !== resetKey) return { resetKey, error: 0 };
+  return { resetKey };
+}
+```
+
+`getResetKey` is `() => match`, the match object, and it is a fresh object per
+navigation. So navigating away from a broken route clears the boundary with no
+cooperation from your code — which is correct, and which is also why a
+`useRef` guard in the component is the only reliable once-per-error gate there
+is. There is a second trap in the same three lines: **the error is held in
+state**, so a report fired from render rather than from an effect can be filed
+before `reset` clears it, and a report fired from `onCatch` fires before the
+fallback is even on screen. `onCatch` runs from `componentDidCatch`, which is
+the commit *callback*, so the visitor is looking at your error page while the
+`widget.open()` from the handler is still queued.
+
+### Errors that reach no hook
+
+Three of the usual suspects, and TanStack is honest about all of them — none of
+them throws inside a component, so no boundary and no `onCatch` sees them:
+
+- **A rejected promise nobody awaits** in a `useEffect`. No throw, no boundary.
+  The window `unhandledrejection` listener is the only thing that sees it, which
+  is what `openOnError` in `mountBugbottle` is for, above.
+- **An event handler**: `onClick={() => { throw … }}`. Same story — the throw
+  happens in a task, not in a render, and React's boundary never hears it.
+- **`onCatch` itself throwing**, which is a real risk in the snippet above on
+  the SSR path where `reset` is `void 0`. The one place a throw is invisible is
+  inside the thing that was reporting the throw.
+
+### What to check before you ship it
+
+Four throws, and a report from the right four. First, from a `loader`: `throw
+new Error("orders failed")` in the route's `loader`, and confirm the panel
+opens and the report's console holds the `[bugbottle]` line — **if the console
+is empty, you forgot the `console.error`.** Second, and this is the one this
+page is for: delete the `errorComponent` line from the root and throw the same
+error again. You should get **no report, no console line, and in production no
+visible error at all** — that silence is the bug, reproduced deliberately, and
+it is the test that tells you the `errorComponent` is load-bearing. Third,
+`notFound({ throw: true })` in a loader: your `notFoundComponent` renders, and
+no report is filed. Fourth, throw in a component's render and press the retry
+button, confirming `reset` clears the error and that a second report is not
+filed by the re-render.
+
+Then build it and serve the build. Every warning on this page that mentions
+`NODE_ENV` disappears in production, including the global boundary's, so a
+development run cannot tell you whether an uncaught loader error is loud or
+silent. Verify the production path.
+
+### Shake to report
+
+The detector is the same one every other page on this site describes, and it is
+described once, in full, under
+[`Shake to report` on the opening-without-a-button page](/docs/opening-it-without-a-button/#shake-to-report)
+— `onShake` is one function and its rules (three alternating crossings of
+15 m/s² in a second, a three-second cool-down, nothing measured while the page
+is hidden, and `requestShakePermission()` called by your button and never by the
+library) do not change per framework. What is worth adding here is one line that
+is TanStack's own:
+
+```ts
+import { onShake } from "bugbottle/shake";
+
+mountBugbottle({ endpoint: "/api/feedback", shake: onShake });
+```
+
+A TanStack Start application can fail **before the panel is mounted** — a
+server-function rejection, or a `beforeLoad` that throws on the server, where no
+client bundle has run at all. So put the script-tag form in the root document
+as well, the way `Next` above does it, and you have a button before the module
+that renders the button has loaded. `data-shake` is off by default; the iOS
+permission gate and the secure-context rule are as they are everywhere else.
+
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
@@ -2994,7 +3356,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `mask` | What to hide in the screenshot; `false` photographs the page as it is. See [Masking](#masking). |
 | `trigger` | `false` for no floating button, or an element or selector to use your own. |
 | `shortcut` | The combination that opens the panel. Default `mod+shift+b`; `false` installs no listener. |
-| `shake` | Open the panel when the phone is shaken. Off by default; hand in `onShake` from `bugbottle/shake`, or `{ on: onShake, threshold, cooldownMs }`. See [Shake to report](#shake-to-report). |
+| `shake` | Open the panel when the phone is shaken. Off by default; hand in `onShake` from `bugbottle/shake`, or `{ on: onShake, threshold, cooldownMs }`. See [Shake to report](/docs/opening-it-without-a-button/#shake-to-report). |
 | `network` | Record the failed and slow requests while the panel is mounted. Off by default; hand in `initNetwork` from `bugbottle/network`, or `{ on: initNetwork, all, slowMs, maxEntries, ignore, beforeRequest }`. The panel's `endpoint` is passed on unless you name one. The same switch as `data-network`. See [What the network did](#what-the-network-did). |
 | `perf` | Record the Web Vitals and the storage snapshot while the panel is mounted. Off by default; hand in `initPerf` from `bugbottle/perf`, or `{ on: initPerf, vitals, storage, allowValues, maxKeys }`. The same switch as `data-perf`. See [Performance and storage](#performance-and-storage). |
 | `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
