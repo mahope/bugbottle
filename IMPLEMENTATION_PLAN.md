@@ -1301,7 +1301,8 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   npm-downloads og stjerner; sammenlign 25/10.
 
 - [x] **34. `/docs/install` uden sin skråstreg blev sendt ned på `http://`.**
-  28/9 13:1x, `ceo/relative-redirect`. **Lukket.** Datagrund: en ren
+  28/9 13:1x, `ceo/relative-redirect`, commit `b220a54`, merge `edb6de7` 13:12.
+  **Lukket.** Datagrund: en ren
   fejlsøgning efter at blokeringen var hævet. Plausible siger 1 besøgende på
   28 dage, så **indgangsvejene er det eneste vi kan måle os på**, og den første
   var defekt. `curl` på live: `https://bugbottle.dev/docs/install` svarede
@@ -3308,7 +3309,9 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 - `VERIFICÉR DEPLOY: absolute_redirect off i site/nginx.conf — en URL uden
   skråstreg skal ikke længere blive sendt ned på http:// (opgave 34,
-  `ceo/relative-redirect`).` **Accepter: `curl -sD - -o /dev/null
+  `ceo/relative-redirect`), commit `b220a54`, merge `edb6de7`, 13:12,
+  2026-09-28.` Næste batch-vindue er **17:30 2026-09-28** (12:30 var lukket da
+  vi mergede). **Accepter: `curl -sD - -o /dev/null
   https://bugbottle.dev/docs/install` skal svare `HTTP/2 301` med
   `location: /docs/install/` — en *relativ* sti, ikke en `http://`-adresse —
   og `curl -sL -w '%{num_redirects}'` på samme URL skal sige `1` mod `2` i dag.**
