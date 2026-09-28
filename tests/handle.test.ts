@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   clientAddress,
+  clientScheme,
   handleReport,
   resetDedupe,
   resetRateLimits,
@@ -497,6 +498,146 @@ test("the Express adapter counts the socket address", async () => {
   assert.equal(await send("203.0.113.10"), 429);
   assert.equal(await send("203.0.113.11"), 202);
   resetRateLimits();
+});
+
+test("a scheme the header did not earn is not the one the URL is built with", () => {
+  // The one value that changes anything: everything else, including a missing
+  // header and a chain whose first entry is not a scheme at all, is `http`.
+  assert.equal(clientScheme("https", true), "https");
+  assert.equal(clientScheme(" HTTPS ", true), "https");
+  assert.equal(clientScheme("https, http", true), "https");
+  assert.equal(clientScheme("http", true), "http");
+  assert.equal(clientScheme("javascript:alert(1)", true), "http");
+  assert.equal(clientScheme("https://evil.example", true), "http");
+  assert.equal(clientScheme(undefined, true), "http");
+  assert.equal(clientScheme(" , , ", true), "http");
+  // Without a trusted proxy the header is a claim by the caller, so it is not
+  // read at all — `http` is the one scheme an adapter can actually see.
+  assert.equal(clientScheme("https", undefined), "http");
+  assert.equal(clientScheme("https", false), "http");
+});
+
+/** The URL an adapter built, read back out of `authorize` and nothing else. */
+async function urlExpress(
+  trustProxy: NonNullable<Parameters<typeof handleReport>[1]>["trustProxy"],
+  forwardedProto?: string,
+): Promise<string> {
+  let url = "";
+  const { res, finished } = fakeRes();
+  expressHandler({
+    trustProxy,
+    authorize: (request) => {
+      url = request.url;
+      return true;
+    },
+  })(
+    {
+      method: "POST",
+      url: "/api/bug-report",
+      headers: {
+        host: "app.example.com",
+        ...(forwardedProto === undefined ? {} : { "x-forwarded-proto": forwardedProto }),
+      },
+      socket: { remoteAddress: "203.0.113.30" },
+      body,
+    },
+    res,
+  );
+  await finished;
+  return url;
+}
+
+test("the URL the Express adapter builds takes x-forwarded-proto only when trustProxy says so", async () => {
+  // Behind a TLS-terminating proxy that is trusted, the report arrived over
+  // HTTPS and the URL should say so.
+  assert.equal(
+    await urlExpress({ header: "x-forwarded-proto" }, "https"),
+    "https://app.example.com/api/bug-report",
+  );
+  // `trustProxy: true` is the setting a deployment behind one proxy actually
+  // writes, and it is enough: the header is the same header.
+  assert.equal(
+    await urlExpress(true, "https"),
+    "https://app.example.com/api/bug-report",
+  );
+  // A chain, where the outermost proxy wrote the scheme the client used.
+  assert.equal(
+    await urlExpress({ hops: 2 }, "https, http"),
+    "https://app.example.com/api/bug-report",
+  );
+  // Nothing trusted: the header is a claim by the caller, and a report sent
+  // over HTTPS behind a proxy that does not set it is recorded as http rather
+  // than believed.
+  assert.equal(
+    await urlExpress(undefined, "https"),
+    "http://app.example.com/api/bug-report",
+  );
+  assert.equal(await urlExpress(false, "https"), "http://app.example.com/api/bug-report");
+  assert.equal(await urlExpress(true), "http://app.example.com/api/bug-report");
+});
+
+test("a x-forwarded-proto that is not a scheme is a http URL and not a 500", async () => {
+  // The header is interpolated into a URL that `new Request` parses, so a
+  // value that does not parse used to be a thrown error in the adapter and a
+  // 500 the reporter saw.
+  for (const value of ["javascript:alert(1)", "https://evil.example", "http://", "%zz", "https"]) {
+    const seen: string[] = [];
+    const { state, res, finished } = fakeRes();
+    expressHandler({
+      trustProxy: true,
+      authorize: (request) => {
+        seen.push(request.url);
+        return true;
+      },
+    })(
+      {
+        method: "POST",
+        url: "/api/bug-report",
+        headers: { host: "app.example.com", "x-forwarded-proto": value },
+        socket: { remoteAddress: "203.0.113.30" },
+        body,
+      },
+      res,
+    );
+    await finished;
+    assert.equal(state.status, 202, value);
+    assert.equal(seen.length, 1, value);
+    assert.ok(seen[0]?.startsWith("http"), `${value} → ${seen[0]}`);
+  }
+});
+
+test("the Fastify adapter builds its URL from the same trustProxy decision", async () => {
+  const url = async (trustProxy: boolean | undefined, forwardedProto?: string) => {
+    let seen = "";
+    const { reply, finished } = fakeReply();
+    fastifyHandler({
+      trustProxy,
+      authorize: (request) => {
+        seen = request.url;
+        return true;
+      },
+    })(
+      fastifyReq(body, {
+        headers: {
+          host: "app.example.com",
+          ...(forwardedProto === undefined ? {} : { "x-forwarded-proto": forwardedProto }),
+        },
+        raw: { url: "/api/bug-report", socket: { remoteAddress: "203.0.113.30" } },
+      }),
+      reply,
+    );
+    await finished;
+    return seen;
+  };
+
+  // Same answers as the Express adapter above, one for one. They are two
+  // translations of the same request and the URL is the one thing a log reads
+  // as fact, so they must not drift apart.
+  assert.equal(await url(true, "https"), "https://app.example.com/api/bug-report");
+  assert.equal(await url(true, "javascript:alert(1)"), "http://app.example.com/api/bug-report");
+  assert.equal(await url(undefined, "https"), "http://app.example.com/api/bug-report");
+  assert.equal(await url(false, "https"), "http://app.example.com/api/bug-report");
+  assert.equal(await url(true), "http://app.example.com/api/bug-report");
 });
 
 test("a duplicate is answered 200 without storing or delivering it again", async () => {

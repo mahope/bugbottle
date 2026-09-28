@@ -344,6 +344,40 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **The published server entry threw on import: `dist/server/fastify.js` was
+  never committed.** `dist/` is force-added rather than un-ignored, and the
+  four files `fastifyHandler` needed landed untracked when that export was
+  added — while the tracked `dist/server/index.js` beside them has imported
+  `./fastify.js` since. So `npm install github:mahope/bugbottle` and jsDelivr —
+  the two paths that take the committed `dist/` as it is, with no build step of
+  their own — answered `ERR_MODULE_NOT_FOUND` on `import … from
+  "bugbottle/server"`: not one export broken, the whole entry, and every sink
+  with it. The build was green, `npm test` was green and `git diff --quiet --
+  dist` was clean, because `dist/` is in `.gitignore` and a `git diff` cannot
+  see a file that was never added. The four files are committed, and
+  `scripts/check-dist.mjs` now asks the question a diff cannot — run by
+  `npm run check` and by CI, it fails on a file the build produced that git
+  does not track, naming the `git add -f` that adds it.
+
+- **`x-forwarded-proto` was believed whatever `trustProxy` said, in both Node
+  adapters.** The Express and Fastify handlers built the `Request` they pass to
+  `handleReport` with the scheme straight out of the header, so behind a proxy
+  that does not set it a report sent over HTTPS was recorded as
+  `http://app.example.com/…` — while the rate limit on the very same request
+  read the connection address and took no forwarding header at all. Two
+  decisions about the same deployment, made by two pieces of code, disagreeing:
+  the address in the log is the one somebody later reads as fact. The scheme
+  now comes from the same `trustProxy` the address does, and only `https` is
+  believed out of the header — an adapter cannot see its connection's own TLS
+  state, so `http` is the one scheme it knows. That also closes a 500 nobody had
+  reported: the header was interpolated into a URL that `new Request` parses,
+  so `x-forwarded-proto: javascript:alert(1)` — or `https://evil.example`, or
+  `%zz` — threw in the adapter and answered the reporter with
+  `Could not store the report`. The [Express page](#express) said the asymmetry
+  was there; it is gone, and the [Fastify page](#fastify) says the same thing
+  about its own adapter. No API change: the decision is made by the setting that
+  already existed.
+
 - **Every page's `<meta name="description">` was the first paragraph of the
   page, clipped mid-word.** `site/` took the description of a documentation page
   from the paragraph under its heading, which is written for somebody who has

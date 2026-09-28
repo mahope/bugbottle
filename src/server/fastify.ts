@@ -45,6 +45,7 @@
 
 import {
   handleReport,
+  clientScheme,
   BAD_SIGNATURE_ERROR,
   DEFAULT_MAX_BODY_BYTES,
   TOO_LARGE_ERROR,
@@ -197,7 +198,12 @@ export function fastifyHandler(
       // structural type that only carries that half.
       const source = req.headers ?? req.raw?.headers ?? {};
       const host = headerValue(source.host) ?? "localhost";
-      const proto = headerValue(source["x-forwarded-proto"]) ?? "http";
+      // The same `trustProxy` decision the rate limit is about to make, so the
+      // URL says what was counted: without it the header is a claim and the
+      // answer is `http`, which is the scheme this adapter can actually see.
+      // The Express adapter builds its URL this way for the same reason, and
+      // the two must not drift apart.
+      const proto = clientScheme(headerValue(source["x-forwarded-proto"]), options.trustProxy);
       const path = req.raw?.url ?? "/";
       const url = `${proto}://${host}${path.startsWith("/") ? path : `/${path}`}`;
 

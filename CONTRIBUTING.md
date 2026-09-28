@@ -10,7 +10,7 @@ people who do not need it".
 git clone https://github.com/mahope/bugbottle.git
 cd bugbottle
 npm ci
-npm run check   # typecheck, test, build
+npm run check   # typecheck, test, build, build:docs, check:dist
 ```
 
 Node 22 or newer is needed to run the tests (they run the TypeScript source
@@ -144,8 +144,8 @@ need Node 18.
 `.github/workflows/ci.yml` has three jobs, and a pull request needs all three:
 
 - **Node 22 / Node 24** — `npm run typecheck`, `npm test`, `npm run build`,
-  `npm run build:docs`, the check that the committed `dist/` matches the build,
-  and `npm pack --dry-run`.
+  `npm run build:docs`, `npm run check:dist` (the committed `dist/` is both
+  current and complete), and `npm pack --dry-run`.
 - **Bundles without html-to-image** — packs the tarball, installs it in a
   scratch project that has no `html-to-image`, bundles every entry point with
   esbuild and weighs each against its budget, and greps the server bundle for
