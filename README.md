@@ -1278,9 +1278,10 @@ export function ReportButton() {
 ```
 
 For an application that does not bundle, "One script tag" is the whole
-integration: one `<script>` tag reads the same `data-*` attributes, needs no
-`"use client"`, no provider and no hydration, and carries the ready-made panel
-so there is no form to write.
+integration, and the placement is the same as any other page: the tag goes in
+the root layout's body, and it needs no `"use client"` because a plain
+`<script>` is not a component. That also makes it the only answer on
+`global-error.tsx`, which is a separate page load without the layout.
 
 **Receiving it.** A route handler is a `Request` in and a `Response` out, and
 `handleReport` is the one that answers:
@@ -1499,9 +1500,10 @@ export class ReportButton {
 ```
 
 **One script tag.** For an application that does not bundle, `One script tag`
-is the whole integration. It reads the same `data-*` attributes, carries the
-panel and the annotator, and needs no provider, no service and no injector —
-drop it in `index.html` and the work above is unnecessary:
+is the whole integration, and an Angular app has the shortest version of that
+sentence in this row: `index.html` has no plugin system, no provider and no
+injector to wire anything into, so the tag goes beside the other assets and the
+work above is unnecessary:
 
 ```html
 <script
@@ -1511,6 +1513,10 @@ drop it in `index.html` and the work above is unnecessary:
   data-locale="da"
 ></script>
 ```
+
+What it cannot reach is `ErrorHandler`, which is why the work above is not
+optional in a real application — see `One script tag` on what the tag does and
+does not cover.
 
 **Receiving it.** The Angular CLI dev server has no API routes, so the
 endpoint is not a route handler — it is a small server beside it, or the
@@ -1845,10 +1851,10 @@ render a message and put a `ReportProblem` button under it, which is the
 version that reaches a person who is not an engineer.
 
 **One script tag.** For an application that does not bundle, `One script tag` is
-the whole integration: no plugin, no `enforce`, no plugin ordering to get wrong,
-and the same `data-*` attributes as everywhere else. In a Nuxt app put it in
-`app.vue` behind `ClientOnly`, or in `nuxt.config.ts`'s `app.head.script` with
-`tagPosition: "bodyClose"`, so it lands after the app's own markup:
+the whole integration, and a Nuxt app has two places to put it and no ordering
+to get wrong: `app.vue` behind `ClientOnly`, or `nuxt.config.ts`'s
+`app.head.script` with `tagPosition: "bodyClose"`, so it lands after the app's
+own markup:
 
 ```ts
 // nuxt.config.ts
@@ -4449,6 +4455,25 @@ that mounts the panel from the tag itself, the annotator included. About
 `https://cdn.jsdelivr.net/gh/mahope/bugbottle@v1.0.1/dist/bugbottle.js`. Pin a
 version in either form; `@latest` is a way to have a stranger's next release
 run on your page.
+
+### In a framework application
+
+This is the whole integration for a page with no build step, and on a page that
+*does* have one it is a complete fallback rather than a second way to do the
+same job. The tag reads the same `data-*` attributes, carries the panel and the
+annotator, and starts the console buffer and the two window events itself — so
+nothing above it is needed to catch a throw that reached `window.onerror`, and
+there is no form to write, no provider, no plugin, no injector and no
+hydration.
+
+What the tag cannot do is reach a framework's own error hook, because those
+live on the app instance where no `<script>` tag can get at them. So a
+framework page usually wants both: the framework integration for the errors the
+framework routes to it, and the tag for everything else. `Next.js`, `Angular`,
+`Nuxt` and `Astro` each say where their own version of the tag goes, and
+`Vue` says the same thing as a warning rather than a recipe. The framework
+error page is the case where the tag is genuinely the *only* answer, because a
+separate page load has no layout and no mount.
 
 ### Two builds
 

@@ -1661,6 +1661,39 @@ async function main() {
         `scripts/page-descriptions.mjs:\n  ${badDescriptions.join("\n  ")}`,
     );
   }
+
+  /* The script tag's explanation is written once, on "One script tag", and the
+     framework pages say only where their copy of the tag goes. That was four
+     restatements of one paragraph (Next.js, Angular, Nuxt, Astro), and prose
+     that exists in four places is prose that goes wrong in one of them and
+     nobody notices — the version in a pinned URL, an attribute name, a claim
+     about what the tag covers. A framework page earns its own paragraph when it
+     has its own placement or its own trap, not when it re-describes the tag.
+
+     The phrases are the sentences that were duplicated verbatim, so the check
+     is narrow on purpose: a page may perfectly well link to "One script tag",
+     and most of them still name what is different about their own copy. */
+  const SCRIPT_TAG_HOME = "one-script-tag";
+  const restated = [
+    ["reads the same `data-*` attributes", "re-describes the tag's attributes"],
+    ["is the whole integration. It reads", "re-describes what the tag covers"],
+    ["no provider, no service and no injector", "re-describes what the tag needs no wiring for"],
+    ["no plugin, no `enforce`, no plugin ordering", "re-describes what the tag needs no plugin for"],
+  ];
+  const echoers = pages
+    .filter((page) => page.slug !== SCRIPT_TAG_HOME)
+    .flatMap((page) =>
+      restated
+        .filter(([phrase]) => page.body.includes(phrase))
+        .map(([, why]) => `/${page.slug}/ (${why})`),
+    );
+  if (echoers.length > 0) {
+    throw new Error(
+      `Framework pages re-describing the script tag — say what is different about ` +
+        `your copy and link "One script tag" instead:\n  ${echoers.join("\n  ")}`,
+    );
+  }
+
   await writeFile(join(outDir, "search.json"), JSON.stringify(searchIndex), "utf8");
 
   await writeFile(join(root, "site", "sitemap.xml"), sitemapXml(pages), "utf8");
