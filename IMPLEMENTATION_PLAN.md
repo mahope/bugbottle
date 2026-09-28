@@ -3533,6 +3533,18 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Deploy-noter
 
+- `VERIFICÉR DEPLOY: panelbilledet i README's åbning, som også er
+  /docs/install/ (opgave 37, `ceo/readme-picture`), commit `fca5fd5`, merge
+  `c39af84`, 13:5x, 2026-09-28.` Næste batch-vindue er **17:30 2026-09-28**.
+  **Accepter: `https://bugbottle.dev/docs/install/` skal have et
+  `<img src="https://bugbottle.dev/panel-narrow.png"` med et `alt` på over 20
+  tegn og `width="788" height="950"`** — HTTP 200 beviser intet, for en side
+  med billedet mangler stadig svarer 200. Tallet 788/950 er PNG'ens egne
+  dimensioner, så hvis de er anderledes, er det en ældre optagelse af billedet
+  og ikke en fejl i rendererens kode. **Ingen ny URL**, så sitemap'en skal
+  stadig tælle **60** `<loc>`; en ny URL her ville være en fejl. Samme note
+  dækker `6ed7217` (planen, ingen synlig ændring).
+
 - `VERIFICÉR DEPLOY: absolute_redirect off i site/nginx.conf — en URL uden
   skråstreg skal ikke længere blive sendt ned på http:// (opgave 34,
   `ceo/relative-redirect`), commit `b220a54`, merge `edb6de7`, 13:12,
