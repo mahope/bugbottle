@@ -2965,6 +2965,351 @@ as well, the way `Next` above does it, and you have a button before the module
 that renders the button has loaded. `data-shake` is off by default; the iOS
 permission gate and the secure-context rule are as they are everywhere else.
 
+## TanStack Query
+
+Three of the nine suggestions under `tanstack error boundary` are
+`tanstack query error boundary`, and this is the half of TanStack the
+[page above](/docs/tanstack-router/) does not cover. The difference is not
+cosmetic: **TanStack Query is a data layer, not a router.** It has no boundary of
+its own, it never throws by default, and the place a query failure surfaces is
+your own render — which means a render error boundary catches it *nowhere*.
+
+Everything below was read out of `@tanstack/query-core@5.104.0` and
+`@tanstack/react-query@5.104.0`, the **published** `build/modern`, not the
+prose. The documentation for this library is good and it is written around
+`isError`; four things below are not in it, and three of them are the difference
+between a working bug inbox and one that either stays empty or takes the site down
+with it.
+
+One thing to know before the rest: **`QueryCache`'s `onError` fires once, after
+the last retry, with the query's state already updated.** That is the hook you
+want, and the reason it is the hook you want is in the next section.
+
+### The one hook, and where it is called from
+
+`QueryCacheConfig` has three callbacks and one of them is the whole integration:
+
+```ts
+interface QueryCacheConfig {
+  /** Called when any query in the cache encounters an error. */
+  onError?: (error: DefaultError, query: Query) => void;
+  onSuccess?: (data: unknown, query: Query) => void;
+  onSettled?: (data: unknown | undefined, error: DefaultError | null, query: Query) => void;
+}
+```
+
+It is called from `query.fetch`, in the `catch`, and the order inside that block
+is the whole design of this page:
+
+```js
+} catch (error) {
+  if (error instanceof CancelledError) { … }
+  this.#dispatch({ type: "error", error });
+  this.#cache.config.onError?.(error, this);
+  this.#cache.config.onSettled?.(this.state.data, error, this);
+  throw error;
+}
+```
+
+Three facts in four lines, and all three matter:
+
+- **It is after `await retryer.start()`**, which resolves only when the retryer
+  gives up. So one report per failed fetch, not one per attempt — a query that
+  retries three times files **one** report, at the end, with the final error.
+- **It is after the state dispatch.** `query.state.error` is already the real
+  error and `errorUpdateCount` has gone up, so you can read the query key, the
+  `meta` you attached to it and the failure count without waiting for a
+  re-render. Nothing here needs a component mounted.
+- **It is not awaited and not wrapped in a `try`** — which is the sharp edge, and
+  it has its own section below.
+
+So the wiring is a `QueryClient` with a cache that has an `onError`:
+
+```tsx
+// query-client.ts
+import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { reportQueryError } from "./report";
+
+export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => reportQueryError(error, query.queryKey),
+  }),
+  defaultOptions: {
+    queries: {
+      // 404 is not a crash and 401 is not a bug. Without this, every missing
+      // record is retried three times and then filed — see "Retries" below.
+      retry: (failureCount, error) =>
+        !isHttpError(error, [404, 401, 403]) && failureCount < 3,
+    },
+  },
+});
+```
+
+`QueryClientConfig` takes `queryCache` and `mutationCache` directly, and builds
+one of each if you do not pass them, so this is the only place a cache is
+constructed. If you already have a `QueryClient` in a file, you have found the
+one place this hook goes.
+
+```ts
+// report.ts
+import type { QueryKey } from "@tanstack/react-query";
+import { widget } from "./widget";
+
+export function reportQueryError(error: unknown, key: QueryKey) {
+  const text = error instanceof Error ? error.message : String(error);
+  widget.open({ message: `query ${JSON.stringify(key)} failed: ${text}` });
+  // The ring buffer records console.error and console.warn and nothing else, so
+  // this line *is* the report's console section. Without it a report arrives
+  // with a URL and an empty console, which is the report nobody reads.
+  console.error("[bugbottle] query failed", error);
+}
+```
+
+Mutations have the same hook with a different signature, and one difference that
+is not cosmetic — see "A throw in your reporter" below:
+
+```ts
+import { MutationCache } from "@tanstack/react-query";
+
+new QueryClient({
+  mutationCache: new MutationCache({
+    onError: (error, variables, _onMutateResult, mutation) =>
+      reportMutationError(error, mutation.options.mutationKey, variables),
+  }),
+});
+```
+
+### `isError` is true while `data` is still the last good value
+
+This is the first of the four things the documentation does not say, and it is
+the reason `throwOnError` is the wrong tool for a bug report. The reducer clears
+the error on a new fetch **only when there is no data**:
+
+```js
+function fetchState(data, options) {
+  return {
+    fetchFailureCount: 0,
+    fetchFailureReason: null,
+    fetchStatus: canFetch(options.networkMode) ? "fetching" : "paused",
+    ...data === void 0 && { error: null, status: "pending" },
+  };
+}
+```
+
+Read the spread condition. A query that has fetched once and then fails a
+background refetch keeps its `error`, and `status` stays `"error"`, because
+`data` is not `undefined`. The result object has a flag for exactly this, and the
+build computes it from the same two fields:
+
+```js
+const isError = status === "error";
+…
+isLoadingError: isError && !hasData,
+isRefetchError: isError && hasData,
+```
+
+So after a refetch that fails over good data, `isError` **and** `data` are both
+true, `isRefetchError` is true and `isLoadingError` is false. Branch on those two,
+not on `isError`:
+
+```tsx
+const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
+
+// A first load that failed: there is nothing to show but the reason.
+if (orders.isLoadingError) return <p>{String(orders.error)}</p>;
+// A refetch that failed: the list on screen is real and one edit old.
+// A full-page error here is the bug this section is about.
+if (orders.isRefetchError) return <p className="stale">Showing the last saved list.</p>;
+return <Orders rows={orders.data} />;
+```
+
+### `throwOnError` takes a working screen down with it
+
+The tempting wiring is one line in `defaultOptions`, and it is wrong:
+
+```ts
+defaultOptions: { queries: { throwOnError: true } }   // do not
+```
+
+Here is what that does. `useBaseQuery` ends with two `throw`s, and the second one
+is the error boundary's share:
+
+```js
+if (shouldSuspend(defaultedOptions, result)) throw fetchOptimistic(…);
+if (getHasError({ result, errorResetBoundary, throwOnError: defaultedOptions.throwOnError, query, suspense: … }))
+  throw result.error;
+```
+
+and `getHasError` is one line:
+
+```js
+return result.isError && !errorResetBoundary.isReset() && !result.isFetching && query &&
+  (suspense && result.data === void 0 || shouldThrowError(throwOnError, [result.error, query]));
+```
+
+The condition is `isError`, not `isLoadingError`. So the failed background
+refetch from the section above — the one where `data` is a perfectly good list
+from a minute ago — **throws out of render**, React unmounts the subtree into
+whatever boundary is above, and the page the visitor was reading is replaced by
+an error screen. The refetch failed; nothing is wrong with the data. `isRefetchError`
+was right there in the result and the throw does not consult it.
+
+Two things about that throw that are *not* problems, because both are asked about
+constantly:
+
+- **It fires once, not once per retry.** `!result.isFetching` is in the
+  condition, and the retries are what keep `fetchStatus` at `"fetching"`. The
+  error is thrown when fetching stops, which is when the retryer has given up.
+- **A reset does not re-throw forever.** `ensurePreventErrorBoundaryRetry` sets
+  `retryOnMount = false` when `suspense` or `throwOnError` is on, so the retry
+  button on your error page does not start a fetch that lands straight back in
+  the same boundary.
+
+So the correct shape is the opposite of the tempting one: **leave `throwOnError`
+off, report from the cache's `onError`, and let the component's own
+`isLoadingError` branch render.** The boundary stays what it is for — the things
+that genuinely throw during render — and a flaky endpoint costs a stale badge
+instead of a lost page.
+
+### A throw in your reporter replaces the real error
+
+The sharpest of the four, and the one that costs an afternoon. The query callback
+is a bare call in a `catch` block with nothing around it:
+
+```js
+this.#dispatch({ type: "error", error });
+this.#cache.config.onError?.(error, this);   // ← if this throws
+this.#cache.config.onSettled?.(this.state.data, error, this);
+throw error;                                 // ← this line never runs
+```
+
+So if `onError` throws — a `console.error` shim that throws, a `widget.open()`
+that throws, anything in your own code — **the app never sees the query's error.**
+It sees yours. `await queryClient.fetchQuery(…)` rejects with the reporter's
+failure, `error.status === 404` is not there, and the state says `"error"` while
+the rejection says something else entirely. The UI looks right, because the
+dispatch already happened, and the code that inspects the error is wrong.
+
+The mutation side is guarded, differently:
+
+```js
+} catch (error) {
+  try { await this.#mutationCache.config.onError?.(error, variables, …); }
+  catch (e) { Promise.reject(e); }
+  …
+  this.#dispatch({ type: "error", error });
+  throw error;
+}
+```
+
+Two consequences, and the second is the one to design around. First, a throw from
+your mutation reporter does **not** reach the app — it is converted into an
+unhandled rejection, which is the same channel `openOnError` listens on, so a
+broken reporter can open the panel a second time from its own error. Second,
+and this is the design fact: **the mutation callback is awaited**, so the
+reporter sits in the application's `mutate()` path. A slow report — a screenshot
+to upload, a slow endpoint — delays `onSettled` and delays the promise your
+`mutateAsync` caller is awaiting, by the report's whole round trip. Do not
+`await` the send inside `onError`; open the panel and let `openOnError`'s own
+delivery take its time.
+
+```ts
+mutationCache: new MutationCache({
+  onError: (error, variables, _r, mutation) => {
+    // Fire and forget on purpose: this callback is awaited by mutate().
+    void reportMutationError(error, mutation.options.mutationKey, variables);
+  },
+}),
+```
+
+### Retries: three on the client, none on the server, and no 4xx exemption
+
+`retry` defaults to **3 on the client and 0 on the server** — that is the
+documented default and the delay function is in the build:
+
+```js
+function defaultRetryDelay(failureCount) {
+  return Math.min(1e3 * 2 ** failureCount, 3e4);
+}
+```
+
+So a failing query takes **1 s + 2 s + 4 s = 7 seconds** before your `onError`
+runs and the report exists. That is the honest answer to "why did the report
+arrive so late", and it is worth knowing before you go looking for a queue bug.
+
+The retry predicate inspects the error and nothing else:
+
+```js
+const shouldRetry = retry === true ||
+  typeof retry === "number" && failureCount < retry ||
+  typeof retry === "function" && retry(failureCount, error);
+```
+
+There is **no built-in exemption for a 4xx.** A record that does not exist, an
+unauthenticated request, a validation error — all three are retried three times
+with backoff, and then filed. A bug inbox that receives a report for every
+missed record is an inbox people mute, and the `retry` predicate at the top of
+this page is the fix. Keep the `failureCount < 3` tail: without it a genuine
+flaky network is reported on the first attempt instead of the last.
+
+The server/client split has a consequence for the panel. On the server the retry
+count is 0, and the `QueryClient` is built per request, so a query that fails
+during SSR fails **on the server** — where there is no `widget`, no ring buffer
+and no visitor. Those failures cannot be reported by the cache hook, because the
+cache hook runs in the same process that has no panel. Put the script tag in the
+root document as well, the way the router page above does it, so an error thrown
+while the client bundle is still loading has a button. Where the tag goes and
+what it covers is written once, under
+[One script tag](/docs/one-script-tag/#in-a-framework-application); what is
+different here is only that a data-layer failure can happen before any of your
+JavaScript has run.
+
+### Failures that reach the panel with nobody watching
+
+Three, and they are the ones a `useQuery`-only integration misses:
+
+- **A failed prefetch.** `prefetchQuery` goes through the same
+  `query.fetch`, so `onError` fires — and `prefetchQuery` swallows the rejection
+  at the client (`this.fetchQuery(options).then(noop).catch(noop)`), so nothing in
+  your code ever sees it. Prefetching is how an application warms a cache for a
+  route the visitor has not asked for yet, which means **reports with a query key
+  nobody is on the page for.** That is not a bug in your wiring; it is the hook
+  telling you the truth, and the report's `url` field is how you tell them apart.
+- **A query removed mid-flight does not report.** `Query#destroy` cancels with
+  `{ silent: true }`, and the `catch` above returns the pending promise for a
+  silent cancellation, so a query evicted by `gcTime` or by `queryClient.clear()`
+  reports nothing. Good — that is the noise you would otherwise have. But a
+  `query.cancel()` you call yourself passes no options, so the error is neither
+  `silent` nor `revert` and **falls through to the dispatch and to `onError`.** If
+  you cancel by hand, you get a report for the cancellation.
+- **A query with no observer at all.** `onError` is on the `Query`, not on the
+  observer, so a fetch started by `queryClient.fetchQuery`, `ensureQueryData` or
+  an `invalidateQueries` cascade reports whether or not anything is rendering the
+  result. This is the feature: an error in a background refresh is exactly the
+  one nobody sees.
+
+### What to check before you ship it
+
+Four failures, and a report from each. First, return a 500 from the endpoint for
+one `queryKey` and load the page: the panel opens, and **the report arrives
+about seven seconds later**, not immediately — that is the retry default, and if
+you want it faster, lower `retry` in the same place. Second, and this is the one
+this page is for: make the endpoint return 500 **once** and then succeed, with
+good data cached and `staleTime: 0`, and trigger a refetch. You should get a
+report, **no error boundary, and the list still on screen.** If you get an error
+page instead, you have `throwOnError` on. Third, put a 404 on a different
+`queryKey`: with the `retry` predicate at the top there is no report and no
+retries; without it you get three retries and a report. Fourth, break the reporter
+on purpose — make `reportQueryError` throw — then `await queryClient.fetchQuery(…)`
+and confirm the rejection is *your* error and not the endpoint's. That is the trap
+in "A throw in your reporter", reproduced on purpose, and it is the test that
+tells you the `try` is load-bearing.
+
+Then build it and serve the build. Every warning on this page that mentions
+`NODE_ENV` disappears in production, including the one about a query function
+returning `undefined`, which throws a different error in production than the
+`console.error` in development suggests. Verify the production path.
+
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not

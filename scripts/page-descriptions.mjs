@@ -88,6 +88,8 @@ export const PAGE_DESCRIPTIONS = {
     "React Router v7, v8 and Remix: the declarative and the data error boundary, useRevalidator on the error page, and three modes that differ.",
   "tanstack-router":
     "TanStack Router: onCatch never runs without an errorComponent, and the global boundary is silent in production. The one line that fixes both.",
+  "tanstack-query":
+    "TanStack Query has no error boundary and does not throw by default. QueryCache onError, throwOnError, isError, retry, and the trap in each.",
   "receiving-a-report":
     "handleReport is the whole endpoint: it validates every field, scrubs, decides what happens to the screenshot, stores the report and calls the sinks.",
   recipes: "The endpoint is the same everywhere; only the sentence that produces a Request differs. One short recipe per framework and per host.",

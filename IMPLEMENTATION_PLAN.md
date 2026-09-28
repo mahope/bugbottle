@@ -1164,7 +1164,8 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   grønne, `check-dist` grøn på 208 filer, ingen budget flyttede sig
   (IIFE'erne uændrede 24 688 / 21 104 mod 25 088 / 21 504, fordi det er
   dokumentation og en byggevågt).
-- [ ] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 3 af de
+- [ ] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 28/9,
+  `ceo/tanstack-query`. 3 af de
   9 forslag under `tanstack error boundary` er `tanstack query error
   boundary`, og TanStack Query er et **datalag, ikke en router** — det fanger
   intet sig selv og har ingen boundary, så siden handler om

@@ -226,6 +226,7 @@ const GROUPS = [
       "astro",
       "react-router",
       "tanstack-router",
+      "tanstack-query",
       "wordpress",
       "hono",
       "fastify",
