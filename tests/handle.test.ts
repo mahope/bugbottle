@@ -13,6 +13,8 @@ import {
   type ValidatedReport,
 } from "../src/server/handle.ts";
 import { expressHandler } from "../src/server/express.ts";
+import { fastifyHandler } from "../src/server/fastify.ts";
+import { computeSignature, DEFAULT_SIGNATURE_HEADER } from "../src/sign.ts";
 import { MAX_CONTACT_LENGTH } from "../src/report-core.ts";
 import {
   PNG_BYTES,
@@ -835,6 +837,9 @@ test("the Express adapter answers a CORS preflight", async () => {
   assert.equal(state.headers["access-control-allow-origin"], "*");
 });
 
+/** A key for the signature tests here; a browser one is public anyway. */
+const SIGNING_KEY = "shh-this-is-public-anyway";
+
 /** A `Request` whose body is a stream, the way a chunked upload arrives. */
 function streamed(
   stream: ReadableStream<Uint8Array>,
@@ -1415,3 +1420,208 @@ test("a dedupe store answering with something that is not an entry is not believ
   resetDedupe();
 });
 
+/**
+ * A Fastify reply, which is not the Express one: it has `header` rather than
+ * `setHeader`, and `send` is what settles the test. Fastify's `status` and
+ * `code` are aliases of each other, so only the first is given here — the
+ * adapter prefers `status` and falls back to `code`.
+ */
+function fakeReply() {
+  const state: { status: number; headers: Record<string, string>; body: string } = {
+    status: 0,
+    headers: {},
+    body: "",
+  };
+  let settle!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  return {
+    state,
+    finished,
+    reply: {
+      status(code: number) {
+        state.status = code;
+        return this;
+      },
+      header(name: string, value: string) {
+        state.headers[name.toLowerCase()] = value;
+        return this;
+      },
+      send(payload?: unknown) {
+        state.body = String(payload ?? "");
+        settle();
+      },
+    },
+  };
+}
+
+/** A request as Fastify's JSON content-type parser leaves it. */
+function fastifyReq(
+  payload: unknown,
+  extra: Record<string, unknown> = {},
+): Parameters<ReturnType<typeof fastifyHandler>>[0] {
+  return {
+    method: "POST",
+    headers: { host: "app.example.com", "content-type": "application/json" },
+    raw: { url: "/api/bug-report" },
+    body: payload,
+    ...extra,
+  };
+}
+
+test("the Fastify adapter round-trips a body its own parser produced", async () => {
+  const { state, reply, finished } = fakeReply();
+  let stored: ValidatedReport | undefined;
+  fastifyHandler({
+    cors: true,
+    store: async (report) => {
+      stored = report;
+      return { id: "rep_12" };
+    },
+  })(fastifyReq(body), reply);
+  await finished;
+
+  assert.equal(state.status, 201);
+  assert.deepEqual(JSON.parse(state.body), { id: "rep_12" });
+  assert.equal(state.headers["access-control-allow-origin"], "*");
+  assert.equal(stored?.message, "The save button does nothing");
+});
+
+test("the Fastify adapter reads the raw stream when nothing parsed the body", async () => {
+  const { state, reply, finished } = fakeReply();
+  const text = JSON.stringify(body);
+  const req = {
+    method: "POST",
+    headers: { host: "app.example.com", "content-length": "999" },
+    raw: {
+      url: "/api/bug-report",
+      [Symbol.asyncIterator]: async function* () {
+        yield new TextEncoder().encode(text);
+      },
+    },
+  };
+
+  fastifyHandler({ store: async () => ({ id: "rep_13" }) })(req, reply);
+  await finished;
+
+  assert.equal(state.status, 201);
+  assert.deepEqual(JSON.parse(state.body), { id: "rep_13" });
+});
+
+test("the Fastify adapter counts the socket address, not a forwarded header", async () => {
+  resetRateLimits();
+  const options = { rateLimit: { limit: 1, windowMs: 60_000 } };
+  const send = async (remoteAddress: string) => {
+    const { state, reply, finished } = fakeReply();
+    fastifyHandler(options)(
+      fastifyReq(body, {
+        raw: {
+          url: "/api/bug-report",
+          socket: { remoteAddress },
+        },
+        // Fastify only defines `request.ip` when the instance set trustProxy,
+        // and when it does it is already a forwarded address.
+        ip: "1.2.3.4",
+      }),
+      reply,
+    );
+    await finished;
+    return state.status;
+  };
+
+  assert.equal(await send("203.0.113.20"), 202);
+  // The same socket again, forged header and all.
+  assert.equal(await send("203.0.113.20"), 429);
+  assert.equal(await send("203.0.113.21"), 202);
+  resetRateLimits();
+});
+
+test("the Fastify adapter answers a CORS preflight", async () => {
+  const { state, reply, finished } = fakeReply();
+  fastifyHandler({ cors: true })(
+    {
+      method: "OPTIONS",
+      headers: { host: "app.example.com" },
+      raw: { url: "/api/bug-report" },
+    },
+    reply,
+  );
+  await finished;
+
+  assert.equal(state.status, 204);
+  assert.equal(state.headers["access-control-allow-origin"], "*");
+});
+
+test("the Fastify adapter answers 400 when there is no message in the body", async () => {
+  const { state, reply, finished } = fakeReply();
+  fastifyHandler({})(fastifyReq({}), reply);
+  await finished;
+
+  assert.equal(state.status, 400);
+  assert.deepEqual(JSON.parse(state.body), { error: "Write a message first" });
+});
+
+test("a signed Fastify route behind the default JSON parser cannot verify, so it is a 401", async () => {
+  const errors: unknown[] = [];
+  const { state, reply, finished } = fakeReply();
+  const signature = await computeSignature(SIGNING_KEY, JSON.stringify(body));
+  fastifyHandler({ signature: { key: SIGNING_KEY }, onError: (err) => errors.push(err) })(
+    fastifyReq(body, {
+      headers: {
+        host: "app.example.com",
+        "content-type": "application/json",
+        [DEFAULT_SIGNATURE_HEADER.toLowerCase()]: signature,
+      },
+    }),
+    reply,
+  );
+  await finished;
+
+  assert.equal(state.status, 401);
+  assert.equal(errors.length, 1);
+  assert.match(String((errors[0] as Error).message), /addContentTypeParser/);
+});
+
+test("the Fastify adapter verifies a signature over a body a parser kept as text", async () => {
+  const text = JSON.stringify(body);
+  const signature = await computeSignature(SIGNING_KEY, text);
+  const { state, reply, finished } = fakeReply();
+  let stored: ValidatedReport | undefined;
+  // What `addContentTypeParser("application/json", { parseAs: "string" })`
+  // leaves behind: the body as it arrived, so the bytes the HMAC was taken
+  // over are the bytes that are verified.
+  fastifyHandler({
+    signature: { key: SIGNING_KEY },
+    store: async (report) => {
+      stored = report;
+      return { id: "rep_14" };
+    },
+  })(
+    fastifyReq(text, {
+      headers: {
+        host: "app.example.com",
+        "content-type": "application/json",
+        [DEFAULT_SIGNATURE_HEADER.toLowerCase()]: signature,
+      },
+    }),
+    reply,
+  );
+  await finished;
+
+  assert.equal(state.status, 201);
+  assert.deepEqual(JSON.parse(state.body), { id: "rep_14" });
+  assert.equal(stored?.message, "The save button does nothing");
+});
+
+test("a Fastify body over the ceiling is a 413 from the adapter itself", async () => {
+  const { state, reply, finished } = fakeReply();
+  const huge = { message: "x".repeat(2000) };
+  fastifyHandler({ maxBodyBytes: 500 })(fastifyReq(huge), reply);
+  await finished;
+
+  // What Fastify's own `bodyLimit` would have done is a 413 before the route
+  // ran; this is the adapter's own cap, and the shape is ours.
+  assert.equal(state.status, 413);
+  assert.deepEqual(JSON.parse(state.body), { error: "Report is too large" });
+});

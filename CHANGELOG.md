@@ -10,6 +10,27 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`fastifyHandler` — a Fastify route handler for `handleReport`, and
+  `/docs/fastify/`.** The framework with the most server-side search behind it
+  that had no page here (10 Google Suggest entries, measured 2026-09-28, the
+  same band as React Router and Vue), and the reason it needs an adapter at all
+  where Hono does not: `handleReport` is a `Request`→`Response` function, and
+  Hono already is a fetch handler while Fastify predates the web `Request`. The
+  translation is the Express one, and so are its two extra traps, both read out
+  of `fastify@5.12.5`'s published build: **the default `bodyLimit` is
+  1 048 576 — four times smaller than `DEFAULT_MAX_BODY_BYTES` — and the JSON
+  parser refuses an over-limit body with `FST_ERR_CTP_BODY_TOO_LARGE` before
+  the route handler runs**, so a report with a screenshot is a 413 in Fastify's
+  own error shape that this adapter never sees; and **a signed route cannot be
+  mounted behind the default parser at all**, because it is registered in the
+  `ContentTypeParser` constructor rather than by the application, so the way
+  out is an `{ parseAs: "string" }` parser whose string result is taken
+  verbatim. As with `expressHandler`, that answers 401 and says so once through
+  `onError`. The page also covers `setErrorHandler`, which replaces the
+  framework's error output — the first of these pages where that output was
+  never `console.error`: it is 0 occurrences across Fastify's `lib/`, because
+  `defaultErrorLog` writes to pino.
+
 - **`/docs/svelte/` — a page for Svelte 5 and SvelteKit.** The one adapter with
   no page of its own, and the only framework here whose error API is an
   element in the markup rather than a hook. Read out of `svelte@5.57.1` and
@@ -26,6 +47,22 @@ attribute needs a major version, and a new entry point needs a minor one.
   `error(404, …)` never reaches your hook, both `console.error` calls in the
   client runtime's error paths are `DEV`-guarded, and `unhandledrejection`
   appears zero times in the package.
+
+- **`/docs/hono/` — a page for Hono, and the first server-side one.** A Hono
+  app is not a browser, and it is the one framework where both halves of
+  bugbottle meet in the same process: `c.req.raw` *is* the `Request`
+  `handleReport` takes, so receiving a report is one line, and a Worker can
+  file its own crash with `buildReport` and `sendReport` because the core is not
+  browser-only underneath. The findings, read out of `hono@4.13.9`'s build:
+  **a route that forgets `return` is a 404, not a 500** — `res ??
+  this.#notFoundHandler(c)` — so no throw, no `console.error`, no `onError` and
+  no report possible; **`throw` of a non-`Error` skips `onError` entirely**
+  (`#handleError` re-throws anything that is not an `Error` instance); **a
+  thrown `HTTPException` never reaches the console**, because the default
+  handler returns it before `console.error`, which means an `onError` that
+  reports everything files every 404 as a bug; and `onError` replaces the
+  console line rather than adding to it, like Vue's `errorHandler`, Nuxt's
+  `app:error` and React's `onCaughtError` before it.
 
 - **`/docs/react-router/` — a page for React Router v7, v8 and Remix.** The
   framework with the most careful error handling of the ones documented here, and
