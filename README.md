@@ -2,9 +2,12 @@
 
 [![npm](https://img.shields.io/npm/v/bugbottle)](https://www.npmjs.com/package/bugbottle)
 [![CI](https://github.com/mahope/bugbottle/actions/workflows/ci.yml/badge.svg)](https://github.com/mahope/bugbottle/actions/workflows/ci.yml)
-[![MIT](https://img.shields.io/badge/licence-MIT-blue)](./LICENSE)
+[![MIT](https://img.shields.io/badge/licence-MIT-blue)](https://github.com/mahope/bugbottle/blob/main/LICENSE)
 
-[bugbottle.dev](https://bugbottle.dev) — the page, with a live demo of the panel ([in Danish](https://bugbottle.dev/da/)).
+[bugbottle.dev](https://bugbottle.dev) — the page, with a live demo of the panel
+([in Danish](https://bugbottle.dev/da/)). The full reference is
+[bugbottle.dev/docs/install/](https://bugbottle.dev/docs/install/): installing,
+every framework, the server side, and every export.
 
 Headless in-app bug reports that arrive with the evidence attached.
 Your UI, your endpoint, a few kilobytes.
@@ -1360,7 +1363,7 @@ one on purpose.
 ## SvelteKit
 
 SvelteKit is not a rendering library with a router bolted on, and that is why it
-has an error story the [page above](/docs/svelte/) cannot tell: **it owns the
+has an error story the [page above](https://bugbottle.dev/docs/svelte/) cannot tell: **it owns the
 error.** `sveltekit error handling` is seven suggestions on Google, more than
 twice `svelte error handling`'s three, and the two the autocomplete adds that
 the others do not have are `sveltekit global error handling` and `sveltekit
@@ -1498,7 +1501,7 @@ form does nothing" and you have no reports, this row is why.
 
 ### `error()` is not yours, and a server error arrives as a copy
 
-Two things from the [Svelte page](/docs/svelte/) carry over unchanged, so they
+Two things from the [Svelte page](https://bugbottle.dev/docs/svelte/) carry over unchanged, so they
 are linked rather than repeated. `error(404, "Not found")` is an `HttpError`, so
 `handle_error` returns at its first line and your hook never sees it. And a
 server-rendered error handed to the client hook is a **deserialised copy**: the
@@ -1543,7 +1546,7 @@ before: what the hook returns is the response body, so returning a different
 `+error.svelte` is a separate page load without the layout, so the panel is not
 mounted on it, and `src/error.html` is the static file SvelteKit serves when the
 app cannot boot — the same two answers as the other framework pages, and the
-[full snippet is on the Svelte page](/docs/svelte/#the-page-where-the-framework-is-gone).
+[full snippet is on the Svelte page](https://bugbottle.dev/docs/svelte/#the-page-where-the-framework-is-gone).
 One note is SvelteKit's alone: `src/error.html` is served before any of your
 code runs, so it is the one page where the tag has to be inline in the markup,
 and it is also the page a reader lands on when the whole application is down.
@@ -3353,7 +3356,7 @@ silent. Verify the production path.
 
 The detector is the same one every other page on this site describes, and it is
 described once, in full, under
-[`Shake to report` on the opening-without-a-button page](/docs/opening-it-without-a-button/#shake-to-report)
+[`Shake to report` on the opening-without-a-button page](https://bugbottle.dev/docs/opening-it-without-a-button/#shake-to-report)
 — `onShake` is one function and its rules (three alternating crossings of
 15 m/s² in a second, a three-second cool-down, nothing measured while the page
 is hidden, and `requestShakePermission()` called by your button and never by the
@@ -3377,7 +3380,7 @@ permission gate and the secure-context rule are as they are everywhere else.
 
 Three of the nine suggestions under `tanstack error boundary` are
 `tanstack query error boundary`, and this is the half of TanStack the
-[page above](/docs/tanstack-router/) does not cover. The difference is not
+[page above](https://bugbottle.dev/docs/tanstack-router/) does not cover. The difference is not
 cosmetic: **TanStack Query is a data layer, not a router.** It has no boundary of
 its own, it never throws by default, and the place a query failure surfaces is
 your own render — which means a render error boundary catches it *nowhere*.
@@ -3668,7 +3671,7 @@ cache hook runs in the same process that has no panel. Put the script tag in the
 root document as well, the way the router page above does it, so an error thrown
 while the client bundle is still loading has a button. Where the tag goes and
 what it covers is written once, under
-[One script tag](/docs/one-script-tag/#in-a-framework-application); what is
+[One script tag](https://bugbottle.dev/docs/one-script-tag/#in-a-framework-application); what is
 different here is only that a data-layer failure can happen before any of your
 JavaScript has run.
 
@@ -4115,7 +4118,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `mask` | What to hide in the screenshot; `false` photographs the page as it is. See [Masking](#masking). |
 | `trigger` | `false` for no floating button, or an element or selector to use your own. |
 | `shortcut` | The combination that opens the panel. Default `mod+shift+b`; `false` installs no listener. |
-| `shake` | Open the panel when the phone is shaken. Off by default; hand in `onShake` from `bugbottle/shake`, or `{ on: onShake, threshold, cooldownMs }`. See [Shake to report](/docs/opening-it-without-a-button/#shake-to-report). |
+| `shake` | Open the panel when the phone is shaken. Off by default; hand in `onShake` from `bugbottle/shake`, or `{ on: onShake, threshold, cooldownMs }`. See [Shake to report](https://bugbottle.dev/docs/opening-it-without-a-button/#shake-to-report). |
 | `network` | Record the failed and slow requests while the panel is mounted. Off by default; hand in `initNetwork` from `bugbottle/network`, or `{ on: initNetwork, all, slowMs, maxEntries, ignore, beforeRequest }`. The panel's `endpoint` is passed on unless you name one. The same switch as `data-network`. See [What the network did](#what-the-network-did). |
 | `perf` | Record the Web Vitals and the storage snapshot while the panel is mounted. Off by default; hand in `initPerf` from `bugbottle/perf`, or `{ on: initPerf, vitals, storage, allowValues, maxKeys }`. The same switch as `data-perf`. See [Performance and storage](#performance-and-storage). |
 | `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
@@ -4279,7 +4282,7 @@ accidental delete is recoverable, and a directory nobody can reach over HTTP is
 a smaller problem than an unrecoverable one. Clear the directory yourself when
 you mean it.
 
-Before you turn it on, read [A privacy checklist](/docs/privacy-checklist/) —
+Before you turn it on, read [A privacy checklist](https://bugbottle.dev/docs/privacy-checklist/) —
 the four questions to answer first, and the two places a screenshot is most
 likely to carry somebody else's name, an order or a half-written message.
 
