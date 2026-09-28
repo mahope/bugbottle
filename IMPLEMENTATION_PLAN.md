@@ -27,11 +27,39 @@ næste iteration ikke skal opdage det samme igen.
 - `dist/` er committet, så et site-image bygget fra en commit altid har den
   bibliotekversion der hører til.
 
+### Deploy-status 28/9 08:0x — ét vindue er gået tabt (ikke DEPLOY-MISSING endnu)
+
+Målt på det *live* site kl. 08:0x, ikke på noterne:
+
+| Side | Forventet siden | Live? |
+|---|---|---|
+| `/docs/vue/` | 27/9 23:04 | **200** |
+| `/support/` | 27/9 23:34 | **404** |
+| `/docs/react-router/` | 28/9 00:16 | **404** |
+| `/docs/svelte/` | 28/9 00:54 | **404** |
+| `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/` | 28/9 01:36-02:44 | **404** |
+| `/docs/express/` | 28/9 04:01 | **404** |
+| `/self-hosted/` | 28/9 05:37 | **404** |
+| `/docs/global-errors/` | 28/9 06:17 | **404** |
+
+Sitemap'en har **47 `<loc>`** mod de 55+ den rene build producerer. Altså er det
+live site præcis standen fra `/docs/vue/`-mergen (27/9 23:04) — **alt hvad der
+er merged siden 23:34 mangler**, inklusive de tretten åbne VERIFICÉR-noter.
+
+**Én batch-vindue** (07:30 28/9) er gået uden at ændringerne er live. Den var
+30 minutter gammel da jeg målte, så den kan stadig være i gang; derfor er dette
+**ikke** `DEPLOY-MISSING` endnu — den kræver to vinduer. Mål igen efter
+12:30-vinduet: er `/self-hosted/` stadig 404, skriver jeg `DEPLOY-MISSING` og
+stopper med at merge til `main` indtil et menneske har kigget. (Mærk at
+`/docs/vue/` *er* live, så et vindue har virket — batchen kører, den er bare
+gået i stykker eller kørt mod et ældre udtræk.)
+
+
 ## Baseline — trafik (2026-09-27)
 
 | Kilde | Tal | Bemærkning |
 |---|---|---|
-| Plausible (analytics.holstjensen.eu) | **HTTP 401 — ingen data** | Scriptet blev først lagt på bugbottle.dev i commit `58f8ecc` 27/9 kl. 15:53. Der er ingen historik at sammenligne med. Første rigtige baseline kan tidligst være 28 dage senere, ca. 25/10. |
+| Plausible (analytics.holstjensen.eu) | **virker nu** (28/9 05:04): **1 besøgende, 1 sidevisning, bounce 100 %, Direct/None, kun `/`** | Rettet 28/9 fra "HTTP 401 — ingen data". Scriptet kom på i commit `58f8ecc` 27/9 kl. 15:53, så 28/9 er det første snapshot med data overhovedet. **Tracking er verificeret live** (se "Fund fra baseline-iterationen" 28/9) — de Cloudflare-tal nedenfor er derfor bots, ikke mennesker. |
 | Cloudflare 28 d | 4 918 unikke besøgende-dage, 6 198 sidevisninger, 23 287 requests | Tæller bots. Brug til retning. |
 | Cloudflare 7 d | 1 308 unikke | ca. 1/4 af 28-dages-tallet, stabil. |
 | npm `bugbottle` | 412 downloads/30 d, 191/7 d | Klassen "downloads pr. uge" er 3-4 % af det unikke webtrafik. |
@@ -41,6 +69,24 @@ næste iteration ikke skal opdage det samme igen.
 **MÅL-baseline for `/docs/nextjs/`:** 0 besøgende (siden siden ikke findes).
 Forventelse: første visninger i Google efter indeksering, 1-5 pr. uge i de
 første måneder. Sammenlign 25/10 og 25/11.
+
+### Hvad tallene siger nu (28/9 05:04, rettet samme dag)
+
+**Plausible og Cloudflare fortæller to forskellige historier, og Plausible har
+ret.** Plausible: 1 besøgende, 1 sidevisning, 28 dage. Cloudflare: 5 025
+unike besøgende-dage og 6 495 sidevisninger. Begge kan være sande — Plausible
+filtrerer bots, Cloudflare tæller dem med — men det er en *virkelig* forskel på
+to kilder om det samme site, så den er målt i stedet for forklaret (28/9,
+"Fund fra baseline-iterationen"): scriptet står på alle live sider, og den
+site-specifikke `pa-*.js` har `domain:"bugbottle.dev"` indbrændt.
+
+**Konsekvens for Fase 3:** sitet har reelt set nul menneskelige besøgende, så
+det tal vi kan styre efter er **ikke** sidevisninger, men **indeksering og
+CTR** — altså Search Console, som er opgave 7 og stadig **blocked** på Mads'
+eksport. De tolv sider vi har bygget er SEO-form, ikke trafik-form, og de måles
+først i Search Console. Det er derfor ❓-eksporten er den vigtigste ulævede
+ting i hele planen: uden den er hverken §1 eller §2 målbar, og de 40+ sider
+vi har lavet, står med **0 i trafik-baseline hver** indtil den kommer.
 
 ## Fase 3 — trafik-drevet
 
@@ -369,7 +415,18 @@ nextjs.org, angular.dev, nuxt.com.
   her: det er et spørgsmål om **sprog** (skal et dansk `#anchor` pege på den
   danske side eller på den engelske?), ikke om opløsning, og det er bedre
   besvaret end gættet.
-- [ ] **24. `typescript` 5.9.3 → 7.0.2 — den én major der ligger.**
+- [x] **24. `typescript` 5.9.3 → 7.0.2 — den én major der ligger. 28/9,
+  `ceo/pin-typescript`. LUKKET SOM BEVIDST FRAVALG (vej A).**
+  **Vej A er gennemført 28/9:** TypeScript står på **5.9.3**, og hele
+  undersøgelsen er nu skrevet ind i **`CLAUDE.md`** som en egen sektion
+  ("TypeScript is pinned at 5.9.3, and that is a decision (28/9)") med de tre
+  steder der bruger compiler-API'et, de to ting den native generator taber
+  (`maxLength: 200` og `properties`-rækkefølgen), og hvad der skal til for at
+  åbne opgaven igen. Det er pointen med valget: **den næste agent (eller
+  Dependabot) skal kunne se grunden uden at læse 172 KB plan**, og uden at
+  bruge en time på at finde ud af det samme. Ingen kode, ingen `package.json`-
+  ændring, ingen `dist/`-ændring — kun `CLAUDE.md`. Beslutningen er Mads' at
+  vende (vej B, se ❓); indtil da står den, fordi den er den forsvarlige.
   **BLOCKED (28/9, `ceo/typescript-7`, rullet tilbage efter 55 min): tre
   forhindringer, en af dem reel. Se "Fund fra TypeScript 7-iterationen" —
   hele undersøgelsen er skrevet ud der, så næste iteration ikke gentager den.**
@@ -1443,6 +1500,9 @@ eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
   `api-table.mjs`-skrivningen skal diffes mod en ** kopi** af den nuværende
   tabel, ikke mod den frosne — ellers ser en fejl ud som en kæmpe diff. Sig til
   hvilken vej, så gør jeg den; ellers er opgaven lukket som bevidst fravalgt.
+  **Vej A er lavet 28/9** (opgave 24): fundene står nu i `CLAUDE.md` som
+  grunden til at versionen står fast, så opgaven er lukket som bevidst fravalgt
+  og genåbnes kun ved et "vej B" fra dig.
 
 - **`createRootErrorHandlers` slettede konsollinjen den erstattede — rettet
   28/9.** Reacts egen standard for `onCaughtError` er én `console.error(error)`,
@@ -1587,7 +1647,68 @@ flyttede sig** (24 688 / 21 104 gzipped, uændrede).
   måltal skal kunne sammenlignes med de tidligere — den pindning er ikke en
   glemt opgradering.
 
+## Fund fra baseline-iterationen (28/9) — Plausible og Cloudflare er ikke i strid
+
+Iterationen startede med at tjekke CI (grøn på alle fem seneste kørsel) og så
+**live-sitet indholdt**, fordi der lå tretven åbne VERIFICÉR-noter. Det førte
+til det største fund i planen hidtil, og det er et *målefund*:
+
+**Plausible siger 1 besøgende. Cloudflare siger 5 025.** Begge om de samme 28
+dage på det samme site. Den normale forklaring er "Cloudflare tæller bots", og
+den kan være rigtig — men den er en forklaring, ikke en måling, og hele Fase
+3 bygger på hvilken af de to der har ret. Så jeg målte trackingen i stedet:
+
+```
+$ curl -sS https://bugbottle.dev/ | grep -o '<script[^>]*analytics[^>]*>'
+<script async src="https://analytics.holstjensen.eu/js/pa-HQm6yfTYvkvAY6ARnXmPp.js">
+$ curl -sS …/js/pa-HQm6yfTYvkvAY6ARnXmPp.js | grep -o 'domain:"[^"]*"'
+domain:"bugbottle.dev"
+$ curl -sS -o /dev/null -w '%{http_code}' https://bugbottle.dev/plausible-init.js
+200
+```
+
+To ting der var værd at tjekke, og som begge viste sig i orden:
+
+1. **Scriptet har ingen `data-domain`.** Det så ud som en fejl — Plausible
+   bruger normalt `data-domain` på script-tag'en. Men `pa-*.js` er den
+   *site-specifikke* variant, og den har `domain:"bugbottle.dev"` indbrændt i
+   sig. Uden attributten er den altså korrekt, og det er *kun* derfor den er
+   rigtig. (Et `data-domain` ville være det samme site to gange.)
+2. **Findes den på alle sidetyper?** Tjekket på `/`, `/docs/nextjs/`,
+   `/compare/`, `/da/` og `/docs/api/` — alle har den. `/plausible-init.js`
+   svarer 200 live, og den ligger i `site/Dockerfile:66` som et COPY, fordi
+   CSP'en ikke tillader inline script.
+
+**Konsekvensen er vigtigere end fundet:** sitet har reelt set nul menneskelige
+besøgende. Så det tal Fase 3 kan styre efter er **ikke** trafik, men
+indeksering og CTR — altså Search Console, opgave 7, som stadig er blocked på
+Mads' CSV. De 40+ sider vi har byggt står hver især med **0 i
+trafik-baseline**, og det er ikke en fejl i arbejdet, det er blot hvad et site
+uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
+i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
+
 ## Log
+
+- **2026-09-28, iteration 21** (`ceo/pin-typescript`). Opgave 24, vej A.
+  Se opgaven og "Fund fra baseline-iterationen" ovenfor.
+  - **Målt først, skrevet bagefter.** CI grøn på alle fem seneste kørsel, og
+    det live site undersøgt *inden* nogen kode blev rørt — fordi tretven
+    VERIFICÉR-noter lå åbne. To fund ud af det, og det første af dem er det
+    der ændrer hvordan Fase 3 måles (se baseline-iterationen).
+  - **Deploy: ét vindue tabt, ikke to.** Live-sitet er standen fra
+    `/docs/vue/`-mergen 27/9 23:04; alt merged siden 23:34 er 404, og
+    sitemap'en har 47 `<loc>` mod 55+ i den rene build. 07:30-vinduet gik
+    tabt. Det er **ét** vindue, og det var 30 minutter gammelt da jeg målte,
+    så `DEPLOY-MISSING` er endnu ikke skrevet — kontrakten kræver to. Mål
+    igen efter 12:30; er `/self-hosted/` stadig 404, skrives den, og så
+    merges til `main` stopper.
+  - **Opgave 24 lukket som bevidst fravalg, ikke som opgave.** Vej A er
+    ikke "gør intet": den skriver undersøgelsen ind i `CLAUDE.md`, så
+    grunden til at TypeScript står på 5.9.3 ligger i det repo en efterfølgende
+    agent læser *før* den rører `package.json`. Det er forskellen på en
+    beslutning og en udvikling, der ikke sker.
+  - **Ingen kode, ingen `dist/`, ingen budget.** Én fil ændret ud over
+    planen: `CLAUDE.md`.
 
 - **2026-09-28, iteration 20** (`ceo/script-tag-once`). Opgave 25. Se opgaven.
   - **Fundet ved at læse den byggede HTML, ikke koden.** Jeg ville skrive

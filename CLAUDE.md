@@ -436,6 +436,50 @@ work in both places: `CHROME_BIN`, `CHROME_PATH`, then the usual Linux, macOS
 and Windows paths. So run them by hand while working — the failure is easier to
 read locally — and know that forgetting is caught.
 
+## TypeScript is pinned at 5.9.3, and that is a decision (28/9)
+
+`typescript` stays on **5.9.3** while 7.0.2 is the current major. This is not an
+oversight and Dependabot should not open it as one: the upgrade was carried out
+in full on a branch, and rolled back on purpose. Read this before starting it
+again — it costs an hour to rediscover.
+
+The reason is that we use the compiler **API**, not only the command. Three
+places read a program through JavaScript, and `typescript@7` has no JavaScript
+compiler API at all: `require("typescript")` answers
+`{ version, versionMajorMinor }`, `package.json#exports` has no `main`, and the
+only entries are `./package.json`, `.` (→ `lib/version.cjs`) and eight
+`unstable/*` ones. `tsc` itself works fine — it is the Go build — so the port
+gets a green gate and then fails in three different places:
+
+1. **`tsc -p tsconfig.build.json`** wants an explicit `"rootDir": "src"`
+   (TS5011). Without it the emit lands in `dist/src/…` instead of `dist/…`,
+   which `scripts/check-dist.mjs` correctly refuses to accept as tracked — a
+   build that passes every other gate and packs the wrong tree.
+2. **`ts-json-schema-generator` 2.9.0** is a peer on `typescript: ^5.9.3` and
+   calls `ts.createProgram`. It is what generates `dist/report.schema.json` from
+   `BugReport`, so that the schema cannot drift from the types. The drop-in
+   built for TS 7, `ts-json-schema-generator@3.0.0-native.5`, **drops a real
+   ceiling from a published artefact**: `maxLength: 200` under
+   `ElementRef.properties.attributes` disappears, and the ceiling is true —
+   `normaliseElement` clips every attribute value with `slice(0, 200)`. It also
+   writes `properties` alphabetically rather than in declaration order, which
+   flips *which* rule ajv reports first, and
+   `tests/schema.test.ts` asks that question.
+3. **`scripts/api-table.mjs:29`** calls `ts.createProgram` and then
+   `ts.ScriptTarget`, `ts.ModuleKind`, `ts.isTypeAliasDeclaration` and
+   `checker.getSymbolAtLocation` — the whole typechecker surface that makes
+   `docs/api-audit-1.0.md`'s table a *frozen* API contract. There is no
+   `unstable/*` replacement I would defend without reading that API's
+   documentation, and **a wrong export table is worse than an old one**, because
+   the table is citable.
+
+The cost of staying is a Go binary for six platforms pulled in as
+`optionalDependencies` on the other side, against zero today. If the
+Go compiler's speed is wanted anyway, the work is `scripts/api-table.mjs`
+rewritten against `typescript@7`'s `unstable/ast` — as its own branch, without
+the upgrade, and **diffed against a copy of the current table**, never against
+the frozen 1.0 one, or a mistake reads as a huge diff.
+
 ## Conventions
 
 - TypeScript strict with `noUncheckedIndexedAccess` and `verbatimModuleSyntax`.
