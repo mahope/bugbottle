@@ -1556,7 +1556,7 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 - `VERIFICÉR DEPLOY: alle 50 sider får en ny `<meta name="description">` (40
   af dem lå med en ellipse, seks talte om sitet), de to landingsider kortet i
   hånden, og `build:docs` fejler nu på en side uden sætning, på en klippet
-  en og på en der taler om sitet — ae51bd2, merge <merge-sha>, 28/9 ~03:5x` —
+  en og på en der taler om sitet — ae51bd2, merge 208b573, 28/9 ~03:5x` —
   **næste batch-vindue er 07:30 2026-09-28**. Kan verificeres i **én kørsel**
   med de otte notes nedenfor. Verificér **indhold**, ikke HTTP 200: hent
   `https://bugbottle.dev/docs/nestjs/` og læs `content=` i description-taggen,
