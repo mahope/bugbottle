@@ -2227,7 +2227,7 @@ flyttede sig** (24 688 / 21 104 gzipped, uændrede).
 
 - `VERIFICÉR DEPLOY: de ti kryds-side-links i den byggede HTML (Vue ×4,
   global-errors ×2, Fastify, NestJS, API, Recipes) — 7503b81, merge
-  <sha>, ~08:0x, 2026-09-28` — næste batch-vindue er **12:30 2026-09-28**,
+  5912d58, ~08:07, 2026-09-28` — næste batch-vindue er **12:30 2026-09-28**,
   samme som de otte notes ovenfor, så **én kørsel dækker alle ni**.
   Verificér **indhold**: `https://bugbottle.dev/docs/vue/` skal linke "Nuxt
   page" og "Nuxt plugin" til `/docs/nuxt/` (ikke `/docs/recipes/#nuxt`),
