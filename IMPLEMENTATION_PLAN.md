@@ -1706,6 +1706,40 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Deploy-noter
 
+- `VERIFICÉR DEPLOY: /docs/express/ og /docs/fastify/ — to afsnit i
+  "X-Powered-By er på" og "Hvilken adresse ratelimitten tæller" er skrevet om
+  `x-forwarded-proto` igen, fordi adfærden er rettet (opgave 19) og den gamle
+  sætning sagde, at asymmetrien fandtes. dc9a3ef, merge 7c2ccb7 ~04:5x,
+  2026-09-28` — næste batch-vindue er **07:30 2026-09-28**, samme som de otte
+  notes nedenfor, så **én kørsel dækker alle ti**. Verificér **indhold**:
+  `https://bugbottle.dev/docs/express/` skal ikke længere sige "One asymmetry
+  worth knowing … takes `x-forwarded-proto` at face value", og skal sige at
+  skemaet kun kommer fra headeren når `trustProxy` siger det;
+  `https://bugbottle.dev/docs/fastify/` skal have det afsnit der siger det
+  samme. `description`-taggene er uændrede, så de skal begynde
+  `expressHandler in Express` og `Receive a report in Fastify` — hvis de er
+  klippet, er den forrige deploy af description-iterationen ikke landet, og
+  det skal siges i stedet for at læses som en ny fejl. **Ingen ny URL** og ingen
+  ændring i sitemap'en. `dist/` rørte denne ændring kun på
+  `dist/server/{handle,express,fastify}.js`, som sitet ikke bruger — det er en
+  statisk nginx-side, så intet af det synes på bugbottle.dev. Den **eneste**
+  synlige forskel er de to afsnit.
+- `KLAR TIL RELEASE: v1.0.2` — **ikke** bumpet, kun her, fordi beslutningen er
+  Mads'. `CHANGELOG.md`s *Unreleased* har nu fire poster, hvor de to nye er de
+  der betyder mest: (1) det committede `dist` manglede
+  `dist/server/fastify.js`, så **`bugbottle/server` har kastet
+  `ERR_MODULE_NOT_FOUND` på import for alle der installerede fra GitHub eller
+  jsDelivr siden 28/9 kl. 02:4x** — det er den, der haster; (2)
+  `x-forwarded-proto` blev troet uden `trustProxy`, plus den 500 den lukker.
+  Begge er patches, og *Unreleased* rummer desuden `/docs/express/`,
+  `/support/`, søgningssætningerne på alle 50 sider og de otte framework-sider,
+  som heller ikke er frigivet endnu. **Spørgsmålet til Mads:** frigives alt
+  sammen som 1.0.2, eller er der grund til at holde docs-arbejdet tilbage fra
+  en patch der retter en brudt importvej? Bemærk at rettelsen først virker for
+  en ny GitHub-installation **efter** at committen er nået GitHub — den ligger
+  der nu, så `npm install github:mahope/bugbottle#<sha>` virker allerede, mens
+  `#v1.0.1` stadig er brudt.
+
 - `VERIFICÉR DEPLOY: /docs/express/ (46 sider i sitemap'en, ny
   integrationsside — den **tolvte** under Integrations, og den første side om
   den adapter der er mest brugt) 51fdf36, merge 80c6933 04:01,
