@@ -1200,9 +1200,54 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   (fra 50), 259 søgeposter (fra 253), `npm run check` grøn (896 tests,
   `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
   budget flyttede sig (IIFE'erne uændrede 24 688 / 21 104).
-  **Sitemap-tallet er nu 60 `<loc>`, ikke 57** — den gamle note regnede fra 48
+  **  Sitemap-tallet er nu 60 `<loc>`, ikke 57** — den gamle note regnede fra 48
   docs-sider, og der har været tre siden. Den næste deploy-måling skal holde
   mod 60, ellers ser den rigtige build ud som en fejl.
+- [x] **33. En hel rapport i README's åbning — de to filer en første rapport
+  er.** 28/9, `ceo/readme-first-report`. **Datagrund: npm-siden er den eneste
+  overflade der er live.** 191 downloads/uge, 412/måned, ★2 stjerner, og alle
+  dem læser README — og GitHub-clones læser den samme fil. Den er **7 956
+  linjer lang**, og åbningens første kodelinje var `initConsoleBuffer()`, som
+  alene ikke sender noget: det første snippet der *bygger* en rapport lå
+  3 700 linjer nede, det første komplette rundt trip 7 800. Så den ene
+  overflade vi faktisk kan nå en læser på, havde ingen komplet rapport på den.
+  Ny `### A first report, end to end` lukker åbningen med de to filer: en
+  knap og én route handler, hvis `fileStore` ikke kræver en database. **Og den
+  fandt en fejl, der lå i seks snippets** — se fundene. **MÅL: npm-siden og
+  `/docs/install/` — ingen målbar baseline (Plausible 1 besøgende/28 d,
+  Search Console-eksporten stadig på Mads, opgave 7). Måles først på
+  npm-downloads og stjerner; sammenlign 25/10.
+
+### Fund fra readme-first-report-iterationen (28/9 11:5x) — seks snippets der
+### ville have svaret 500
+
+**1. `fileStore()` svarer et objekt, og seks snippets skrev det som et
+`store`.** `fileStore` svarer `{ store, list, read, remove, prune, refresh }`,
+mens `handleReport`s `store`-option er en **funktion** den kalder
+(`src/server/handle.ts:1330` — `await options.store(report, screenshot)`). En
+læser der indsatte Hono-, Express-, Fastify- eller NestJS-snippet fik derfor
+`TypeError` → **500** og ingen rapport. Fundet fordi jeg selv skrev det
+forkert i den nye åbning og stoppede for at tjekke typen. **Rektorens egen
+API-sektion har altid sagt det rigtige** — *"whose store answers `store`,
+`list`, `read`, `remove`, `prune` and `refresh`"* — så det var aldrig typen
+der var forkert, kun eksemplerne. Alle seks skriver nu `.store`, og den
+**ene** i README der var rigtig (`Storing it`, linje 6125) er den der viste
+mig at objektet er formen.
+
+**2. Vagten er skrevet, og den er provokeret.** `tests/readme-snippets.test.ts`
+fails på ethvert README-snippet der bygger en `fileStore` og afleverer den
+til en `store` uden at nå gennem `.store`. Bevis: linje 1699 rettet tilbage
+til den gamle form → testen fejler og *navngiver linjen*. Den slipper
+med vilje `prune()`-eksemplet, der kun læser katalogen og aldrig afleverer
+nogen noget — så reglen er "afleverer den", ikke "nævner den".
+
+**3. Den anden vagt er den der burde have været der fra starten.** README's
+åbning importerer `initConsoleBuffer`, `buildReport`, `sendReport`,
+`handleReport` og `fileStore` — og de er nu pinet mod de rigtige entries, så
+en rename ikke kan efterlade hurtigstarten med et navn der ikke findes. Det er
+samme slags pin som `exports.test.ts` lavet til subpaths'ne.
+
+**4. Deploy-klammen står uændret, og sitemap'en er stadig 47 mod 60.**
 
 ### Fund fra one-table-iterationen (28/9 10:5x) — fire fund, og tre af dem er
 ### ikke om bugbottle
@@ -2007,6 +2052,16 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
 
 ## ❓ Til Mads
 
+- **🟡 GitHub har ingen topics på `mahope/bugbottle`, og det er den
+  billigste discovery der findes.** ★2 stjerner, 0 watchers, 4 visninger på 14
+  dage — et repo uden topics findes ikke, uanset hvor god README'en er. Jeg har
+  **ikke** kørt det, fordi det er en skrivning mod en ekstern API og kontrakten
+  forbyder udadvendte handlinger. Det er én kommando, når du vil:
+  ```bash
+  gh repo edit mahope/bugbottle --add-topic bug-report,error-reporting,error-tracking,user-feedback,sentry-alternative,headless,screenshot,console-log,self-hosted,nextjs,react,vue,svelte,solid,astro
+  ```
+  Samme for `mahope/bugbottle-wordpress` og `mahope/bugbottle-action`, som også
+  står på 0.
 - **🔴 Deployet er gået i stykker, og det kan ikke rettes fra repoet.** 28/9.
   Opdateret 09:2x med en måling der indsnævrer spørgsmådet fra "mod `main`
   eller mod et tag" til **"hvorfor kørte der en build kl. 23:1x den 27/9, og
@@ -2274,6 +2329,24 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-28, iteration 25** (`ceo/readme-first-report`, oven på
+  `ceo/sveltekit-side`). Opgave 33. Se opgaven og fundene ovenfor.
+  - **Deploy, genmålt 28/9 11:4x: uændret.** Live-sitemap'en har **47**
+    `<loc>` mod **60** i den rene build. Der er ikke gået et nyt batch-vindue
+    siden målingen kl. 09:2x — næste er **12:30** — så det er forventet.
+    **Merges til `main` er derfor stadig stoppet**, og branchen ligger oven på
+    `ceo/sveltekit-side` som de tre forrige: opgave 29–33 ligger i **én** kø.
+  - **Gaten:** `npm run check` grøn — **900 tests** (fra 896, fire nye),
+    `check-dist` grøn på 208 filer, `build:docs` skriver **51 docs-sider** og
+    **260 søgeposter** (fra 259, den nye `###` på åbningen), sitemap'en
+    uændret på 60 `<loc>`. **Ingen kode- eller `dist/`-ændring**: IIFE'erne
+    vejer 24 688 / 21 104 mod budgetterne 25 088 / 21 504, uændrede, fordi det
+    er dokumentation og to tests.
+  - **Bygget bekræfter de tre `#anchor`e** i den nye sektion: de renderes som
+    `/docs/receiving-a-report/` og `/docs/the-ready-made-panel/`, ikke som
+    `#`-links til GitHub. `/docs/install/` har nu "A first report, end to end"
+    som sit tredje afsnit.
 
 - **2026-09-28, iteration 24** (`ceo/which-framework`, oven på
   `ceo/sveltekit-side`). Opgave 32: `/docs/every-framework-one-table/`.
@@ -3402,3 +3475,18 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   sidebaren skal have **femten** sider (den var fjorten efter TanStack Query).
   Branchen indeholder samlet opgave 29, 30, 31 og 32, så **én**
   `git merge --no-ff ceo/sveltekit-side` tager dem alle fire.
+
+- **OPGAVE 33 — LIGGER PÅ `ceo/readme-first-report`, oven på `fc8f6c0`, 28/9 11:5x.**
+  README's åbning har nu "A first report, end to end": de to filer en første
+  rapport er, med `initConsoleBuffer()` og uden en database. Seks snippets der
+  skrev `fileStore()` som et `store` er rettet (de ville have svaret 500), og
+  `tests/readme-snippets.test.ts` vogter både dem og åbningens imports mod de
+  rigtige entries. Gaten er grøn (900 tests, `check-dist` grøn på 208 filer,
+  ingen kode- eller `dist/`-ændring, ingen budget flyttede sig).
+  **VERIFICÉR DEPLOY: `https://bugbottle.dev/docs/install/` skal vise afsnittet
+  "A first report, end to end" med de to kodeblokke og de tre links ud til
+  `/docs/receiving-a-report/` og `/docs/the-ready-made-panel/`.** Den samme
+  ændring skal ses på **npm-siden** (`npmjs.com/package/bugbottle`), som ikke
+  afhænger af deployet — README'en er den der, uanset hvad sitet gør.
+  Branchen indeholder samlet opgave 29, 30, 31, 32 og 33, så **én**
+  `git merge --no-ff ceo/readme-first-report` tager dem alle fem.

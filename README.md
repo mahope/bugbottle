@@ -70,6 +70,59 @@ thing that turns *"it's broken"* into a reproducible payload, and stays out of
 the way otherwise. The optional panel in `bugbottle/ui` is a convenience over
 the same core, not the product.
 
+### A first report, end to end
+
+Everything above is a promise; this is the proof of it. Two files, and the
+first of them is the button. `initConsoleBuffer()` runs once at start-up,
+because a
+report can only carry the console errors that were recorded *before* the
+reporter pressed the button — that one call is the whole difference between a
+report and a screenshot:
+
+```ts
+// app/report-button.ts
+import { initConsoleBuffer, buildReport, sendReport } from "bugbottle";
+
+initConsoleBuffer();
+
+reportButton.addEventListener("click", async () => {
+  const report = buildReport({ type: "bug", message: messageInput.value });
+  const { id } = await sendReport("/api/bugbottle", report);
+  console.log("stored as", id);
+});
+```
+
+The receiving half is one route handler, and it needs no database — one JSON
+file per report, with the picture beside it when there is one:
+
+```ts
+// app/api/bugbottle/route.ts
+import { handleReport, fileStore } from "bugbottle/server";
+
+const store = fileStore({ dir: "./reports" }).store;
+
+export async function POST(request: Request) {
+  return handleReport(request, { store });
+}
+```
+
+`handleReport` checks every field before it reaches your disk, so the file in
+`./reports` is already a validated report and not a guess. The reply is
+`201 { id }`, and that `id` is the one `sendReport` handed back above.
+
+`export async function POST` is a Next.js route handler, a Hono handler minus
+the `app.post`, a Cloudflare Worker and a Bun route. The same file compiles
+wherever you already speak the web `Request`; where you do not,
+[`expressHandler`](#receiving-a-report) and
+[`fastifyHandler`](#receiving-a-report) are the translation.
+
+The report above carries no picture, on purpose: `captureScreenshot` needs
+`html-to-image`, and a report is worth sending without one. Add the capture
+when you want the screenshot, reach for
+[`bugbottle/ui`](#the-ready-made-panel) when you would rather not write the
+form, and read [Receiving a report](#receiving-a-report) when you want the
+sinks that turn the file into a Slack message, a GitHub issue or an email.
+
 ## Recording console errors
 
 Call this once, from client-side code, as early as your app can manage.
@@ -1643,7 +1696,7 @@ the root layout's body, and it needs no `"use client"` because a plain
 // app/api/feedback/route.ts
 import { handleReport, fileStore, slackSink } from "bugbottle/server";
 
-const store = fileStore({ dir: "./reports" });
+const store = fileStore({ dir: "./reports" }).store;
 const notify = slackSink({ webhookUrl: process.env.SLACK_WEBHOOK_URL! });
 
 export async function POST(request: Request) {
@@ -1880,7 +1933,7 @@ Express one an SSR application already has. `expressHandler` builds the
 import express from "express";
 import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
 
-const store = fileStore({ dir: "./reports" });
+const store = fileStore({ dir: "./reports" }).store;
 
 app.post(
   "/api/feedback",
@@ -4301,7 +4354,7 @@ app.post("/api/feedback", (c) =>
   handleReport(c.req.raw, {
     // Header or signature — the first thing a public endpoint needs.
     authorize: (req) => req.headers.get("x-bugbottle-key") === REPORT_KEY,
-    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
     sinks: [slackSink({ webhookUrl: SLACK_WEBHOOK })],
   }),
 );
@@ -4527,7 +4580,7 @@ const app = Fastify({ bodyLimit: 5 * 1024 * 1024 });
 app.post(
   "/api/bug-report",
   fastifyHandler({
-    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
     sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
   }),
 );
@@ -4725,7 +4778,7 @@ import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
 import type { ExpressRequestLike, ExpressResponseLike } from "bugbottle/server";
 
 const receive = expressHandler({
-  store: fileStore({ dir: "./reports", maxReports: 2000 }),
+  store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
   sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
 });
 
@@ -4912,7 +4965,7 @@ app.post(
   "/api/bug-report",
   express.json({ limit: "5mb" }),
   expressHandler({
-    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
     sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
   }),
 );
