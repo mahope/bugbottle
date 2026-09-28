@@ -45,6 +45,18 @@ COPY CHANGELOG.md ./
 # was not updated. `tests/site-image.test.ts` pins the two lists together.
 COPY site/compare.md site/self-hosted.md site/support.md ./site/
 COPY site/da/sammenlign.md site/da/kom-i-gang.md site/da/privatliv.md ./site/da/
+# The panel shot, for the same reason and not for its own sake: `build-docs.mjs`
+# reads the picture's own IHDR to give the `<img>` its intrinsic `width` and
+# `height`, so an `<img>` whose size it cannot measure renders without them and
+# the paragraph under it jumps once the file lands. That is the layout shift the
+# performance floor in CLAUDE.md is about, and it is invisible from here: the
+# docs stage still succeeds and the page still serves the picture, so nothing in
+# a green build says the attributes are missing. Live did exactly that between
+# 28/9 13:5x and 17:30 — `/docs/install/` answered 200 with the image and without
+# its size, while the same build in the repository has both.
+# `tests/site-image.test.ts` reads the README for the pictures it points at and
+# fails when one is not named here, so a second shot cannot repeat this quietly.
+COPY site/panel-narrow.png ./site/
 # The history, for the sitemap's dates. Last, because it changes with every
 # commit and would otherwise invalidate everything below it.
 #
