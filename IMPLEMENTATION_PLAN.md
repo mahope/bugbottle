@@ -3848,7 +3848,12 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   ikke ligge i en patch. **Spørgsmålet til Mads er derfor ændret:** de to patches
   nedenfor er stadig dem, der haster mest — især (1) — så hvis du hellere vil have
   1.0.2 ud *nu* med kun patches, så skal `open({ message })` holdes tilbage, og
-  det er én commit at fjerne igen. `CHANGELOG.md`s *Unreleased* har nu fire
+  det er én commit at fjerne igen. **Opgave 38's `description` og `keywords`
+  sidder i samme kø** (28/9 15:2x, `14f0163`) og er værd at huske her, fordi de
+  er det eneste i batchen der *kun* virker efter `npm publish`:
+  `npm view bugbottle description` svarer stadig den gamle, og det første du kan
+  se af effekten er den første uge *efter* release, ikke dagen før.
+  `CHANGELOG.md`s *Unreleased* har nu fire
   poster, hvor de to nye er de
   der betyder mest: (1) det committede `dist` manglede
   `dist/server/fastify.js`, så **`bugbottle/server` har kastet
