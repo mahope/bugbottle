@@ -4098,7 +4098,8 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   `dist/` urørt.
 
 - `VERIFICÉR DEPLOY: panelbilledet får sin størrelse i imaget (opgave 41,
-  `ceo/panel-image-into-docs-stage`), commit `12a1105`, 2026-09-28 18:3x.` Næste
+  `ceo/panel-image-into-docs-stage`), commit `12a1105`, merge `786dc5c`,
+  2026-09-28 18:3x.` Næste
   batch-vindue er **21:30 2026-09-28**. **Accepter:
   `https://bugbottle.dev/docs/install/` skal have
   `<img src="https://bugbottle.dev/panel-narrow.png"` med
