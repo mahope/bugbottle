@@ -3672,6 +3672,244 @@ Pass `req.socket.remoteAddress` in as `remoteAddress`, exactly as the
 and Nest has its own `trust proxy` setting on the adapter, which is a
 *different* one from `handleReport`'s. Decide with one of them, not with both.
 
+## Express
+
+`expressHandler` is the most-used export in `bugbottle/server`, and until now it
+had no page. Express is also the odd one out in this row in a way worth saying
+first: it is the only framework here where an `async` handler that rejects is
+*already* routed to the error handler, so the six lines that catch a crash on
+the other five are a promise you can leave in place rather than a trap to avoid.
+
+Every claim below was read out of `express@5.2.1`'s published build and the two
+packages it pulls in for the interesting parts — `body-parser@2.3.0`,
+`router@2.2.0`, `finalhandler@2.1.1` — not out of expressjs.com.
+
+### Receiving a report
+
+```ts
+import express from "express";
+import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
+
+const app = express();
+
+// `limit` first. See the next section: the default is 100 kB.
+app.post(
+  "/api/bug-report",
+  express.json({ limit: "5mb" }),
+  expressHandler({
+    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
+  }),
+);
+```
+
+`expressHandler` is a route handler, so it returns `void` and writes through the
+`res` Express already made: the status and headers `handleReport` chose are set
+on it and the body goes out with `res.send`. It reads `req.body` when a parser
+produced one, and the raw stream when none did, exactly as the Fastify adapter
+does. A stream is counted against `maxBodyBytes` as it arrives, and over the
+ceiling the adapter answers `413` and destroys the request rather than buffering
+the rest of a body it has already refused.
+
+### `express.json()` stops at 100 kB, and it stops before the route
+
+This is the finding that decides whether the snippet works, and it is the same
+one the [NestJS page](#nestjs) found one layer up. The default is not Express's;
+it is body-parser's, and it is in the normalised options rather than in a
+documented default:
+
+```js
+// body-parser/lib/utils.js
+const limit = typeof options?.limit === 'undefined' || options?.limit === null
+  ? 102400 // 100kb default
+  : bytes.parse(options.limit)
+```
+
+`express.json` *is* `bodyParser.json` — `lib/express.js` line 77 is
+`exports.json = bodyParser.json` — so a report with a screenshot is refused with
+`entity.too.large` and a **413 in body-parser's shape** before `expressHandler`
+is entered, while `handleReport` would have accepted the same body: its own
+ceiling is `DEFAULT_MAX_BODY_BYTES`, 4 MiB. Fastify's default is 1 MiB, so
+Express is four times tighter than the framework we just wrote a page about, and
+forty times tighter than the handler behind it.
+
+It fails in production only, and it fails quietly. A report without a screenshot
+is a few kilobytes, so every test passes; the first person who attaches a
+picture gets a 413 whose body is body-parser's `{"errors":{"body":"too large"}}`
+and a reporter who concludes the widget is broken. Read the mount as what it
+is: an adapter that silently serves a subset of the reports the client is
+willing to send.
+
+### A signed route cannot be mounted behind `express.json()`
+
+The signature covers the exact text the browser sent. Behind a JSON parser,
+`req.body` is an object, the adapter re-serialises it, and the re-serialised
+bytes hash to something else — so every signed report is answered `401`, forever,
+for a reason that has nothing to do with the sender. The adapter refuses the
+route up front rather than verifying a body it cannot recover, and says so once
+through `onError`, once per handler, because a mounting mistake is not an event.
+
+**`verify` does not save you, and the reason is the interesting part.** It is the
+obvious answer, and body-parser does hand `verify` the raw buffer — but only by
+disabling its own decoding:
+
+```js
+// body-parser/lib/read.js
+opts.encoding = verify   // a verify function turns off the charset handling
+```
+
+`opts.encoding` is a boolean that says whether to decode the stream into a
+string. Setting it to the function makes the body arrive as a `Buffer`, which is
+what you wanted — and `parse` still runs afterwards, so `req.body` is still an
+object. The bytes were available; they were simply not kept where the adapter
+looks. The escape is a parser that *keeps* them:
+
+```ts
+app.post("/api/bug-report", express.raw({ type: "application/json", limit: "5mb" }),
+  expressHandler({ signature: { key: process.env.SIGNING_KEY! } }));
+```
+
+A `Buffer` is not a parsed object, so the adapter decodes it as text and the
+bytes it verifies are the bytes that were signed. As with the Fastify adapter, a
+mounting mistake and a forged signature look identical on the wire, so the answer
+is the same `401` either way and the explanation goes to the log.
+
+**The trap inside the trap:** `express.raw()` with no options matches
+`application/octet-stream`, not JSON — `normalizeOptions(options,
+'application/octet-stream')` in `lib/types/raw.js`. A report sent as JSON is not
+parsed at all, the middleware passes through without reading the stream, and the
+adapter's own reader takes over. It works, and it works by accident, because the
+accident happens to be the safe one. Write the `type`.
+
+### Express 5 forwards a rejected promise, and that changes what a handler catches
+
+Every other framework in this row needs an explicit hook for an `async` failure.
+Express 5 does not, and it is worth knowing exactly what it does instead:
+
+```js
+// router/lib/layer.js, handle_request
+if (isPromise(ret)) {
+  if (!(ret instanceof Promise)) {
+    deprecate('handlers that are Promise-like are deprecated, use a native Promise instead')
+  }
+  ret.then(null, function (error) { next(error) })
+}
+```
+
+A route that throws, a route that rejects, and a middleware that rejects all
+arrive at the same four-argument error handler, in registration order. Two
+consequences, the first wanted and the second not.
+
+**Wanted:** a route that forgets `next(err)` no longer hangs the request. In
+Express 4 that was a socket left open until the client timed out; here it is a
+500. `BugReportBoundary`-shaped thinking — a single `app.use` at the root that
+reports — now also sees rejections from every route in the app, which is what
+makes the one-reporter-in-the-middle pattern work here and nowhere else in this
+row.
+
+**Not wanted:** the same line runs in `handle_error`, so an `async` error handler
+that rejects does *not* catch its own failure — it forwards it, and the next
+error handler in the chain sees a rejection rather than the error it was given.
+Same sharp edge as Fastify's `setErrorHandler`, arriving by a different road:
+await inside, catch inside.
+
+A `Promise`-like thenable is deprecated rather than supported, so a handler
+returning a third party's thenable warns once per call. Return an `async`
+function's own promise.
+
+### The default error handler destroys the socket, and pastes a stack into the body
+
+`app.handle` ends in `finalhandler`, and both of its surprises are in the
+published build rather than in its documentation.
+
+**Headers already sent, and then an error.** `finalhandler` cannot answer a
+request that has started, so it does the only thing left:
+
+```js
+if (res.headersSent) {
+  debug('cannot %d after headers sent', status)
+  req.socket.destroy()
+  return
+}
+```
+
+The reporter sees a network failure, not a status — no `500`, nothing to retry
+against, and no clue that a server-side error happened. This is the one place
+`handleReport`'s own error handling cannot help, because the failure is after the
+bytes left. Keep the error handler to work that happens before you write.
+
+**`NODE_ENV` unset means a 500 answers with a stack trace.**
+
+```js
+function getErrorMessage (err, status, env) {
+  if (env !== 'production') {
+    msg = err.stack
+    …
+```
+
+`env` is `process.env.NODE_ENV || 'development'` (`lib/application.js`), and
+`development` is not `production` — so an app that never sets it, or a dev
+container that sets it to something else, returns the full stack, with file paths
+and line numbers, in the body of every unhandled error. On a bug-report endpoint
+that is your own source layout, handed to whoever posted a form. `NODE_ENV=production`
+in the deployment is the fix, not an Express setting.
+
+Two smaller things come with it. `console.error` appears **once** in
+`express@5.2.1`'s `lib/` — in `logerror`, which `app.handle` passes to
+finalhandler as `onerror`, and which is skipped when `env === 'test'`, so a test
+run is silent about a 500 your suite produced. And `onerror` is scheduled with
+`setImmediate`, so the log line lands *after* the response, not before it.
+
+### `X-Powered-By` is on, and `trust proxy` is off
+
+`app.enable('x-powered-by')` is in the constructor, and `app.handle` sets the
+header for every request:
+
+```js
+if (this.enabled('x-powered-by')) {
+  res.setHeader('X-Powered-By', 'Express');
+}
+```
+
+It says "Express" and not the version, so it is a fingerprint rather than a
+disclosure — but it is on by default on every response from the route above,
+including the `401` and the `413`. `app.disable("x-powered-by")` is one line and
+is on most Express hardening checklists.
+
+`trust proxy` is `false` by default (`lib/application.js`), so `req.ip` is the
+socket address. The adapter passes `req.socket.remoteAddress` in and only falls
+back to `req.ip`, and in Express the order is the one you want: on a default app
+they are the same value, and on an app that set `trust proxy` the socket is the
+one `handleReport` was not asked to trust. If you set `trust proxy`, pass
+`remoteAddress` explicitly and set `trustProxy` on `handleReport` too, so one
+decision is in charge.
+
+One asymmetry worth knowing, because it is in our adapter and not in Express: the
+URL the adapter builds for `handleReport` takes `x-forwarded-proto` at face
+value, whatever `trustProxy` says, so behind a proxy that does not set it the
+handler sees an `http://` URL for a report sent over HTTPS. It changes what the
+handler logs rather than what it accepts, and the rate limit is unaffected —
+but the address it logs is worth a glance before you trust it in a log search.
+
+Express 5 also changed the default `query parser` to `'simple'`, so `?a[b]=1` is
+no longer a nested object unless you set `'extended'`. It does not touch a
+report, which is a POST body, but it does touch every other route in an app
+upgraded from 4.
+
+### What to check before you ship
+
+- A report **with a screenshot**, sent to the route, and the status it comes
+  back with. This is the one that only fails in production.
+- A signed route, if you have one, answering `201` rather than `401` — and
+  `express.raw({ type: "application/json" })` on it rather than `express.json()`.
+- `NODE_ENV=production` in the deployment. Without it a 500 answers with a
+  stack trace, and this page is the reason to know that.
+- An error handler that does its work before writing, because after the first
+  `res.send` an error destroys the socket instead of answering.
+- `app.disable("x-powered-by")`.
+- The rate limit counting a real address: two reports from one browser should be
+  one allowed and one `429`.
+
 ## One script tag
 
 For a site with no build step — a WordPress theme, a static page, a client

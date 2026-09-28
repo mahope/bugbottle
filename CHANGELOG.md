@@ -10,6 +10,41 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`/docs/express/` — a page for the export the package has used most and
+  documented least.** `expressHandler` is the most-used export in
+  `bugbottle/server`, `express error handling middleware` has 10 Google Suggest
+  entries (measured 2026-09-28, the same band as Fastify, NestJS, React Router
+  and Vue), and Express was the only server framework with no page here at all.
+  Written on the published builds of `express@5.2.1`, `body-parser@2.3.0`,
+  `router@2.2.0` and `finalhandler@2.1.1` rather than out of expressjs.com, on
+  the method the eight pages before it established. No new export: the page
+  documents the existing adapter. Five findings, none of them in Express's own
+  documentation, and the first is the same one the NestJS page found one layer
+  up: **`express.json()` stops at 100 kB** — `102400` in
+  `body-parser/lib/utils.js`, the comment in the source saying "100kb default" —
+  which is four times below Fastify's 1 MiB and forty times below
+  `handleReport`'s own `DEFAULT_MAX_BODY_BYTES`, and 413s a report with a
+  screenshot in body-parser's error shape before the route is entered.
+  **A signed route cannot sit behind it, and `verify` is not the way out** —
+  body-parser sets `opts.encoding = verify` to hand the raw buffer over, but
+  still runs `parse`, so `req.body` is still an object and the HMAC still differs;
+  the fix is `express.raw({ type: "application/json" })`, and bare `express.raw()`
+  is a second trap because it matches `application/octet-stream` and passes a
+  JSON report straight through. **Express 5 forwards a rejected promise from any
+  handler to `next(err)`** (`isPromise(ret)` in `router/lib/layer.js` and
+  `router/index.js`), so it is the one framework in this row where a single
+  root error handler sees route rejections without a hook — and the flip side
+  is that the same line runs in `handle_error`, so an `async` error handler that
+  rejects forwards the rejection rather than the error it was given.
+  **The default error path destroys the socket when headers are already sent**
+  (`finalhandler`), so a late failure reaches the reporter as a network error
+  with no status at all, and `getErrorMessage` returns `err.stack` whenever
+  `env !== 'production'` — with `NODE_ENV` defaulting to `'development'`, an app
+  that never sets it answers every unhandled 500 with a full stack trace in the
+  body. And `X-Powered-By: Express` is on by default on every response from the
+  route, while `trust proxy` is off, which is why the adapter passes
+  `req.socket.remoteAddress` first.
+
 - **`/docs/nestjs/` — a NestJS page, and the first one that says the framework
   is on the wrong side of both jobs.** `nestjs exception filter` and
   `nestjs error handling` both have 10 Google Suggest entries (measured
