@@ -17,6 +17,13 @@
  * `readme-snippets.test.ts`: read the repository rather than `dist/`, and
  * derive both sides from the sources instead of restating them, so a page
  * added in `STANDALONE` fails the suite until the Dockerfile names it.
+ *
+ * There are now three families rather than two, and the third arrived on the
+ * day the second was fixed. `build-docs.mjs` also reads the *pictures* the
+ * README points at, to measure them — and a picture it cannot read is not a
+ * failed build but a rendered page without the intrinsic `width`/`height`
+ * that keep the text under it from jumping. Same list, same cause, a third of
+ * the symptoms, and the quietest of the three.
  */
 
 import { test } from "node:test";
@@ -33,10 +40,42 @@ function read(path: string): string {
 
 const dockerfile = read("site/Dockerfile");
 const buildDocs = read("scripts/build-docs.mjs");
+const readme = read("README.md");
 
-/** The sources the docs stage copies in, as repository-relative paths. */
+/**
+ * The source paths of every `COPY` line in the **builder** stage — the one that
+ * runs `build-docs.mjs` — the last token on each line being the destination
+ * rather than a source. Builder-stage inputs are the lines without `--from`,
+ * since that names what the *previous* stage produced rather than something the
+ * build has to be given.
+ *
+ * Scoped to the builder stage on purpose, and that is not tidiness. Both
+ * stages copy `site/panel-narrow.png` — the served stage has to, or the picture
+ * is a 404, and the builder stage has to, or the docs build cannot measure it —
+ * so a set gathered from the whole file answers "yes it is copied" while the
+ * stage that needs it is the one missing. The first version of the picture test
+ * did exactly that and passed against the bug it was written for.
+ */
 function copiedSources(): Set<string> {
-  return copySources(/^COPY\s+(.*)$/, (rest) => !rest.startsWith("--from="));
+  const sources = new Set<string>();
+  for (const line of builderStageLines()) {
+    const match = /^COPY\s+(.*)$/.exec(line.trim());
+    if (!match?.[1] || match[1].startsWith("--from=")) continue;
+    for (const token of match[1].split(/\s+/).slice(0, -1)) {
+      if (token) sources.add(token);
+    }
+  }
+  return sources;
+}
+
+/** Everything from the `FROM` that starts the docs stage to the next `FROM`. */
+function builderStageLines(): string[] {
+  const lines = dockerfile.split("\n");
+  const start = lines.findIndex((line) => /^FROM\s+\S+\s+AS\s+docs\s*$/i.test(line.trim()));
+  assert.ok(start >= 0, "site/Dockerfile has no `FROM … AS docs` stage to read the inputs of");
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^FROM\s/i.test(line.trim()));
+  return end === -1 ? rest : rest.slice(0, end);
 }
 
 /**
@@ -47,21 +86,10 @@ function copiedSources(): Set<string> {
  * points at.
  */
 function servedOutputs(): Set<string> {
-  return copySources(/^COPY\s+--from=docs\s+(.*)$/, () => true);
-}
-
-/**
- * The source paths of every `COPY` line the pattern matches, the last token on
- * each line being the destination rather than a source. The predicate picks
- * the lines: the builder stage's inputs are the ones without `--from`, since
- * that names what the *previous* stage produced rather than something the
- * build has to be given.
- */
-function copySources(pattern: RegExp, include: (rest: string) => boolean): Set<string> {
   const sources = new Set<string>();
   for (const line of dockerfile.split("\n")) {
-    const match = pattern.exec(line.trim());
-    if (!match?.[1] || !include(match[1])) continue;
+    const match = /^COPY\s+--from=docs\s+(.*)$/.exec(line.trim());
+    if (!match?.[1]) continue;
     for (const token of match[1].split(/\s+/).slice(0, -1)) {
       if (token) sources.add(token);
     }
@@ -137,4 +165,34 @@ test("the files the docs build reads outside site/ are copied into the image", (
   for (const path of ["README.md", "package.json", "CHANGELOG.md"]) {
     assert.ok(copied.has(path), `site/Dockerfile does not copy ${path}, which the docs build reads`);
   }
+});
+
+test("every picture the docs build measures is copied into the image", () => {
+  const copied = copiedSources();
+  /* The same third family as the two tests above, and it is a *quieter* one
+     than either. `build-docs.mjs` reads a picture's own PNG header to give the
+     `<img>` its intrinsic `width` and `height`, so that the text under it
+     cannot jump once the file loads — the layout shift the performance floor in
+     CLAUDE.md is about. A picture the docs stage cannot read is not an error:
+     `pngSize` catches it and omits the attributes, the page still serves the
+     picture, and every page still builds. Nothing in a green build says the
+     size is gone, which is how `/docs/install/` served the panel without it
+     for a whole deploy window while the repository build had both.
+
+     Read from the README rather than written down, so the second picture on
+     this site is covered by the same rule as the first. */
+  const own = [...readme.matchAll(/!\[[^\]]*\]\(https:\/\/bugbottle\.dev\/([^)\s]+)\)/g)].map(
+    (m) => `site/${m[1]!}`,
+  );
+  assert.ok(own.length > 0, "the README points at at least one picture on this site");
+
+  const missing = own.filter((path) => !copied.has(path));
+  assert.deepEqual(
+    missing,
+    [],
+    `site/Dockerfile does not copy ${missing.join(", ")}, so the docs stage renders ` +
+      `those pictures without their intrinsic width and height: the page still ` +
+      `serves the picture and the build still passes, so only a request for the ` +
+      `page shows it.`,
+  );
 });
