@@ -249,6 +249,33 @@ nextjs.org, angular.dev, nuxt.com.
   Bemærk til Mads: hvis nogen har installeret fra GitHub siden 28/9 kl. 02:4x,
   har `bugbottle/server` ikke virket for dem. **Ingen release endnu** — det er
   en patch, og den skal med i næste version.
+- [x] **21. `widget.open({ message })` — panelen kan få en besked lagt i
+  forvejen.** 28/9, `ceo/open-prefill`. **Datagrund:** ikke trafik, men det
+  mest genbrugelige fund i hele planen — det stod under ❓ i *fire* iterationer
+  og blev nævnt i hver en af dem, fordi det rammer alle framework-siderne, der
+  åbner panelet fra en krog. Kilden er de **otte åbne kaldesætninger i README's
+  egne kode-eksempler**, hvoraf to bar en kommentar, der sagde det samme:
+  ``// `open()` takes no arguments, so the box opens empty.`` (Astro og
+  SvelteKit). Den kommentar var sand, og alle otte kaldesætninger sendte en
+  rapport, hvis reporter skulle skrive beskeden selv — i det øjeblik hvor
+  vedkommende ser en side gå i stykker. **Det er konvertering, ikke features:**
+  den dyrebeste del af en rapport er den linje, og den var tom. **Accept:**
+  `open({ message })` på `BugbottleWidget`, klippet til `MAX_MESSAGE_LENGTH`
+  (samme tal serveren gemmer, så intet tabes), aldrig over en igangværende
+  klitring; `openOnError: { prefill }` fylder nu gennem **samme linje**, så de
+  to kan ikke glide fra hinanden; ikke-tekst ignoreres i stedet for at blive
+  `[object Object]` (et `ErrorHandler` får `unknown`); de fem sider hvis
+  snippets kalder `open()` fra en fejlkrog (Vue, Nuxt, Astro, SvelteKit,
+  Angular) er rettet, så ingen side documenteerer en adfærd der ikke længere
+  findes. **Målt:** `bugbottle/ui` 11 596 → **11 625** (+29, budget 11 776),
+  `dist/bugbottle.js` **24 688** (budget 25 088), `dist/bugbottle.slim.js`
+  **21 104** (budget 21 504) — ingen budget flyttede sig. 896 tests grønne.
+  **Navnet er `message`, ikke `prefill`**, se ❓: `prefill` er allerede en
+  *boolsk* indstilling i `openOnError`, og en nøgle der betyder en streng ét sted
+  og et flag et andet er præcis den fejl `docs/api-audit-1.0.md` #69 eksisterede
+  for at rette. `message` er rapportens eget felt, så nøglen siger hvad den
+  indeholder. Det er en **minor** (signaturen på en eksisterende export), ikke en
+  patch.
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -1122,20 +1149,18 @@ eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
   React-Router-undersøgelsen, ikke fra en fejlrapport, og det er det tredje
   eksempel på samme mønster (Vue, Nuxt, nu os) — **mønstret er værd at kigge
   efter i hvert framework-afsnit: dækker siden "hvad sker der med konsollen?"**
-- **`mountBugbottle().open()` kan ikke forudfylde beskeden.** Panelets egen
-  `openOnError: { prefill: true }` kan det, men kun for vinduesfejl, og kun
-  fordi panelet selv ringer `openForError`. Ethvert andet kald — en
-  framework-`ErrorHandler`, en `onShortcut`, `astro:hydration-error`, din egen
-  knap, **og nu også `app.config.errorHandler` og `router.onError`** — får et
-  tomt felt, selv om den kender beskeden. Fastslået i `src/ui`
-  (linje 218: `open(): void`), så det er ikke en forglemt mulighed.
-  Fixet er lille (en valgfri `open({ prefill })`, ~40 bytes på `bugbottle/ui`),
-  men det **rører et eksisterende eksports signatur**, så efter vores egne
-  navneregler er det en minor, ikke en patch. Og det er ikke længere et
-  hjørnesag: **alle fem frameworksider rammer det**, og Astro-siden rammes
-  hårdest, fordi `componentUrl` + fejlteksten er hele pointen med at lytte på
-  begivenheden. Bygge det, eller lade siderne pege på `bugbottle/triggers` og
-  lægge fejlen i `extra` i stedet?
+- **`mountBugbottle().open()` kunne ikke forudfylde beskeden — bygget 28/9 som
+  `open({ message })`.** Se opgave 21. Panelet har haft `openOnError: { prefill:
+  true }` siden starten, som fylder kassen med * vinduesfejlens* besked, men
+  intet for de andre otte kaldesætninger — og to af dem bar en kommentar i
+  README, der sagde det højt. **Besvaret, og det er `message` og ikke
+  `prefill`:** de to ord betyder ikke det samme her. `openOnError.prefill` er et
+  flag ("fyld kassen med vinduesfejlens besked"), `open().prefill` ville være
+  indholdet, og CLAUDE.md's navneregler forbyder en nøgle der betyder to ting.
+  `message` er feltet i rapporten, så nøglen siger hvad den rummer. Det eneste
+  åbne spørgsmål er **releaseformen**: næste version er nu en minor (1.1.0) for
+  den her og ikke en patch (1.0.2) for de to patches i *Unreleased* — se
+  ❓-punktet om Stripe nederst.
 - **Fejl-siden-problemet er besvaret, så det behøver ikke en beslutning mere.**
   Alle fire sider løser det samme sted: en fejl-side er en separat side load
   uden layout, så panelet kan ikke være mountet, og integrationen er én knap.
@@ -1209,6 +1234,64 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 17** (`ceo/open-prefill`). Opgave 21. Se opgaven.
+  - **Køen var tom, så valget var mellem to ting planen selv navngiver:** den
+    fælles script-tag-opløsning (betalt for tre gange, DRY, ingen trafik) og
+    `open({ message })` (fire iterationer under ❓, otte kaldesætninger i
+    README, to med en kommentar der sagde at kassen var tom). Den anden er
+    valgt, fordi den er **konvertering**: en rapport er en besked fra en
+    person, og de otte kaldesætninger bad præcis den person skrive den dyrebeste
+    linje selv — i det øjeblik hvor de kigger på en side gå i stykker. Alt
+    andet i køen er docs-arbejde, der forbedrer sider, der allerede ranker;
+    dette fik alle otte til at sende en tyndere rapport.
+  - **Eksisterende kode, der lærer.** Den lægde ikke op i `report-state.ts`,
+    fordi `open()` der ikke er "åbn panelet" men "kald når formularen åbner, så
+    screenshotet viser hvad de kiggede på" — panel-layoutet er frameworkens
+    job i de adapters, og det er kun `mountBugbottle` der ejer et panel. Så
+    funden var smallere end den så ud: **én fil, én metode, ~30 byte.**
+  - **Et navnevalg, der var svært at få rigtigt.** `open({ prefill })` var
+    formuleringen i ❓, og den er forkert af navnereglerne: `prefill` er
+    allerede en *boolsk* indstilling i `openOnError` ("fyld med vinduesfejlens
+    besked"), så den nøgle ville have betydet en streng i det ene sted og et
+    flag i det andet. `message` er rapportens eget felt. Samme regel som #69
+    gjaldt i `screenshotUrl`/`screenshotUrlFrom` — samme løsning: ét navn pr.
+    idé, og navnet siger hvad det rummer.
+  - **Én regel, to steder, én implementering.** `openForError` havde sin egen
+    `if (prefill && !textarea.value.trim())`-linje, som nu kalder `open()` med
+    beskeden. Det er ikke en refaktorering for skønnedens skyld: den
+    `openOnError`-tekst der stod i hver en framework-side var håndskrevet, og
+    to steder der ligner hinanden er præcis hvad de otte forgangne sider fandt
+    fejl i.
+  - **Klipningen er tabsfri, og det er derfor den er med.** `MAX_MESSAGE_LENGTH`
+    er det tal serveren gemmer alligevel, så `slice` før den sender taber
+    intet — men en 200 kB stack-lignende tekst i en kasse på fire rækker er
+    ubrugelig for den person der skal læse den. Samme argument som textarea'en
+    uden `maxlength` har: skriveren bestemmer, hvad der kommer med, og
+    serverens klip er kontrakten.
+  - **Ikke-tekst ignoreres i stedet for at blive `[object Object]`.** Et `ErrorHandler`
+    får `unknown`, så det er et rigtigt input, ikke en paranoid case — testen
+    kører `undefined`, `null`, et tal, `{}`, en liste og `true` gennem
+    `open({ message })` og kræver at kassen er tom hver gang.
+  - ⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre** (igen
+    samme grund som i de otte forgangne iterationer: `puppeteer-core` findes
+    ikke i det globale npm-root). Ændringen tilføjer ingen DOM, ingen CSS, ingen
+    control og ingen lokale-streng, og teksten i en `textarea` er hverken et
+    axe-regel-emne eller noget `scripts/a11y-audit.mjs` læser pixels på. CI's
+    `browser`-job kører begge på hvert push.
+  - **En drift fundet ved at køre `scripts/api-table.mjs` (den skal have været
+    kørt i samme ændring, og var ikke):** den frosne export-tabel i
+    `docs/api-audit-1.0.md` manglede **tre** navn fra Fastify-iterationen
+    (`fastifyHandler`, `FastifyReplyLike`, `FastifyRequestLike`) — altså den
+    opgave, der lagde adapteren i, kørte ikke regeringeringen, som CLAUDE.md siger
+    er forskellen på at vedligeholde en API-tabel og at tro man gør det.
+    Regenereret her, så tabellen igen er sand; `bugbottle/ui` er uændret, fordi
+    `open` stadig hedder `open` (kun signaturen har fået et valgfrit argument,
+    og tabellen tæller navne).
+  - **Næste iteration:** `npm run a11y` skal køres i CI og resultaterne læses
+    ved næste iterations start (ét kald, ingen polling). Køen er ellers tom;
+    den næste reelle opgave er den fælles script-tag-opløsning, som nu er
+    betalt for **fire** gange.
 
 - **2026-09-28, iteration 16** (`ceo/trusted-proto`). Opgave 19 + opgave 20. Se
   opgaverne og "Fund fra dist-iterationen" nedenfor.
@@ -1724,8 +1807,15 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `dist/server/{handle,express,fastify}.js`, som sitet ikke bruger — det er en
   statisk nginx-side, så intet af det synes på bugbottle.dev. Den **eneste**
   synlige forskel er de to afsnit.
-- `KLAR TIL RELEASE: v1.0.2` — **ikke** bumpet, kun her, fordi beslutningen er
-  Mads'. `CHANGELOG.md`s *Unreleased* har nu fire poster, hvor de to nye er de
+- `KLAR TIL RELEASE: v1.1.0` (var `v1.0.2` indtil 28/9 05:3x) — **ikke**
+  bumpet, kun her, fordi beslutningen er Mads'. Den bliver en **minor** og ikke en
+  patch, fordi opgave 21 (`widget.open({ message })`) ændrer signaturen på en
+  eksisterende export, og efter `docs/api-audit-1.0.md`'s egne regler kan det
+  ikke ligge i en patch. **Spørgsmålet til Mads er derfor ændret:** de to patches
+  nedenfor er stadig dem, der haster mest — især (1) — så hvis du hellere vil have
+  1.0.2 ud *nu* med kun patches, så skal `open({ message })` holdes tilbage, og
+  det er én commit at fjerne igen. `CHANGELOG.md`s *Unreleased* har nu fire
+  poster, hvor de to nye er de
   der betyder mest: (1) det committede `dist` manglede
   `dist/server/fastify.js`, så **`bugbottle/server` har kastet
   `ERR_MODULE_NOT_FOUND` på import for alle der installerede fra GitHub eller
@@ -1734,11 +1824,32 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   Begge er patches, og *Unreleased* rummer desuden `/docs/express/`,
   `/support/`, søgningssætningerne på alle 50 sider og de otte framework-sider,
   som heller ikke er frigivet endnu. **Spørgsmålet til Mads:** frigives alt
-  sammen som 1.0.2, eller er der grund til at holde docs-arbejdet tilbage fra
-  en patch der retter en brudt importvej? Bemærk at rettelsen først virker for
+  sammen som 1.1.0, eller er der grund til at holde docs-arbejdet tilbage fra
+  en release der retter en brudt importvej? Bemærk at rettelsen først virker for
   en ny GitHub-installation **efter** at committen er nået GitHub — den ligger
   der nu, så `npm install github:mahope/bugbottle#<sha>` virker allerede, mens
   `#v1.0.1` stadig er brudt.
+
+- `VERIFICÉR DEPLOY: de fem framework-siders kode-eksempler kalder nu
+  open({ message }) — /docs/vue/, /docs/nuxt/, /docs/astro/, /docs/svelte/ og
+  /docs/angular/ — og den kommentar der sagde "open() takes no arguments, so the
+  box opens empty" er væk fra begge steder, hvor den stod (Astro og SvelteKit).
+  <merge-sha>, merge <merge-sha> ~05:4x, 2026-09-28` — næste batch-vindue er
+  **07:30 2026-09-28**, samme som de ni notes ovenfor, så **én kørsel dækker
+  alle ti**. Verificér **indhold**: `https://bugbottle.dev/docs/astro/` skal
+  vise `widget.open({ message: ...never hydrated... })` og må **ikke** vise
+  "takes no arguments"; `https://bugbottle.dev/docs/svelte/` skal vise
+  `widget.open({ message: ...${pattern}... })` og må ikke vise den gamle
+  kommentar; `https://bugbottle.dev/docs/vue/` skal vise `app.config.errorHandler`
+  med `widget.open({ message:` og `router.onError` med `Route ${...} failed:`;
+  `/docs/nuxt/` skal have `const open = (message?: string)`; `/docs/angular/`
+  skal have `this.feedback.open({ message: error instanceof Error` i
+  `handleError`. **Ingen ny URL og ingen ændring i sitemap'en** — det er fem
+  eksisterende sider, kun `<pre>`-blokke og kommentarer. `description`-taggene er
+  uændrede, så de skal begynde `vue:` / `nuxt:` / `astro:` / `svelte:` /
+  `angular:` som før. `dist/` rørte denne ændring kun i `dist/ui/*` og de to
+  IIFE'er; sitet indlæser IIFE'erne fra jsDelivr ved sit eget versionsnummer,
+  så **det eneste synlige på bugbottle.dev er de fem eksempler**.
 
 - `VERIFICÉR DEPLOY: /docs/express/ (46 sider i sitemap'en, ny
   integrationsside — den **tolvte** under Integrations, og den første side om

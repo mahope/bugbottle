@@ -200,7 +200,20 @@ export type MountOptions = {
     onError?: (error: unknown) => void;
 };
 export type BugbottleWidget = {
-    open(): void;
+    /**
+     * Opens the panel, and `message` seeds the text box for a caller that
+     * already knows why it is opening: a framework's error hook, a route change
+     * that failed, a 500 page. A reporter looking at a broken page is the one
+     * person who is least inclined to type, so the error text they were never
+     * shown is put in front of them to write about.
+     *
+     * It is clipped to `MAX_MESSAGE_LENGTH`, which is the number the server
+     * keeps anyway, and it never overwrites a draft: somebody who was already
+     * typing keeps what they wrote.
+     */
+    open(options?: {
+        message?: string;
+    }): void;
     close(): void;
     toggle(): void;
     /** Removes the widget and its listeners. */

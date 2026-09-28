@@ -582,7 +582,9 @@ const app = createApp(App);
 // Everything Vue routes through its own funnel: setup, render, watchers,
 // lifecycle hooks, event handlers, and any promise those return.
 app.config.errorHandler = (error, instance, info) => {
-  widget.open();
+  // The message goes in the box, so the reporter writes about the error they
+  // are already looking at. See the panel's `open({ message })`.
+  widget.open({ message: error instanceof Error ? error.message : String(error) });
   // Keep the console. See below: setting this handler *replaces* Vue's own
   // line, and this library is not a monitoring agent.
   console.error(`[vue:${info}]`, error, instance);
@@ -767,7 +769,8 @@ Wire the router's half, then, and keep the same line in it:
 ```ts
 // Registering a listener replaces router's own console.error, so log it back.
 router.onError((error, to) => {
-  widget.open();
+  const text = error instanceof Error ? error.message : String(error);
+  widget.open({ message: `Route ${String(to?.fullPath)} failed: ${text}` });
   console.error(`[vue-router: ${String(to?.fullPath)}]`, error);
 });
 ```
@@ -1283,7 +1286,10 @@ export class BugbottleErrorHandler implements ErrorHandler {
     // `implements`, not `extends`: the default handler is `console.error`, and
     // an application that replaces it silently loses the console too.
     console.error(error);
-    this.feedback.open();
+    // The message goes in the box, so the reporter writes about the error they
+    // are already looking at instead of starting from an empty field. The
+    // console line above is what carries it into the report as well.
+    this.feedback.open({ message: error instanceof Error ? error.message : String(error) });
   }
 
   /**
@@ -1449,9 +1455,9 @@ export default defineNuxtPlugin({
     let wanted = false;
 
     // The window-level half: the message is already known, so the box is not empty.
-    const open = () => {
+    const open = (message?: string) => {
       if (widget) {
-        widget.open();
+        widget.open({ message });
       } else {
         // An error before this plugin's own `setup` finished still wants a panel.
         wanted = true;
@@ -1468,7 +1474,9 @@ export default defineNuxtPlugin({
         if (reported.has(error)) return;
         reported.add(error);
       }
-      open();
+      // The text goes in the box as well as the console: a reporter watching a
+      // broken page writes about the error they can see, not one they retype.
+      open(error instanceof Error ? error.message : String(error));
       console.error(`[bugbottle:${where}]`, error);
     };
 
@@ -1842,9 +1850,11 @@ import "bugbottle/ui/style.css";
           error: unknown;
           componentUrl: string;
         };
-        // `open()` takes no arguments, so the box opens empty. The console line
-        // is what carries the message into the report.
-        widget.open();
+        // The message goes in the box, so the reporter writes about the error
+        // they are already looking at instead of starting from nothing. The
+        // console line below is what carries it into the report as well.
+        const text = error instanceof Error ? error.message : String(error);
+        widget.open({ message: `${componentUrl} never hydrated: ${text}` });
         console.error(`[bugbottle] ${componentUrl} never hydrated`, error);
       });
     </script>
@@ -2092,9 +2102,11 @@ export const onRouteError: ClientOnErrorFunction = (error, { location, pattern }
     return;
   }
 
-  // `open()` takes no arguments, so the box opens empty. The console line below
-  // is what carries the message into the report — see the next section.
-  widget.open();
+  // The message goes in the box, so the reporter writes about the crash they
+  // are already looking at instead of starting from nothing. The console line
+  // below carries it into the report as well — see the next section.
+  const text = error instanceof Error ? error.message : String(error);
+  widget.open({ message: `${pattern} at ${location.pathname}: ${text}` });
   console.error(`[bugbottle] ${pattern} at ${location.pathname}`, error);
 };
 ```
@@ -2813,6 +2825,7 @@ const widget = mountBugbottle({
 });
 
 // widget.open(), widget.close(), widget.setLocale(en), widget.destroy()
+// widget.open({ message }) seeds the text box, for a hook that caught the error
 ```
 
 It offers the three report types, a message, the screenshot checkbox (only
@@ -2820,6 +2833,14 @@ when a renderer is given), the element picker, and a thank-you state. Pass
 `trigger: "#my-feedback-button"` to use your own button instead of the
 floating one, or `trigger: false` and call `open()` yourself. About 11.3 kB
 gzipped, no framework.
+
+`open({ message })` is for the caller that already knows why it is opening: a
+framework's error hook, a failed route change, a 500 page. It fills the box
+with that text — clipped to `MAX_MESSAGE_LENGTH`, which is what the server
+keeps anyway, and never over a draft somebody is already writing — so the
+reporter is answering the error in front of them rather than being asked to
+retype it. It is a plain method, not a mount option, so the script tag reaches
+it too: `window.bugbottle.open({ message })`.
 
 `contact: true` adds one more field, under the message: how to reach the
 reporter. It is off by default, because asking for an address is a promise to
