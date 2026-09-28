@@ -27,13 +27,15 @@ næste iteration ikke skal opdage det samme igen.
 - `dist/` er committet, så et site-image bygget fra en commit altid har den
   bibliotekversion der hører til.
 
-### Deploy-status 28/9 08:0x — ét vindue er gået tabt (ikke DEPLOY-MISSING endnu)
+### DEPLOY-MISSING: 28/9 08:29 — to batch-vinduer tabt, merges til `main` er stoppet
 
-Målt på det *live* site kl. 08:0x, ikke på noterne:
+Målt på det *live* site kl. **08:29**, altså **en time efter** 07:30-vinduet,
+så det er ikke et vindue der stadig kører:
 
 | Side | Forventet siden | Live? |
 |---|---|---|
 | `/docs/vue/` | 27/9 23:04 | **200** |
+| `/docs/nextjs/`, `/docs/angular/` | 27/9 (før `/vue/`) | **200** |
 | `/support/` | 27/9 23:34 | **404** |
 | `/docs/react-router/` | 28/9 00:16 | **404** |
 | `/docs/svelte/` | 28/9 00:54 | **404** |
@@ -42,17 +44,25 @@ Målt på det *live* site kl. 08:0x, ikke på noterne:
 | `/self-hosted/` | 28/9 05:37 | **404** |
 | `/docs/global-errors/` | 28/9 06:17 | **404** |
 
-Sitemap'en har **47 `<loc>`** mod de 55+ den rene build producerer. Altså er det
-live site præcis standen fra `/docs/vue/`-mergen (27/9 23:04) — **alt hvad der
-er merged siden 23:34 mangler**, inklusive de tretten åbne VERIFICÉR-noter.
+Sitemap'en har **47 `<loc>`** mod de 59 den rene build producerer (48 docs-sider
++ 6 egne sider + changelog). Live site er stadig præcis standen fra
+`/docs/vue/`-mergen 27/9 23:04.
 
-**Én batch-vindue** (07:30 28/9) er gået uden at ændringerne er live. Den var
-30 minutter gammel da jeg målte, så den kan stadig være i gang; derfor er dette
-**ikke** `DEPLOY-MISSING` endnu — den kræver to vinduer. Mål igen efter
-12:30-vinduet: er `/self-hosted/` stadig 404, skriver jeg `DEPLOY-MISSING` og
-stopper med at merge til `main` indtil et menneske har kigget. (Mærk at
-`/docs/vue/` *er* live, så et vindue har virket — batchen kører, den er bare
-gået i stykker eller kørt mod et ældre udtræk.)
+**To batch-vinduer** er gået uden at ændringerne er live: 21:30 27/9 og
+07:30 28/9. Det er `DEPLOY-MISSING` efter kontrakten, og **jeg merger ikke til
+`main` længere** indtil et menneske har kigget. De 13 åbne VERIFICÉR-noter
+nedenfor er alle stadig åbne, og hver en lyder om en side der er 404.
+
+Mærk at `/docs/vue/`, `/docs/nextjs/` og `/docs/angular/` *er* live — så et
+vindue har virket, og 21:30 27/9 var den. Batchen kører altså, men den har
+enten fejlet siden eller bygger mod et ældre udtræk end `main`. **Det er ikke
+diagnosticerbart herfra:** `site/Dockerfile` bygger ikke i CI, ingen workflow
+i `.github/workflows` bygger eller skubber billedet, og der ligger ingen
+dokploy-konfiguration i repoet. Se ❓ til Mads.
+
+Mit eget merges i dag (`cfffd6d`, TanStack-siden) er gjort **før** dette blev
+målt, altså under reglen om ét tabt vindue. Den er korrekt på sitet, men den
+liger i samme kø som de andre og bliver live af det næste fungerende vindue.
 
 
 ## Baseline — trafik (2026-09-27)
@@ -216,6 +226,24 @@ nextjs.org, angular.dev, nuxt.com.
   docs**. **MÅL: `/docs/svelte/` baseline 0 besøgende (siden findes ikke)
   pr. 2026-09-28.** Sammenlign 25/10 og 25/11. 42 docs-sider (fra 41), 184
   søgeposter (fra 176).
+- [x] **14b. `/docs/tanstack-router/` — TanStack Router.** 28/9,
+  `ceo/tanstack-guide`, commit `244c99f` (merge `cfffd6d`). **Den største
+  uudnyttede efterspørgsel vi har målt.** Google Suggest 28/9 08:2x:
+  `tanstack error boundary` **9** (hvoraf 7 er `tanstack router error
+  boundary`), `tanstack start error handling` **5** — mod **nul** sider og
+  **nul** forekomster af ordet "tanstack" i README før denne sektion. Til
+  sammenligning: nextjs 15, angular 15, nuxt 11, react/vue/react-router 10,
+  sveltekit 4, **tanstack 9 og ingenting**. Målt i samme kørsel og **ikke**
+  valgt: `preact error boundary` 2, `qwik` 0, `ember` 0, `phoenix` 2,
+  `electron` 2, `tauri` 4, `solidjs` 2, `chrome extension error reporting` 2.
+  Kilden er `@tanstack/react-router@1.170.40`'s **publicerede `dist/esm`**,
+  ikke dokumentationen — samme metode som de otte foregående sider, og de to
+  er ikke det samme dokument. Se "Fund fra TanStack-iterationen" nedenfor:
+  **to fund, begge stille, og det ene ville have kostet en bruger deres
+  fejlrapporter helt uden at vide det.** 48 docs-sider (fra 47), 237
+  søgeposter (fra 228). **MÅL: `/docs/tanstack-router/` baseline 0 besøgende
+  (siden findes ikke) pr. 2026-09-28.** Sammenlign 25/10 og 25/11. Kan ikke
+  måles før Search Console-eksporten (opgave 7).
 - [x] **17. Søgningssætning for hver side — den billigste vækst, der
   findes.** 28/9, `ceo/page-descriptions`. Datagrund: **40 af 48 sider havde en
   `<meta name="description">` der endte i en ellipse**, fordi builden tog sidens
@@ -1015,6 +1043,53 @@ De fire frameworksider er på plads, og de ligner hinanden mere end de burde
   har nul, Vue har én der sletter konsollen. En side skal derfor starte med
   "hvor mange kroge har den her framework, og hvilke", ikke med "hvilken
   krog".
+- **TanStack-siden tilføjer en fjerde klasse, og den er den sjoveste:**
+  **(4) en krog der findes i dokumentationen, men ikke virker uden en anden
+  egenskab.** `onCatch` er ikke en krog, den er en prop på en boundary der
+  kun mountes når routen har et `errorComponent`. Den fejl har samme form
+  som Astro's manglende krog — *ingenting sker* — men kommer fra en
+  framework der tydeligt dokumenterer den. Sorter efter den herfra.
+
+### Køen efter TanStack (28/9 08:4x) — prioriteret, med datagrund
+
+Rækkefølgen er efter forventet effekt på **indeksering og CTR**, fordi Plausible
+viser 1 besøgende på 28 dage: der er ingen trafik at konvertere endnu, så nyt
+indhold købes først som en søgning, der fanges, ikke som en side der besøges.
+
+- [ ] **27. Genfind det tabte deploy-vindue — blokeringen over alt andet.**
+  **Datagrund: to batch-vinduer (21:30 27/9, 07:30 28/9) tabt, 9 sider er
+  404, sitemap'en har 47 mod 59 `<loc>`.** Alt indhold der er lavet siden
+  27/9 23:34 er skrevet, committet, gaten grøn — og **usynligt**. Før nogen
+  ny side skriver vi flere sider ind i det samme mørke. Acceptkriterium:
+  `/self-hosted/` svarer 200 **med sit indhold** (ikke bare 200) på det live
+  site, og sitemap'en tæller 59. Dette kan ikke løses fra repoet — se ❓.
+- [ ] **28. Søgningssætning for de otte nye framework-sider er skrevet, men
+  `/docs/tanstack-router/` er den eneste uden et målt CTR-baseline.**lav
+  prioritet: samme behandling som opgave 17, lavet i samme script.
+  **Datagrund: 9 suggest mod 0 sider før 28/9.**
+- [ ] **29. Script-tagonlysningen, skrevet en gang.** Betalt for **fire**
+  gange nu (Vue + React Router + Svelte + TanStack). Datagrund: det er fire
+  sider der hver gengiver den samme kode, og den er den mest søgte kode på
+  hver af dem.
+- [ ] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 3 af de
+  9 forslag under `tanstack error boundary` er `tanstack query error
+  boundary`, og TanStack Query er et **datalag, ikke en router** — det fanger
+  intet sig selv og har ingen boundary, så siden handler om
+  `QueryCache`'s `onError` og `useQuery`'s `error`-rendering. Forsk først:
+  læs `@tanstack/query-core`'s publicerede build.
+  **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.**
+- [ ] **31. SvelteKit har sin egen fejl-vej og kun nævnt i en halv side.**
+  `sveltekit error handling` er 7 forslag (28/9) — højere end
+  `svelte error handling`'s 3, og `/docs/svelte/` dækker den kun som et
+  afsnit. `handleError` i `hooks.server.ts` kører **på serveren**, hvor
+  panelet ikke findes, så den rigtige løsning er den samme
+  script-tag-fallback som TanStack Start. Kan slås sammen med opgave 29.
+- [ ] **32. En `/docs/`-side der samler de otte framework-integrationer i én
+  tabel.** Datagrund: otte sider der ligner hinanden, hver med sin egen
+  "hvor mange kroge"-inddeling. En læser der *vil* vide hvilken de har,
+  har i dag ingen side at finde det på. Advarsel fra CLAUDE.md: må ikke blive
+  en tynd opslagsside — den skal have den fulde krog-tabel, ellers er den
+  værre end ingen.
 
 ## Fund fra Sentry-SDK-rækken (27/9) — hvorfor tallene er målt
 
@@ -1318,6 +1393,85 @@ Plus: deres `docs/how-to/error-reporting.md` siger "make sure to still log the
 error" — hvilket er den samme halve sandhed Vue-siden skrev om. Vi siger
 hvorfor, og vi siger at `console.error` er den linje ringbufferen læser.
 
+## Fund fra TanStack-iterationen (28/9) — to fund, og det ene slår alle de andre
+
+Kilde: `@tanstack/react-router@1.170.40` + `@tanstack/router-core@1.170.40`,
+installeret i `/tmp/tsq` og læst i `node_modules/…/dist/esm/`. **Ikke**
+dokumentationen. Det er den samme metode som de otte foregående framework-sider,
+og igen viste det sig at være den rigtige: de to er ikke det samme dokument, og
+skillen er her **to fungerende fejl** der ikke er nævnt ét sted.
+
+**1. `onCatch` kører aldrig uden et `errorComponent`. Det er det største fund i
+hele rækken.** `Match.js:39-44`:
+
+```js
+const routeErrorComponent = route.options.errorComponent ?? router.options.defaultErrorComponent;
+const routeOnCatch = route.options.onCatch ?? router.options.defaultOnCatch;
+const ResolvedCatchBoundary = routeErrorComponent ? CatchBoundary : SafeFragment;
+```
+
+`onCatch` gives **som prop på `CatchBoundary`**, og `CatchBoundary` er præcis
+det den betingede kassérer. `SafeFragment` er et render-gennemløb uden
+`props.onCatch` at læse, så den callback routeren lige har opløst nås aldrig.
+Mekanismen er én linje (`CatchBoundary.js:26`,
+`this.props.onCatch?.(error, errorInfo)`) — altså `componentDidCatch`, så det
+er en **render**-hook, og den findes kun på en boundary der er mountet.
+
+Deres dokumentation siger *"The default `onCatch` handler for errors caught by
+the Router ErrorBoundary"*, og det er bogstaveligt sandt taget ordret: ingen
+error-komponent, ingen ErrorBoundary, ingen `onCatch`. Skriv opslagningen med
+`onCatch` uden komponenten, og den består **alle** de prøver der kaster noget
+med en synlig effekt — fordi effekten af en loader-fejl uden boundary er
+*ingenting*. Og rettelsen er én egenskab, som den har Brug for til selve
+fejlsiden.
+
+**2. Den globale catch-boundary er stille i den build man udgiver.**
+`Matches.js:43-46`:
+
+```js
+children: router.options.disableGlobalCatchBoundary ? matchComponent : jsx(CatchBoundary, {
+  onCatch: process.env.NODE_ENV !== "production" ? (error) => {
+    console.warn(`Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute!`);
+  } : undefined, …
+```
+
+Betingelsen er `NODE_ENV !== "production"` og intet andet, så advarslen
+**forsvinder i produktion**. En loader-fejl i prod uden noget `errorComponent`
+er usynlig: ingen side, ingen konsol, ingen rapport. Og ringbufferen kan ikke
+redde den, fordi der slet ikke er nogen `console.error` på den vej.
+
+**3 (følge, ikke et selvstænd fund).** På klienten **kaster** routeren
+loaderens fejl i stedet for at rendere din komponent direkte
+(`Match.js:104-118`, `throw match.error`), og `CatchBoundary` ovenfor fanger
+kastet. Så loader-, `beforeLoad`-, search-validator- og render-fejl alle
+kommer ad samme vej gennem én boundary — bedre design end de fleste frameworks
+i rækken, og grunden til at integrationen er så kort. Bemærk at SSR-grenen
+gør det modsatte: den renderer komponenten direkte med `reset: void 0` og
+`info: { componentStack: "" }`, så **på serveren er `reset` `undefined`** og et
+retry-knap der kalder den døde indtil hydration erstatter den. Skriv
+`reset?.()`.
+
+**4 (samme fil, samme test).** `info` er deklareret i `ErrorComponentProps` og
+på klienten fyldes den **aldrig** ind — det eneste sted builden sætter en
+`info` er SSR-grenen med den tomme streng. Den læser, der renderer
+`info?.componentStack`, renderer altså intet og tror det er en fejl i sin egen
+kode.
+
+**5 (og den er billig).** `getResetKey: () => match` +
+`getDerivedStateFromProps` (`CatchBoundary.js:11-18`) gør at **en ny match
+rydder fejlen**, fordi `match` er et friskt objekt pr. navigation. Navigation
+væk fra en brudt rute rydder altså boundary'en uden at nogen kalder `reset` —
+korrekt, og grunden til at `useRef`-guarden i siden er den eneste pålidelige
+gate pr. fejl. Desuden kører `onCatch` fra `componentDidCatch`, som er
+commit-*callback'en*: besøgeren ser din fejlside, mens `widget.open()` fra
+handleren stadig står i kø.
+
+**Hvorfor siden er stærkere end de otte andre:** de ni sider før denne fandt
+fejl der lå i *vores* kode eller i læserens kode. Denne fandt en
+dokumentationsfejl, der gør at **helt uventet fejlrapporter overhovedet ikke
+opstår** i en udleveret build. Det er det tætteste match mellem "sådan
+løser man det" og "sådan kan man ikke se det".
+
 ## Fund fra Svelte-iterationen (28/9) — fire fund i boundary-runtime'en, ingen i docs
 
 Kilderne er `svelte@5.57.1`'s **publicerede kilde** (ikke builden, men de er
@@ -1514,6 +1668,32 @@ ikke noget en senere iteration bør prøve igen for hver side — hverken `a11y`
 eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
 
 ## ❓ Til Mads
+
+- **🔴 Deployet er gået i stykker, og det kan ikke rettes fra repoet.** 28/9.
+  To batch-vinduer er gået tabt i træk (21:30 27/9 og 07:30 28/9), og ni
+  sider er 404 på bugbottle.dev, selv om de er committet og gaten er grøn:
+  `/support/`, `/self-hosted/`, `/docs/react-router/`, `/docs/svelte/`,
+  `/docs/express/`, `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/`,
+  `/docs/global-errors/`. Sitemap'en har 47 `<loc>` mod de 59 builden
+  producerer. **Jeg har stoppet med at merge til `main`**, som kontrakten siger
+  ved to tabte vinduer, og arbejder videre på branches indtil du kigger.
+  `/docs/vue/`, `/docs/nextjs/` og `/docs/angular/` *er* live, så et vindue har
+  virket — batchen fejlede altså efter 21:30 27/9, eller den bygger mod et
+  ældre udtræk end `main`. **Spørgsmålet:** bygger den mod `main` eller mod et
+  tag/pin, og kan du se dens log fra de to kørsler? Jeg rører ikke Dokploy og
+  ikke DNS, og i repoet ligger intet at fejlsøge i — `site/Dockerfile` bygger
+  ikke i CI, og ingen af de to workflows bygger eller skubber billedet.
+
+- **Search Console-eksporten (opgave 7) — stadig den vigtigste ulævede
+  ting.** 28/9. Vi har nu 48 docs-sider og alle har en håndskrevet
+  `<meta name="description">` med søgeordene i (opgave 17), og **null af dem kan
+  måles**, fordi vi ikke har én eneste CTR- eller positionstalt. Plausible siger
+  1 besøgende på 28 dage, så indholdet er købt som søgning der fanges, ikke som
+  trafik. **Det jeg har brug for:** en eksport med visninger, klik, CTR og
+  gennemsnitlig position pr. side for de seneste 28 dage — en CSV fra
+  Performance → Search results er nok. Uden den er opgave 28 (TanStack-sidens
+  baseline) og enhver fremtidig CTR-ændring umålelig, og jeg kan ikke se om
+  beskrivelserne virker.
 
 - **TypeScript 5.9.3 → 7.0.2: vil du have Go-compileren, og er du villig til at
   betale for den med en omskrevet `api-table.mjs`?** 28/9. Jeg gennemførte
@@ -2786,3 +2966,12 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   `https://bugbottle.dev/sitemap.xml` skal liste `https://bugbottle.dev/docs/nestjs/`,
   siden skal vise NestJS-guiden med `getBodyParserOptions`-kodeblokken og
   `useBodyParser`-fixet, og `Integrations` i sidebaren skal have tolv sider.
+
+- `VERIFICÉR DEPLOY: /docs/tanstack-router/ (48 sider i sitemap'en, ny
+  integrationsside; `npm run check` grøn, 896 tests, 237 søgeposter fra 228,
+  28/9 08:3x)` — merge `cfffd6d`. **Denne note er under DEPLOY-MISSING
+  ovenfor, så den kan ikke verificeres før du har kigget.** Når batchen
+  virker igen: `https://bugbottle.dev/docs/tanstack-router/` skal vise
+  TanStack-guiden med `ResolvedCatchBoundary`-eksemplet og
+  `NODE_ENV !== "production"`-afsnittet, og `Integrations` i sidebaren skal
+  have tretten sider.
