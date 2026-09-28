@@ -57,7 +57,11 @@ morning is a store nobody reads. If you do not, it is the cost of finding out
 that it is worth it.
 
 BugPin gives you the dashboard and the triage that bugbottle deliberately
-does not ship, and you can still run it on your own hardware. rrweb records
+does not ship, and you can still run it on your own hardware. What "your own
+hardware" costs is a column of its own, and
+[self-hosting bugbottle](/self-hosted/) answers it: there is no service to run,
+three ways to receive a report yourself, and the five things that bite whoever
+writes the route. rrweb records
 far more than bugbottle ever will: it is the recorder underneath several of
 the products above, and if what you need is to watch the minute before the
 bug, nothing here replaces it.
