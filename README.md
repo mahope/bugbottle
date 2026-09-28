@@ -3296,6 +3296,192 @@ you send it to. Point `FEEDBACK_URL` at a host that stores, and let
 - `sendReport` given a `timeoutMs`, and its promise caught.
 - The endpoint pointed somewhere that cannot itself fail.
 
+## Fastify
+
+Fastify is the framework with the most server-side search behind it that this
+package does not yet have a page for, and it is a different job from the
+[Hono page](#hono) in one specific way: Hono *is* a `fetch` handler, so
+`handleReport` mounts with no adapter at all, while Fastify predates the web
+`Request` and needs one. That is what `fastifyHandler` is.
+
+Every claim below was read out of `fastify@5.12.5`'s published build, not out
+of fastify.dev.
+
+### Receiving a report
+
+```ts
+import Fastify from "fastify";
+import { fastifyHandler, fileStore, toWebhook } from "bugbottle/server";
+
+const app = Fastify({ bodyLimit: 5 * 1024 * 1024 });
+
+app.post(
+  "/api/bug-report",
+  fastifyHandler({
+    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
+  }),
+);
+```
+
+`fastifyHandler` takes Fastify's own `(request, reply)` and hands back nothing:
+it is a route handler, so the reply is the one Fastify already made, and the
+status and headers `handleReport` chose are written through it. It reads a
+`request.body` the content-type parser already produced, and the raw stream
+when nothing parsed one, exactly as the Express adapter does. A raw stream is
+counted against `maxBodyBytes` as it arrives; over the ceiling the adapter
+answers `413` and destroys the request rather than buffering the rest of a body
+it has already refused.
+
+### The default body limit is smaller than a report with a screenshot
+
+This is the finding on this page, and it is the one that decides whether the
+snippet above works. `bodyLimit` defaults to **1 048 576 bytes** — it is in
+`defaultInitOptions`, and again as a schema default in `config-validator.js` —
+and the JSON parser refuses anything larger with `FST_ERR_CTP_BODY_TOO_LARGE`
+*before the route handler is entered at all*:
+
+```js
+// lib/content-type-parser.js
+const contentLength = Number(request.headers['content-length'])
+if (contentLength > limit) {
+  done(new FST_ERR_CTP_BODY_TOO_LARGE(), undefined)
+  return
+}
+```
+
+So a 2 MB report — a screenshot plus a console ring buffer, which is ordinary —
+is a 413 with **Fastify's** error shape, `fastifyHandler` never runs, and the
+message the reporter sees is not one of bugbottle's. Meanwhile `handleReport`
+would have accepted the same body: its own ceiling is `DEFAULT_MAX_BODY_BYTES`,
+4 MiB, four times as large. The default is not wrong for a JSON API, and the
+mismatch is silent — every report under a megabyte arrives, so a route looks
+healthy until the first person attaches a picture.
+
+`bodyLimit: 5 * 1024 * 1024` in the snippet is the fix, and it is worth reading
+as what it is: an adapter that silently serves a subset of the reports the
+client is willing to send. The same applies to `maxBodyBytes` on the handler,
+which is the ceiling the adapter enforces itself once the body is in hand.
+
+### A signed route cannot work behind the default parser
+
+The signature covers the exact text the browser sent. Fastify registers
+`application/json` in the `ContentTypeParser` constructor, so by the time the
+handler runs, `request.body` is an object, and re-serialising it gives
+different bytes and a different HMAC — every signed report is answered `401`,
+forever, for a reason that has nothing to do with the sender.
+
+Unlike Express, there is no way to route around it by *not* mounting a parser,
+because this one is the framework's own and always runs. The way out is a
+parser that keeps the text, and `fastifyHandler` takes that result unchanged:
+
+```ts
+app.addContentTypeParser("application/json", { parseAs: "string" },
+  (_req, body, done) => done(null, body));
+```
+
+A string is not re-serialised, so the bytes that are verified are the bytes
+that were signed. As with the Express adapter, a mounting mistake and a forged
+signature look identical on the wire, so the adapter answers the same `401` and
+says so once through `onError` — once per handler, because it is a mounting
+mistake and not an event.
+
+### `setErrorHandler` replaces the logger, and the logger is not the console
+
+`setErrorHandler` is how Fastify reports a server-side crash, and what it
+replaces is the whole of the framework's own error output:
+
+```js
+function defaultErrorHandler (error, request, reply) {
+  setErrorHeaders(error, reply)
+  setErrorStatusCode(reply, error)
+  request.server[kLogController].defaultErrorLog(error, request, reply)
+  reply.send(error)
+}
+```
+
+Two things follow, and the first is the one nobody expects.
+
+**There is no `console.error` to lose.** `console.error`, `console.warn` and
+`console.log` appear **zero times** across `fastify@5.12.5`'s `lib/` and
+`fastify.js`. Everything goes through `defaultErrorLog`, which writes to
+`reply.log` — pino, with pino's own formatting and pino's own destination. A
+handler that replaces the default does not silence the terminal, it moves the
+output somewhere else, and where depends on your logger configuration rather
+than on Fastify. A pino transport writing to `pino-pretty` in development and
+to stdout in production is the usual answer, and "usual" is the problem: a
+Fastify app that nobody configured logs somewhere the other half of the tooling
+cannot see.
+
+**A handler that returns something sends it.** `handleError` does
+`if (result !== undefined) { … reply.send(result) }`, so returning a value from
+`setErrorHandler` is how you answer with something other than the error, and
+returning a *promise* routes it through `wrapThenable` — which means an async
+handler that rejects is handled by Fastify like any other async failure. This
+is the fifth framework in a row where the documented handler *replaces* the
+error output rather than adding to it (Vue's `errorHandler`, Nuxt's
+`app:error`, React's `onCaughtError`, Hono's `onError`, now this), and the
+pattern is worth a line of its own in whichever handler you write.
+
+```ts
+app.setErrorHandler((err, request, reply) => {
+  // Keep the framework's own log line. This is what it logged.
+  request.log.error({ err }, err.message);
+
+  // …then report it, with a timeout and a caught promise.
+});
+```
+
+### An error thrown inside `setErrorHandler` is caught, not crashed
+
+`handleError` wraps the call in `try`/`catch` and sends the *new* error, and
+before it does it walks the handler up one prototype:
+
+```js
+reply[kReplyNextErrorHandler] = Object.getPrototypeOf(errorHandler)
+```
+
+`buildErrorHandler` builds each scope's handler with `Object.create(parent)`, so
+a handler that throws falls to its **parent scope's** handler — the enclosing
+plugin, then the instance's. In an application built from encapsulated plugins
+that is a genuinely useful property: a reporter registered on the root catches
+a bug in a route registered in a plugin, because the walk ends at the root.
+The same line is why a throwing handler in the *root* scope does not loop: the
+parent there is `rootErrorHandler`, whose `func` is undefined, which is the
+`fallbackErrorHandler` branch.
+
+The sharp edge is the same as everywhere else: an async handler that rejects
+reports the rejection, not the error it was given. Await inside, and catch.
+
+### Which address the rate limit counts
+
+The adapter passes `request.raw.socket.remoteAddress` — the connection — and
+only falls back to `request.ip`. That order is the same as the Express
+adapter's, and for a sharper reason here: **Fastify only defines `request.ip`
+at all when the instance set `trustProxy`.** `buildRequest` returns a plain
+`buildRegularRequest` otherwise, and the `ip`, `ips`, `host` and `protocol`
+getters are added by `buildRequestWithTrustProxy`. So on a default instance
+`request.ip` is `undefined` — which is the honest answer, and the reason the
+socket has to be first rather than a preference.
+
+If you do set `trustProxy`, `request.ip` is already a forwarded address, so
+reading it would trust a setting `trustProxy` was never asked about. Pass
+`remoteAddress` explicitly when you want to decide, and `trustProxy` in
+`handleReport` when you want the package to read forwarding headers for you.
+
+### What to check before you ship
+
+- `bodyLimit` raised above `DEFAULT_MAX_BODY_BYTES`, or send a report **with a
+  screenshot** and look at what comes back. This is the one that fails in
+  production only.
+- A signed route, if you have one, sending one report and getting a `201` back
+  rather than a `401`.
+- `request.log.error` still in your `setErrorHandler` — and checked where your
+  pino output actually goes, not in the source.
+- An async `setErrorHandler` that catches its own failure.
+- The rate limit counting a real address: two reports from one browser should
+  be one allowed and one `429`.
+
 ## One script tag
 
 For a site with no build step — a WordPress theme, a static page, a client
@@ -4137,6 +4323,10 @@ none did, so `express.json()` is convenient rather than required. A raw stream
 is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
 answers `413` and calls `req.destroy()` rather than buffering the rest of a
 body it has already refused.
+
+Fastify gets [`fastifyHandler`](#fastify), the same translation for a Fastify
+route. Its two traps are sharper than these two, because its body parser cannot
+be left out — read the page before signing a route or shipping screenshots.
 
 ### Knowing what it decided
 
@@ -5942,7 +6132,7 @@ imports this entry, so a site that does not ask for it never carries it.
 
 **`bugbottle/server`** — `handleReport` (with `clientAddress`, the
 `TrustProxyOptions` type, and the `ReportDecision` and `DecisionReason`
-types `onDecision` is handed), `expressHandler`, `fileStore`
+types `onDecision` is handed), `expressHandler`, `fastifyHandler`, `fileStore`
 (whose store answers `store`, `list`, `read`, `remove`, `prune` and `refresh`,
 with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `StoredReport` and `StoredReportFile` types), `toResend`,
@@ -6000,7 +6190,8 @@ Each sink's options and result travel with it: `SendReportEmailOptions` and
 `CreateLinearIssueOptions` with `CreateLinearIssueResult`, and the `FetchLike`
 every one of them takes as `fetch`. `expressHandler` brings the two structural
 types it reads an Express request and response through, `ExpressRequestLike`
-and `ExpressResponseLike`.
+and `ExpressResponseLike`; `fastifyHandler` the same pair for a Fastify route,
+`FastifyRequestLike` and `FastifyReplyLike`.
 
 **`bugbottle/report.schema.json`** — the JSON Schema for the payload, also
 served at [bugbottle.dev/schema/report.json](https://bugbottle.dev/schema/report.json).

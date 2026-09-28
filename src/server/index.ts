@@ -84,6 +84,16 @@ export {
   type ExpressResponseLike,
 } from "./express.ts";
 
+// Fastify's own JSON parser and its 1 MiB default body limit are the two
+// things that decide whether a report arrives at all, so this adapter is a
+// second export rather than a line in the README: both need a decision the
+// reader has to make before mounting it.
+export {
+  fastifyHandler,
+  type FastifyRequestLike,
+  type FastifyReplyLike,
+} from "./fastify.ts";
+
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.
 export { SinkError, type FetchLike } from "../sinks/error.ts";

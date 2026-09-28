@@ -205,6 +205,7 @@ const GROUPS = [
       "react-router",
       "wordpress",
       "hono",
+      "fastify",
     ],
   },
   {

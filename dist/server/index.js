@@ -24,6 +24,11 @@ export { handleReport, clientAddress, validateReport, collectExtra, resetRateLim
 // it — CI greps the minified text to be sure.
 export { fileStore, DEFAULT_MAX_REPORTS, } from "./file-store.js";
 export { expressHandler, } from "./express.js";
+// Fastify's own JSON parser and its 1 MiB default body limit are the two
+// things that decide whether a report arrives at all, so this adapter is a
+// second export rather than a line in the README: both need a decision the
+// reader has to make before mounting it.
+export { fastifyHandler, } from "./fastify.js";
 // The sinks live here and nowhere else: they carry API keys and webhook URLs,
 // neither of which has any business in a browser bundle.
 export { SinkError } from "../sinks/error.js";
