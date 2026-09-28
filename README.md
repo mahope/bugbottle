@@ -3482,6 +3482,196 @@ reading it would trust a setting `trustProxy` was never asked about. Pass
 - The rate limit counting a real address: two reports from one browser should
   be one allowed and one `429`.
 
+## NestJS
+
+NestJS is the sixth framework in this row and the first one where the honest
+answer is that **the framework is on the wrong side of both jobs**. A
+`BaseExceptionFilter` runs on the server: it holds a `Request`, and it has
+never seen the console ring buffer, the DOM, the screenshot or the sentence a
+person typed. So a Nest filter is not where you collect a report. It is where
+you *forward* a server crash, and a report forwarded from there is a report
+about the server. The browser side is whichever framework serves your HTML, or
+the [one script tag](#one-script-tag) — this page is about the receiving end,
+which is the half that is actually Nest.
+
+Every claim below was read out of `@nestjs/core@11.2.6` and
+`@nestjs/platform-express@11.2.6`'s published builds, not out of
+docs.nestjs.com.
+
+### Receiving a report
+
+Nest's default platform **is** Express, so `@Req()` and `@Res()` hand this
+package's own Express adapter the two objects it already knows how to read.
+There is no `nestHandler`, and there does not need to be one:
+
+```ts
+import { Controller, Post, Req, Res } from "@nestjs/common";
+import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
+import type { ExpressRequestLike, ExpressResponseLike } from "bugbottle/server";
+
+const receive = expressHandler({
+  store: fileStore({ dir: "./reports", maxReports: 2000 }),
+  sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
+});
+
+@Controller("api/bug-report")
+export class ReportController {
+  @Post()
+  async store(@Req() req: ExpressRequestLike, @Res() res: ExpressResponseLike) {
+    receive(req, res);
+  }
+}
+```
+
+Two details are load-bearing. Injecting `@Res()` tells Nest you are answering
+the request yourself, so Nest does not write a response of its own — which is
+what lets the adapter's status, headers and body stand. And `receive` returns
+`void`: it starts the work and returns, so `await`ing it would only be waiting
+for a function that has already handed off.
+
+### The default body limit is 100 kB, forty times too small
+
+This is the finding on this page, and it is the same shape as Fastify's, only
+smaller. Nest does not choose a limit, so it inherits body-parser's:
+
+```js
+// @nestjs/platform-express/adapters/utils/get-body-parser-options.util.js
+function getBodyParserOptions(rawBody, options) {
+  let parserOptions = (options || {});
+  if (rawBody === true) parserOptions = { ...parserOptions, verify: rawBodyParser };
+  return parserOptions;
+}
+```
+
+No `limit` is set anywhere on that path, so `express.json()` is registered with
+body-parser's own default — `102400 // 100kb default` in `lib/utils.js`. A
+report with a screenshot is a base64 PNG inside a JSON body and is routinely
+**two megabytes**, so it is refused by the parser before your controller is
+entered, with body-parser's `entity.too.large` error. `http-errors` sets both
+`err.status` and `err.statusCode`, so `BaseExceptionFilter`'s `isHttpError`
+recognises it and Nest answers `413` with `{ statusCode: 413, message: "request
+entity too large" }` — a real and correct 413, and one that never reaches
+`handleReport`, whose own ceiling is `DEFAULT_MAX_BODY_BYTES`, 4 MiB, forty
+times as large.
+
+Every report under 100 kB arrives, so the route looks healthy until the first
+person attaches a picture. The fix is Nest's own re-registration, called before
+`listen()`:
+
+```ts
+app.useBodyParser("json", { limit: "5mb" });
+```
+
+`useBodyParser` is the same `use` call with the same options
+`registerParserMiddleware` would have made, so it replaces the parser rather
+than adding a second one. With `@nestjs/platform-fastify` there is no such
+method — the adapter logs "Your HTTP adapter does not support
+`.useBodyParser`" and moves on — which is why the [Fastify
+page](#fastify) is its own page and this one is not.
+
+### A signed route needs `rawBody`, and `rawBody` is not enough
+
+The signature covers the exact text the browser sent, and Nest's parser has
+already turned it into an object by the time your controller runs — so
+`expressHandler` re-serialises it, the bytes differ, and every signed report is
+answered `401` for a reason that has nothing to do with the sender. A mounting
+mistake and a forged signature look identical on the wire.
+
+Nest's answer is `rawBody: true`, which is better than Fastify's because there
+is nothing to register:
+
+```ts
+const app = await NestFactory.create(AppModule, { rawBody: true });
+```
+
+`getBodyParserOptions` adds a `verify` that keeps the bytes on `req.rawBody`,
+and `useBodyParser` threads the same flag through, so the limit and the raw
+body can be set together. The route then has to hand *those* bytes to
+`handleReport` itself, which is six lines, because the adapter reads `req.body`
+and a parsed object is not what a signature covers:
+
+```ts
+@Post()
+async store(@Req() req: RawBodyRequest<Request>, @Res() res: Response) {
+  const web = new Request(`http://${req.headers.host}${req.url}`, {
+    method: "POST",
+    headers: req.headers as HeadersInit,
+    body: req.rawBody,
+  });
+  const answer = await handleReport(web, {
+    signature: { key: process.env.SIGN_KEY! },
+  });
+  res.status(answer.status);
+  answer.headers.forEach((value, name) => res.setHeader(name, value));
+  res.send(await answer.text());
+}
+```
+
+`new Request(url, { body: buffer })` takes a `Buffer` as `BodyInit`, so there
+is no stream to bridge, and this is the one route in this package where
+building the `Request` by hand is the right answer rather than the last resort.
+
+### A filter with no `@Catch()` argument catches everything, and wins
+
+Reading a filter as "the one that handles my error type" gets it backwards
+twice, and both halves are in one line:
+
+```js
+// @nestjs/common/utils/select-exception-filter-metadata.util.js
+filters.find(({ exceptionMetatypes }) =>
+  !exceptionMetatypes.length || exceptionMetatypes.some((M) => exception instanceof M));
+```
+
+A filter with **no** `@Catch()` argument has an empty `exceptionMetatypes`, so
+`!exceptionMetatypes.length` is true and it matches every exception. `find`
+returns the **first** match, so a bare `@Catch()` filter makes every specific
+filter declared before it dead code — silently, with no warning. And the array
+it searches is `filters.reverse()` in `RouterExceptionFilters.create`, with
+global filters ahead of scoped ones, so **the last filter registered wins**.
+The rule that follows is the opposite of the one people carry over from
+middleware: the specific filter first, the catch-all last.
+
+```ts
+app.useGlobalFilters(new HttpExceptionFilter(), new EverythingFilter());
+```
+
+### `getArgByIndex(1)` is a parameter, not the response
+
+`BaseExceptionFilter` is not handed a response; it goes looking for one:
+
+```js
+const response = host.getArgByIndex(1);
+if (!applicationRef.isHeadersSent(response)) {
+  applicationRef.reply(response, message, exception.getStatus());
+}
+```
+
+For the framework's own filters, index 1 is the response, because Nest hands
+those `[req, res, next]`. For a filter attached to **one route method**, index
+1 is that method's *second parameter* — so extending `BaseExceptionFilter` on a
+handler taking `(id: string)` reaches for a string, and `isHeadersSent("123")`
+is the truthy answer that then goes into `reply`. If you extend the base
+filter, the handler has to declare `@Res()`.
+
+Two more things about the base class, both worth knowing before extending it.
+`BaseExceptionFilter.logger` is a **`static`** —
+`BaseExceptionFilter.logger = new Logger("ExceptionsHandler")` — so the line
+that logs a crash, `if (!(exception instanceof IntrinsicException))
+BaseExceptionFilter.logger.error(exception)`, always logs under the name
+`ExceptionsHandler` whatever your class is called, and you cannot point it at
+your own logger; a subclass that wants its own output overrides `catch` and
+logs for itself. And `ExternalExceptionFilter`, the one used outside the HTTP
+context, logs and then **rethrows** — so a reporting filter that sends no
+answer of its own leaves the exception travelling on, and the reporter's own
+status never arrives. Send it, or let it through; never neither.
+
+### Which address the rate limit counts
+
+Pass `req.socket.remoteAddress` in as `remoteAddress`, exactly as the
+[Express page](#express) says. Nest's `@Req()` is that same Express request,
+and Nest has its own `trust proxy` setting on the adapter, which is a
+*different* one from `handleReport`'s. Decide with one of them, not with both.
+
 ## One script tag
 
 For a site with no build step — a WordPress theme, a static page, a client
@@ -4327,6 +4517,10 @@ body it has already refused.
 Fastify gets [`fastifyHandler`](#fastify), the same translation for a Fastify
 route. Its two traps are sharper than these two, because its body parser cannot
 be left out — read the page before signing a route or shipping screenshots.
+
+A [NestJS](#nestjs) app needs no adapter of its own: its default platform is
+this one, so `@Req()` and `@Res()` are the pair above. Its parser is the trap —
+100 kB by default, and 413-ing a screenshot before the route is entered.
 
 ### Knowing what it decided
 

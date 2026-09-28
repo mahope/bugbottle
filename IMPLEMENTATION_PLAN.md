@@ -177,15 +177,75 @@ nextjs.org, angular.dev, nuxt.com.
   `ceo/fastify-handler`. Se "Fund fra Fastify-iterationen". **MÅL:
   `/docs/fastify/` baseline 0 besøgende (siden findes ikke) pr. 2026-09-28.**
   Sammenlign 25/10 og 25/11. 44 docs-sider (fra 43), 202 søgeposter (fra 194).
-- [ ] **16. `/docs/nestjs/` — målt, ikke valgt endnu.** `nestjs exception
-  filter` har **10 suggest** (28/9), samme bånd som Fastify, og nul sider i
-  hele kategorien. Men NestJS er et **filter**, ikke en krog: `@Catch()` på en
-  egen klasse, og dens `@Catch()` uden argumenter fanger alt. Det er den
-  sjette fejlklasse i rækken, så siden skal begynde med "hvad kan frameworket
-  overhovedet se". **Bør ikke skrives før research** — læs først
-  `@nestjs/core`'s `BaseExceptionFilter` og `ExceptionsHandler` i
-  produktionsbuilden, som de andre sider er bygget på. Mål igen ved næste
-  iteration.
+- [x] **16. `/docs/nestjs/` — NestJS.** 28/9, `ceo/nestjs-page`. Målt igen
+  28/9 02:2x (Google Suggest, samme metode): `nestjs exception filter` **10**,
+  `nestjs error handling` **10**, `nestjs interceptor` 10, `nestjs middleware`
+  10, `nestjs filter` 10, `nestjs http exception` 4, `nestjs catch exception` 3,
+  `nestjs global exception filter` 1, `nestjs useGlobalFilters` 1 — altså
+  **samme bånd som de fire sider vi lige har lavet**, og de er konkrete
+  (dependency injection, best practices, not working, prisma, graphql, flere
+  filtre). Kilden er de publicerede builds af `@nestjs/core@11.2.6` +
+  `@nestjs/platform-express@11.2.6` + `body-parser`, **ikke** docs.nestjs.com.
+  **Ingen ny export**: Nest's default platform *er* Express, så `@Req()`/
+  `@Res()` er det par `expressHandler` allerede læser. Se "Fund fra
+  NestJS-iterationen" — fire fund i koden, og det første er en fejl der
+  **ikke kan rapporteres overhovedet**.
+  **MÅL: `/docs/nestjs/` baseline 0 besøgende (siden findes ikke) pr.
+  2026-09-28.** Sammenlign 25/10 og 25/11. 45 docs-sider (fra 44), 209
+  søgeposter (fra 202).
+
+### Fund fra NestJS-iterationen (28/9) — den sjette fejlklasse, og hvor den ikke kan
+
+Fire fund, alle læst i de publicerede builds. Ingen af dem er i Nests egen
+dokumentation, og det første er en klasse fejl vi ikke kan rapportere.
+
+1. **En `BaseExceptionFilter` kan ikke samle en rapport.** Den kører på
+   serveren og har aldrig set console-ringbufferen, DOM'en, screenshotet eller
+   den sætning en person skrev. Den *forwarder* en serverfejl; den opsamler
+   ikke en rapport. Siden siger det i første afsnit, fordi det er den fejl
+   alle otte sider før denne har undgået at sige: en ramme skal have den
+   fejlklasse den kan se, og en browserreporter skal have den *ikke* har.
+2. **Standard body-limit er 100 kB — fyrre gange for lille.**
+   `get-body-parser-options.util.js` sætter ingen `limit`, så `express.json()`
+   arver body-parsers `102400 // 100kb default`. En rapport med screenshot er
+   2 MB base64 og bliver 413'et **før controlleren køres**; `http-errors`
+   sætter både `status` og `statusCode`, så `isHttpError` genkender den og
+   Nest svarer 413 i *sine* felter. `handleReport`'s eget loft er 4 MiB.
+   Fastify-siden fandt samme fejl med 1 MiB; **den mønsterfejl gentager sig
+   én for hvert server-framework, og den er usynlig** fordi alle rapporter
+   under loftet ankommer. Fix: `app.useBodyParser("json", { limit: "5mb" })`.
+   Med `@nestjs/platform-fastify` findes metoden ikke — adapteren logger
+   "does not support `.useBodyParser`" — hvilket er grunden til at Fastify og
+   Nest er to sider.
+3. **En signeret rute kræver `rawBody: true`, og det er ikke nok.**
+   `rawBody` sætter en `verify`-funktion der gemmer bytes på `req.rawBody` —
+   bedre end Fastify, hvor der skal registreres en parser. Men `expressHandler`
+   læser `req.body` og serialiserer et objekt, så de verificerede bytes er
+   ikke de signerede. Ruten skal selv bygge en `Request` af `req.rawBody`
+   (verificeret i Node 22: `new Request(url, { body: buffer })` tager et
+   `Buffer` som `BodyInit`). Det er **det eneste sted i pakken hvor det er
+   rigtigt at bygge `Request` manuelt** i stedet for som sidste udfugt.
+4. **Et filter uden `@Catch()`-argument fanger alt og vinder.**
+   `selectExceptionFilterMetadata` er
+   `filters.find(({ exceptionMetatypes }) => !exceptionMetatypes.length || …)`
+   over et `filters.reverse()`-et array, så første match vinder og det er den
+   **sidst registrerede**. Regelmodellen er modsat middleware's: den
+   specifikke filter først, catch-all sidst. Plus: `getArgByIndex(1)` er en
+   *parameter* (metodens anden argument) for et filter monteret på én rute,
+   ikke svaret; `BaseExceptionFilter.logger` er `static` og logger altid som
+   `ExceptionsHandler`; `ExternalExceptionFilter` logger og **kaster videre**,
+   så et rapporterende filter der ikke selv svarer lader rapportstatus aldrig
+   ankomme.
+
+**Ikke gjort, og hvorfor:** det ville være en `nestHandler`-export. Den er
+unødvendig (punkt 2 i kilderne: platformen *er* Express), og en export der
+kun er en genindpakning ville være dyrere end den er værd. Skrevet i ❓ hvis
+Mads vil have en controller-dekorator i stedet.
+
+**Køen efter dette:** de otte framework-sider er på plads (nextjs, angular,
+nuxt, astro, react, vue, react-router, svelte, wordpress, hono, fastify,
+nestjs — tolv). Næste mål er derfor ikke en tredje framework-side.
+
 - [x] **8. `/docs/wordpress/` + link fra `/da/kom-i-gang/`.** 27/9,
   `ceo/wordpress-page`. Kilden er pluginnets *kode*, ikke dets readme:
   `class-settings.php` (indstillingsnavne + standarder), `class-assets.php`
@@ -1599,3 +1659,10 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `enforce: "pre"` og `app:chunkError`, og `Integrations`-gruppen i sidebaren
   skal have tre sider. Sidstmod for `/docs/nuxt/` skal være 2026-09-27.
   **Alle tre deploy-noter kan verificeres i én kørsel** (nextjs, angular, nuxt).
+
+- `VERIFICÉR DEPLOY: /docs/nestjs/ (45 sider i sitemap'en, ny integrationsside
+  i `Integrations`; `npm run check` grøn, 889 tests, 209 søgeposter fra 202,
+  28/9 02:5x)` — næste batch-vindue er 07:30 2026-09-28. Verificér **indhold**:
+  `https://bugbottle.dev/sitemap.xml` skal liste `https://bugbottle.dev/docs/nestjs/`,
+  siden skal vise NestJS-guiden med `getBodyParserOptions`-kodeblokken og
+  `useBodyParser`-fixet, og `Integrations` i sidebaren skal have tolv sider.

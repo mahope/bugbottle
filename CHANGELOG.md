@@ -10,6 +10,30 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`/docs/nestjs/` — a NestJS page, and the first one that says the framework
+  is on the wrong side of both jobs.** `nestjs exception filter` and
+  `nestjs error handling` both have 10 Google Suggest entries (measured
+  2026-09-28, the same band as Fastify, React Router and Vue), and the page is
+  written on the published builds of `@nestjs/core@11.2.6` and
+  `@nestjs/platform-express@11.2.6` rather than out of docs.nestjs.com. A
+  `BaseExceptionFilter` runs on the server and has never seen a console ring
+  buffer, a DOM or a sentence a person typed, so a filter forwards a server
+  crash and is not where a report is collected; the receiving end is a
+  controller route, and because Nest's default platform *is* Express, `@Req()`
+  and `@Res()` are the pair `expressHandler` already reads — no new export, and
+  none needed. The findings are four, and all four are in the build: **the
+  default JSON body limit is body-parser's 100 kB** — `getBodyParserOptions`
+  sets no `limit`, so `express.json()` inherits `102400` — which 413s a
+  two-megabyte report before the controller runs, in Nest's own error shape,
+  and `app.useBodyParser("json", { limit: "5mb" })` is the fix; **a signed
+  route needs `rawBody: true` and `rawBody` alone is not enough**, because the
+  adapter re-serialises `req.body`, so the route hands `req.rawBody` to a
+  `Request` it builds itself; **a `@Catch()` with no argument matches
+  everything and wins**, since `selectExceptionFilterMetadata` is
+  `filters.find(({ exceptionMetatypes }) => !exceptionMetatypes.length || …)`
+  over a `filters.reverse()`d array, so the specific filter goes first and the
+  catch-all last; and **`host.getArgByIndex(1)` is a parameter, not the
+  response**, which `BaseExceptionFilter` assumes it is.
 - **`fastifyHandler` — a Fastify route handler for `handleReport`, and
   `/docs/fastify/`.** The framework with the most server-side search behind it
   that had no page here (10 Google Suggest entries, measured 2026-09-28, the
