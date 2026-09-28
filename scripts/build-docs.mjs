@@ -765,7 +765,7 @@ const TABLE_HOOK = {
   },
 };
 
-function renderer(page, anchors) {
+function renderer(page, links) {
   return {
     /* The section heading became the page's h1, so everything below it moves
        up one level and keeps the document outline honest. */
@@ -792,13 +792,43 @@ function renderer(page, anchors) {
     /* README links are written for GitHub: `#anchor` means somewhere in the
        one long file, and `./LICENSE` means a file in the repository. Both
        have to be pointed somewhere real from a page that is only one section
-       of it. */
+       of it.
+
+       Four answers, in this order, and the first is the one GitHub gives: a
+       page whose slug is the anchor. `#nuxt` is the Nuxt page on GitHub too,
+       because `## Nuxt` is the first heading in the file with that text and
+       `### Nuxt` further down Recipes is not what a reader clicking the link
+       there gets either — so a page slug beats even this page's own heading
+       of the same name, which is what a "see the WordPress page" link inside
+       Recipes' WordPress recipe means. Then a heading only this page holds,
+       so the link stays a bare `#` and reads as the self-link it is; then a
+       sub-heading only one other page holds, which is what `#masking` is. And
+       when two pages hold the same sub-heading there is no answer left,
+       because the reader cannot see which one a writer meant, so the build
+       stops and names them rather than keeping whichever was filled in last. */
     link(token) {
       const text = this.parser.parseInline(token.tokens);
       let href = token.href ?? "";
       if (href.startsWith("#")) {
-        const target = anchors.get(href.slice(1));
-        href = target ?? `${BLOB}/README.md${href}`;
+        const slug = href.slice(1);
+        if (links.pagesBySlug.has(slug)) {
+          href = links.pagesBySlug.get(slug);
+        } else if (links.own.has(slug)) {
+          href = `#${slug}`;
+        } else {
+          const owners = links.claims.get(slug) ?? [];
+          if (owners.length > 1) {
+            links.problems.push(
+              `[${(token.text ?? text).replace(/`/g, "")}](#${slug}) on ${page.url} — ${owners
+                .map((owner) => `${owner.url} has "${owner.text}"`)
+                .join(" and ")}, so no rule can say which one it means; write ` +
+                `the page: ${owners.map((owner) => `${owner.url}#${slug}`).join(" or ")}`,
+            );
+            return text;
+          }
+          const owner = owners[0];
+          href = owner ? `${owner.url}#${slug}` : `${BLOB}/README.md${href}`;
+        }
       } else if (!href.startsWith("/") && !/^[a-z]+:|^\/\//i.test(href)) {
         href = `${BLOB}/${href.replace(/^\.\//, "")}`;
       }
@@ -821,8 +851,13 @@ function renderer(page, anchors) {
    The shared renderer would give every one of those the id `added`, which is
    a page with twelve elements answering to one anchor and eleven of them
    unreachable. Nobody links to "Added"; they link to a release. */
+/* Nothing to resolve: the changelog is its own Markdown file rather than a
+   README section, and a `#anchor` in a release note is a GitHub link like
+   any other. */
+const NO_LINKS = { own: new Map(), pagesBySlug: new Map(), claims: new Map(), problems: [] };
+
 function changelogRenderer(page) {
-  const base = renderer(page, new Map());
+  const base = renderer(page, NO_LINKS);
   return {
     ...base,
     heading(token) {
@@ -1348,28 +1383,53 @@ async function main() {
     page.next = pages[i + 1];
   }
 
-  /* Every anchor in the README, pointed at the page that now holds it. */
-  const anchors = new Map();
+  /* Every anchor in the README and the page that answers it. `own` is what
+     this page holds — its URL slug and its own headings — `pages` is every
+     page's slug, and `claims` is every sub-heading on every page, with the
+     pages that hold it, so the renderer can tell an answer from a guess. */
+  const own = new Map();
+  const pagesBySlug = new Map();
+  const claims = new Map();
   for (const page of pages) {
-    anchors.set(page.slug, page.url);
     /* A section whose URL was shortened is still linked to by its heading
        anchor everywhere else in the README, so both point at the page. */
-    if (page.readmeSlug) anchors.set(page.readmeSlug, page.url);
+    for (const slug of [page.slug, page.readmeSlug]) {
+      if (!slug) continue;
+      pagesBySlug.set(slug, page.url);
+      if (!own.has(slug)) own.set(slug, page.url);
+    }
     for (const heading of page.headings) {
-      anchors.set(heading.slug, `${page.url}#${heading.slug}`);
+      if (!own.has(heading.slug)) own.set(heading.slug, page.url);
+      const owners = claims.get(heading.slug) ?? [];
+      owners.push({ url: page.url, text: heading.text });
+      claims.set(heading.slug, owners);
     }
   }
+  const problems = [];
 
   for (const page of pages) {
     const marked = new Marked({ gfm: true, breaks: false });
 
     marked.use(TABLE_HOOK);
-    marked.use({ renderer: renderer(page, anchors) });
+    marked.use({
+      renderer: renderer(page, {
+        own: new Map([...own].filter(([, url]) => url === page.url)),
+        pagesBySlug,
+        claims,
+        problems,
+      }),
+    });
     page.html = marked.parse(page.body);
     /* The one page with something on it that is not README prose. */
     if (page.slug === PLAYGROUND_SLUG) {
       page.html = withPlayground(page.html, page.body);
     }
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      `#anchor links in README.md that two pages could answer — name the page:\n  ${problems.join("\n  ")}`,
+    );
   }
 
   await rm(outDir, { recursive: true, force: true });
@@ -1405,7 +1465,7 @@ async function main() {
     const marked = new Marked({ gfm: true, breaks: false });
 
     marked.use(TABLE_HOOK);
-    marked.use({ renderer: renderer(entry, new Map()) });
+    marked.use({ renderer: renderer(entry, NO_LINKS) });
     const en = entry.lang === "en" ? entry.url : entry.otherUrl;
     const da = entry.lang === "da" ? entry.url : entry.otherUrl;
     const page = {
