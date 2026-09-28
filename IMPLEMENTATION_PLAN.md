@@ -2423,8 +2423,8 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 ## Deploy-noter
 
 - `VERIFICÉR DEPLOY: /da/privatliv/ — ét link i den danske privatlivsside skal
-  være et selvlink igen (opgave 26, `ceo/standalone-anchors`) — <sha>, merge
-  <sha>, ~08:1x, 2026-09-28.` **Ingen ny URL, ingen ændring i sitemap'en eller
+  være et selvlink igen (opgave 26, `ceo/standalone-anchors`) — d810b59, merge
+  3c8964c, 08:07, 2026-09-28.` **Ingen ny URL, ingen ændring i sitemap'en eller
   søgeindekset** — den eneste forskel i den byggede HTML er linkets `href`:
   `https://github.com/mahope/bugbottle/blob/main/README.md#når-nogen-beder-om-de-data-du-allerede-har`
   skal være `#når-nogen-beder-om-de-data-du-allerede-har`. Bevis på den rene
