@@ -459,6 +459,84 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   nævner dem, og vagten er **bevist rød** mod den oprindelige Dockerfile.
   Mål: ingen trafikbaseline ændres (den er 0/1 pr. 28/9); effekten er
   layout-shift på `/docs/install/`, som Lighthouse-gulvet i CLAUDE.md er om.
+- [x] **43. `CHANGELOG.md` har holdt **hver release to gange** siden 8/9 — så
+  `/docs/changelog/` er den tungeste side på sitet og har 19 dublet-`id`.**
+  28/9 19:5x, `ceo/changelog-halved`. Datagrund: ikke trafik — den kom af at
+  måle **alle 60** sider i sitemap'en for kanonisk tag, titel, description og
+  `h1`, som var alle i orden; den ene side der faldt ud af mængden var
+  `/docs/changelog/` med **421 817** bytes mod **47 311** på den næststørste.
+  Se "Fund fra changelog-halverings-iterationen" nedenfor. **Accept:** filen er
+  én fil, `tests/changelog.test.ts` holder den på den (release kun én gang,
+  indledningen kun én gang, nyeste først), `scripts/build-docs.mjs` fejler på
+  to releases med samme anchor, og **begge vagter er bevisst røde** mod den
+  gamle fil. Mål: ingen trafikbaseline ændres (Plausible 1 besøgende/28 d,
+  npm 210 downloads/uge, ★2 pr. 28/9); effekten er sidens vægt og
+  søgefeltets rigtighed.
+
+### Fund fra changelog-halverings-iterationen (28/9 19:5x) — den dyreste
+### fejl i repoet, og den var usynlig i tyve dage
+
+**Fund 1 — målingen der ledte derhen.** Jeg kørte den audit, Fase 3 beder om,
+fordi køen var tom: alle 60 sider i sitemap'en hentet og læst for `canonical`,
+`title`, `description`, `og:image`, `og:title`, `lang`, `h1`-antal,
+`twitter:card` og JSON-LD. **Alt var rent**: 60 med canonical, ingen dublet,
+60 unikke titles, 60 beskrivelser over 50 tegn og ingen to ens, præcis ét `h1`
+pr. side, ingen interne links til sig selv. Det er den stærkeste måling af
+sitets tekniske SEO i planen, og den siger, at der ikke er en fejlklasse mere
+at finde dér. **Det ene tal der stak ud:** `/docs/changelog/` **421 817** bytes
+mod **47 311** på den næststørste side — ni gange.
+
+**Fund 2 — årsagen er en fil, der er blevet appendet til sig selv.** Den
+første kopi løber fra toppen til linje 3041; en ældre kopi løber derfra til
+slutningen og begynder midt i en `### Fixed` med en nøgen ` Changelog`-linje,
+ hvor `# Changelog` headingen havde været. Den kom ind med `a73fcaa` 8/9
+("Record the queue retry fix under Unreleased"), der gjorde 19 `##`-headings
+til 38 i én commit, og **er ikke synlig i et diff** — en note under
+`## Unreleased` er ét hunk, og filen vokser bare.
+
+**Fund 3 — de to kopier er byte-identiske, så intet gik tabt.** Før den anden
+blev fjernet: 2 249 ikke-tomme linjer i halen, **alle til stede ordret i den
+første** (den eneste undtagelse er halens egen ` Changelog`-linje). Og den
+første er den nyere, fordi den har `## 1.0.1` og halen ikke har den. Før
+fjernelsen: 5 463 linjer → 3 040.
+
+**Fund 4 — tre målbare skader, ikke én.** (1) `/docs/changelog/` **421 817 →
+237 648** bytes, og den gåede fra **136 kB gzippet** til det halve — den var
+den eneste side over 100 kB på sitet. (2) **19 dublet-`id`** (`#0-9-0` to
+gange, …): ugyldig HTML, og **udgivelseslisten i toppen af siden linkede til den
+ene af dem** og landede i den gamle kopi, mens den nye kopi ikke var
+nogen links mål. (3) `site/docs/search.json` — den fil der hentes ved første
+fokus i sidepanelens søgefelt — havde **261** poster mod **242**, med 19
+releases **to gange**, og de to kopier var uenige, fordi `1.0.1` aldrig nåede
+den anden. Et søgning efter noget i 1.0.1 gav to resultater, hvor det ene
+havde en tom tekst.
+
+**Fund 5 — vagterne er bevisst røde mod den gamle fil.** `node --test
+tests/changelog.test.ts` mod `HEAD:CHANGELOG.md`: 2 af 3 fejler. `node
+scripts/build-docs.mjs` mod samme fil: *"CHANGELOG.md has 19 release(s) whose
+anchor is written twice, so /docs/changelog/ would answer with a duplicate id
+and an unreachable link"*. Den anden vagt er den der står imellem en dårlig
+fil og en publiceret side, fordi `build-docs.mjs` kører i site-imaget uden
+test.
+
+**Målt efter:** `site/docs/changelog/index.html` har **20** `id` og 20
+distinkte (var 39/20), `search.json` **364 117** bytes mod 383 520. **Ingen
+bibliotekskode rørtes**, så ingen bundle-budget flyttede sig; gaten er grøn med
+**934** tests, `check-dist` grøn på 208 filer.
+
+**MÆL:** ingen trafikbaseline ændres — Plausible 1 besøgende/28 d,
+npm 210 downloads/uge, ★2 pr. 28/9. Effekten er en side, der er halvt så
+tung, en gyldig side og et søgefelt, der ikke svarer dobbelt.
+
+**VERIFICÉR DEPLOY: changelog'en uden dobbeltkopien `ceo/changelog-halved`
+28/9 19:5x.** Accepter mod indhold på `https://bugbottle.dev/docs/changelog/`:
+siden skal have **20** `id`-attributter og **20** distinkte (live har 39/20 nu),
+og dens samlede størrelse skal være under **250 000** bytes over gzip
+(live: **136 kB**). Samme måling på `https://bugbottle.dev/docs/search.json`:
+**242** poster og under **370 000** bytes (live: 261 og 383 520). **Ingen af
+de 60 sider i sitemap'en må miste en post** i søgeindekset — den gamle note om
+dobbelt-`id` sagde, at et link til sig selv er præcis den lækage rettelsen
+lukker, og den skal stadig være lukket efter den her.
 
 ### Fund fra rapport-reference-iterationen (28/9 19:0x) — id'et var ikke
 ### tabt, det var brugt og lagt væk

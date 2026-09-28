@@ -1655,6 +1655,29 @@ async function main() {
        is and the first release, which is where a reader looking for one
        version wants it: after the sentence explaining the versioning scheme,
        before 1400 lines of prose. */
+    /* Two releases that answer to one anchor write one `id` twice, and the
+       page is then invalid in a way nothing else here can see: the release list
+       at the top links to `#0-9-0`, the browser jumps to whichever of the two
+       it finds first, and the second one's text is unreachable by any link at
+       all. A duplicated tail in CHANGELOG.md is what does it, and that is not
+       hypothetical — the file held every release twice from 8/9 to 28/9, so
+       /docs/changelog/ rendered 19 duplicate ids and 425 kB of HTML, and the
+       search index answered with every release twice. A build failure is the
+       one answer that arrives before the page does. */
+    const anchors = new Map();
+    for (const release of releases) {
+      anchors.set(release.anchor, (anchors.get(release.anchor) ?? 0) + 1);
+    }
+    const collisions = [...anchors].filter(([, count]) => count > 1);
+    if (collisions.length > 0) {
+      throw new Error(
+        `CHANGELOG.md has ${collisions.length} release(s) whose anchor is written twice, ` +
+          `so /docs/changelog/ would answer with a duplicate id and an unreachable link: ` +
+          `${collisions.map(([anchor, count]) => `#${anchor} × ${count}`).join(", ")}\n` +
+          `  Two copies of the same release usually means the file was appended to itself.`,
+      );
+    }
+
     const first = releases[0];
     const marked = new Marked({ gfm: true, breaks: false });
 
