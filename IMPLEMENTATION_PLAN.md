@@ -3934,8 +3934,8 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 ## Deploy-noter
 
 - `VERIFICÉR DEPLOY: /support/'s Donating-afsnit nævner den tredje sted der
-  beder om penge (opgave 40, `ceo/npm-funding-button`), merge <sha>, 16:3x,
-  2026-09-28.` Næste batch-vindue er **17:30 2026-09-28**. **Accepter:
+  beder om penge (opgave 40, `ceo/npm-funding-button`), `0b9d5a4`, merge
+  `dcf4530`, 16:3x, 2026-09-28.` Næste batch-vindue er **17:30 2026-09-28**. **Accepter:
   `https://bugbottle.dev/support/` skal have sætningen "so the button on" og
   linket `https://www.npmjs.com/package/bugbottle` i Donating-afsnittet**, og
   siden skal stadig have **præcis én** `donate.stripe.com`-adresse. HTTP 200
