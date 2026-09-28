@@ -674,6 +674,20 @@ repo-vagter plus deres følgevirkning), 52 docs-sider (fra 51), 249 søgeposter
 (fra 242), **sitemap 61 `<loc>`** (fra 60), `check-dist` grøn på 208 filer.
 Ingen bibliotekskode rørtes, så ingen bundle-budget flyttede sig.
 
+- **VERIFICÉR DEPLOY: opgave 45's to krydslinks, `ceo/npm-tarball-example`
+  `977fff6` 28/9 22:5x.** Accepter mod **indhold**: på
+  `https://bugbottle.dev/docs/install/` skal den afsluttende sætning i *A
+  first report, end to end* linke `href="/docs/a-working-example/"`, og på
+  `https://bugbottle.dev/docs/a-working-example/` skal afsnittet over
+  `cd examples/vanilla-js` have den nye sætning *Both examples live in the
+  repository, not in the tarball* og linke
+  `href="/docs/install/#a-first-report-end-to-end"`. **Ingen ny URL**: sitemap
+  skal fortsat tælle **61** `<loc>` og `/docs/search.json` **249** poster, og
+  ingen af de 52 sider må miste en post. *Skrevet i en commit for sig selv,
+  fordi den blev glemt i squashen — det er den eneste grund til at den ikke
+  lå sammen med `977fff6`. En manglende note ligner ellers en glemt ændring,
+  hvilket er præcis den forveksling denne note er skrevet for at fjerne.*
+
 ✅ **DEPLOY OK 2026-09-28 22:0x.** `/docs/solid/` (opgave 44, `ceo/solid-guide`,
 merge `7a9a75b` 20:59) er målt **mod indhold** i det første vindue efter
 mergeen (21:30): siden svarer **200** med titlen *Solid — bugbottle docs*,
