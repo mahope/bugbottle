@@ -430,6 +430,26 @@ attribute needs a major version, and a new entry point needs a minor one.
   framework page that re-describes the tag, naming the page and the reason —
   the same shape as the build's other prose guards. No new URL, no new page,
   and nothing in the package changed.
+- **The README had no picture of the panel, on npm or on GitHub.** Both render
+  the README, and a package page for a *visual* product that shows no picture
+  of it asks the reader to take the description's word for it: 191 downloads a
+  week against 0 stars and 4 repository views in 14 days. The panel shot the
+  landing page already used — `panel-narrow.png`, captured from the real panel
+  by `npm run shot:panel` — now sits in the opening, which is the part that is
+  both the npm package page and `/docs/install/`. Same-origin on npmjs.com
+  through `https://bugbottle.dev/`, and on GitHub through the same absolute
+  URL, so the picture is one file rather than two copies that can drift.
+- **`/docs/install/` showed a sentence where the picture belongs.** The docs
+  renderer answered *every* `![]()` with its alt text, on the strength of the
+  footer's promise that the site makes no external request. That promise is
+  about the **host**, not about images: a picture served from bugbottle.dev is
+  the site asking itself for a file, which is what the landing page's own panel
+  shot has always done. The rule is now "no *foreign* request" — a src on this
+  origin renders, a shields.io badge still becomes its alt text, so the fifty-one
+  pages still make no third-party request. `tests/docs-images.test.ts` pins
+  both halves against the real build, and a src the renderer *will* render has
+  to be a file that is actually committed, because a picture nobody committed
+  is a 404 on every page the line was pasted into.
 
 ### Fixed
 

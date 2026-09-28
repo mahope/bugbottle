@@ -374,6 +374,18 @@ h3:hover > .anchor,
 
 /* ------------------------------------------------------- code and copy */
 
+/* A picture the README points at on this site — today only the panel shot.
+   `max-width: 100%` so a wide one cannot force the 52rem column to scroll
+   sideways, and `height: auto` so the aspect ratio survives the clamp. */
+.docs-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.6rem auto;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
 .docs-body .slab {
   margin: 1.2rem 0;
   position: relative;
