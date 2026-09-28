@@ -1839,8 +1839,10 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 ## Deploy-noter
 
 - `VERIFICÉR DEPLOY: /self-hosted/ (55 sider i sitemap'en, ny side under About
+  — ny side under About
   — den sjette side med sin egen Markdown, og den første der svarer på
-  "sentry alternative" / "self hosted error tracking") — merge <sha> ~06:2x,
+  "sentry alternative" / "self hosted error tracking") — 1535837, merge
+  68f21a6 ~06:2x,
   2026-09-28` — næste batch-vindue er **07:30 2026-09-28**, samme som de ti
   notes nedenfor, så **én kørsel dækker alle elleve**. Verificér **indhold**:
   `https://bugbottle.dev/self-hosted/` skal vise de tre former (rute,
