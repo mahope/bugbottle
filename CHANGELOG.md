@@ -482,6 +482,28 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **Seven links in the README were dead on two of the three places that serve
+  it, and the npm page had no route into the reference at all.** The README is
+  one text with three readers — `github.com/mahope/bugbottle`,
+  `npmjs.com/package/bugbottle`, and `/docs/install/`, which
+  `scripts/build-docs.mjs` builds out of the very same opening — and a relative
+  link resolves on only one of them. Six were written `./LICENSE` or
+  `/docs/svelte/`, correct for the site and a 404 everywhere else: on GitHub
+  they ask `github.com` for a path it does not have, and on npm they ask
+  `npmjs.com` for one it certainly does not. They were invisible from here,
+  because the only place they were ever followed is the one place they work.
+  All seven are absolute now, which is also the form the site's own Markdown
+  already used for a file in the repo. The other half of the same gap: a
+  reader who landed on npmjs.com had the landing page and nothing else, so
+  the navigation paragraph now names the reference —
+  `https://bugbottle.dev/docs/install/` — and travels in the paragraph the
+  build already drops, so `/docs/install/` never links to itself. The docs
+  pointed back at npm from their footer all along; both directions are pinned
+  now, along with the opening's two version pins, which `scripts/release.mjs`
+  moves as one string and a hand edit can leave behind. Three new tests in
+  `tests/readme-snippets.test.ts`, each verified red against the defect it
+  describes.
+
 - **Six README snippets passed `fileStore()` straight in as a `store`, so a
   pasted one answered 500.** `fileStore` answers an *object* — `store`, `list`,
   `read`, `remove`, `prune`, `refresh` — and `handleReport`'s `store` option is

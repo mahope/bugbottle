@@ -581,15 +581,33 @@ function sliceSections(markdown) {
   const firstTop = tops[0];
   if (!firstTop) throw new Error("README has no `##` sections");
 
-  /* The intro keeps its prose but not the H1, the badge row or the line
-     pointing at bugbottle.dev. The badges are images from shields.io and this
-     site makes no external request; the link is a link to the site the reader
-     is already on. */
+  /* The intro keeps its prose but not the H1, the badge row or the navigation
+     paragraph. The badges are images from shields.io and this site makes no
+     external request; the paragraph is the npm page's own way into the site —
+     the landing page, the Danish page and the reference — and every link in it
+     points at this site, so on `/docs/install/` all three are either where the
+     reader already is or a link from the page to itself.
+
+     It is a paragraph and not a line, because that paragraph wraps, and a drop
+     keyed on the first line would leave its continuations behind as an
+     unlinked sentence about the site's own homepage. */
+  const isNav = (line) => /^\[bugbottle\.dev\]/.test(line);
+  let inNav = false;
   const introLines = lines.slice(0, firstTop.line).filter((line) => {
     if (/^#\s/.test(line)) return false;
     if (/^\[!\[/.test(line)) return false;
-    if (/^\[bugbottle\.dev\]/.test(line)) return false;
-    return true;
+    if (isNav(line)) {
+      inNav = true;
+      return false;
+    }
+    /* A blank line ends the paragraph, and the walk is over: the flag has to
+       follow the paragraph rather than the line before it, because a wrapped
+       paragraph is three or four lines and only the first starts the sentence. */
+    if (line.trim() === "") {
+      inNav = false;
+      return true;
+    }
+    return !inNav;
   });
 
   const sections = [

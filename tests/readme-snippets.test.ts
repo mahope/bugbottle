@@ -142,3 +142,87 @@ test("every bugbottle import in the opening is a name the package still exports"
     }
   }
 });
+
+/**
+ * The opening is one text with three readers, and only one of them can
+ * resolve a relative link. GitHub serves it from `github.com/mahope/bugbottle`,
+ * npm serves it from `npmjs.com/package/bugbottle`, and `scripts/build-docs.mjs`
+ * serves it again as `/docs/install/`. A link written `./LICENSE` or
+ * `/docs/svelte/` is correct for the third and dead for the first two: on
+ * GitHub it asks `github.com` for a path it does not have, and on npm it asks
+ * `npmjs.com` for one it certainly does not. Six of the seven were written
+ * that way, and they were invisible from here, because the only place they
+ * were ever followed was the site — which is also where they work.
+ */
+test("no link in the README is relative, because two of its three readers cannot resolve one", () => {
+  const relative = [...readme.matchAll(/\]\((\.[^)]*|\/[^)]*)\)/g)].map((m) => m[1]!);
+  assert.deepEqual(
+    [...new Set(relative)],
+    [],
+    "A relative or root-relative link works on the docs site and 404s on GitHub " +
+      "and on npmjs.com, which serve the same text from their own host. Write the " +
+      "whole address: https://bugbottle.dev/docs/… and the blob URL for a file in the repo.",
+  );
+});
+
+/**
+ * The two ways in are one sentence apart and neither used to point at the
+ * other. A reader who lands on npmjs.com/package/bugbottle had the landing
+ * page and nothing else — the reference, the frameworks, the server side, all
+ * of it one click away and not linked — and a reader on `/docs/install/` had
+ * the footer, which has carried the npm link since the site first shipped.
+ * Both directions are pinned here, so dropping either is a red test rather
+ * than a quiet loss of a funnel.
+ */
+test("the npm page's opening points at the docs, and the docs point back at npm", () => {
+  const install = "https://bugbottle.dev/docs/install/";
+  assert.ok(
+    intro.includes(`](${install})`),
+    "the opening must link the reference, or a reader on npmjs.com has no way to it",
+  );
+
+  /* The reference is the page the build makes out of this same opening, so the
+     link to it cannot live in the prose the build keeps — it has to travel in
+     the navigation paragraph, which the build drops. That is a rule in
+     `scripts/build-docs.mjs` rather than a convention, so it is read from
+     there: a build that stopped dropping the paragraph would put a link from
+     `/docs/install/` to itself on the page. */
+  const generator = readFileSync(root + "scripts/build-docs.mjs", "utf8");
+  const navStart = intro.split("\n").find((line) => line.startsWith("[bugbottle.dev]"));
+  assert.ok(navStart, "the opening's navigation paragraph has moved, so this test cannot find it");
+  assert.ok(
+    generator.includes("/^\\[bugbottle\\.dev\\]/"),
+    "scripts/build-docs.mjs must go on dropping the navigation paragraph, " +
+      "or /docs/install/ links to itself and the opening's own link is a loop",
+  );
+
+  /* The other direction, from every page on the site. */
+  assert.ok(
+    generator.includes('<a href="https://www.npmjs.com/package/bugbottle">'),
+    "the docs footer must go on linking npm, which is how a reader who found the " +
+      "reference gets to the package",
+  );
+});
+
+/**
+ * The opening pins the version twice, in two fences a reader pastes rather
+ * than reads: the GitHub install and the jsDelivr import. A release moves both
+ * with one string replacement in `scripts/release.mjs`, so the only way they
+ * can disagree is a hand edit — and then one of the two addresses 404s while
+ * the README still looks right. `npm run release` is the supported way to
+ * bump, and this is what says so out loud.
+ */
+test("both pinned install snippets in the opening name the version this build is", () => {
+  const { version } = JSON.parse(readFileSync(root + "package.json", "utf8")) as { version: string };
+  const pins = new Set(
+    [...intro.matchAll(/(?:github:mahope\/bugbottle#|bugbottle@)(v[\d.]+)/g)].map((m) => m[1]!),
+  );
+  assert.deepEqual(
+    [...pins],
+    [`v${version}`],
+    `the opening pins ${[...pins].join(" and ")} but package.json is ${version}. ` +
+      "A pasted snippet that names a tag that does not exist is a 404 with no " +
+      "explanation; scripts/release.mjs moves every pin at once, and this fails " +
+      "if one was edited by hand.",
+  );
+});
