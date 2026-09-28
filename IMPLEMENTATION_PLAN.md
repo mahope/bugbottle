@@ -435,6 +435,122 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
 - [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
   Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
   måles.
+- [x] **41. Panelbilledet i site-imaget fik ingen størrelse — samme COPY-liste,
+  tredje symptom.** 28/9 18:2x, `ceo/panel-image-into-docs-stage`, `12a1105`.
+  Se "Fund fra deploy-verifikations-iterationen" nedenfor. Datagrund: **ikke
+  trafik** — den kom af målingen af en åben `VERIFICÉR DEPLOY`-note, der krævede
+  `width="788" height="950"` på `/docs/install/`, og live svarede 200 **med
+  billedet og uden størrelsen**. **Accept:** `site/Dockerfile` kopierer
+  `site/panel-narrow.png` ind i docs-trinnet, `tests/site-image.test.ts` læser
+  README'en for de billeder den peger på og fejler når Dockerfile'en ikke
+  nævner dem, og vagten er **bevist rød** mod den oprindelige Dockerfile.
+  Mål: ingen trafikbaseline ændres (den er 0/1 pr. 28/9); effekten er
+  layout-shift på `/docs/install/`, som Lighthouse-gulvet i CLAUDE.md er om.
+
+### Fund fra deploy-verifikations-iterationen (28/9 18:0x–18:2x) — den samme
+### fejl en tredje gang, og den eneste der så ud som en *succes*
+
+**Denne iteration var en verifikations-kørsel.** Køen havde kun opgave 7
+(blockeret), så jeg målte de åbne `VERIFICÉR DEPLOY`-noter fra 17:30-vinduet.
+To af de tre var grønne, og den tredje var **gået halvt igennem** — hvilket er
+værre end at være gået fra. Derfor var den også den eneste, der gjorde noget.
+
+#### Fund 1 — alle tre noter lukket mod indhold, 18:0x
+
+17:30-vinduet har kørt, og det dækker de tre noter:
+
+| Note | Kriterium | Målt 18:0x |
+|---|---|---|
+| `0b9d5a4` (`/support/`) | sætningen "so the button on" + `npmjs.com/package/bugbottle`, stadig **præcis én** Stripe-adresse | ✅ alle tre, stripe-tal 1 |
+| `fca5fd5` (`/docs/install/`) | `<img>` med `alt` > 20 tegn **og** `width="788" height="950"` | ⚠️ `alt` på 137 tegn og billedet live — **men ingen `width`/`height`** |
+| `b220a54` (nginx) | `301` med **relativ** `location: /docs/install/`, `num_redirects` 1 | ✅ `HTTP/2 301`, `location: /docs/install/`, 1 |
+
+#### Fund 2 — `width`/`height` mangler i *imaget*, og kun der
+
+Det er den af de tre der ikke var grøn, og den peger lige. Den lokale build på
+`main` **har** dem:
+
+```
+width="788" height="950" loading="lazy" decoding="async"
+```
+
+Live **har ikke dem**. Så spørgsmålet er ikke "er renderereren forkert" — den er
+ikke, den læser rigtig — men "hvorfor er de to builds forskellige", og der er
+kun ét svar på den: **byggekonteksten**. `pngSize()` i `build-docs.mjs` læser
+filen fra disk, og i imaget er den ikke der.
+
+Og det er **den samme fejl for tredje gang**, samme liste, samme sted:
+`site/Dockerfile:46` kopierer Markdown-kilderne (`compare.md`, `self-hosted.md`,
+`support.md`) ind i docs-trinnet, **men ikke `site/panel-narrow.png`**. Så:
+
+- `readFileSync` kaster,
+- `pngSize` fanger det og svarer `undefined` — som koden selv siger: *"Anything
+  that is not a readable PNG answers `undefined` and the caller omits the
+  attributes"*,
+- `<img>` skrives **uden** størrelse,
+- **buildet er grønt, siden svarer 200, billedet er der.**
+
+Det er den tredje familie i `tests/site-image.test.ts` — efter `STANDALONE`s
+`source:`/`out:` og `scripts/*.mjs`-importerne — og den er den **quieteste af
+de tre**. De to første fejler *buildet*. Denne fejler intet: den leverer en
+side, der ligner rigtig, og eneste forskel er at teksten under billedet hopper
+når filen lander. Det er præcis layout-shiftet CLAUDE.md's Lighthouse-gulv
+handler om.
+
+**Bevis, at det er årsagen — målt, ikke forklaret.** Jeg byggede docs-trinnet
+*i billedets kontekst* uden Docker: et katalog med præcis de filer
+Dockerfile'en kopierer, plus den nye `COPY`. Før rettelsen:
+
+```
+<img src="https://bugbottle.dev/panel-narrow.png" alt="…" loading="lazy" decoding="async">
+```
+
+Efter rettelsen:
+
+```
+<img src="https://bugbottle.dev/panel-narrow.png" alt="…" width="788" height="950" loading="lazy" decoding="async">
+```
+
+Samme kommando, samme README, én fil mere i konteksten. Det er den samme metode
+som fandt `page-descriptions.mjs` i morges, og den er billig: ingen Docker,
+under et sekund.
+
+#### Fund 3 — vagten skød ikke, fordi den ikke kunne se *hvilken* stage
+
+Det er den del af fundet der er værd mest, fordi den er en fejl i min egen test
+fra i morges. Den nye test læste `copiedSources()` — som før min ændring samlede
+`COPY`-linjerne fra **hele** filen. Og `site/panel-narrow.png` står på den
+**nginx**-stages `COPY` (linje 69), fordi siden ellers ville være en 404. Så
+sættet indeholdt filen, testen svarede grøn, **og den var grøn mod præcis den
+fejl den var skrevet til at finde.**
+
+> **En `COPY`-liste er to lister, ikke én.** Begge stager kopierer billedet, men
+> af to forskellige grunde, og kun den ene tæller for hver egenskab. Det blev
+> rigtigt ved at scope `copiedSources()` til docs-stagen (fra `FROM … AS docs`
+> til næste `FROM`).
+
+**Bevis at vagten virker, begge veje:** mod den rettede Dockerfile er den grøn
+(5/5). Mod den oprindelige, med kun den nye `COPY` fjernet, er den **rød** med
+`site/Dockerfile does not copy site/panel-narrow.png` og 4/5. Det er den prøve,
+min første version af testen ikke bestod, så den er den der fortjener at være
+skrevet ned.
+
+**Målt:** `npm run check` grøn — **923 tests** (fra 922, én ny), `check-dist`
+grøn på 208 filer, IIFE'erne **24 688 / 21 104** mod budgetterne 25 088 /
+21 504 (uændrede — intet i pakken rørte), 51 docs-sider, 260 søgeposter,
+sitemap **60** uændret. **Ingen ny URL.** Denne rettelse rører ikke `dist/`
+overhovedet — den ligger i `site/Dockerfile`.
+
+**⚠️ Kan ikke måles her:** Lighthouse og `npm run a11y` kræver en browser, og
+denne maskine har ingen (`chrome.mjs` svarer `C:/Program Files/…`,
+`puppeteer-core` er ikke installeret). Layout-shiftet er derfor **argumenteret
+fra koden og bevist i outputtet**, ikke målt i en browser. CI's `browser`-job
+kører `a11y` på hvert push.
+
+**Bemærk til næste iteration:** de tre lukkede noter er lukket. Den nye note
+(opgave 41) har næste batch-vindue **21:30 2026-09-28**, og den skal måles mod
+*indhold* — altså `width="788"` på `/docs/install/`, ikke HTTP 200, for en side
+uden størrelse stadig svarer 200.
 
 ### Fund fra funding-iterationen (28/9 16:2x) — den eneste konvertering i
 ### køen, der viste sig at være målbar inden den blev lavet
@@ -3933,17 +4049,15 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Deploy-noter
 
-- `VERIFICÉR DEPLOY: /support/'s Donating-afsnit nævner den tredje sted der
+- ✅ `VERIFICÉR DEPLOY: /support/'s Donating-afsnit nævner den tredje sted der
   beder om penge (opgave 40, `ceo/npm-funding-button`), `0b9d5a4`, merge
-  `dcf4530`, 16:3x, 2026-09-28.` Næste batch-vindue er **17:30 2026-09-28**. **Accepter:
-  `https://bugbottle.dev/support/` skal have sætningen "so the button on" og
-  linket `https://www.npmjs.com/package/bugbottle` i Donating-afsnittet**, og
-  siden skal stadig have **præcis én** `donate.stripe.com`-adresse. HTTP 200
-  beviser intet her — `/support/` svarer 200 både før og efter. **Ingen ny
-  URL**, så sitemap'en skal tælle **60** `<loc>`.
-  **Bemærk:** den anden halvdel af opgaven (`package.json#funding`) er **ikke**
-  en deploy-note — den læses af npm, ikke af bugbottle.dev, så intet på sitet
-  ændrer sig for den. Den kræver en *release*; se `KLAR TIL RELEASE: v1.1.0`.
+  `dcf4530`, 16:3x, 2026-09-28.` **LUKKET 28/9 18:0x** mod indhold, i ét
+  kørselsvindue (17:30). Målt: sætningen "so the button on" er der,
+  `https://www.npmjs.com/package/bugbottle` er linket i Donating-afsnittet, og
+  siden har stadig **præcis én** `donate.stripe.com`-adresse. Sitemap **60**
+  `<loc>` uændret, ingen ny URL. Den anden halvdel af opgaven
+  (`package.json#funding`) er ikke en deploy-note — den læses af npm, så den
+  kræver en *release*; se `KLAR TIL RELEASE: v1.1.0`.
 
 - **Ingen deploy-note for `ceo/npm-search-terms` (opgave 38, `14f0163`, merge
   `731b707`).**
@@ -3960,38 +4074,41 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 - `VERIFICÉR DEPLOY: panelbilledet i README's åbning, som også er
   /docs/install/ (opgave 37, `ceo/readme-picture`), commit `fca5fd5`, merge
-  `c39af84`, 13:5x, 2026-09-28.` Næste batch-vindue er **17:30 2026-09-28**.
-  **Accepter: `https://bugbottle.dev/docs/install/` skal have et
-  `<img src="https://bugbottle.dev/panel-narrow.png"` med et `alt` på over 20
-  tegn og `width="788" height="950"`** — HTTP 200 beviser intet, for en side
-  med billedet mangler stadig svarer 200. Tallet 788/950 er PNG'ens egne
-  dimensioner, så hvis de er anderledes, er det en ældre optagelse af billedet
-  og ikke en fejl i rendererens kode. **Ingen ny URL**, så sitemap'en skal
-  stadig tælle **60** `<loc>`; en ny URL her ville være en fejl. Samme note
-  dækker `6ed7217` (planen, ingen synlig ændring).
+  `c39af84`, 13:5x, 2026-09-28.` **Delvis lukket 28/9 18:0x, og fundet
+  halvt igennem — se den nye note nedenfor.** Billedet er live med sit `alt` på
+  137 tegn, og sitemap'en tæller **60** `<loc>` som kravet. **Men `width="788"
+  height="950"` mangler**, fordi `site/Dockerfile` ikke kopierede
+  `site/panel-narrow.png` ind i docs-trinnet, så `pngSize()` ikke kunne måle
+  filen. Det er opgave 41, og dens note er den der lukker denne helt.
 
-- `VERIFICÉR DEPLOY: absolute_redirect off i site/nginx.conf — en URL uden
+- ✅ `VERIFICÉR DEPLOY: absolute_redirect off i site/nginx.conf — en URL uden
   skråstreg skal ikke længere blive sendt ned på http:// (opgave 34,
   `ceo/relative-redirect`), commit `b220a54`, merge `edb6de7`, 13:12,
-  2026-09-28.` Næste batch-vindue er **17:30 2026-09-28** (12:30 var lukket da
-  vi mergede). **Accepter: `curl -sD - -o /dev/null
-  https://bugbottle.dev/docs/install` skal svare `HTTP/2 301` med
-  `location: /docs/install/` — en *relativ* sti, ikke en `http://`-adresse —
-  og `curl -sL -w '%{num_redirects}'` på samme URL skal sige `1` mod `2` i dag.**
-  Bemærk at en `location: http://…` her **beviser at rettelsen ikke er landet**,
-  for det er præcis fejlen; og at en 301 med en *relativ* sti på den gamle
-  adresse ikke kan ske, så et uændret svar er enten gammelt eller et andet
-  problem. Verificér også at aliaset ikke er kommet i en sløjfe:
-  `curl -sD - -o /dev/null -H 'Host: bugbottle.mahoje.dk' https://bugbottle.mahoje.dk/docs/install`
-  skal svare 301 med `location: https://bugbottle.dev/docs/install` — altså stadig
-  absolut, som den var. **Ingen ny URL, ingen ændring i sitemap'en (60
-  `<loc>`), ingen ændring i `description`-tags, og `dist/` rørte denne ændring
-  slet ikke** — den ligger i `site/nginx.conf`, som er statisk serveret af nginx,
-  så IIFE'erne er uændrede (24 688 / 21 104 mod budgetterne 25 088 / 21 504).
+  2026-09-28.` **LUKKET 28/9 18:0x** mod indhold, i ét kørselsvindue (17:30).
+  Målt: `https://bugbottle.dev/docs/install` svarer `HTTP/2 301` med
+  `location: /docs/install/` — en **relativ** sti, som den skulle, og nummer
+  redirects er `1`. Aliaset er heller ikke kommet i en sløjfe:
+  `bugbottle.mahoje.dk/docs/install` svarer stadig 301 med
+  `location: https://bugbottle.dev/docs/install`, altså absolut som før.
   Bevis på den rene konfiguration, målt i rigtig `nginx:alpine` før merge:
   mod `main`s config `Location: http://127.0.0.1/docs/install/`, mod den
   rettede `Location: /docs/install/`, siden selv 200, aliaset uændret
-  absolut, `nginx -t` grøn.
+  (historien bag de to sidste afsnit er bevaret fordi tallene er dem der
+  dokumenterer rettelsen; resten er lukket mod live). Sitemap **60** uændret,
+  `dist/` urørt.
+
+- `VERIFICÉR DEPLOY: panelbilledet får sin størrelse i imaget (opgave 41,
+  `ceo/panel-image-into-docs-stage`), commit `12a1105`, 2026-09-28 18:3x.` Næste
+  batch-vindue er **21:30 2026-09-28**. **Accepter:
+  `https://bugbottle.dev/docs/install/` skal have
+  `<img src="https://bugbottle.dev/panel-narrow.png"` med
+  `width="788" height="950"`.** HTTP 200 beviser **intet** — den gjorde det
+  heller ikke i hele det deploy-vindue den her rettelse lukker, fordi siden
+  serverede billedet uden størrelse og så rigtig ud. Tallet 788/950 er PNG'ens
+  egne dimensioner, så et andet tal er en ældre optagelse af billedet og ikke en
+  fejl i rendererens kode. **Ingen ny URL**, så sitemap'en skal tælle **60**
+  `<loc>`; `dist/` rører denne ændring slet ikke, så IIFE'erne skal være
+  **24 688 / 21 104** uændrede.
 
 - `VERIFICÉR DEPLOY: rettelsen af site-imaget — alle ti 404-sider + de otte
   docs-commits i samme kø — 040c3b9 (fix: c98782c), 12:5x, 2026-09-28.`
