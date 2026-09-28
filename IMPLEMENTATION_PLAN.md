@@ -185,7 +185,7 @@ nextjs.org, angular.dev, nuxt.com.
   (Plausible 401; Cloudflare 6 351 sidevisninger/28 d). Kan ikke måles før
   Search Console-eksporten (opgave 7). Sammenlign 25/10 og 25/11.
   Se "Fund fra description-iterationen" i loggen.
-- [ ] **18. `/docs/express/` — server-side, den framework vi allerede har en
+- [x] **18. `/docs/express/` — server-side, den framework vi allerede har en
   export til.** 10 suggest målt 28/9 02:0x (`express error handling
   middleware`), og **Express er den eneste server-framework uden en side**,
   selv om `expressHandler` er den mest brugte export i `bugbottle/server`.
@@ -195,6 +195,26 @@ nextjs.org, angular.dev, nuxt.com.
   først (planen: læs `express@5`'s published build, ikke Express' docs — de otte
   forgående sider er alle bygget på den metode). **MÅL: `/docs/express/`
   baseline 0 pr. 2026-09-28.** Sammenlign 25/10 og 25/11.
+  28/9, `ceo/express-guide`. **Ingen ny export** — siden dokumenterer den
+  eksisterende adapter. Se "Fund fra Express-iterationen": fem fund, og **to er
+  nye fejlklasser for hele rækken** (den afviste forespørgsel, og stacktrace i
+  svaret). 46 docs-sider (fra 45), 217 søgeposter (fra 209).
+- [ ] **19. `x-forwarded-proto` i URL'en adapteren bygger — lille rettelse i
+  `src/server/express.ts`.** Fundet i Express-iterationen (punkt 5): adapteren
+  tager `x-forwarded-proto` i frifart, når den bygger den `Request` den sender
+  videre, uanset `trustProxy` — altså læser den ét forwarding-header
+  ubetinget, imens ratelimitten læser socketen med mindst samme omhu. Bag en
+  proxy der ikke sætter headeren er URL'en `http://` for en rapport sendt over
+  HTTPS. **Det er ikke en sikkerhedshull** (signaturen er over kroppen,
+  ratelimitten er over adressen, validererne rører ikke URL'en), men det er en
+  asymmetri mellem hvad vi logger og hvad vi tæller, og det er den slags der
+  senere læses som sandhed i en log. **Accept:** URL'en bygges af samme
+  `trustProxy`-beslutning som ratelimitten, `tests/server.test.ts` får en test
+  der viser `https://` ved `trustProxy: { header: "x-forwarded-proto" }` og
+  `http://` uden den, og en diff på de to adaptere så de ikke driver fra hinanden
+  igen. Lille nok til én iteration; **må ikke** trække et budget med sig — kun
+  `bugbottle/server`, hvis det overhovedet flytter noget (det gør det ikke: det
+  er `handleReport`'s path, som validator-bundlen aldrig når).
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -296,6 +316,64 @@ nestjs — tolv). Næste mål er derfor ikke en tredje framework-side.
   **MÅL: `/docs/hono/` baseline 0 besøgende (siden findes ikke) pr.
   2026-09-28.** Sammenlign 25/10 og 25/11. 43 docs-sider (fra 42), 194
   søgeposter (fra 184).
+
+### Fund fra Express-iterationen (28/9) — fem fund, og to klasser rækken ikke havde set
+
+Kilderne er `express@5.2.1`'s publicerede build plus de to pakker der gør
+interessant arbejde: `body-parser@2.3.0`, `router@2.2.0` og
+`finalhandler@2.1.1`. **Ingen af de fem find er i Express' egen dokumentation**,
+og ingen af dem er synlige i `bugbottle/server`. Det første bekræfter den
+fælde Fastify- og NestJS-siderne allerede havde fundet — **på det niveau hvor
+den opstår** — og de to sidste er klasser, de otte forgående sider ikke rummer.
+
+1. **100 kB, og det er body-parsers, ikke Express'.**
+   `102400 // 100kb default` i `body-parser/lib/utils.js` `normalizeOptions`,
+   og `express.json` *er* `bodyParser.json` (`lib/express.js:77`). Fire gange
+   under Fastifys 1 MiB og **fyrre gange** under `handleReport`'s eget
+   `DEFAULT_MAX_BODY_BYTES`. Fejlen er 413 i body-parsers form, før ruten er
+   kaldt, så `expressHandler` svarer aldrig. **Siden skal begynde med den**,
+   fordi den er fælden både Fastify og Nest arvede.
+2. **En signeret rute kan ikke ligge bag `express.json()` — og `verify` er ikke
+   udvejen.** Det interessante er *hvorfor*: body-parser sætter
+   `opts.encoding = verify` (`lib/read.js:99`) for at rå bufferen, men kører
+   `parse` bagefter, så `req.body` er stadig et objekt og HMAC'en stadig en
+   anden. **Bytene var tilgængelige; de blev blot ikke gemt hvor adapteren kikker.**
+   Udvejen er `express.raw({ type: "application/json" })` — og fælden i fælden er
+   at `express.raw()` uden muligheder matcher `application/octet-stream`, så en
+   JSON-rapport slet ikke parses. Den virker alligevel, fordi adapterens egen
+   rå-læser overtager, altså ved et held. Skriv `type`.
+3. **Express 5 videresender et rejected promise** (`isPromise(ret)` i både
+   `router/lib/layer.js:119` og `router/index.js:650`) — det **eneste** framework
+   i rækken hvor én fejlhandler i roden ser route-rejections uden en krog. Og
+   samme linje kører i `handle_error`, så den anden side af mønsteret er den
+   skarpe kant: en `async` fejlhandler der afviser videresender *rejectionen*,
+   ikke den fejl den fik. Samme fælde som Fastifys `setErrorHandler`, ad anden
+   vej. **Nyttig for `Køen efter dette`:** Express er den eneste af de ni
+   frameworker hvor "én reporter i roden" faktisk virker for alt.
+4. **To klasser, rækken ikke havde.** (a) `finalhandler` `req.socket.destroy()`er
+   når headers er sendt (`finalhandler/index.js:118-121`), så en fejl *efter* det
+   første svar når reporteren som en **netværksfejl uden status** — det er det
+   eneste sted `handleReport`s egen fejlhåndtering ikke kan hjælpe, fordi
+   fejlen sker efter bytene er væk. Og (b) `getErrorMessage` svarer med
+   `err.stack` når `env !== 'production'`, og `env` er
+   `process.env.NODE_ENV || 'development'` — så en app der aldrig sætter den
+   svarer hver uhåndteret 500 med **hele stacktrace'en i kroppen**. På en
+   bug-report-rute er det vores egen filstruktur, udleveret til den der
+   postede en formular. Begge klasser er generelle nok til at de bør genovervejes
+   på de andre otte sider.
+5. **`X-Powered-By` er tændt som standard** (`app.enable('x-powered-by')` i
+   konstruktøren), og `trust proxy` er `false` som standard — sidstnævnte er
+   præcis derfor adapteren sender `req.socket.remoteAddress` først, og det er
+   den rigtige rækkefølge i Express (på en standard-app er de to ens, på en app
+   med `trust proxy` er socketen den `handleReport` ikke blev bedt om at tro).
+   **Én asymmetri i vores egen adapter, fundet her:** URL'en den bygger tager
+   `x-forwarded-proto` i frifart, uanset `trustProxy`, så bag en proxy der ikke
+   sætter den ser handleren en `http://`-URL for en rapport sendt over HTTPS.
+   Det ændrer hvad der logges, ikke hvad der accepteres, og ratelimitten er
+   upåvirket — men det er skrevet ned, fordi en asymmetri mellem "hvad vi logger"
+   og "hvad vi tæller" er præcis den slags fejl man senere læser en log og
+   stoler på. **Ikke rettet i denne iteration** (dokumentationsopgave); et
+   lille fix kunne være at lade URL'en bruge samme `trustProxy`-beslutning.
 
 ### Fund fra Vue-iterationen (28/9) — den billigste side med de hårdeste fund
 
@@ -1552,6 +1630,29 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/express/ (46 sider i sitemap'en, ny
+  integrationsside — den **tolvte** under Integrations, og den første side om
+  den adapter der er mest brugt) 51fdf36, merge 80c6933 04:01,
+  2026-09-28` — næste batch-vindue er **07:30 2026-09-28**. Kan verificeres i
+  **samme kørsel som de otte notes nedenfor** (alle merge før 07:30). Verificér
+  **indhold**: `https://bugbottle.dev/docs/express/` skal vise de fem fund
+  (`102400` / "100kb default", `opts.encoding = verify`,
+  `express.raw({ type: "application/json" })`, `isPromise(ret)`,
+  `req.socket.destroy()`), teksten `DEFAULT_MAX_BODY_BYTES` og
+  `req.socket.remoteAddress`, `description`-taggen skal begynde
+  `expressHandler in Express` (ikke klippet, under 158 tegn), sitemap'en skal
+  liste siden med `lastmod 2026-09-28`, og `Integrations`-gruppen i sidebaren
+  skal have **tolv** sider med `/docs/express/` som nr. 12.
+- **Bemærk til næste iteration: `npm run a11y` kan ikke køre lokalt her.**
+  `scripts/chrome.mjs` slår `puppeteer-core` op i det globale npm-root
+  (`/opt/homebrew/lib/node_modules`) og den findes ikke, så `npm run a11y` og
+  `npm run smoke:annotate` fejler med `MODULE_NOT_FOUND` efter ~0 ms. Det er et
+  lokalt miljøproblem, ikke en kodefejl: CI's `browser`-job kører begge på hvert
+  push. **Lad være med at læse det som en rød gate lokalt** — `npm run check`
+  er den gate, og den var grøn. Sider der kun er tekst (en docs-side) er lav
+  risiko; det er en ændring i `src/ui/` eller `site/*.css` der kræver en
+  browsermåling, og den skal ske i CI.
 
 - `VERIFICÉR DEPLOY: alle 50 sider får en ny `<meta name="description">` (40
   af dem lå med en ellipse, seks talte om sitet), de to landingsider kortet i
