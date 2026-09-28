@@ -550,6 +550,152 @@ the client and the server share), so a component that throws on every render
 sends one report rather than a thousand. Say so in your privacy notice, and
 pass `scrub: scrubReport` if a message could carry anything personal.
 
+## Every framework, one table
+
+Eleven frameworks have a page here, and a reader who has just chosen one of them
+wants the same four facts from all of them: which hook to wire, which file it
+goes in, what it will catch, and what it will miss. That is this page. Everything
+below was read out of each framework's own published build or its own source,
+and every row links to the page that carries the code, the traps and the
+verification throws — this is the map, not a second copy of the eleven.
+
+Three of the four answers are not properties of the framework but of *your*
+application, which is why the tables are split. The hook is fixed and the file
+is fixed. What it catches depends on where you put the boundary, and what it
+misses is the same four classes in every framework, in different words.
+
+### The hook, and the file it goes in
+
+| Framework | The hook | The file | Page |
+|---|---|---|---|
+| React 19 | `onCaughtError` / `onUncaughtError` | your `createRoot(...)` call | [React](#react) |
+| Vue | `app.config.errorHandler` | `main.ts` | [Vue](#vue) |
+| Svelte 5 | `<svelte:boundary onerror>` | the component that wraps the app | [Svelte](#svelte) |
+| SvelteKit | `handleError` in `src/hooks.ts` | `src/hooks.ts` | [SvelteKit](#sveltekit) |
+| Next.js | `error.tsx`, `global-error.tsx` | `app/` | [Next.js](#nextjs) |
+| Angular | `ErrorHandler` | `app.config.ts` | [Angular](#angular) |
+| Nuxt | `vue:error`, `app:error`, `app:chunkError` | `plugins/bugbottle.client.ts` | [Nuxt](#nuxt) |
+| Astro | `astro:hydration-error` | `src/layouts/Base.astro` | [Astro](#astro) |
+| React Router | `onError` on `RouterProvider` or `HydratedRouter` | `entry.client.tsx` | [React Router](#react-router) |
+| TanStack Router | `onCatch` **plus** `errorComponent` | `router.tsx` | [TanStack Router](#tanstack-router) |
+| TanStack Query | `QueryCache`'s `onError` | `query-client.ts` | [TanStack Query](#tanstack-query) |
+
+Two rows in that table are not frameworks with a hook, and both are in it on
+purpose. **Astro has no error handler at all** — thirty guides and a hundred
+reference pages, none of them about errors — so the one client event it does
+emit is the whole integration, and an error inside an already-hydrated island
+still has to come from `window.onerror`. **TanStack Query is a data layer, not a
+router**: it has no boundary, it never throws by default, and a failed query is
+a value you render rather than an exception, so the hook is the cache's
+callback.
+
+The count is the thing people get wrong. There is no number of hooks per
+framework that predicts whether your reports arrive, because three of the eleven
+have a hook that is a *prop on a boundary* rather than a callback you register:
+Svelte's is an element in your markup, TanStack Router's is `onCatch` and does
+nothing at all unless the same route also has an `errorComponent`, and Next.js's
+`error.tsx` is a component the framework renders instead of the broken one.
+
+### What it misses, in four classes
+
+Every gap the eleven pages document is one of these four. They are worth
+naming together, because the first one is a framework, the second is a
+framework's silence about a *return value* instead of a throw, the third is
+production, and the fourth is a page.
+
+**1. A throw the framework never routes to a hook.** Most of it is your own
+code: an event handler, a `setTimeout` callback, a `fetch` that rejects inside a
+plain `async` function, a WebSocket, a third-party script. `window.onerror` and
+`unhandledrejection` are the two that see all of it, and the console buffer
+patches both from the first line of the script tag. Two frameworks have a
+*named* version of this gap, and both are quieter than a throw: Angular's
+`resource()` and `httpResource()` put the failure in `status()` and `error()`
+instead of throwing, and Astro's `action()` returns `{ data, error }` and never
+throws either. Nuxt's `useFetch` and `useAsyncData` are the same shape. A report
+integration that only has a framework hook misses every one of them, and what
+they have in common is that nobody calls them a failure.
+
+**2. A hook that replaces the console line.** This console ring buffer records
+`console.error` and `console.warn` and nothing else, so on several paths that
+line *is* the report's console section — and installing a hook is what deletes
+it. Vue's `errorHandler` returns before `logError`, which is where Vue's own
+`console.error` lives. SvelteKit's `src/hooks.ts` is *your hook, or a function
+that logs*: adding one replaces the generated `console.error` default. React
+Router's `onError` replaces a line that the render path prints itself and that
+the data path — `console.error` appears zero times in `router.js` — never
+prints at all. Astro's is subtler and worse: `astro:hydration-error` is
+`cancelable`, and a listener that calls `preventDefault()` switches off the one
+`console.error` that carries both the component URL and the raw error text. The
+fix is the same in every case and it is one line: `console.error(error)` before
+you send.
+
+**3. A hook that does not work in production.** Vue rethrows in development and
+only logs in a production build, and `console.warn` appears zero times in
+`runtime-core.cjs.prod.js` — so "it crashes locally" is not a property of the
+production path. Angular's `provideBrowserGlobalErrorListeners()` works, an
+`ErrorHandler` in the wrong provider does not. TanStack Router's global
+catch boundary logs a warning under `NODE_ENV !== "production"` and nothing
+else, so **in the build you ship it is silent**: a loader error with no
+`errorComponent` anywhere gives no page, no console line and no report. The
+throw you verify against `npm run dev` is not the throw that ships.
+
+**4. The error page, where the framework is gone.** An error page is a
+*different page*: no layout, no providers, no plugin, no app instance. In
+Next.js, `global-error.tsx` writes its own `<html>`; in Nuxt, `error.vue` is
+rendered by a plugin like any other, so a plugin that threw is a page nobody can
+report from; in Astro, `500.astro` is a fresh document with none of the layout
+above it; in SvelteKit, `+error.svelte` renders without the layout and
+`src/error.html` is served before any of your code runs. What survives is the
+evidence — `console.error` ran before the page was swapped, and the console
+buffer is not React — so the report you want from that page is one somebody
+sends, and the integration there is a single button. That is a class, not a
+detail, and it is the same answer in all four.
+
+### The page where the panel is not mounted
+
+| Framework | The page | What it takes |
+|---|---|---|
+| Next.js | `global-error.tsx` | the script tag inline, or a button |
+| Nuxt | `error.vue` | a button; a plugin that threw never loads the panel |
+| Astro | `src/pages/500.astro` | a button, and keep this file to the button |
+| SvelteKit | `+error.svelte`, `src/error.html` | a button; `error.html` needs the tag inline |
+| React Router | the root `ErrorBoundary` | `BugReportBoundary` with a fallback that sends |
+
+The panel is mounted from your app's code, and on these five pages there is no
+app code running. One button is the whole integration, and the four
+framework pages carry the snippet for their own page.
+
+### A framework page and a framework hook
+
+The tag and the hook are not alternatives; they cover different halves. The
+hook sees what the framework routes to it. The tag — and `openOnError` with it —
+sees the throws that reach `window`, which is the class-1 gap above and the only
+thing that works on a page with no app instance. [One script tag](#one-script-tag)
+has the attributes and the two builds; the framework pages say where their own
+copy goes. Vue is the one framework where the tag is *half* an integration, for
+a structural reason rather than a bug: `app.config.errorHandler` lives on the app
+instance, and no `<script>` tag can reach it.
+
+### What to check before you ship it
+
+Each framework page ends with its own list, because the throws are the
+framework's. The shape is the same everywhere, and four of them are worth
+knowing before you start:
+
+- **Throw from a render, a click handler, and a `setTimeout`.** The first two
+  should open the panel; the third is the gap, and the report exists only if
+  somebody presses the trigger. That asymmetry is the integration working, not
+  failing.
+- **Build it, serve the build, and throw again.** Vue only logs in production,
+  and TanStack Router's global boundary is silent in it. A verification run
+  against `npm run dev` has verified nothing about the shipping path.
+- **Delete the hook and watch the console line come back.** That is the
+  baseline: the generated default, the framework's own printer, the line the
+  ring buffer records.
+- **Make your reporter throw on purpose.** A `console.error` shim that throws
+  replaces the real error inside TanStack Query's `onError`, and a
+  `widget.open()` that throws turns one failure into a different one.
+
 ## React
 
 A plain React application — Vite, a build of your own, React Router with no

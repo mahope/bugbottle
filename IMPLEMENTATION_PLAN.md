@@ -1189,12 +1189,68 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   (fra 49), 253 søgeposter (fra 246), `npm run check` grøn (896 tests,
   `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
   budget flyttede sig (IIFE'erne uændrede 24 688 / 21 104).
-- [ ] **32. En `/docs/`-side der samler de otte framework-integrationer i én
-  tabel.** Datagrund: otte sider der ligner hinanden, hver med sin egen
+- [x] **32. `/docs/every-framework-one-table/` — de elleve
+  framework-integrationer i én tabel.** 28/9, `ceo/which-framework`.
+  **Lukket.** Datagrund: elleve sider der ligner hinanden, hver med sin egen
   "hvor mange kroge"-inddeling. En læser der *vil* vide hvilken de har,
   har i dag ingen side at finde det på. Advarsel fra CLAUDE.md: må ikke blive
   en tynd opslagsside — den skal have den fulde krog-tabel, ellers er den
-  værre end ingen.
+  værre end ingen. **MÅL: `/docs/every-framework-one-table/` baseline 0
+  (siden findes ikke) pr. 2026-09-28.** Se fundene nedenfor. 51 docs-sider
+  (fra 50), 259 søgeposter (fra 253), `npm run check` grøn (896 tests,
+  `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
+  budget flyttede sig (IIFE'erne uændrede 24 688 / 21 104).
+  **Sitemap-tallet er nu 60 `<loc>`, ikke 57** — den gamle note regnede fra 48
+  docs-sider, og der har været tre siden. Den næste deploy-måling skal holde
+  mod 60, ellers ser den rigtige build ud som en fejl.
+
+### Fund fra one-table-iterationen (28/9 10:5x) — fire fund, og tre af dem er
+### ikke om bugbottle
+
+**1. Der er elleve framework-sider, ikke otte.** Opgaven sagde otte. Talt er
+der **elleve** i `Integrations`: React, Vue, Svelte, SvelteKit, Next.js,
+Angular, Nuxt, Astro, React Router, TanStack Router og TanStack Query — de otte
+`framework`-navne plus de tre TanStack/React-Router-sider, der kom efter at
+opgaven blev skrevet. Siden er skrevet til alle elleve, og det er ikke en
+forskel i formuleringen: **Svelte og SvelteKit er to sider om to kroge i to
+filer**, og en tabel der tæller fejl ville sendt en SvelteKit-læser til
+Svelte-siden og ladet dem lede efter en `onerror` der ikke findes der.
+
+**2. "Hvor mange kroge har den her framework" er det spørgsmål, der ikke
+virker.** Planen har selv skrevet det tre gange siden TanStack-siden, og
+skrevet at man skal starte med det. Siden gennemgår alle elleve og **den
+egenskab holder ikke**: tre af elleve har ikke en krog, men en *prop på en
+boundary* — Svelte's `<svelte:boundary onerror>` er et element i markup'en,
+TanStack Router's `onCatch` er `componentDidCatch` på en boundary der kun
+mountes med et `errorComponent`, og Next.js's `error.tsx` er en komponent
+frameworken renderer i stedet for den brudte. Tælleren siger "1" for alle tre,
+og den siger det samme som "1" for `app.config.errorHandler` i Vue, som
+fungerer helt andet. **Siden siger derfor i stedet fire klasser af det krogen
+ikke ser** — egen kode frameworken ikke ruter til, en krog der erstatter
+konsolinien, en krog der ikke virker i produktion, og fejlsiden hvor
+frameworket er væk — fordi klasserne er det læseren kan *handle på*, uanset
+hvilken framework de har.
+
+**3. Den fælles nævner for de elleve er ikke antallet af kroge, men at de
+otte af dem sletter konsolinien.** Vue, React 19's `onCaughtError`, SvelteKits
+`src/hooks.ts`, React Router's `onError` i data-mode, Nuxts
+`vueApp.config.errorHandler` og Astros `preventDefault()` gør alle seks den
+*samme* ting: de erstatter præcis den `console.error` som ringbufferen
+optager. Det er fundet der gjorde klassifikationen værd at skrive, fordi det er
+**ét** afsnit og **én** linie rettelse (`console.error(error)` før send) i stedet
+for seks. Og Astro's er det værste af dem, fordi det ikke er en krog der
+erstatter en linje, men en `preventDefault()` der **slukker** den eneste linje
+der bærer både komponent-URL'en og den rå fejltekst.
+
+**4. En fejl der *returneres* er en klasse for sig, og den er den stille
+fælde.** Angulars `resource()`/`httpResource()`, Nuxt's `useFetch().error.value`,
+Astro's `action()` og TanStack Query's `isError` lægger alle fejlen i en
+*værdi* frem for at kaste den — så ingen krog i nogen af de elleve ser den, og
+ingen af dem kalder det en fejl. Siden tager den som klasse 1 og siger det
+pligtigt: *en rapportintegration der kun har en frameworkkrog misser alle fire,
+og det de har til fælles er at ingen kalder dem en fejl.* Det er den samme
+indsigt som `resource()`-fundet på Angular-siden, løftet op så de fire rammer
+kan se den samme ting.
 
 ### Fund fra SvelteKit-iterationen (28/9 10:3x) — fire fund, og de retter planen
 
@@ -2218,6 +2274,24 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-28, iteration 24** (`ceo/which-framework`, oven på
+  `ceo/sveltekit-side`). Opgave 32: `/docs/every-framework-one-table/`.
+  Se opgaven og fundene nedenfor.
+  - **Deploy, genmålt 28/9 10:3x før arbejdet og igen efter gaten: uændret.**
+    `/self-hosted/`, `/docs/svelte/`, `/docs/tanstack-query/`, `/support/` og
+    `/docs/sveltekit/` er alle stadig **404**, og sitemap'en har stadig **47**
+    `<loc>`. Der er ikke gået et nyt batch-vindue siden målingen kl. 08:29 —
+    næste er **12:30** — så det er forventet, og det bekræfter at blokeringen
+    står. **Merges til `main` er derfor stadig stoppet**, og denne iteration
+    ligger derfor oven på `ceo/sveltekit-side` som de to forrige: opgave 29, 30,
+    31 og 32 ligger i **én** kø og merger sammen, når blokeringen hæves.
+  - **Et tal i planen var forkert, og det er det tredje tal i tre iterationer
+    der peger på det samme.** Sitemap'en blev målt til 57 `<loc>` i
+    deploy-noten, og `comm` sagde "ti sider kun på min". Siden den måling er
+    **tre** docs-sider kommet til (TanStack Query, SvelteKit og nu denne), så
+    den rene build skriver **60**, ikke 57. En deploy-måling der holder mod 57
+    ville have rapporteret en rigtig build som en fejl. Rettet i opgaven.
 
 - **2026-09-28, iteration 22** (`ceo/script-tag-once-2`). Opgave 29, plus
   en deploy-måling der indsnævrer blokeringen. **Merges til `main` er stadig
@@ -3317,3 +3391,14 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   `QueryCache`'s `onError`-kodeblok og `isRefetchError`-afsnittet, og
   `Integrations` i sidebaren skal have **fireten** sider (den var tretten efter
   TanStack Router).
+
+- **OPGAVE 32 — LIGGER PÅ `ceo/sveltekit-side`, oven på `3e74a2d`, 28/9 10:5x.**
+  `/docs/every-framework-one-table/` er skrevet, gaten er grøn (896 tests,
+  `check-dist` grøn på 208 filer, ingen kode- eller `dist/`-ændring, ingen budget
+  flyttede sig), 51 docs-sider (fra 50), 259 søgeposter (fra 253), og **sitemap'en
+  skriver nu 60 `<loc>`** (den rene build; live har stadig 47).
+  **VERIFICÉR DEPLOY: `/docs/every-framework-one-table/` 28/9 10:5x.** Den skal
+  vise hook-tabellen med elleve rækker og de fire klasser, og `Integrations` i
+  sidebaren skal have **femten** sider (den var fjorten efter TanStack Query).
+  Branchen indeholder samlet opgave 29, 30, 31 og 32, så **én**
+  `git merge --no-ff ceo/sveltekit-side` tager dem alle fire.

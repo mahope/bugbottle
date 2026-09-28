@@ -67,6 +67,8 @@ export const PAGE_DESCRIPTIONS = {
     "Eight languages and the --bb-* CSS variables. Every string a reporter sees lives in a Locale, and your stylesheet never meets ours.",
   licence: "bugbottle is MIT licensed, so it is free to use in commercial and closed-source work. There is no other licence and no paid tier.",
   express: "expressHandler in Express: the 100 kB express.json() limit that 413s a screenshot, a signed route behind a body parser, and a 500 that pastes a stack trace.",
+  "every-framework-one-table":
+    "Every framework in one table: the hook, the file it goes in, and the four classes of failure it misses — Vue, Next.js, Angular, SvelteKit, Astro and more.",
   nestjs: "A NestJS exception filter runs on the server, so it cannot build a report. The browser side is the panel, and the route needs a 5 MB limit.",
   nextjs: "error.tsx, global-error.tsx and a button on the error page in Next.js: where a render error is reported without losing its console line.",
   nuxt: "vue:error, app:error, error.vue and fatal errors in Nuxt, and why showError() deletes the console line the report is built from.",
