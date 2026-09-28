@@ -372,8 +372,8 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   målingerne ovenfor. **MÅL: npm downloads 412/måned, 191/uge pr. 2026-09-28.**
   Sammenlign 5/10 og 5/11. *Næste skridt er at se om billedet flytter
   stjerner, for det er den del af funnelen der fortæller om det virkede.*
-- [ ] **38. npm-`description` er det eneste felt, der finder os — og det er
-  157 tegn brugt på at sige hvad *biblioteket* er.** Datagrund: Fund 1.
+- [x] **38. npm-`description` er det eneste felt, der finder os — og det er
+  148 tegn brugt på at sige hvad *biblioteket* er.** Datagrund: Fund 1.
   Beskrivelsen rangerer 1 på "Your UI your endpoint" og 2 på "evidence
   attached", altså **læseren finder os via beskrivelsens sætninger, ikke via
   keywords**. Den nævner i dag ingen af de ord, en søgning faktisk indeholder
@@ -383,6 +383,17 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   rammer de fem søgeord; `npm view bugbottle description` efter build, og en
   test der siger at den ikke bliver klippet af npm's egen grænse. Mål:
   downloads 5/10 mod 412.
+  **28/9 15:2x, `ceo/npm-search-terms`, `14f0163`.** Se "Fund fra
+  npm-search-iterationen" nedenfor — den **angreb opgavens egen
+  forudsætning** og den negative halvdel er den dyre: **README'en er ikke i
+  npm's søgeindeks**, så halvdelen af rettelsen i opgaven ("bedre `description`
+  og bedre README") kunne ikke have virket for den søgning.
+  **MÅL: npm downloads 412/måned, 191/uge pr. 2026-09-28** (uændret fra
+  opgave 37 — det er samme mål i samme enhed). Sammenlign 5/10 og 5/11.
+  **Bemærk til næste iteration:** de to tal kan ikke stikke ad, før en release
+  er ude. `package.json#description` er kun det npm *serverer* efter
+  `npm publish`, så `npm view bugbottle description` svarer stadig den gamle
+  indtil Mads kører `npm run release`. Se `KLAR TIL RELEASE: v1.1.0`.
 - [ ] **39. `/docs/install/` og npm-siden skal pege på hinanden, så de to
   veje hænger sammen.** Datagrund: de er i dag to *kopier* af samme åbning,
   og de kan glide fra hinanden — præcis som de otte framework-sider gjorde
@@ -392,6 +403,125 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
 - [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
   Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
   måles.
+
+### Fund fra npm-search-iterationen (28/9 15:1x) — README'en er ikke i
+### npm's søgeindeks, og Fund 1 målte keywordsne med den forkerte metode
+
+**Dette er fundet ved at ville angribe opgave 38, så det begynder med det
+forfærdelige: halvdelen af opgavens egen rettelse kunne ikke have virket.**
+
+#### Fund A — npm's søgning læser `description` og `keywords`. Ikke README'en.
+
+Målt med npm's egen søge-API (`registry.npmjs.org/-/v1/search`, `size=250`),
+28/9 15:0x–15:1x. Beslutningen er taget på **vores egen tekst**: `checkoutEveryNms`
+står **elleve gange** i vores README, og søgningen på præcis det ord returnerer
+**ét** resultat, som ikke er os:
+
+| Søgning | Total | Vores plads |
+|---|---|---|
+| `checkoutEveryNms` | **1** | **ikke os** (1. plads er `@askdepth/replay`) |
+| `MAX_MESSAGE_LENGTH` | 3 | **ikke os** |
+| `maskAllInputs` | 42 | **ikke os** |
+| `ring buffer` (22 forekomster i README) | 27 259 | ikke i top 250 |
+| `webhook` (47 forekomster i README) | 15 566 | ikke i top 250 |
+
+`checkoutEveryNms` er afgørende, fordi totaltallet er **1**: hvis README'en var
+indekseret, kunne vi ikke være andet end nr. 1 af 1. **Konklusionen er derfor
+hård:** en bedre README flytter stjerner og den læser der lander på
+npmjs.com, men **aldrig denne ranking**. Det er stadig værd at skrive en bedre
+README — opgave 37 gjorde netop det med billedet — men den er ikke *dette*
+greb, og det er derfor opgave 38's "bedre `description` **og bedre README**"
+kun virker for den ene halvdel.
+
+#### Fund B — Fund 1 målte keywordsne med den forkerte metode, og den konkluderede modsat
+
+Fund 1 (28/9 13:2x) skrev: *"`bugbottle` rangerer 1 og 2 på sin egen
+beskrivelse og er væk på 82 818 resultater for sit eget første keyword — altså
+er teksten i beskrivelsen det der finder os, ikke keyword-feltet"*, og gjorde
+keywords til en **sag, der ikke er værd at ændre**.
+
+**Det er en falsk negativ, og fejlen er i målingen.** Fund 1 søgte på hvert
+keyword som en *fuld søgning* — `bug-report` → 82 818, `feedback-widget` → 91
+829, `error-context` → 1 218 487. Det er **hovedord, ingen vinder**; selv en
+pakke med det perfekte keyword taber der, og det er ikke et signal om
+keywordets værdi. Det rigtige spørgsmål er, om *tokenet* er til stede for en
+søgning, den kan vinde, og målingen på det er ubekvemt fordi de to pakker der
+**vinder** `"sentry alternative"` (24 022 resultater — en vinnelig størrelse,
+mod 1 123 776 for `"error reporting"`) begge har **præcis samme to ting**:
+
+| Pakke | Plads | Keyword | Beskrivelse |
+|---|---|---|---|
+| `@mizchi/utels` | **1** | `sentry-alternative`, `error-tracking` | "*Sentry alternative* for browser and Node.js error tracking…" |
+| `quto-logger` | **2** | `sentry-alternative`, `error-tracking` | "…a simple *Sentry alternative*" |
+| `bughub` (nr. 2 på `bug reporting library`) | **2** | `sentry-alternative` | "A lightweight, standalone *bug reporting* library for React applications." |
+| `bugbottle` (før denne ændring) | ikke i top 250 | hverken `sentry-alternative` eller `self-hosted` | nævner ingen af delene |
+
+Alle tre har **keywords `sentry-alternative`** og **ordene i beskrivelsen**. Det
+er ikke et tilfælde, og det er præcis de to ting vi manglede. **Fund 1's
+konklusion var altså rigtig om målet og forkert om metoden** — og den ville have
+ladt den billigste af de to greb ligge.
+
+#### Fund C — nævn: de 148 tegn, der var brugt på at forklare *biblioteket*
+
+Den gamle beskrivelse var 148 tegn (planens egen note sagde 157 — en
+regnefejl, rettet her). Den er **ikke** dårlig: den siger præcis hvad pakken er,
+og den rangerer 1 på sin egen tagline. Den brugte bare **nul af de ord, en
+søgning indeholder**, fordi den bruger dem på at fortælle *hvad der sker* i
+stedet for *hvad man leder efter*. Den nye er 155 tegn og åbner "Self-hosted
+Sentry alternative for in-app bug reporting and user feedback".
+
+**Det er sandt, ikke en påstand:** biblioteket har ingen hosted service, og
+rapporten POSTes til et endpoint applikationen ejer. `/self-hosted-` og
+`/compare/` siger det samme med kildeangivelse.
+
+#### Fund D — npm's grænse for `description` er målt, ikke antaget
+
+Opgaven bad om en test, der siger at beskrivelsen ikke bliver klippet. Der er
+ingen dokumenteret grænse, så den er **målt**: den længste `description` blandt
+20 velinstallerede pakker er **239 tegn** (`webpack`), og ingen af `eslint`,
+`typescript`, `react`, `express`, `axios`, `jest`, `vite`, `rollup`,
+`@babel/core`, `lodash`, `next`, `vue`, `svelte`, `tailwindcss`, `prisma`,
+`storybook`, `turbo`, `pnpm` og `yarn` er længere. Testen sætter derfor **200**
+som grænse, under den observerede maksimum, og den nye beskrivelse er 155.
+
+*(En måling på webpack i mellemtiden var **uafgørende** og blev kasseret: en
+frase fra *starten* af dens egen beskrivelse gav `rank=-1` af 150 935, fordi
+sætningen er så almen at intet kan skille den. Den måler søgningens
+*almindelighed*, ikke en afkortning, og den skal ikke have stået i planen som
+om den gjorde.)*
+
+#### Leveret 28/9 15:2x — beskrivelsen, fire keywords og testen
+
+**Branch `ceo/npm-search-terms`, commit `14f0163`.** Kun `package.json` (to
+felter), `CHANGELOG.md` og `tests/npm-metadata.test.ts`. **Ingen export, ingen
+mulighed, intet adfærdsændring og ikke én byte i `dist/`** — målt: IIFE'erne er
+**24 688 / 21 104** mod budgetterne 25 088 / 21 504, uændrede mod opgave 37.
+`check-dist: 208 filer`. **Ingen ny URL**, sitemap **60** `<loc>`, 51 docs-sider,
+260 søgeposter.
+
+**Bevis at vagterne virker, tre veje, fordi en test der kun passer er en test
+der intet siger:**
+
+| Hvad der blev brudt | Hvilken test blev rød |
+|---|---|
+| `sentry alternative` + taglinen + keywordet fjernet | **4 af 6** røde (den kortsigtede holdt, korrekt) |
+| beskrivelsen gjort 253 tegn | længdetesten rød |
+| et keyword gjort til `Sentry Alternative` | tokenformen rød |
+
+#### Hvad næste iteration skal vide
+
+- **Downloads og søgerangering kan ikke måles før en release.** `description` og
+  `keywords` er kun det npm *serverer* efter `npm publish`, så
+  `npm view bugbottle description` svarer **stadig den gamle** lige nu. Målet
+  "5/10 mod 412" kan altså ikke stikke ad den 5/10 — den første læsbare
+  måling er den første uge *efter* `KLAR TIL RELEASE: v1.1.0` er kørt. Skriv
+  det i målingen, ellers læses stilheden som en fejl.
+- **Den næste opgave i køen er 39** (npm-siden og `/docs/install/` skal pege på
+  hinanden), og den er billig. Den skal dog **ikke** gentage Fund 1's fejltagelse
+  ved at regne README'en som en søgegreb — kun som en læsegreb.
+- **Større uforholdsmæssighed, opgave 7 er stadig blocked:** 51 docs-sider, og
+  ingen af dem har en trafik-baseline. Denne iteration gjorde det modsatte for
+  én vare, som er den eneste adoption-måling jeg kan hente selv.
 
 ### Det nye billede på de 27 opgaver, og hvorfor Fase 3's rækkefølge holdt
 
@@ -2741,6 +2871,34 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
 
+- **2026-09-28, iteration 28** (`ceo/npm-search-terms`, `14f0163`). Opgave 38.
+  Se "Fund fra npm-search-iterationen" (28/9 15:1x).
+  - **README'en er ikke i npm's søgeindeks.** `checkoutEveryNms` står elleve
+    gange i vores README, og søgningen på ordet returnerer **ét** resultat som
+    ikke er os. Et bedre README flytter stjerner og læseren på npmjs.com, men
+    aldrig rankingen — så opgave 38's "bedre `description` **og bedre README**"
+    virker kun for den ene halvdel.
+  - **Fund 1's keywords-konklusion var en falsk negativ, fordi målet var det
+    forkerte.** Den søgte på hvert keyword som en *fuld* søgning (`bug-report`:
+    82 818), altså på hovedord ingen vinder, og konkluderede at keywords var
+    uværdige at ændre. De to pakker der *vinder* `"sentry alternative"` (24 022
+    resultater) har begge `sentry-alternative` som keyword **og** ordene i
+    beskrivelsen; det havde vi ingen af delene.
+  - **Leveret:** beskrivelsen åbner "Self-hosted Sentry alternative for in-app
+    bug reporting and user feedback" (155 tegn, mod den gamles 148), fire
+    keywords (`error-reporting`, `error-tracking`, `self-hosted`,
+    `sentry-alternative`), og `tests/npm-metadata.test.ts` med seks tests hvis
+    vagter er **bevist** mod tre opdelte fejl. Nul ændring i `dist/`, nul ny
+    URL, sitemap 60. **917 tests** (fra 911).
+  - ⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre:** samme
+    grund som i de tre forrige iterationer, ingen Chrome på maskinen. Ingen
+    DOM, ingen CSS, ingen ny side rørt — kun to felter i `package.json` — så
+    auditten rammer ikke denne ændring, og CI's `browser`-job kører den.
+  - **Kan ikke måles endnu, og det er ikke en fejl:** `description` er kun det
+    npm *serverer* efter publish, så `npm view bugbottle description` svarer
+    stadig den gamle. Første læsbare måling er 5/10 **hvis** `KLAR TIL RELEASE:
+    v1.1.0` er kørt inden da.
+
 - **2026-09-28, iteration 27** (`ceo/readme-picture`, merge `c39af84`).
   Opgave 37. Research-iteration, fordi køen var tom undtagen opgave 7.
   Se "Research-iteration 28/9 13:3x" og fundene ovenfor.
@@ -3532,6 +3690,18 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   iteration måler efter 12:30.
 
 ## Deploy-noter
+
+- **Ingen deploy-note for `ceo/npm-search-terms` (opgave 38, `14f0163`).**
+  `package.json#description` og `#keywords` læses af **npm**, ikke af
+  bugbottle.dev: ingen side renderer dem, `scripts/build-docs.mjs` læser kun
+  `version` af `package.json`, og `dist/` viste at være uændret (IIFE'erne
+  24 688 / 21 104 mod budgetterne 25 088 / 21 504, `check-dist: 208 filer`).
+  **Ingen ny URL**, sitemap **60** `<loc>` uændret, ingen ny docs-side, ingen
+  ændring i søgeindekset (260 poster). Skrevet, fordi kontrakten siger "tilføj en
+  VERIFICÉR-note efter merge+push", og fordi en manglende note ellers ligner en
+  glemt — en note der siger "intet at verificere" er her det rigtige svar.
+  **Det denne ændring kræver er en *release*, ikke et deploy** — se
+  `KLAR TIL RELEASE: v1.1.0` under ❓.
 
 - `VERIFICÉR DEPLOY: panelbilledet i README's åbning, som også er
   /docs/install/ (opgave 37, `ceo/readme-picture`), commit `fca5fd5`, merge
