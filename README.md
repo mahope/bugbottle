@@ -3469,6 +3469,12 @@ reading it would trust a setting `trustProxy` was never asked about. Pass
 `remoteAddress` explicitly when you want to decide, and `trustProxy` in
 `handleReport` when you want the package to read forwarding headers for you.
 
+The URL this adapter builds for `handleReport` follows the same rule:
+`x-forwarded-proto` decides the scheme only when `trustProxy` says a proxy may
+speak for this deployment, and only `https` is believed out of it. The
+[Express page](#express) says why in full, and the two answer alike — they are
+two translations of one request, and the URL is what a log reads as fact.
+
 ### What to check before you ship
 
 - `bodyLimit` raised above `DEFAULT_MAX_BODY_BYTES`, or send a report **with a
@@ -3884,12 +3890,19 @@ one `handleReport` was not asked to trust. If you set `trust proxy`, pass
 `remoteAddress` explicitly and set `trustProxy` on `handleReport` too, so one
 decision is in charge.
 
-One asymmetry worth knowing, because it is in our adapter and not in Express: the
-URL the adapter builds for `handleReport` takes `x-forwarded-proto` at face
-value, whatever `trustProxy` says, so behind a proxy that does not set it the
-handler sees an `http://` URL for a report sent over HTTPS. It changes what the
-handler logs rather than what it accepts, and the rate limit is unaffected —
-but the address it logs is worth a glance before you trust it in a log search.
+One thing worth knowing, because it is a decision this adapter makes for you:
+the URL it builds for `handleReport` takes its scheme from
+`x-forwarded-proto` **only when `trustProxy` says a proxy may speak for this
+deployment**, which is the same setting the rate limit reads. Without it the
+header is a claim by the caller and the scheme is `http` — the one scheme the
+adapter can actually see, since it has no way to read the connection's own TLS
+state. So behind a TLS-terminating proxy set `trustProxy` and the report is
+recorded as `https://`; without it, the same deployment logs `http://` and you
+know why. A chain is read at its leftmost entry, which is the scheme the
+outermost proxy saw the client use, and only `https` is believed out of the
+header — it is interpolated into a URL that `new Request` parses, so a header is
+not something to pass through. The [Fastify page](#fastify) builds its URL the
+same way, and the two are meant to answer alike.
 
 Express 5 also changed the default `query parser` to `'simple'`, so `?a[b]=1` is
 no longer a nested object unless you set `'extended'`. It does not touch a

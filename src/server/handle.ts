@@ -282,6 +282,34 @@ export function clientAddress(
   return entries[entries.length - hops] ?? connection;
 }
 
+/**
+ * The scheme the adapters put in front of the URL they build for
+ * `handleReport`, decided by the same `trustProxy` that decides the address.
+ *
+ * `x-forwarded-proto` is a claim by the caller like every other forwarding
+ * header, and reading it unconditionally is how a report sent over HTTPS ends
+ * up recorded as `http://` behind a proxy that does not set it. Without
+ * `trustProxy` the answer is therefore `http` whatever the header says: the
+ * adapters cannot see the connection's own TLS state, so `http` is the one
+ * scheme they actually know.
+ *
+ * With `trustProxy` the header is read and only two answers are believed —
+ * `https` is `https`, everything else stays `http`. It is interpolated into a
+ * URL that `new Request` parses, so a header is not something to pass through
+ * and the value never gets to choose the scheme. `hops` has no counterpart
+ * here: this header names a scheme rather than a chain of addresses, and the
+ * leftmost entry is the one the outermost proxy saw the client use, since
+ * proxies nearer the application append rather than replace.
+ */
+export function clientScheme(
+  forwarded: string | undefined,
+  trustProxy: TrustProxyOptions | undefined,
+): "http" | "https" {
+  if (!trustProxy) return "http";
+  const first = forwarded?.split(",")[0]?.trim().toLowerCase();
+  return first === "https" ? "https" : "http";
+}
+
 /** How much traffic one key may send. In memory by default, so per instance. */
 export type RateLimitOptions = {
   limit: number;

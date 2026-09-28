@@ -29,13 +29,13 @@ jobs:
       - name: The OpenAPI document lints clean
         run: npx --yes @redocly/cli@2.51.2 lint dist/openapi.json
       - run: npm run build:docs
+      # The committed dist is what a GitHub or jsDelivr install gets, with no
+      # build step of its own, so it has to be both current and complete. The
+      # script asks both questions: a diff catches what the build changed, and
+      # a `git ls-files` catches what it produced that nothing ever added —
+      # which a diff cannot see, because dist/ is in .gitignore.
       - name: dist is committed and current
-        run: |
-          if ! git diff --quiet -- dist; then
-            echo "dist/ differs from the build. Run npm run build and git add -f dist before pushing." >&2
-            git diff --stat -- dist >&2
-            exit 1
-          fi
+        run: npm run check:dist
       - run: npm pack --dry-run
 
   bundle:

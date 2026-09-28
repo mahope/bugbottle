@@ -199,9 +199,9 @@ nextjs.org, angular.dev, nuxt.com.
   eksisterende adapter. Se "Fund fra Express-iterationen": fem fund, og **to er
   nye fejlklasser for hele rækken** (den afviste forespørgsel, og stacktrace i
   svaret). 46 docs-sider (fra 45), 217 søgeposter (fra 209).
-- [ ] **19. `x-forwarded-proto` i URL'en adapteren bygger — lille rettelse i
+- [x] **19. `x-forwarded-proto` i URL'en adapteren bygger — lille rettelse i
   `src/server/express.ts`.** Fundet i Express-iterationen (punkt 5): adapteren
-  tager `x-forwarded-proto` i frifart, når den bygger den `Request` den sender
+  tog `x-forwarded-proto` i frifart, når den bygger den `Request` den sender
   videre, uanset `trustProxy` — altså læser den ét forwarding-header
   ubetinget, imens ratelimitten læser socketen med mindst samme omhu. Bag en
   proxy der ikke sætter headeren er URL'en `http://` for en rapport sendt over
@@ -214,7 +214,41 @@ nextjs.org, angular.dev, nuxt.com.
   `http://` uden den, og en diff på de to adaptere så de ikke driver fra hinanden
   igen. Lille nok til én iteration; **må ikke** trække et budget med sig — kun
   `bugbottle/server`, hvis det overhovedet flytter noget (det gør det ikke: det
-  er `handleReport`'s path, som validator-bundlen aldrig når).
+  er `handleReport`'s path, som validator-bundlen aldrig når). 28/9,
+  `ceo/trusted-proto`. **Accept holdt, med to rettelser til opgaven:** (1) testene
+  ligger i `tests/handle.test.ts` — der findes ingen `tests/server.test.ts`, og
+  det er dér begge adaptere allerede er testet; (2) `Fastify`-adapteren havde
+  **samme linje**, så rettelsen gik i begge, gennem én ny funktion
+  `clientScheme` i `src/server/handle.ts` ved siden af `clientAddress` — så
+  "samme beslutning som ratelimitten" er nu kode, ikke to linjer der ligner
+  hinanden. Målt: ingen budget flyttede sig (IIFE'erne er uændrede, fordi
+  serverkoden ikke er i dem), 893 tests grønne.
+
+- [x] **20. `dist/server/fastify.js` er aldrig blevet committet — den
+  publicerede server-entry kastede på import.** Fundet i iterationen med
+  opgave 19, som en følge af `npm run check` og ikke af research. `dist/` er
+  `.gitignore`'et og force-addet i stedet, så de fire filer
+  `fastifyHandler` skabte da den export landede (`fastify.js`, `fastify.d.ts` og
+  to maps) landede **utrackede** — mens `dist/server/index.js` lige ved siden af,
+  som *er* tracket, har importeret `./fastify.js` siden. Bevis, ikke formodning:
+  `git archive HEAD dist | tar -x` ud i en tom mappe og
+  `import('/tmp/…/dist/server/index.js')` svarer
+  `ERR_MODULE_NOT_FOUND: Cannot find module '…/dist/server/fastify.js'`. Altså:
+  **`npm install github:mahope/bugbottle` og jsDelivr — de to veje der tager det
+  committede `dist` som det er, uden et byggetrin — gav `ERR_MODULE_NOT_FOUND`
+  på `bugbottle/server`.** Ikke én export brudt, hele entry'en, og alle sinks med
+  den. Build grøn, `npm test` grøn, `git diff --quiet -- dist` grøn: en `git
+  diff` kan ikke se en fil, der aldrig blev addet, fordi `dist/` er
+  gitignore'et. **Rettet:** de fire filer er committede (208 mod 204 trackede), og
+  `scripts/check-dist.mjs` spørger det spørgsmål, en diff ikke kan: `git
+  ls-files` mod en walk af `dist/`, med `git add -f` i beskeden. Det kører som
+  sidste trin i `npm run check` og i CI's `check`-job (der nu kalder scriptet
+  i stedet for den indlejrede diff-linje), så den næste `fastifyHandler` kan
+  ikke lande samme sted. **Accept:** `npm run check` grøn, `check-dist` med
+  grønt resultat på 208 filer, og import fra et `git archive`-udtræk svarer OK.
+  Bemærk til Mads: hvis nogen har installeret fra GitHub siden 28/9 kl. 02:4x,
+  har `bugbottle/server` ikke virket for dem. **Ingen release endnu** — det er
+  en patch, og den skal med i næste version.
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -1175,6 +1209,47 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 16** (`ceo/trusted-proto`). Opgave 19 + opgave 20. Se
+  opgaverne og "Fund fra dist-iterationen" nedenfor.
+  - **En fejl af den dyreste slags, fundet ved at køre gaten og ikke ved at
+    læse kode.** `npm run check` kørte `tsc`, som emitterede
+    `dist/server/fastify.js` — og `git status` viste intet, fordi `dist/` er
+    gitignore'et og filen aldrig var blevet addet. Først da jeg ville se
+    `git diff --stat dist/` for at skrive budget-ændringerne ned, holdt jeg op:
+    `dist/server/fastify.js` var der, `dist/server/express.js` var ændret, og
+    **kun den første var et problem**. Beviset er reproducerbart og står i
+    opgave 20: et `git archive HEAD dist` ud i en tom mappe kaster
+    `ERR_MODULE_NOT_FOUND` på `import "bugbottle/server"`. Det er den
+    installationvej, `npm install github:mahope/bugbottle` og jsDelivr, der er
+    dokumenteret i README og i CLAUDE.md som grunden til at `dist/` er
+    committet overhovedet — og den har været brudt siden Fastify-iterationen i
+    nat. **Mønstret er værd at huske:** en gitignore'et mappe der holdes oppe af
+    `git add -f` er den eneste slags "committed" kode, hvor *tilføjelse* kan
+    fejle stille, og derfor er der nu et script der spørger om det hver gang.
+  - **`git diff` er ikke et fuldstændighedstjek, og det er derfor det ikke er
+    nok.** Det svarer på "er der noget ændret?" og ikke på "er der noget
+    mangler?" — to forskellige spørgsmål om to forskellige fejl, og den anden
+    er den der brød entry'en. CI's trin hed "dist is committed and current", og
+    det var præcist, hvad det testede. Nu hed trinets krop ét kalds `npm run
+    check:dist`, og navnet på spørgsmålet ligger i scriptet.
+  - **`clientScheme` er i `handle.ts`, ikke i `express.ts`.** Den skal kunne
+    svare det samme som `clientAddress`, og de to skal ikke kunne komme i
+    uoverensstemmelse senere — derfor bor de ved siden af hinanden, og derfor
+    hedder den `client*` og ikke `forwardedProto`: den *er* klientens adresse,
+    bare dens anden halvdel. Den er **ikke** eksporteret fra
+    `src/server/index.ts`, så det offentlige API er uændret: en patch ændrer
+    adfærd, hvor adfærden var en fejl, og tilføjer ikke navne.
+  - **En 500 til en reporter, som ingen havde rapporteret.** Headeren blev
+    skrevet direkte ind i den URL, `new Request` parser den, og
+    `x-forwarded-proto: javascript:alert(1)` (eller `https://evil.example`, eller
+    `%zz`) kastede i adapteren — svaret var det 500-svar, `handleReport` aldrig
+    når, fordi oversættelsen dør først. Rettelsen lukker det, fordi kun `https`
+    eller intet kommer igennem. Der er en test på præcis de fem værdier.
+  - **En ting opgaven havde skrevet om, der viste sig at være forkert:**
+    acceptkriteriet sagde `tests/server.test.ts`. Den fil findes ikke; begge
+    adaptere testes i `tests/handle.test.ts` (89 tests, nu 92). Skrevet ned, så
+    næste iteration ikke leder efter en fil, der ikke findes.
 
 - **2026-09-28, iteration 15** (`ceo/page-descriptions`). Opgave 17: en
   søgningssætning for hver side. Se opgaven.

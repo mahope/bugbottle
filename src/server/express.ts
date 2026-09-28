@@ -29,6 +29,7 @@
 
 import {
   handleReport,
+  clientScheme,
   BAD_SIGNATURE_ERROR,
   DEFAULT_MAX_BODY_BYTES,
   TOO_LARGE_ERROR,
@@ -184,7 +185,10 @@ export function expressHandler(
     void (async () => {
       const method = (req.method ?? "POST").toUpperCase();
       const host = headerValue(req.headers.host) ?? "localhost";
-      const proto = headerValue(req.headers["x-forwarded-proto"]) ?? "http";
+      // The same `trustProxy` decision the rate limit is about to make, so the
+      // URL says what was counted: without it the header is a claim and the
+      // answer is `http`, which is the scheme this adapter can actually see.
+      const proto = clientScheme(headerValue(req.headers["x-forwarded-proto"]), options.trustProxy);
       const path = req.originalUrl ?? req.url ?? "/";
       const url = `${proto}://${host}${path.startsWith("/") ? path : `/${path}`}`;
 
