@@ -383,7 +383,7 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   rammer de fem søgeord; `npm view bugbottle description` efter build, og en
   test der siger at den ikke bliver klippet af npm's egen grænse. Mål:
   downloads 5/10 mod 412.
-  **28/9 15:2x, `ceo/npm-search-terms`, `14f0163`.** Se "Fund fra
+  **28/9 15:2x, `ceo/npm-search-terms`, `14f0163` (merge `731b707`).** Se "Fund fra
   npm-search-iterationen" nedenfor — den **angreb opgavens egen
   forudsætning** og den negative halvdel er den dyre: **README'en er ikke i
   npm's søgeindeks**, så halvdelen af rettelsen i opgaven ("bedre `description`
@@ -2871,7 +2871,8 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
 
-- **2026-09-28, iteration 28** (`ceo/npm-search-terms`, `14f0163`). Opgave 38.
+- **2026-09-28, iteration 28** (`ceo/npm-search-terms`, `14f0163`, merge
+  `731b707`). Opgave 38.
   Se "Fund fra npm-search-iterationen" (28/9 15:1x).
   - **README'en er ikke i npm's søgeindeks.** `checkoutEveryNms` står elleve
     gange i vores README, og søgningen på ordet returnerer **ét** resultat som
@@ -3691,7 +3692,8 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Deploy-noter
 
-- **Ingen deploy-note for `ceo/npm-search-terms` (opgave 38, `14f0163`).**
+- **Ingen deploy-note for `ceo/npm-search-terms` (opgave 38, `14f0163`, merge
+  `731b707`).**
   `package.json#description` og `#keywords` læses af **npm**, ikke af
   bugbottle.dev: ingen side renderer dem, `scripts/build-docs.mjs` læser kun
   `version` af `package.json`, og `dist/` viste at være uændret (IIFE'erne
