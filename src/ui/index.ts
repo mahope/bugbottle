@@ -21,7 +21,7 @@ import {
   type ScreenshotRenderer,
 } from "../capture.ts";
 import { pickElement } from "../element-picker.ts";
-import { en, type Locale, type Messages, type UiTexts } from "../locales.ts";
+import { en, sentLine, type Locale, type Messages, type UiTexts } from "../locales.ts";
 import type { initNetwork, NetworkOptions } from "../network.ts";
 import type { initPerf, PerfOptions } from "../perf.ts";
 import {
@@ -565,7 +565,12 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     intro, typesRow, messageLabel, textarea, contactLabel, contactInput, contactNote,
     shotRow, shotNote, preview, editBtn, editor,
     pickBtn, list, status, sendBtn);
-  const thanksText = el("p");
+  // `role="status"` on the sentence rather than the container, because the
+  // container also holds the close button and a live region that announces a
+  // control is noise. It is its own live region because `status` lives inside
+  // the form, which is hidden the moment the report is sent — so before this,
+  // a confirmation was shown to sighted reporters and read to none.
+  const thanksText = el("p", { role: "status", "aria-live": "polite" });
   const thanksClose = el("button", { class: "send", type: "button" });
   const thanks = el("div", { class: "thanks", hidden: "" }, thanksText, thanksClose);
   // `aria-modal` is true because focus really is trapped while the panel is
@@ -861,7 +866,10 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         sign: options.sign,
       });
       resetForm();
-      thanksText.textContent = ui.thanks;
+      // The reference the server answered with, in the reporter's own
+      // language, so the confirmation is something they can quote. An
+      // endpoint that answers no id gets the plain sentence.
+      thanksText.textContent = id ? sentLine(msg, id) : ui.thanks;
       form.hidden = true;
       thanks.hidden = false;
       thanksClose.focus();

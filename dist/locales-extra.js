@@ -29,6 +29,7 @@ export const it = {
         screenshotFailed: "Non è stato possibile creare l'immagine — puoi inviare lo stesso senza",
         sendFailed: "Non è stato possibile inviare la segnalazione",
         sent: "Grazie — la segnalazione è in viaggio",
+        sentWithId: "Grazie — la segnalazione è in viaggio. Riferimento: {id}",
         queued: "Salvata — verrà inviata quando tornerai online",
     },
     ui: {
@@ -79,6 +80,7 @@ export const pl = {
         screenshotFailed: "Nie udało się zrobić zrzutu — możesz wysłać bez niego",
         sendFailed: "Nie udało się wysłać zgłoszenia",
         sent: "Dziękujemy — zgłoszenie jest w drodze",
+        sentWithId: "Dziękujemy — zgłoszenie jest w drodze. Numer zgłoszenia: {id}",
         queued: "Zapisano — wyślemy je, gdy wrócisz do sieci",
     },
     ui: {
@@ -129,6 +131,7 @@ export const pt = {
         screenshotFailed: "Não foi possível capturar a imagem — pode enviar sem ela",
         sendFailed: "Não foi possível enviar o relatório",
         sent: "Obrigado — o relatório está a caminho",
+        sentWithId: "Obrigado — o relatório está a caminho. Referência: {id}",
         queued: "Guardado — será enviado quando voltar a estar online",
     },
     ui: {
@@ -179,6 +182,7 @@ export const fi = {
         screenshotFailed: "Kuvaa ei voitu ottaa — voit lähettää silti ilman sitä",
         sendFailed: "Raporttia ei voitu lähettää",
         sent: "Kiitos — raportti on matkalla",
+        sentWithId: "Kiitos — raportti on matkalla. Viite: {id}",
         queued: "Tallennettu — se lähetetään, kun olet taas verkossa",
     },
     ui: {
@@ -229,6 +233,7 @@ export const uk = {
         screenshotFailed: "Не вдалося зробити знімок — ви можете надіслати без нього",
         sendFailed: "Не вдалося надіслати звіт",
         sent: "Дякуємо — звіт уже в дорозі",
+        sentWithId: "Дякуємо — звіт уже в дорозі. Номер звіту: {id}",
         queued: "Збережено — надішлемо, коли ви знову будете онлайн",
     },
     ui: {

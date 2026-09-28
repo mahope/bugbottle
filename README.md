@@ -5333,8 +5333,9 @@ changes with every version, so it has to be updated with the version.
 
 ## Languages and branding
 
-Every string a reporter sees lives in a `Locale`: six status `messages` and
-the widget's `ui` labels. `bugbottle/locales` ships English, Danish, Swedish,
+Every string a reporter sees lives in a `Locale`: seven status `messages` —
+the last of them optional, for the report's reference — and the widget's `ui`
+labels. `bugbottle/locales` ships English, Danish, Swedish,
 Norwegian, German, Dutch, French and Spanish, and `resolveLocale(navigator.language)`
 picks one. Override any label, or write a locale of your own — the type tells
 you what is required:
@@ -5350,6 +5351,33 @@ mountBugbottle({
   texts: { title: "Hjælp os med at gøre det bedre", trigger: "Fejl?" },
   messages: { sent: "Tak — vi kigger på det i morgen tidlig" },
 });
+```
+
+### The report's reference
+
+`handleReport` answers with the id it stored the report under, and both the
+panel and `useBugReport` put it in the confirmation:
+
+> Thank you — the report is on its way. Reference: B-4711
+
+A reporter who is only told the report is on its way has nothing to quote to
+the person who will look for it. The sentence is the locale's
+`messages.sentWithId`, with `{id}` where the reference goes, and the key is
+**optional**: a locale without one is thanked with `sent` instead, so a
+hand-written `Messages` keeps working. So is an endpoint that answers no `id` —
+and an id longer than a reference could be, which is left out rather than shown
+clipped, because half a reference finds nothing and still reads as though the
+real one is in hand.
+
+`sentLine(messages, id)` builds that sentence. It is the one place that knows
+what `{id}` means, and the panel and the four framework bindings all share it,
+so the hook and the panel say the same thing in the same language.
+
+```ts
+import { sentLine } from "bugbottle/locales";
+
+sentLine(da.messages, "B-4711");
+// → "Tak — rapporten er på vej. Rapport nummer: B-4711"
 ```
 
 ### Five more languages, imported on purpose

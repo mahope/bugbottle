@@ -190,6 +190,21 @@ issues, the same row built by hand in the Jira document, and a
 first field in Slack and Discord. `scrubReport(report, { contact: true })`
 takes the line out whole for the teams that keep reports somewhere public.
 
+**1.1** — the report's reference in the confirmation. `handleReport` answers
+with the id it stored the report under and the panel read it into `status.id`
+and then dropped it, so the reporter was told the report was on its way and had
+nothing to quote. Both the panel and the four framework bindings now say "Thank
+you — the report is on its way. Reference: B-4711" in the reporter's own
+language, from the new optional `messages.sentWithId` with `{id}` in it;
+`sentLine(messages, id)` in `bugbottle/locales` is the one place that knows
+what `{id}` means, which is how the panel shares a sentence with the adapters
+without importing the state machine. A locale without the key is thanked with
+`sent`, so a hand-written `Messages` keeps working, and an id too long to be a
+reference is left out rather than shown clipped. It came with a fix: the
+thank-you sentence is now its own `role="status"`, because the status line it
+used to share lives inside the form that is hidden the moment a report is sent,
+so the confirmation reached sighted reporters and no screen reader.
+
 **0.8** — `rateLimit.rateLimitStore` and `dedupe.dedupeStore` beside
 `signature.replayStore`, so all three things `handleReport` remembers between
 requests are seams rather than a `Map` in one process, and a fleet behind a

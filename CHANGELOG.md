@@ -10,6 +10,31 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **The confirmation names the report the server stored.** `handleReport`
+  answers with the id it gave the report, and until now the panel read it, put
+  it in `status.id` and then dropped it on the floor: a reporter was told the
+  report was on its way and given nothing to quote. The panel and all four
+  framework bindings now say "Thank you — the report is on its way. Reference:
+  B-4711", in the reporter's own language. The sentence is the locale's new
+  `messages.sentWithId` and the key is **optional**, so a hand-written
+  `Messages` from before 1.1 keeps compiling and is thanked with `sent`
+  instead. `sentLine(messages, id)` is exported from `bugbottle/locales` and is
+  the one place that knows what `{id}` means — the panel, which keeps its own
+  state, shares it with the four adapters rather than importing the state
+  machine to get one sentence.
+
+### Fixed
+
+- **The panel's confirmation was never announced.** The status line the panel
+  writes to is inside the form, and the form is hidden the moment the report
+  is sent, so the thank-you sentence reached sighted reporters and no screen
+  reader. The sentence carries its own `role="status"` now, which is also what
+  makes the new reference audible.
+- **A null byte in a report id is dropped rather than read out**, and an id too
+  long to be a reference is left out instead of being shown clipped. The id is
+  the response body of somebody's endpoint, so it is untrusted text that was
+  about to be spoken.
+
 - **The README's opening now carries a whole report, both halves of it.** The
   opening is what a reader on npmjs.com and a visitor to `/docs/install/` sees
   instead of reading the rest, and its first line of code was
@@ -3010,7 +3035,8 @@ First cut. Extracted from the feedback bubble in two production apps.
   error type.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
-  picker included), `bugbottle/server` 0.8 kB.
+  picker included), `bugbottle/server` 0.8 kB.
+
 ### Fixed
 
  Changelog
@@ -5433,4 +5459,5 @@ First cut. Extracted from the feedback bubble in two production apps.
   error type.
 - Sizes measured with esbuild, minified and gzipped, without `html-to-image`:
   `bugbottle` core 0.6 kB, `bugbottle/react` 3.2 kB (React external, element
-  picker included), `bugbottle/server` 0.8 kB.
+  picker included), `bugbottle/server` 0.8 kB.
+

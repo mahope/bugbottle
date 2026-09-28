@@ -16,6 +16,17 @@ export type Messages = {
     screenshotFailed: string;
     sendFailed: string;
     sent: string;
+    /**
+     * The same line as `sent`, carrying the reference the server gave the
+     * report. `{id}` is where the id goes.
+     *
+     * Optional so that a hand-written `Messages` — a consumer's own three
+     * strings — keeps compiling after 1.0 froze the shape, and because an
+     * endpoint that answers no `id` has no reference to show. Every bundled
+     * locale defines it, and `statusText` falls back to `sent` when one does
+     * not.
+     */
+    sentWithId?: string;
     /** After a failed send that an offline queue caught. See `bugbottle/queue`. */
     queued: string;
 };
@@ -116,6 +127,22 @@ export type Locale = {
  * to them without carrying the widget labels of every locale in its bundle.
  */
 export declare const enMessages: Messages;
+/**
+ * The line a sent report is confirmed with, carrying the reference the server
+ * gave it where the locale has a `{id}` to put.
+ *
+ * It lives beside the strings rather than in the state machine, because this
+ * is the one place that knows what `{id}` means — and because the panel, which
+ * keeps its own state, has to say the same sentence as the hook without
+ * importing a state machine to get it.
+ *
+ * The id is the response body of somebody's endpoint, so it is whatever that
+ * endpoint chose to send. A null byte is dropped rather than read out, and an
+ * id too long to be a reference is left out rather than shown clipped: half a
+ * reference finds nothing and still reads as though the real one is in hand.
+ * So does a locale with no `sentWithId`, which is why that key is optional.
+ */
+export declare function sentLine(messages: Messages, id?: string): string;
 export declare const en: Locale;
 export declare const da: Locale;
 export declare const sv: Locale;

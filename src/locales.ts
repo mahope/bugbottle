@@ -17,6 +17,17 @@ export type Messages = {
   screenshotFailed: string;
   sendFailed: string;
   sent: string;
+  /**
+   * The same line as `sent`, carrying the reference the server gave the
+   * report. `{id}` is where the id goes.
+   *
+   * Optional so that a hand-written `Messages` — a consumer's own three
+   * strings — keeps compiling after 1.0 froze the shape, and because an
+   * endpoint that answers no `id` has no reference to show. Every bundled
+   * locale defines it, and `statusText` falls back to `sent` when one does
+   * not.
+   */
+  sentWithId?: string;
   /** After a failed send that an offline queue caught. See `bugbottle/queue`. */
   queued: string;
 };
@@ -122,8 +133,37 @@ export const enMessages: Messages = {
   screenshotFailed: "The picture could not be taken — you can still send without it",
   sendFailed: "The report could not be sent",
   sent: "Thank you — the report is on its way",
+  sentWithId: "Thank you — the report is on its way. Reference: {id}",
   queued: "Saved — it will be sent when you are back online",
 };
+
+/**
+ * The longest reference a person could read out to a support desk and still
+ * be found by. Longer than this and it is a body, not a reference.
+ */
+const MAX_REFERENCE_LENGTH = 64;
+
+/**
+ * The line a sent report is confirmed with, carrying the reference the server
+ * gave it where the locale has a `{id}` to put.
+ *
+ * It lives beside the strings rather than in the state machine, because this
+ * is the one place that knows what `{id}` means — and because the panel, which
+ * keeps its own state, has to say the same sentence as the hook without
+ * importing a state machine to get it.
+ *
+ * The id is the response body of somebody's endpoint, so it is whatever that
+ * endpoint chose to send. A null byte is dropped rather than read out, and an
+ * id too long to be a reference is left out rather than shown clipped: half a
+ * reference finds nothing and still reads as though the real one is in hand.
+ * So does a locale with no `sentWithId`, which is why that key is optional.
+ */
+export function sentLine(messages: Messages, id?: string): string {
+  if (typeof id !== "string" || !messages.sentWithId) return messages.sent;
+  const clean = id.replaceAll("\u0000", "").trim();
+  if (clean.length === 0 || clean.length > MAX_REFERENCE_LENGTH) return messages.sent;
+  return messages.sentWithId.replace("{id}", clean);
+}
 
 export const en: Locale = {
   code: "en",
@@ -179,6 +219,7 @@ export const da: Locale = {
     screenshotFailed: "Billedet kunne ikke tages — du kan stadig sende uden",
     sendFailed: "Rapporten kunne ikke sendes",
     sent: "Tak — rapporten er på vej",
+    sentWithId: "Tak — rapporten er på vej. Rapport nummer: {id}",
     queued: "Gemt — den bliver sendt, når du er online igen",
   },
   ui: {
@@ -232,6 +273,7 @@ export const sv: Locale = {
     screenshotFailed: "Bilden kunde inte tas — du kan ändå skicka utan",
     sendFailed: "Rapporten kunde inte skickas",
     sent: "Tack — rapporten är på väg",
+    sentWithId: "Tack — rapporten är på väg. Rapportnummer: {id}",
     queued: "Sparad — den skickas när du är online igen",
   },
   ui: {
@@ -285,6 +327,7 @@ export const nb: Locale = {
     screenshotFailed: "Bildet kunne ikke tas — du kan fortsatt sende uten",
     sendFailed: "Rapporten kunne ikke sendes",
     sent: "Takk — rapporten er på vei",
+    sentWithId: "Takk — rapporten er på vei. Rapportnummer: {id}",
     queued: "Lagret — den blir sendt når du er tilkoblet igjen",
   },
   ui: {
@@ -338,6 +381,7 @@ export const de: Locale = {
     screenshotFailed: "Das Bild konnte nicht aufgenommen werden — Senden ohne Bild ist möglich",
     sendFailed: "Die Meldung konnte nicht gesendet werden",
     sent: "Danke — die Meldung ist unterwegs",
+    sentWithId: "Danke — die Meldung ist unterwegs. Referenz: {id}",
     queued: "Gespeichert — sie wird gesendet, sobald Sie wieder online sind",
   },
   ui: {
@@ -392,6 +436,7 @@ export const nl: Locale = {
     screenshotFailed: "De afbeelding kon niet worden gemaakt — je kunt zonder verzenden",
     sendFailed: "De melding kon niet worden verzonden",
     sent: "Bedankt — de melding is onderweg",
+    sentWithId: "Bedankt — de melding is onderweg. Referentie: {id}",
     queued: "Opgeslagen — de melding wordt verzonden zodra u weer online bent",
   },
   ui: {
@@ -445,6 +490,7 @@ export const fr: Locale = {
     screenshotFailed: "L'image n'a pas pu être prise — vous pouvez envoyer sans",
     sendFailed: "Le signalement n'a pas pu être envoyé",
     sent: "Merci — le signalement est en route",
+    sentWithId: "Merci — le signalement est en route. Référence : {id}",
     queued: "Enregistré — il sera envoyé dès votre retour en ligne",
   },
   ui: {
@@ -499,6 +545,7 @@ export const es: Locale = {
     screenshotFailed: "No se pudo tomar la imagen — puedes enviar sin ella",
     sendFailed: "No se pudo enviar el informe",
     sent: "Gracias — el informe está en camino",
+    sentWithId: "Gracias — el informe está en camino. Referencia: {id}",
     queued: "Guardado — se enviará cuando vuelvas a estar en línea",
   },
   ui: {

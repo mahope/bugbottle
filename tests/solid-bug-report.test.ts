@@ -152,7 +152,8 @@ test("a successful submit reports the id, clears the form and calls onSent", asy
 
   assert.equal(sent, true);
   assert.deepEqual(form.status(), { kind: "sent", id: "rep_42" });
-  assert.equal(form.statusMessage(), enMessages.sent);
+  // The reference is in the sentence, not only in the state.
+  assert.equal(form.statusMessage(), `${enMessages.sent}. Reference: rep_42`);
   assert.equal(form.message(), "");
   assert.deepEqual(seenIds, ["rep_42"]);
 
@@ -380,7 +381,8 @@ test("a bundled locale reaches the reporter", async () => {
 
   form.setMessage("Knappen gemmer ikke");
   await form.submit();
-  assert.equal(form.statusMessage(), da.messages.sent);
+  // The Danish sentence with the reference the server answered with.
+  assert.equal(form.statusMessage(), `${da.messages.sent}. Rapport nummer: rep_7`);
   fetchStub.restore();
   unmount();
 });

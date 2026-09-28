@@ -16,13 +16,17 @@ import { captureScreenshot, ScreenshotTooLargeError, } from "./capture.js";
 import { pickElement as pickElementFromPage } from "./element-picker.js";
 import { MAX_ELEMENTS } from "./report-core.js";
 import { buildReport, sendReport, SendFailedError, } from "./send.js";
-import { enMessages } from "./locales.js";
+import { enMessages, sentLine } from "./locales.js";
 const FALLBACK_MESSAGES = enMessages;
 const bugsOnly = (t) => t === "bug";
 /**
  * The one line of the form that is not in the state: a sent or queued report
  * is announced with the reporter's own language, and an error carries the
  * message it failed with.
+ *
+ * A sent report the server gave an id to is announced *with* it, so the
+ * reporter has something to quote — see `sentLine` in `bugbottle/locales` for
+ * why that sentence is built there rather than here.
  */
 export function statusText(status, messages) {
     if (status.kind === "error")
@@ -30,7 +34,7 @@ export function statusText(status, messages) {
     if (status.kind !== "sent" && status.kind !== "queued")
         return "";
     const msg = { ...FALLBACK_MESSAGES, ...messages };
-    return status.kind === "sent" ? msg.sent : msg.queued;
+    return status.kind === "queued" ? msg.queued : sentLine(msg, status.id);
 }
 export function createReportState(options) {
     let opts = options;

@@ -748,7 +748,7 @@ needs a major version, and adding an entry point needs a minor one.
 
 ### `bugbottle/locales`
 
-15 exports.
+16 exports.
 
 | Name | Kind | Source |
 |---|---|---|
@@ -765,6 +765,7 @@ needs a major version, and adding an entry point needs a minor one.
 | `nb` | const | `src/locales.ts` |
 | `nl` | const | `src/locales.ts` |
 | `resolveLocale` | function | `src/locales.ts` |
+| `sentLine` | function | `src/locales.ts` |
 | `sv` | const | `src/locales.ts` |
 | `UiTexts` | type | `src/locales.ts` |
 

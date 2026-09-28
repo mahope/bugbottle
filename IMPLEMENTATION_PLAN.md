@@ -432,6 +432,19 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   npm downloads 412/måned, 191/uge, ★2.** Sammenlign 5/10 og 5/11. **Bemærk:**
   hele effekten ligger bag en release — før `npm publish` er der ingen knap at
   tælle, kun et felt på GitHub.
+- [x] **42. Panelet læser rapport-id'et og smider det væk — en reporter får
+  intet at citere.** 28/9 19:0x, `ceo/report-reference`. Datagrund: ikke
+  trafik, men ❓-punktet "flere brugere og **mere tillid**": serveren svarer
+  `id`, `sendReport` læser det, `status` har `{ kind: "sent"; id? }`, `onSent`
+  får det — og panelet skriver `ui.thanks` og glemmer resten. Se Fund 1–5
+  nedenfor. **Accept:** bekræftelsen siger referencen i reporterens eget sprog
+  (`messages.sentWithId`, valgfri nøgle så 1.0's frosne form stadig kompilerer),
+  panelet **og** alle fire adapters siger den samme sætning gennem ét sted,
+  en reference der er for lang til at være en reference vises **ikke** klippet,
+  en null byte fjernes, og tak-skærmens sætning er en live-region. Mål:
+  ingen trafikbaseline ændres (Plausible 1 besøgende/28 d pr. 28/9, npm 210
+  downloads/uge, ★2) — effekten er tillid, og den første målbare ting bliver
+  `onSent`-kald i en app der logger id'et.
 - [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
   Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
   måles.
@@ -446,6 +459,77 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   nævner dem, og vagten er **bevist rød** mod den oprindelige Dockerfile.
   Mål: ingen trafikbaseline ændres (den er 0/1 pr. 28/9); effekten er
   layout-shift på `/docs/install/`, som Lighthouse-gulvet i CLAUDE.md er om.
+
+### Fund fra rapport-reference-iterationen (28/9 19:0x) — id'et var ikke
+### tabt, det var brugt og lagt væk
+
+**Fund 1 — røret var hele vejen; kun den sidste led manglede.** `handleReport`
+svarer `{"id": …}`, `sendReport` læser `body.id` og type-checker det til
+`string | undefined`, `BugReportStatus` har `{ kind: "sent"; id? }`,
+`onSent(id)` kaldes — og `statusText` kigger på `status.kind` og ingenting
+andet. Altså var der ingen fejl at finde: der manglede én linje, der bruger en
+værdi, der allerede var der. **Det er den billigste art tillid, der findes, og
+den lå i en ubrugt variabel.**
+
+**Fund 2 — og den lå i to steder, ikke i ét.** Ikke bare `statusText`: panelet
+har sin egen tilstand og skriver `thanksText.textContent = ui.thanks` med
+`onSent?.(id)` på næste linje. Så en rettelse kun i `statusText` ville givet
+hooks React/Vue/Svelte/Solid referencen og **ikke** panelet — og panelet er den
+flade de fleste læser kender. Derfor måtte de to dele én funktion, og derfor
+blev den lagt i `src/locales.ts` og ikke i `src/report-state.ts`: panelen
+skal ikke trække en state-maskine ind i `bugbottle/ui` for at få **én**
+sætning. Målt: `bugbottle/ui` har 290 bytes gzippet til budget (11 486 mod
+11 776), og `report-state.ts` er selve maskinen. *(Bemærk: jeg målte kun de to
+IIFE-bygges egne tal med `scripts/build-iife.mjs`; de fire client-entry-budgets
+er ikke genmålt med pakket-tarball-opskriften, så dem må CI stå for.)*
+
+**Fund 3 — tak-skærmen blev aldrig sagt højt. Det er en reel a11y-fejl, og den
+er ældre end denne opgave.** `status`-linjen har `role="status"`, men den
+**ligger inde i `form`**, og `form.hidden = true` sættes i samme øjeblik
+rapporten er sendt. Så den eneste bekræftelse, en reporter får, lå i et
+skjult element: en synende læser læste "Tak — rapporten er på vej", en
+screenreader-læser hørte intet (fokus flyttede til "Luk"). Ny fundet ved at
+læse den kode, jeg ville ændre — ikke ved en fejlrapport. Sætningen har nu
+sin egen `role="status"`, og det er også det, der gør referencen hørbar. Ville
+jeg bare have vist referencen, ville den være vist og for lydløs.
+
+**Fund 4 — `{id}` er tekst fra en fjendtlig server, og den skal *læses op*.**
+Id'et er `body.id` fra det endpoint, applikationen selv har valgt, og det ender
+i en `role="status"`-region, som en skærmlæser læser tegn for tegn. Derfor:
+null byte droppes (`"rep\u0000_42"` → `rep_42`), og et id længere end 64 tegn
+**vises slet ikke** frem for klippet — en halv reference finder intet og læses
+alligevel som om den rigtige lå i hånden. Samme mål som `MAX_MESSAGE_LENGTH`
+havde af en anden grund. Testene dækker begge.
+
+**Fund 5 — nøglen må være valgfri, ellers er 1.0's løfte brudt.** En
+*obligatorisk* nøgle i `Messages` ville være en breaking change for alle, der
+skriver deres eget `Messages`-objekt, og det er en major. `sentWithId?:` er
+det ikke, og en håndlavet locale uden den takkes med `sent` — altså præcis
+dagens adfærd. Alle **trettens** egne sprog definerer den alligevel, og
+`tests/locales.test.ts`'s paritetstest (samme nøglesæt som engelsk i alle
+tretten) er det, der holder dem til det.
+
+**Fund 6 — seks tests holdt den gamle sætning, og de har alle ret.** De fire
+adapters + `use-bug-report` + Vue/Svelte/Solid-kopierne hævdede
+`…on its way` på en streng, der *havde* et id. De blev ikke svækket: de siger
+nu den fulde sætning med referencen, for det er den adfærd der er rigtig. Fire
+nye tests i `tests/ui-reference.test.ts` (referencen vises, intet id giver den
+almindelige sætning, dansk forbliver dansk, sætningen er en live-region) og
+fire i `tests/locales.test.ts`.
+
+**Målt:** `dist/bugbottle.js` **24 895** gzippet (fra 24 596, +299) mod budget
+25 088, `dist/bugbottle.slim.js` **21 324** (fra 21 042, +282) mod 21 504. Kun
+193 og 180 bytes tilbage — de tretten sætninger er den pris, og den er ikke
+gratis. **Ingen budget er flyttet.**
+
+**VERIFICÉR DEPLOY: rapport-referencen i tak-skærmen `ceo/report-reference`
+28/9 19:0x.** Accepter mod indhold på `https://bugbottle.dev/docs/install/`:
+scriptet fra `dist/bugbottle.js` skal sætte tak-teksten til
+*"Thank you — the report is on its way. Reference: …"* når svaret bærer et
+`id`, og til *"Thank you for the report"* (`ui.thanks`) når det ikke gør.
+Biblioteket ligger i `dist/`, som er committet, så den bliver live med sitet —
+men `README`/`CHANGELOG` er de i npm-tarballet, så **npm-siden afhænger ikke
+af deployet**.
 
 ### Fund fra deploy-verifikations-iterationen (28/9 18:0x–18:2x) — den samme
 ### fejl en tredje gang, og den eneste der så ud som en *succes*
@@ -3012,15 +3096,20 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
   retningen "Buge" / "Trygg" / "Skærg" — noget der ikke bare hedder "Pro",
   fordi bugbottle ikke er noget man *proficerer* på. Skal jeg skrive tre
   konkrete navne med domænetilgængelighed og prispositionering?
-- **Panelet skal vise rapport-id'et.** Fund 2 ovenfor: serveren svarer det, der
-  er plads til det i `status.id`, og panelet bruger det ikke. En synlig
-  reference ("Rapport B-4711") er præcis den slags tillid, en virksomhedskunde
-  efterspørger, og det er en ny streng i alle otte sprog — måske 100-200 bytes
-  på `bugbottle/ui` og på begge IIFE'er mod budgetterne 11 776 / 25 088 /
-  21 504. Eller er det bedre som en **option** (`showReportId`), der kun koster
-  noget for dem der slår den til? Det er en minor, ikke en patch, fordi det er
-  et nyt mount-option. Skal jeg bygge det, eller lade applikationen selv skrive
-  id'et i sin egen bekræftelse?
+- ✅ **Panelet viste rapport-id'et ikke — nu gør det, og uden en option.**
+  Bygget 28/9 19:0x som opgave 42. **Besvaret mit eget spørgsmål: altid, ikke
+  som `showReportId`.** Tre grunde, målt og ikke antaget: (1) det er en
+  `<p>`-tekst der kun får indhold, når serveren svarede et id, så den koster
+  *én* streng pr. sprog og nul logik til en app der slår den fra — en option
+  ville være en boolean i begge script-tag-bygges, et nyt `data-*`-attribut og
+  et nyt mount-option i den frosne 1.0-API-tabel for at skjule det, der er det
+  rigtige som standard; (2) nøglen er **valgfri** i `Messages`, så ingen der
+  skriver sit eget objekt brydes, og en håndlavet locale uden den takkes med
+  `sent` som i dag; (3) målt: de to IIFE-bygges steg 299 og 282 bytes mod
+  budgetter med 193 og 180 tilbage — det er den samlede pris, og den er ikke
+  større af et flag. **Næste skridt er ikke mere kode** men at se om
+  `onSent`-kald i en rigtig app bliver læst. *(`errorBoundary`-punktet nedenfor
+  er uændret og stadig et spørgsmål.)*
 - **Stripe.** Der er ingen `docs/stripe-kontrakt.md` i repoet, og vi sælger
   intet. **Delvist besvaret 28/9:** `.github/FUNDING.yml` og `/support/` findes nu,
   bygget på det ene betalingslink missionen oplyser
@@ -4556,8 +4645,27 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   Branchen indeholder samlet opgave 29, 30, 31, 32 og 33, så **én**
   `git merge --no-ff ceo/readme-first-report` tager dem alle fem.
 
-- **VERIFICÉR DEPLOY: de syv absolute README-links + navparagraphen `b12b123`
-  28/9 15:5x.** Accepter mod **indhold**, ikke mod status: (1)
+- ✅ **DEPLOY OK 2026-09-28 19:1x, `b12b123`.** Verificeret mod **indhold** og
+  med en måling der dækker hele fejlklassen i stedet for fire stikprøver: jeg
+  hentede **alle 60** URL'er i sitemap'en og ledte på hver side efter et
+  relativt link til sig selv, som ikke er sidens egen navigation — altså
+  præcis den lækage rettelsen lukker. **Tre fund, alle falske**, og de er nu
+  skrevet ned så næste iteration ikke jagter dem igen: `privacy-checklist`
+  har to (`<nav class="lang">` og footersprog-linket, begge med
+  `aria-current="page"`), og `/docs/` har én (site-nav'ets "Docs"-knap). Resten
+  er **nul** — rettelsen er altså live på hele sitet, ikke på de fire sider
+  noten nævnte. `/docs/svelte/` har de to absolute krydslinks fra SvelteKit-
+  og TanStack-Query-siderne, `/docs/install/` har **tre** absolute
+  (`canonical`, `hreflang`, `og:url`) og nul i kroppen, og teksten "full
+  reference" er væk. **Og en fejl i noten selv:** de to anchors
+  (`one-script-tag/#in-a-framework-application` og
+  `opening-it-without-a-button/#shake-to-report`) blev bedt verificeret *på
+  deres egne sider*, men rettelsen lever i README'en, og de sider har ingen sådan
+  krydsreference — 0 relative **og** 0 absolute, altså rigtigt. At kræve en
+  måling på den side, hvor ændringen ikke bor, er det tredje eksempel i dag på
+  en acceptkriterie der ikke passer på den kode, den skulle vogte.
+- ~~**VERIFICÉR DEPLOY: de syv absolute README-links + navparagraphen `b12b123`
+  28/9 15:5x.**~~ Accepter mod **indhold**, ikke mod status: (1)
   `https://bugbottle.dev/docs/install/` skal **ikke** have et link til sig selv
   i kroppen — de tre forekomster af `/docs/install/` i HTML'en skal alle ligge
   i `<head>` (`canonical`, `hreflang`, `og:url`), og teksten "full reference"

@@ -241,7 +241,12 @@ test("a successful submit reports the id, clears the form and calls onSent", asy
 
   assert.equal(sent, true);
   assert.deepEqual(result.current.status, { kind: "sent", id: "rep_42" });
-  assert.equal(result.current.statusMessage, enMessages.sent);
+  // The reference is in the sentence, not only in the state: a reporter who
+  // sees "on its way" and no id has nothing to quote to a support desk.
+  assert.equal(
+    result.current.statusMessage,
+    `${enMessages.sent}. Reference: rep_42`,
+  );
   assert.equal(result.current.message, "");
   assert.deepEqual(seenIds, ["rep_42"]);
 

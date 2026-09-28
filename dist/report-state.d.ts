@@ -152,6 +152,10 @@ export type ReportStateStore = {
  * The one line of the form that is not in the state: a sent or queued report
  * is announced with the reporter's own language, and an error carries the
  * message it failed with.
+ *
+ * A sent report the server gave an id to is announced *with* it, so the
+ * reporter has something to quote — see `sentLine` in `bugbottle/locales` for
+ * why that sentence is built there rather than here.
  */
 export declare function statusText(status: BugReportStatus, messages?: Partial<Messages>): string;
 export declare function createReportState(options: UseBugReportOptions): ReportStateStore;
