@@ -45,6 +45,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { protectAtIn } from "./protect-at.mjs";
 import { Marked } from "marked";
 import {
   MAX_DESCRIPTION_CHARS,
@@ -793,6 +794,7 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
+
 /* A table wider than its column scrolls inside a wrapper; axe (and a keyboard
    user) require such a region to be focusable, so the wrapper carries a
    tabindex and a name. Applied to every Marked instance as a post-process. */
@@ -1537,7 +1539,7 @@ async function main() {
 
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
-  await writeFile(join(outDir, "index.html"), indexHtml(pages), "utf8");
+  await writeFile(join(outDir, "index.html"), protectAtIn(indexHtml(pages)), "utf8");
 
   /* The search index, written beside the pages it points into. One entry per
      page and one per heading, in the order of the sidebar, so results that
@@ -1553,7 +1555,11 @@ async function main() {
 
   for (const page of pages) {
     await mkdir(join(outDir, page.slug), { recursive: true });
-    await writeFile(join(outDir, page.slug, "index.html"), pageHtml(page, pages), "utf8");
+    await writeFile(
+      join(outDir, page.slug, "index.html"),
+      protectAtIn(pageHtml(page, pages)),
+      "utf8",
+    );
     searchIndex.push(...searchEntries(page));
   }
 
@@ -1628,7 +1634,7 @@ async function main() {
     const dir = join(root, "site", entry.out);
     await rm(dir, { recursive: true, force: true });
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, "index.html"), standaloneHtml(page), "utf8");
+    await writeFile(join(dir, "index.html"), protectAtIn(standaloneHtml(page)), "utf8");
     if (entry.indexed !== false) {
       searchIndex.push(...searchEntries({ url: entry.url, title: entry.heading, body }));
     }
@@ -1697,7 +1703,7 @@ async function main() {
     const dir = join(root, "site", CHANGELOG.out);
     await rm(dir, { recursive: true, force: true });
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, "index.html"), standaloneHtml(page), "utf8");
+    await writeFile(join(dir, "index.html"), protectAtIn(standaloneHtml(page)), "utf8");
 
     /* Indexed by release, and each release by its own summary rather than by
        everything under it. The changelog says of every feature what the

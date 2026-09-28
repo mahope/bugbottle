@@ -8,6 +8,27 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Fixed
+
+- **Every script tag the site publishes was cut off at the `@` by Cloudflare.**
+  bugbottle.dev runs with email obfuscation on, and `bugbottle@1.0.1` reads as
+  an address, so the edge rewrote every jsDelivr URL the documentation and the
+  landing pages print into a `/cdn-cgi/l/email-protection` link — with the
+  sample's `src` ending at `.../npm/` and an anchor spliced into the middle of
+  the code. A reader who copied it got a script tag that cannot load, on the
+  one page whose whole job is to be copied from. Measured on the live site 28/9:
+  two hits on `/`, two on `/da/`, one on `/docs/install/`. HTML we serve now
+  writes the character as `&#64;`, which a browser decodes to `@` before it
+  reads the attribute and before the text is copied, so nothing visible changes
+  and there is no address left to rewrite. The README keeps a literal `@`,
+  because npm and GitHub render it themselves and would print the entity.
+- **`/da/kom-i-gang/` pinned `bugbottle@0.9.0`.** Two releases and a whole major
+  behind the package, on the one Danish route in, and `scripts/release.mjs`
+  only moves that pin when it is the run that bumps the version — 1.0.0 and
+  1.0.1 were both made by hand. A test now reads `package.json` and fails on
+  the difference.
+
+
 ### Added
 
 - **`/docs/solid/`: the last shipped adapter had no page of its own.**

@@ -635,6 +635,77 @@ kører begge dele på hvert push.
   pakker uden keywords, så det er navnets vægt og `bugbottle` er ét ord.
   **Accept:** en beslutning — ikke en kodeændring. Se ❓; **byg den ikke selv.**
 
+- [x] **48. Hvert script-tag på sitet var brudt i browseren, fordi Cloudflare
+  læste pakkenavnet som en mailadresse.** 28/9 23:1x, `ceo/cloudflare-at-sign`.
+  Datagrund: ikke trafik fra målingen — fra at opgave 46 skulle finde et adoption-
+  tal, og dens research-tur førte til jsDelivr's per-version hits, som viste
+  **725 hits på 1.0.1 i de seneste 7 dage** mod 2231 totalt på 0.5.0. Så
+  spørgsmålet "hvor kommer de fra" førte til det første sted en læser møder os:
+  landingssidenes script-tag. **Målt på live 28/9 23:0x, ikke gættet:**
+  `/` og `/da/` har **to** `cdn-cgi/l/email-protection` hver, `/docs/install/`
+  **en**, og `src`-attributten i prøve-tag'et ender på
+  `https://cdn.jsdelivr.net/npm/` — Cloudflare har skåret URL'en af ved `@` og
+  klippet et `<a>` ind midt i koden. **Accept:** `protectAtIn` kører over hver
+  side `build-docs.mjs` skriver **og** de to håndskrevne landingssider, så det
+  udsendte HTML har `&#64;` i stedet for `@`; `tests/protect-at.test.ts` holder
+  på reglen, på de håndskrevne filer, på **listen af writes** i build-scriptet
+  (så en fjerde write uden kaldet fejler) og på den danske pins version mod
+  `package.json`. Beviset er i den rene build: `site/docs/install/index.html`
+  har **0** rå `@` i en jsDelivr-URL og `&#64;v1.0.1` i stedet. Mål: ingen
+  trafikbaseline ændres (Plausible 1/28 d, npm 210/uge, ★2 pr. 28/9) — den
+  reelle effekt er at **det eneste kodefelt siden har som helst er at kopiere
+  fra** igen virker, og det kan ikke ses i et tal før det er rettet.
+
+### Fund fra Cloudflare-iterationen (28/9 23:0x) — den dyreste fejl i sitet,
+### og den lå i kanten, ikke i koden
+
+**Fund 1 — `bugbottle@1.0.1` *er* en mailadresse, for Cloudflare.** Email
+obfuscation er slået til for bugbottle.dev, og den skriver ethvert svar der
+*ligner* en adresse om til et `/cdn-cgi/l/email-protection`-link. Pakkenavnet
+med en udgave-nummer bag ligner en adresse. Følgen er ikke kosmetisk: koden
+ligger i et `<pre><code>`, Cloudflare sætter sit anchor ind **midt i
+attributten**, og `src` ender på `.../npm/`. En læser der kopierer får kode der
+ikke kan loade — på præcis den side hvis eneste opgave er at blive kopieret fra.
+**Ingen gate kunne se det:** `npm run build:docs` skriver de samme bytes
+uanset hvad, fordi omskrivningen sker i kanten på *responsen*, længe efter
+bygget. Derfor holdes reglen i stedet for outputtet.
+
+**Fund 2 — den samme måling fandt den danske side to releases forældet.**
+`site/da/kom-i-gang.md` pinned `bugbottle@0.9.0` mens pakken er på 1.0.1, altså
+et pre-1.0-build på den ene danske indgangsside. `scripts/release.mjs` skriver
+den pin — men kun når *det* script bumper versionen, og `.split(previous)` kan
+kun flytte én version ad gangen. 1.0.0 og 1.0.1 blev lavet i hånden. Nu er der
+en test der læser `package.json` og fejler på afvigelsen.
+
+**Fund 3 — `npm downloads` er *ikke* støj, og de to adoption-tal er ikke det
+samme tal.** Målt med npm's egen API pr. uge: uge 37 **182**, uge 38 **42**,
+uge 39 **210**, og **0** i de otte uger før publicering. Variationen er stor,
+men niveauet er vedvarende, så "uger siden 5x" (som fund 1 i research-
+iterationen konkluderede) var en overfortolkning af en uges stigning. Det er
+ikke en ny *bruger* pr. uge, og det er derfor opgave 46 står åben.
+
+**Fund 4 — det skelnende adoption-tal findes, og det er jsDelivr.** npm's
+downloads-API **kan ikke** brydes ned på version (`/bugbottle/1.0.1` svarer
+`package bugbottle/1.0.1 not found`). jsDelivr's gør:
+`data.jsdelivr.com/v1/stats/packages/npm/bugbottle/versions` giver pr. version
+en total og en daglig kurve, og **en versions tæller kun bevæger sig for
+hentninger af den version**. Den kan altså skelne en ny udgivelse fra
+geninstallationer på det samme tal, som `npm downloads` ikke kan. Målt 28/9
+23:0x: `0.5.0` 2231 hits (1220 d. 07/09, dagen den kom), `1.0.1` 766 hvoraf
+**725 i de seneste 7 dage**, `0.12.0` 2, `0.3.0` 2.
+**Forbehold, ærligt:** et hit er et fil-kald, ikke et menneske — en læser der
+indlæser 20 filer tæller tyve gange. Det er et *attributerbart* tal pr. udgave,
+ikke et tal pr. menneske. GitHub traffic-API'en virker også med `gh auth` og
+giver pr. sti `uniques` (pt. 3 på `/mahope/bugbottle`), men referrerlisten er
+tom, så den tæller os ikke ind. **Anbefalet som MÅL for næste opgave med
+adoption som formål: jsDelivr-hits på den nye version, 14 dage efter release.**
+
+**MÅL: jsDelivr-hits på version 1.0.1 = 766 totalt, 725 i de seneste 7 dage,
+pr. 2026-09-28.** Før næste release: læg samme måling på den nye versions
+kurve 14 dage efter den kommer op, og sammenlign med 1.0.1's 725.
+*npm downloads pr. uge (210) og Plausible (1/28 d) er uændret referencepunkt,
+ikke det skelnende mål.*
+
 ### Fund fra Solid-iterationen (28/9 20:5x) — fire fælder i ryggraden af
 ### `solid-js`, og tre af dem er tavse
 
@@ -3491,6 +3562,16 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
   open-core-tilføjelser under ❓? `/support/` er lavet som et svar på den anden
   halvdel af spørgsmålet — en læser, der gerne vil betale, skal kunne se *at* det
   ikke kan, uden at spørge.
+
+- **Cloudflare's email obfuscation på bugbottle.dev.** Fundet 28/9 23:0x: den
+  er slået til, og den spiser `bugbottle@1.0.1` fordi det ligner en adresse —
+  den skærer script-taggene af ved `@` på `/`, `/da/` og `/docs/install/`.
+  Rettelsen her koder `@` som `&#64;`, som browseren læser identisk, så
+  **spørgsmålet til dig er om den kan slås fra** under Security → Scrubbing →
+  Email Address Obfuscation: den er lavet til *adresser*, ikke til
+  pakkenavne, og den koster os den indsats. *Hvis du slår den fra, kan
+  `protectAtIn` og dens test tages ud igen; indtil da er de den billigste
+  forsvarslinje, og de koster ingenting på læsesiden.*
 
 ## ❓ Til Mads — søstrepos
 

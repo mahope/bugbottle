@@ -51,7 +51,7 @@ attributter, så der er ikke andet at skrive:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.9.0/dist/bugbottle.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@1.0.1/dist/bugbottle.js"
   data-endpoint="/api/feedback"
   data-locale="da"
   data-primary="#e11d48"
@@ -74,7 +74,7 @@ det værd at låse filen med dens hash:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/bugbottle@0.9.0/dist/bugbottle.js"
+  src="https://cdn.jsdelivr.net/npm/bugbottle@1.0.1/dist/bugbottle.js"
   integrity="sha384-…"
   crossorigin="anonymous"
   data-endpoint="/api/feedback"

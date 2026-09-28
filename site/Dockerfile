@@ -32,7 +32,7 @@ COPY README.md ./
 # `site/docs/` copy below. `tests/site-image.test.ts` reads this list and fails
 # when a `scripts/*.mjs` the build imports is not named here, so a module added
 # later cannot leave the image broken.
-COPY scripts/build-docs.mjs scripts/page-descriptions.mjs ./scripts/
+COPY scripts/build-docs.mjs scripts/page-descriptions.mjs scripts/protect-at.mjs ./scripts/
 # The changelog is its own Markdown too, rendered into site/docs/changelog/,
 # so it has to be here or the script fails on a file it cannot read.
 COPY CHANGELOG.md ./
