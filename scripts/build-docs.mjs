@@ -199,6 +199,7 @@ const GROUPS = [
     slugs: [
       INTRO.slug,
       "recording-console-errors",
+      "global-errors",
       "the-form-react",
       "the-form-vue",
       "the-form-svelte",
@@ -324,6 +325,12 @@ const TRANSLATED = {
    at the page as well, so a link written for GitHub still lands here. */
 const SLUG_OVERRIDES = {
   "a-privacy-checklist": "privacy-checklist",
+  /* The one heading with a dot in it, which `slugify` drops:
+     `## window.onerror and unhandledrejection` would give
+     `/docs/windowonerror-and-unhandledrejection/`. The short URL is the one
+     somebody types after reading the title, and the heading stays as it is
+     because a README heading is a sentence in a list of them. */
+  "windowonerror-and-unhandledrejection": "global-errors",
 };
 
 const TITLE_OVERRIDES = {

@@ -309,6 +309,29 @@ nextjs.org, angular.dev, nuxt.com.
   baseline 0 besøgende (siden findes ikke) pr. 2026-09-28.** Sammenlign 25/10
   og 25/11. Se "Fund fra self-hosted-iterationen" i loggen.
 
+- [x] **23. `/docs/global-errors/` — `window.onerror` og
+  `unhandledrejection`.** 28/9, `ceo/global-error-events`. **Datagrund:** målt
+  28/9 06:2x (Google Suggest, samme metode som de tø forgående iterationer) —
+  `window onerror` **10**, `window.onerror` 10, `javascript error handling` 10,
+  `catch javascript errors` 6, `uncaught exception javascript` 6,
+  `onunhandledrejection` 5. Det er **den største ucoverede klynge i hele
+  målingen**, og den eneste hvor forespørgslen er en *kode-linje* læseren
+  vil skrive frem for et framework-navn. De tretten frameworksider begynder alle
+  et niveau over de to events — på frameworkens egen krog — så de to events der
+  ringbufferen faktisk sidder på, har aldrig haft en side. Siden siger de to
+  signaturers asymmetri (`onerror` får fem argumenter, `addEventListener` ét
+  `ErrorEvent`), de **fem** ting der afgør om noget indfanget er brugbart (en
+  ressource-`error` på et element der ikke bobler, `Script error.` for et
+  cross-origin script, et cross-origin-rejection der **ikke fyrer noget event
+  overhovedet** fordi det ville lække grunden, en Workers egen globale scope,
+  og `event.error` der er hvad der blev kastet), og hvad en ufanget fejl
+  faktisk lægger i en rapport: én linje til læseren og højst ti frames, som er
+  **positioner og aldrig kildekode**. Kilde: MDN, læst 28/9. **MÅL:
+  `/docs/global-errors/` baseline 0 besøgende (siden findes ikke) pr.
+  2026-09-28.** Sammenlign 25/10 og 25/11. 47 docs-sider (fra 46), 228
+  søgeposter (fra 217). **Ingen kodeændring** — begge IIFE'er vejer 24 688 /
+  21 104 gzipped, uændrede, `check-dist` grøn på 208 filer, 896 tests grønne.
+
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -332,6 +355,87 @@ nextjs.org, angular.dev, nuxt.com.
   **MÅL: `/docs/nestjs/` baseline 0 besøgende (siden findes ikke) pr.
   2026-09-28.** Sammenlign 25/10 og 25/11. 45 docs-sider (fra 44), 209
   søgeposter (fra 202).
+
+### Fund fra global-errors-iterationen (28/9) — den første side om de to events
+  selv, og den sjette skrivning af det samme mønster
+
+Metoden var målingen igen (Google Suggest, `suggestqueries.google.com`,
+FETCHET 28/9 06:2x) og **kilden var MDN denne gang** — `Window: error event` og
+`Window: unhandledrejection event`, begge læst 28/9. Det er første gang de otte
+framework-siders metode (læs det publicerede build, ikke dokumentationen) ikke
+er den rigtige, og det er rigtigt: der er ingen build at læse for to browser-
+events, og MDN *er* kilden. Siden blev skrevet fordi emnet har **null** sider,
+ikke fordi fundene var nye.
+
+**Fire ting der var nye for os, alle med kilde:**
+
+1. **`onerror`-propertyet og `addEventListener` har to forskellige
+   signaturer.** `onerror` får `(message, source, lineno, colno, error)`,
+   `addEventListener` får ét `ErrorEvent` med de samme fem felter. Det er det
+   **eneste** handler-property på `window` der får mere end ét argument, og
+   det er grunden til at kode der virker i det ene, virker ikke i det andet.
+   Vores egen kode bruger `addEventListener` — det er derfor
+   `console-buffer.ts` læser `e.message`/`e.filename`/`e.lineno` på eventet
+   og ikke på fem løse argumenter.
+2. **`return true` i `onerror` slår konsollinjen fra**, mens alle andre
+   handler-properties annullerer ved `return false`. En læser der kopierer
+   mønsteret fra en anden event og skriver `return false`, får en fejl i to
+   udgange.
+3. **Et cross-origin rejection fyrer `unhandledrejection` slet ikke.** MDN
+   siger det direkte: "Promise rejections that originate from a cross-origin
+   script won't fire this event", fordi eventet bærer grunden. Det er det eneste
+   sted hvor browseren **med vilje** skjuler en fejl, og der er ingen fix fra
+   siden — kun en CORS-overskrift på det script der *kaster*. Skrevet op som sådan.
+4. **`unhandledrejection` bobler op i konsollen medmindre `preventDefault()`.**
+   Altså: en læser der skriver sin egen handler og *også* vil beholde
+   browserens egen røde linje, skal ikke kalde `preventDefault()` — og en der
+   gør, mister den.
+
+**To fund der bekræfter noget, vi vidste, fra en ny vinkel:**
+
+- **Ressource-fejl er et andet event end script-fejl.** MDN's egen sætning er
+  "fired on a Window object when a resource failed to load **or** couldn't be
+  used", hvilket er tvetydet, og siden siger derfor kun det sikkert kendte: et
+  `error` på et element bobler ikke, så en `window`-lytner uden `capture: true`
+  ser det aldrig, og `event.error` er `undefined`. **Jeg skrev ikke "MDN siger
+  at det ikke bobler", fordi den side ikke siger det** — det er en skrivefejl
+  af slagsen "find en kilde eller skriv det som det er det".
+- **En Workers globale scope er et andet objekt med de samme to events**, og
+  vores `initConsoleBuffer` lytter kun når `typeof window !== "undefined"`
+  (`src/console-buffer.ts:100-109`). Altså: **en rapport kan ikke indeholde
+  worker-fejl**, og det er skrevet på siden i stedet for at være en skjulest fejl
+  i et produkt der ellers ikke nævner Workers.
+
+**Mønstret der er blevet en regel (sjette skrivning):** "dækker siden, hvad der
+sker med konsollen?" findes nu i React, Nuxt, Hono, Vue, Astro og denne side. Det
+er ikke længere en ting hver frameworkside husker — det er **en** afsnit, der
+skal skrives, fordi det er den ofte oversete halvdel af en fejlkrog.
+
+**Næste kandidater i kategorien** (målt samme kørsel, ikke valgt):
+
+- **`datadog alternative` 10** — det største **uafdækkede** købsintente
+  emne efter `/self-hosted/` (som svarede på `sentry alternative` 10 og
+  `open source error tracking` 10). Samme form som sammenligningen: en række i
+  `/compare/` målt med `scripts/measure-competitors.mjs` på
+  `@datadog/browser-rum` + `errorTracking`, daterede kilder, og ærlig
+  tekst om at Datadog er et overvågningsprodukt med APM og ikke et
+  rapportværktøj. **Forbehold:** to produkter med forskellige formål i én tabel
+  kan blive den tynde sammenligning, `/self-hosted/` blev skrevet imod. Skal
+  researches før den skrives.
+- `error monitoring tool` 9, `error reporting tool` 5, `user feedback tool` 5
+  — generiske købsforespørgsler. **Ingen ny side:** de er besvaret af
+  `/self-hosted/`, `/compare/` og forsiden, og tre sider der svarer på samme
+  generiske søgning er tre tynde sider.
+- `error boundary` 10 og `react error boundary` 10 — dækket af
+  `/docs/catching-render-errors-react/` (React) og `/docs/react/`. En
+  *generisk* "hvad er en error boundary"-side ville være tynd, fordi
+  error boundaries er React's ord; skriv den kun hvis nogen kan gøre den til en
+  sammenligning af de tre klasser (krog i frameworket / fejl i din egen kode
+  ingen krog ser / fejl i en fejl-side), og den klassifikation findes allerede
+  i planens egen "Køen efter dette".
+- `cloudflare workers error handling` — målt **1** i denne kørsel mod **5** i
+  Hono-iterationen samme dag. Et tal der bevæger sig fire pladser på en dag er
+  ikke et tal at bygge en side på; Hono-siden dækker Workers i dag.
 
 ### Fund fra NestJS-iterationen (28/9) — den sjette fejlklasse, og hvor den ikke kan
 
@@ -1268,6 +1372,24 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
+- **2026-09-28, iteration 19** (`ceo/global-error-events`). Opgave 23. Se opgaven
+  og "Fund fra global-errors-iterationen". **Første gang metoden var en anden:**
+  målt som altid med Google Suggest, men kilden var MDN og ikke et publiceret
+  build — fordi der ikke findes et build af to browserevents, og det er *MDN* der
+  definerer dem. Det gav fire ting, hvoraf to var nye for os (de to signaturers
+  asymmetri, og at et cross-origin rejection slet ikke fyrer `unhandledrejection`)
+  og to bekræftede noget vi vidste, men som siden nu siger højt i stedet for at
+  være en skjulest mangel: **en rapport kan ikke indeholde worker-fejl**, fordi
+  `initConsoleBuffer` kun lytter når `window` findes. Skrev ned i planen, at jeg
+  *ikke* har kilde til "en ressource-`error` bobler ikke" (MDN's sætning er
+  tvetydet om netop det), så siden siger kun det sikkert kendte — en læsers
+  tillid er her mere værd end endnu en autoritativ klingende påstand.
+  `SLUG_OVERRIDES` fik sin anden indgang: `## window.onerror and
+  unhandledrejection` slug'ifies til `windowonerror-…` fordi `slugify` sletter
+  punktum, så overskriften står som den er i README (den er en sætning i en
+  liste af andre) og URL'en er `/docs/global-errors/`. 47 docs-sider, 228
+  søgeposter, ingen budget flyttede sig, 896 tests grønne, `check-dist` grøn på
+  208 filer.
 - **2026-09-28, iteration 18** (`ceo/self-hosted-page`). Opgave 22. Se opgaven.
   Metoden holdt for tiende gang: målt først (Google Suggest), skrevet på
   konstanter i koden, og **ikke** gentaget fra en sibling-side. Den nye klasse
@@ -1837,6 +1959,23 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/global-errors/ (47 sider i sitemap'en, ny side som
+  nummer to i `Get started` — `window.onerror` og `unhandledrejection`, de to
+  events ringbufferen lytter på, skrevet på MDN læst 28/9) 2df3bd8, merge
+  (denne) ~06:4x, 2026-09-28` — næste batch-vindue er **07:30 2026-09-28**, samme som de
+  elleve notes nedenfor, så **én kørsel dækker alle tolv**. Verificér
+  **indhold**: `https://bugbottle.dev/docs/global-errors/` skal vise de to
+  signaturer, de **fem** ting under "Five things that decide whether what you
+  captured is any use" (elementets `error`, `Script error.`, at et cross-origin
+  rejection ikke fyrer noget event, Workers, `event.error`), afsnittet "What an
+  uncaught error puts in a report" med `ten frames`, og den vanilje snippet
+  med `window.addEventListener("unhandledrejection"`. `description`-taggen skal
+  begynde `window.onerror and unhandledrejection:` (helt, ingen ellipse),
+  sitemap'en skal liste siden med `lastmod 2026-09-28`, og `Get started` i
+  sidebaren skal have den som **post 2** (Install, Recording console errors,
+  window.onerror…). **Ingen ny URL ud over denne**, og `dist/` rørte ændringen
+  slet ikke — ingen kode, så IIFE'erne er uændrede (24 688 / 21 104 gzipped).
 
 - `VERIFICÉR DEPLOY: /self-hosted/ (55 sider i sitemap'en, ny side under About
   — ny side under About

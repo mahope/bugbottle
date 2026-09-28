@@ -54,6 +54,8 @@ export const PAGE_DESCRIPTIONS = {
   fastify: "Receive a report in Fastify with fastifyHandler, raise the default 1 MB bodyLimit, and keep the raw body so a signed report verifies.",
   "feeding-reports-to-an-agent":
     "A report with a selector, the element's text, the page path and the last console errors is usually enough context for a coding agent.",
+  "global-errors":
+    "window.onerror and unhandledrejection: the two events a browser fires when nothing caught the error, and what bugbottle records from both.",
   "github-action":
     "A GitHub Action that validates exported bugbottle reports in CI, so a report that reaches your repository is checked before anyone reads it.",
   hono: "Receive a report in Hono, Cloudflare Workers, Deno, Bun and Node: handleReport is a Request in and a Response out, with no adapter to write.",
