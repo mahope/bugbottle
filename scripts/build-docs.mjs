@@ -513,6 +513,24 @@ function slugify(text) {
     .replace(/\s+/g, "-");
 }
 
+/* The headings a page with its own Markdown holds, so a `#anchor` written in it
+   can stay a self-link. A README page gets that from the section it was sliced
+   out of; a standalone page is a whole document, so its own headings are the
+   answer — and on a Danish page it is the *only* possible answer, because the
+   README it would otherwise fall back to is in English and cannot hold a
+   Danish heading at all. Same slugs the `heading` renderer above writes, read
+   straight out of the source so the map and the ids cannot drift. */
+function ownHeadings(body) {
+  const own = new Map();
+  for (const line of body.split("\n")) {
+    const heading = /^#{1,6}\s+(.+)$/.exec(line);
+    if (!heading) continue;
+    const slug = slugify(heading[1]);
+    if (slug && !own.has(slug)) own.set(slug, `#${slug}`);
+  }
+  return own;
+}
+
 /* The anchor of a changelog release. `## 0.9.0 — 2026-09-08` is `#0-9-0` and
    `## Unreleased` is `#unreleased`, so a link to a release survives the date
    being corrected and is short enough to type. The heading that covers four
@@ -1464,13 +1482,49 @@ async function main() {
     const body = (await readFile(join(root, entry.source), "utf8")).replace(/\r\n/g, "\n").trim();
     const marked = new Marked({ gfm: true, breaks: false });
 
+    /* Its own headings, so `[the section above](#that-section)` stays on the
+       page. Without them every `#anchor` fell through to the GitHub fallback —
+       and on a Danish page that is a link to an English file with a Danish
+       slug, which lands on nothing. The guard makes the class of bug a build
+       failure instead of a link: an anchor this page does not hold, in a
+       language the README does not speak, has no answer anyone could have
+       meant. An English page keeps the fallback, because there the README
+       genuinely may hold the heading. */
+    const problems = [];
+    const own = ownHeadings(body);
+    const base = renderer(entry, { ...NO_LINKS, own, problems });
+
     marked.use(TABLE_HOOK);
-    marked.use({ renderer: renderer(entry, NO_LINKS) });
+    marked.use({
+      renderer:
+        entry.lang === "en"
+          ? base
+          : {
+              ...base,
+              link(token) {
+                const href = token.href ?? "";
+                if (href.startsWith("#") && !own.has(href.slice(1))) {
+                  problems.push(
+                    `[${(token.text ?? "").replace(/`/g, "")}](${href}) — ${entry.url} has no heading with that text`,
+                  );
+                }
+                return base.link.call(this, token);
+              },
+            },
+    });
+    const html = marked.parse(body);
+
+    if (problems.length > 0) {
+      throw new Error(
+        `#anchor in ${entry.source} that the page does not hold, in a language the README does not speak:\n  ${problems.join("\n  ")}\n` +
+          `  Write the heading's own text as the anchor, or give the page it lives on: ${entry.otherUrl ?? entry.url}`,
+      );
+    }
     const en = entry.lang === "en" ? entry.url : entry.otherUrl;
     const da = entry.lang === "da" ? entry.url : entry.otherUrl;
     const page = {
       ...entry,
-      html: marked.parse(body),
+      html,
       description: pageDescription(entry.id, body),
       headTitle: `${entry.heading} — bugbottle`,
       canonical: `${ORIGIN}${entry.url}`,

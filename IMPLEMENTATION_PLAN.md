@@ -415,6 +415,36 @@ nextjs.org, angular.dev, nuxt.com.
   her: det er et spørgsmål om **sprog** (skal et dansk `#anchor` pege på den
   danske side eller på den engelske?), ikke om opløsning, og det er bedre
   besvaret end gættet.
+- [x] **26. Et `#anchor` på en STANDALONE-side pegede på GitHub med et dansk
+  slug i en engelsk fil.** 28/9, `ceo/standalone-anchors`. **Datagrund:** ikke
+  trafik, men den konverteringsfejl der lå i den side en virksomhedskundes
+  indkøbsliste lander på. Fundet ved at læse det **live** site, fordi de tretven
+  åbne VERIFICÉR-noter skulle afstemmes: `/da/privatliv/` linkede
+  `[afsnittet ovenfor](#når-nogen-beder-om-de-data-du-allerede-har)` — en
+  overskrift **på samme side** — til
+  `github.com/mahope/bugbottle/blob/main/README.md#når-nogen-beder-om-de-data-du-allerede-har`.
+  README'en er på engelsk, så slug'et findes ikke der: linket sender en dansk
+  læser ud af sitet og lander ingen steder. Det var det **ene `#anchor` på hele
+  sitet** (optalt, `grep` over de seks `site/*.md`), så rettelsen er lille.
+  **Årsagen:** `build-docs.mjs` renderer STANDALONE-siderne med tomme kort
+  (`NO_LINKS`), så *ethvert* `#anchor` på dem faldt igennem til
+  GitHub-fallback'en. **Rettelsen:** siden læser sine egne overskrifter ind fra
+  sin egen Markdown og giver dem som `own`, præcis som en README-side får dem
+  fra den sektion den blev skåret ud af — samme `slugify`, så kortene og `id`erne
+  ikke kan glide fra hinanden. **Plus en byggevagt:** på en side der ikke er
+  engelsk er et `#anchor` siden ikke holder en fejl, fordi README'en den ellers
+  ville pege på ikke kan have den overskrift. Bevis at vagten virker: en
+  provokeret `](#findes-ikke)` i `site/da/privatliv.md` stopper builden med
+  *"… that the page does not hold, in a language the README does not speak"* og
+  navngiver filen, linket og hvad man skal gøre. **En engelsk side beholder
+  GitHub-fallback'en** — der kan README'en godt have overskriften, så vagten
+  ville være forkert. Det besvarer det sprogspørgsmål opgave 25 lagde til side:
+  et dansk anchor peger på den danske side, og et der ikke findes er en fejl.
+  **Accept:** `npm run check` grøn (896 tests, `check-dist` grøn på 208 filer,
+  IIFE'erne uændrede 24 688 / 21 104), ingen ny URL, ingen ændring i
+  sitemap'en eller søgeindekset (228 poster), og **én** forskel i den byggede
+  HTML: linket. `site/` er gitignore'et, så kun `scripts/build-docs.mjs`
+  ændres.
 - [x] **24. `typescript` 5.9.3 → 7.0.2 — den én major der ligger. 28/9,
   `ceo/pin-typescript`. LUKKET SOM BEVIDST FRAVALG (vej A).**
   **Vej A er gennemført 28/9:** TypeScript står på **5.9.3**, og hele
@@ -1647,6 +1677,33 @@ flyttede sig** (24 688 / 21 104 gzipped, uændrede).
   måltal skal kunne sammenlignes med de tidligere — den pindning er ikke en
   glemt opgradering.
 
+## Fund fra anchor-iterationen (28/9) — en klasse af fejl, der så ud som én
+
+Opgave 26 startede som en afstemning af deploy-noter og endte som en
+byggevagt. Kæden er værd at skrive ned, fordi den er den **fjerde** gang
+`build-docs.mjs` har fejlet i `#anchor`-opløsningen — og hver gang på en måde,
+der ikke kan ses ved at læde koden:
+
+1. Én flad `Map` over alle 47 sider (opgave 25) — den sidste skrev vinder.
+2. Samme `#anchor`-flade på STANDALONE-siderne (denne iteration) — de renderer
+   med tomme kort, så *alt* faldt igennem til GitHub.
+3. Og nu det underliggende problem i (2): **den danske side pegede på den
+   engelske fil.** Selv en perfekt opløsning af fejlen 2 ville have sendt en
+   dansk læser videre til GitHub, fordi den eneste adresse den kender med et
+   dansk slug i sig, er GitHub-linket.
+
+Det tredje er derfor den egentlige rettelse. Den første to var symptomer, og
+begge var fundet ved at **læse den byggede HTML** — aldrig ved at læse
+`build-docs.mjs`, der ser rigtig ud hver gang. Derfor er den fjerde
+`build-docs`-vagt nu på plads: en dansk side der ikke holder sit eget anchor
+stopper builden, så klassen kan ikke komme tilbage som en vasket link på en
+side ingen læser af en grund.
+
+**Målingen der gjorde det billigt:** `grep -c "](\#"` over de seks `site/*.md`
+siger **én** — ét link, i ét af dem. Så var spørgsmålet ikke "hvor mange steder
+er der brudt", men "hvor kommer det fra", og svaret var én `NO_LINKS` i én
+løkke.
+
 ## Fund fra baseline-iterationen (28/9) — Plausible og Cloudflare er ikke i strid
 
 Iterationen startede med at tjekke CI (grøn på alle fem seneste kørsel) og så
@@ -1707,8 +1764,14 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
     grunden til at TypeScript står på 5.9.3 ligger i det repo en efterfølgende
     agent læser *før* den rører `package.json`. Det er forskellen på en
     beslutning og en udvikling, der ikke sker.
-  - **Ingen kode, ingen `dist/`, ingen budget.** Én fil ændret ud over
-    planen: `CLAUDE.md`.
+  - **Opgave 26 fandt den fjerde `build-docs`-vagt.** Afstemningen af
+    deploy-noterne førte til et link på den danske privatlivsside, der pegede
+    på GitHub med et dansk slug i en engelsk fil. Én linje i den byggede HTML,
+    fundet ved at læse *output* — samme metode som de otte framework-sider og
+    opgave 25, og igen et sted hvor koden så rigtig ud. Se "Fund fra
+    anchor-iterationen".
+  - **Ingen kode, ingen `dist/`, ingen budget.** Iterationen rørte to filer
+    ud over planen: `CLAUDE.md` og `scripts/build-docs.mjs`.
 
 - **2026-09-28, iteration 20** (`ceo/script-tag-once`). Opgave 25. Se opgaven.
   - **Fundet ved at læse den byggede HTML, ikke koden.** Jeg ville skrive
@@ -2344,7 +2407,32 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   Bemærk: `## Next.js` slugifierer til `nextjs`, så siden hedder
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
+- **Ingen deploy-note for `ceo/pin-typescript`** (65bf51a, merge 971653c
+  ~08:0x, 2026-09-28). `CLAUDE.md` og denne plan er ikke en del af sitet, så
+  intet på bugbottle.dev kan se forskel. Skrevet her, fordi kontrakten siger
+  "tilføj en VERIFICÉR-note efter merge+push", og fordi en manglende note ellers
+  ligner en glemt. Samme for `ceo/standalone-anchors` (opgave 26) under: den
+  **gør** ændre en side, så den har sin egen note.
+
+- **2026-09-28 08:0x, anden måling i samme time:** `/self-hosted/` stadig
+  404, sitemap'en stadig 47 `<loc>`. **Det 07:30-vindue er endnu ikke regnet
+  som tabt** — det var 30 minutter gammelt ved den første måling, og der er
+  ingen evidens for at batchen fejlede, kun at den ikke er landet. Næste
+  iteration måler efter 12:30.
+
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /da/privatliv/ — ét link i den danske privatlivsside skal
+  være et selvlink igen (opgave 26, `ceo/standalone-anchors`) — <sha>, merge
+  <sha>, ~08:1x, 2026-09-28.` **Ingen ny URL, ingen ændring i sitemap'en eller
+  søgeindekset** — den eneste forskel i den byggede HTML er linkets `href`:
+  `https://github.com/mahope/bugbottle/blob/main/README.md#når-nogen-beder-om-de-data-du-allerede-har`
+  skal være `#når-nogen-beder-om-de-data-du-allerede-har`. Bevis på den rene
+  build: `grep -c 'blob/main/README.md#' site/da/privatliv/index.html` → **0**.
+  `dist/` rørte ændringen slet ikke, så IIFE'erne er uændrede (24 688 / 21 104
+  mod budgetterne 25 088 / 21 504). **Bemærk:** denne note kan først
+  afstemmes sammen med de tretven ovenfor, fordi de alle afhænger af det
+  **samme** kørende deploy-vindue.
 
 - `VERIFICÉR DEPLOY: de ti kryds-side-links i den byggede HTML (Vue ×4,
   global-errors ×2, Fastify, NestJS, API, Recipes) — 7503b81, merge
