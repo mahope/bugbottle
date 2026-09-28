@@ -2024,6 +2024,13 @@ flyttede sig** (24 688 / 21 104 gzipped, uændrede).
 
 ## Deploy-noter
 
+- **Ingen deploy-note for devDependency-runden** (13aeeb3, merge c01d22a
+  ~06:19, 2026-09-28). Otte patch/minor i byggeværktøjet, ingen kode, ingen
+  `dist/`-ændring, ingen ny URL — **intet på bugbottle.dev kan se forskel**, så
+  den næste iteration skal ikke lede efter den. Skrevet her, fordi kontrakten
+  siger "tilføj en VERIFICÉR-note efter merge+push", og fordi en manglende note
+  ellers ligner en glemt.
+
 - `VERIFICÉR DEPLOY: /docs/global-errors/ (47 sider i sitemap'en, ny side som
   nummer to i `Get started` — `window.onerror` og `unhandledrejection`, de to
   events ringbufferen lytter på, skrevet på MDN læst 28/9) 9f1d5e8, merge
