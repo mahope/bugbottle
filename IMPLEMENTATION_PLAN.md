@@ -173,6 +173,19 @@ nextjs.org, angular.dev, nuxt.com.
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
+- [x] **15. `/docs/fastify/` + `fastifyHandler`-export.** 28/9,
+  `ceo/fastify-handler`. Se "Fund fra Fastify-iterationen". **MÅL:
+  `/docs/fastify/` baseline 0 besøgende (siden findes ikke) pr. 2026-09-28.**
+  Sammenlign 25/10 og 25/11. 44 docs-sider (fra 43), 202 søgeposter (fra 194).
+- [ ] **16. `/docs/nestjs/` — målt, ikke valgt endnu.** `nestjs exception
+  filter` har **10 suggest** (28/9), samme bånd som Fastify, og nul sider i
+  hele kategorien. Men NestJS er et **filter**, ikke en krog: `@Catch()` på en
+  egen klasse, og dens `@Catch()` uden argumenter fanger alt. Det er den
+  sjette fejlklasse i rækken, så siden skal begynde med "hvad kan frameworket
+  overhovedet se". **Bør ikke skrives før research** — læs først
+  `@nestjs/core`'s `BaseExceptionFilter` og `ExceptionsHandler` i
+  produktionsbuilden, som de andre sider er bygget på. Mål igen ved næste
+  iteration.
 - [x] **8. `/docs/wordpress/` + link fra `/da/kom-i-gang/`.** 27/9,
   `ceo/wordpress-page`. Kilden er pluginnets *kode*, ikke dets readme:
   `class-settings.php` (indstillingsnavne + standarder), `class-assets.php`
@@ -822,6 +835,83 @@ Workers og kunne være en sektion i `/docs/recipes/` i stedet for en side;
 `cloudflare workers error handling` 5 kan lægges ind i Hono-siden som en
 D1/KV-`store`-opskrift, hvis ikke den bliver for lang.
 
+## Fund fra Fastify-iterationen (28/9) — to fejl, ingen af dem kan ses fra koden
+
+Metoden er den syvende gang den samme: `npm pack fastify@5.12.5`, læs
+`lib/content-type-parser.js`, `lib/error-handler.js`, `lib/log-controller.js`,
+`lib/handle-request.js`, `lib/request.js` og `lib/config-validator.js` — ikke
+fastify.dev. Den blev endnu engang stærkest, fordi **den største fælde ikke
+handler om fejl overhovedet**: den afgør om rapporten når serveren.
+
+1. **`bodyLimit` er 1 048 576 som standard, og parseren afviser FØR routen
+   køres.** Det står to steder: i `defaultInitOptions` og som schema-default i
+   `config-validator.js`. `rawBody` gør `if (contentLength > limit) done(new
+   FST_ERR_CTP_BODY_TOO_LARGE())` — altså før `handler(request, reply)` nogensinde
+   kaldes. **En rapport med screenshot er derfor en 413 i Fastifys egen
+   fejlform, som `fastifyHandler` aldrig ser**, mens `handleReport` ville have
+   accepteret den samme krop: `DEFAULT_MAX_BODY_BYTES` er 4 MiB, fire gange
+   større. Standarden er ikke forkert til en JSON-API, og mismatchet er
+   **stille** — hvert under-et-megabyte-report ankommer, så ruten ser sund ud
+   indtil den første person vedhæfter et billede. Det er den eneste fælde på
+   siden der fejler i produktion og ikke i dev.
+2. **En signeret rute kan ikke monteres bag standardparseren.** `application/json`
+   registreres i `ContentTypeParser`-konstruktøren, så kroppen er et objekt når
+   routen kører, og re-serialisering giver andre bytes og en anden HMAC. **Der
+   er ingen "montér den ikke bag en parser"-udvej som hos Express**, fordi
+   parseren er frameworkets egen og altid kører. Udvejen er en
+   `{ parseAs: "string" }`-parser, og adapteren tager dens streng ordret, så de
+   verificerede bytes er de signerede. Samme `onError`-én-gang-som-de-Express
+   gør, fordi en monteringsfejl og en forfalsket signatur er ens på ledningen.
+3. **`console.error` står 0 gange i hele `lib/` og `fastify.js`.** Den fjerde
+   (nu: femte) side i rækken om en krog der erstatter frameworkets egen
+   fejloutput, og **den første hvor der ikke er nogen konsol at erstatte**:
+   `defaultErrorHandler` kalder `defaultErrorLog`, som skriver til `reply.log` —
+   pino, med pinos formatering og pinos destination. En handler der erstatter
+   default'en slår altså ikke terminalen ihjel, den flytter output et sted hen,
+   og hvor afhænger af din logger-konfiguration. `console.log` og `console.warn`
+   er også 0.
+4. **En fejl i `setErrorHandler` fanges, ikke krasjet — og går til
+   forælderscope.** `handleError` gør `reply[kReplyNextErrorHandler] =
+   Object.getPrototypeOf(errorHandler)` før den kalder, og `buildErrorHandler`
+   bygger hver scope med `Object.create(parent)`. Altså: en reporter på root
+   fanger en fejl i en rute i et plugin, fordi vandringen ender ved root. Samme
+   linje er grunden til at en kastende handler i *root* ikke looper — forældren
+   er `rootErrorHandler`, hvis `func` er `undefined`. Og `if (result !==
+   undefined) reply.send(result)` betyder at en handler der **returnerer**
+   bestemmer svaret; et promise går gennem `wrapThenable`, så et afvist async-
+   kald rapporteres som sig selv.
+
+**To ting der ændrede adapterens form, ikke bare siden:**
+
+- **`request.ip` findes slet ikke på en standard-instans.** `buildRequest`
+  returnerer `buildRegularRequest` medmindre `trustProxy` er sat — det er
+  `buildRequestWithTrustProxy` der definerer `ip`, `ips`, `host` og
+  `protocol`. Så på en standard-instans er `request.ip` `undefined`, og
+  socketen skal derfor være første valg **af en strukturel grund**, ikke en
+  præference. Det er samme rækkefølge som `express.ts` og samme begrundelse.
+- **Fastify er den anden Node-side, og den er en modsætning til Hono.** Hono
+  *er* en fetch-handler, så `handleReport` kræver nul lim; Fastify predater
+  web-API'et og kræver en adapter. Det er derfor `fastifyHandler` er en
+  **export** og ikke en README-linje: de to Node-frameworks i rækken har
+  modsatte svar, og det er præcis det en læser skal finde.
+
+**Køen efter denne side:** `express error handling middleware` har **10
+suggest** (28/9) og *er* dækket — af `expressHandler` og to afsnit i
+"Receiving a report", men **ikke som side**. Det er samme valg som Vue blev
+valgt på: en adapter der findes to steder, ingen side. NestJS (10) er den
+største helt udækkede, se opgave 16.
+
+⚠️ **`npm run a11y` kunne ikke køre** (se Note om Chrome nedenfor). Siden er ren
+Markdown — ingen nye DOM-elementer, ingen ny CSS, ingen nye controls — så
+a11y-auditten rammer ikke ændringen, og CI's `browser`-job kører begge dele på
+hvert push.
+
+**Note om Chrome (alle iterationer siden nr. 2):** `findChrome()` returnerer en
+Windows-sti på denne maskine, `/Applications/Google Chrome.app` findes ikke, og
+`CHROME_BIN` er ikke sat. Det er **ikke** en fejl i repoet, og det er heller
+ikke noget en senere iteration bør prøve igen for hver side — hverken `a11y`
+eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
+
 ## ❓ Til Mads
 
 - **`createRootErrorHandlers` slettede konsollinjen den erstattede — rettet
@@ -922,6 +1012,59 @@ iteration, der tager første afhængighedsopgave. Overfladen er devDependencies 
 Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
+
+- **2026-09-28, iteration 12** (`ceo/fastify-handler`). Opgave 15:
+  `/docs/fastify/` + `fastifyHandler`-export. Se "Fund fra Fastify-iterationen".
+  - **Valgt på et tal, ikke på en kvote:** `fastify error handling` har **10
+    suggest** målt 28/9 02:0x (Google Suggest, samme metode som de seks
+    foregående) — samme bånd som react-router (10) og vue (10), og de var de to
+    højest prioriterede sider i rækken. `express error handling middleware`
+    har også 10, men er dækket af `expressHandler` og to afsnit i "Receiving a
+    report", så den er et opgave 16-kandidat (adapter uden side) frem for et
+    mål. Målt i samme kørsel, **ikke valgt**: `nestjs exception filter` **10**
+    (se opgave 16), `koa error handling` 5, `hapi error handling` **0**,
+    `solid error handling` 0, `inertia js error handling` 1.
+  - **Første gang et fund ikke handler om fejl.** De tre foregående
+    serversider handler om kroge; den største fælde her er Fastifys
+    `bodyLimit` på 1 MiB, som afviser en rapport med screenshot **før ruten
+    køres**. Den er derfor formuleret som en fejl i *mountingen* og ikke som en
+    fælde i koden, og den er den eneste på de elleve sider der fejler i
+    produktion og ikke i dev — de andre ti kan ses ved at læse koden.
+  - **Et API-gap fundet og lukket i samme iteration:** de to Node-frameworks i
+    rækken har modsatte svar. Hono *er* en fetch-handler, så `handleReport`
+    kræver nul lim; Fastify predater web-API'et og kræver en adapter. Uden
+    `fastifyHandler` var den eneste Node-side en læser kun kan bruge hvis de
+    skriver oversættelsen selv — hvilket er præcis det `expressHandler` blev
+    lavet for. Samme regel som altid: en ny *export* er en minor, ikke en
+    patch, så det er skrevet i CHANGELOG under Unreleased og **ikke** bumpet
+    i version endnu.
+  - `npm run check` grøn: **889 tests** (fra 881), 0 fejl, 0 advarsler.
+    **44 docs-sider** (fra 43), **202 søgeposter** (fra 194).
+  - **`dist/` ændret kun i `dist/server/`.** IIFE'en er uændret byte for byte
+    (24 645 / 21 063 mod budgetterne 25 088 / 21 504) — ingen kode i
+    bibliotekets klientdel rørte sig, så intet at lægge ved siden af. Den nye
+    adapter ligger i `bugbottle/server`, som de to script-tag-builds ikke
+    rører.
+  - **Validator-only-bundlen er uændret: 582 B gzipped, 1025 minified** (mod
+    budgetten 1024), målt med CI's egen opskrift (`normaliseConsole`,
+    esbuild 0.24.0, `--platform=node`). De otte forbudte symboler er alle
+    stadig væk, `node:fs`/`node:path`/`readFile`/`randomUUID` inklusive — så
+    `fastifyHandler` bliver tree-shaket væk ligesom sinksene, hvilket er det
+    den skal. **Bemærk til næste måling:** den første måling i denne iteration
+    brugte `validateReport` i stedet for CI's `normaliseConsole` og gav 2813 B,
+    altså 4,8× budgetten — fordi `validateReport` trækker hele `handle.ts` med
+    sig. **Brug CI's indgang, ellers måler man en anden ting.**
+  - **En reel mangel fundet og rettet:** Hono-siden (iteration 11) var landet
+    **uden CHANGELOG-post**, så den ville være forsvundet i
+    udgivelsesnoterne. Samme fejl som Astro-siden havde, og samme fælde — en
+    frameworkside er dokumentation. Rettet her, fordi det er samme slags
+    dokumentation og der lå en ren changelog-commit klar. **Regel for de
+    næste sider: `rg -n <sidetitel> CHANGELOG.md` som en del af gaten.**
+  - Næste iteration: opgave 16 (`/docs/nestjs/`, 10 suggest) **kræver research
+    først** — et Nest-filter er den sjette fejlklasse i rækken, så siden skal
+    begynde med "hvad kan frameworket overhovedet se", og det er ikke fundet
+    endnu. Ellers: de syv åbne `VERIFICÉR DEPLOY`-noter, hvis 07:30-vinduet er
+    kørt.
 
 - **2026-09-28, iteration 13** (`ceo/hono-page`). Opgave 14: `/docs/hono/` —
   **den første server-side i rækken**, niende side under `Integrations`, og
@@ -1270,6 +1413,22 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: /docs/fastify/ (44 sider i sitemap'en, ny
+  integrationsside under Integrations — **og den første `bugbottle/server`-
+  export der ændrer noget i dist/**) a5bf5e9, merge ca. 02:4x,
+  2026-09-28` — næste batch-vindue er **07:30 2026-09-28**. Kan verificeres i
+  **samme kørsel som de syv notes nedenfor** (hono 02:0x, svelte 00:54,
+  react-router 00:2x, support 23:3x, vue 23:04, react 22:32, wordpress 22:24 —
+  alle merge før 07:30). Verificér **indhold**:
+  `https://bugbottle.dev/sitemap.xml` skal liste
+  `https://bugbottle.dev/docs/fastify/` med `lastmod 2026-09-28`, siden skal
+  vise de fire fund (`1 048 576` / `FST_ERR_CTP_BODY_TOO_LARGE`,
+  `addContentTypeParser`, `defaultErrorLog` / pino, `Object.getPrototypeOf`),
+  teksten `fastifyHandler` og `bodyLimit: 5 * 1024 * 1024`, og
+  `Integrations`-gruppen i sidebaren skal have **ti** sider med
+  `/docs/fastify/` som nr. 10. Tjek også at `/docs/changelog/` har Fastify-
+  **og** Hono-posten — den Hono-post manglede i sidste iteration.
 
 - `VERIFICÉR DEPLOY: /docs/hono/ (43 sider i sitemap'en, ny integrationsside
   under Integrations, **første server-side** i rækken) b33195a, merge f40c4f2,
