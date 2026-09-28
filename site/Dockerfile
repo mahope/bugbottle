@@ -26,14 +26,24 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY README.md ./
-COPY scripts/build-docs.mjs ./scripts/
+# Both scripts, not one. `build-docs.mjs` imports `./page-descriptions.mjs` for
+# the per-page `<meta name="description">` strings, so copying only the entry
+# point fails the build with ERR_MODULE_NOT_FOUND — see the note on the
+# `site/docs/` copy below. `tests/site-image.test.ts` reads this list and fails
+# when a `scripts/*.mjs` the build imports is not named here, so a module added
+# later cannot leave the image broken.
+COPY scripts/build-docs.mjs scripts/page-descriptions.mjs ./scripts/
 # The changelog is its own Markdown too, rendered into site/docs/changelog/,
 # so it has to be here or the script fails on a file it cannot read.
 COPY CHANGELOG.md ./
-# The two comparison pages and the Danish getting-started page are their own
-# Markdown, not README sections, and the same run writes sitemap.xml and
-# robots.txt.
-COPY site/compare.md ./site/
+# Every Markdown the run reads: the two comparison pages, the Danish
+# getting-started and privacy pages, and the two that are their own files
+# rather than README sections (`/self-hosted/` and `/support/`). Each is a
+# `source:` in the script's `STANDALONE` list, and a `source:` that is not
+# copied here is a build that fails on a file it cannot read — which is what
+# took the site down from 27/9 23:32, when `/support/` was added and this line
+# was not updated. `tests/site-image.test.ts` pins the two lists together.
+COPY site/compare.md site/self-hosted.md site/support.md ./site/
 COPY site/da/sammenlign.md site/da/kom-i-gang.md site/da/privatliv.md ./site/da/
 # The history, for the sitemap's dates. Last, because it changes with every
 # commit and would otherwise invalidate everything below it.
@@ -73,7 +83,15 @@ COPY site/fonts/ /usr/share/nginx/html/fonts/
 # generated from them.
 COPY site/da/index.html /usr/share/nginx/html/da/
 COPY --from=docs /build/site/docs/ /usr/share/nginx/html/docs/
+# One line per `out:` in the script's `STANDALONE` list, and both halves of a
+# pair are needed: the `COPY` above feeds the build its `source:`, this one
+# puts the page it generated where nginx serves it. A `source:` without its
+# `out:` is the quieter half of that bug — the build succeeds and the page is
+# still a 404, which is how `/self-hosted/` and `/support/` stayed missing
+# after their Markdown was added.
 COPY --from=docs /build/site/compare/ /usr/share/nginx/html/compare/
+COPY --from=docs /build/site/self-hosted/ /usr/share/nginx/html/self-hosted/
+COPY --from=docs /build/site/support/ /usr/share/nginx/html/support/
 COPY --from=docs /build/site/da/sammenlign/ /usr/share/nginx/html/da/sammenlign/
 COPY --from=docs /build/site/da/kom-i-gang/ /usr/share/nginx/html/da/kom-i-gang/
 COPY --from=docs /build/site/da/privatliv/ /usr/share/nginx/html/da/privatliv/
