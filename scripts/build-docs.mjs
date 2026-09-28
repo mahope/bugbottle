@@ -220,6 +220,7 @@ const GROUPS = [
       "react",
       "vue",
       "svelte",
+      "sveltekit",
       "nextjs",
       "angular",
       "nuxt",

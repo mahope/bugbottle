@@ -1156,6 +1156,213 @@ handler is called with a deserialised copy, and printing it is the only way to
 see that. Throw from the `failed` snippet too, since the runtime re-throws that
 one on purpose.
 
+## SvelteKit
+
+SvelteKit is not a rendering library with a router bolted on, and that is why it
+has an error story the [page above](/docs/svelte/) cannot tell: **it owns the
+error.** `sveltekit error handling` is seven suggestions on Google, more than
+twice `svelte error handling`'s three, and the two the autocomplete adds that
+the others do not have are `sveltekit global error handling` and `sveltekit
+remote functions error handling`. That is a framework with hooks of its own, and
+therefore a page of its own.
+
+Everything below was read out of `@sveltejs/kit@2.70.3`, the published package,
+not out of the documentation. The documentation is good, and it describes
+`handleError` as the place to log an error. The first thing below is the
+opposite of what adding one does, and it is not written down anywhere.
+
+**The correction to the obvious plan, first, because it is the whole page:** the
+hook that files a report is the one in `src/hooks.ts`, not the one in
+`src/hooks.server.ts`. A server hook runs in Node, where there is no window, no
+ring buffer and no panel to open — a report sent from it describes a machine
+your user is not looking at. The universal hook runs in the browser, on
+client-side navigation, which is where the panel is. You want both, for different
+reasons, and the second half of this page is what each one is for.
+
+### The hook that decides whether you have any reports at all
+
+A SvelteKit application with no `src/hooks.ts` still logs its client-side
+errors. The client runtime's hooks are generated into the manifest, and the
+generated line is this — `src/core/sync/write_client_manifest.js` in the kit
+package:
+
+```js
+export const hooks = {
+	handleError: ${client_hooks_file ? 'client_hooks.handleError || ' : ''}(({ error }) => { console.error(error) }),
+	${client_hooks_file ? 'init: client_hooks.init,' : ''}
+	reroute: ${universal_hooks_file ? 'universal_hooks.reroute || ' : ''}(() => {}),
+	transport: ${universal_hooks_file ? 'universal_hooks.transport || ' : ''}{}
+};
+```
+
+Read the middle of that line twice. It is **your hook, or a function that logs.**
+Adding a `handleError` to `src/hooks.ts` replaces the logging function with
+yours — so if your hook posts a report and does not itself `console.error`, the
+console line disappears at the exact moment you wire the integration up. A
+developer testing the integration sees a working report; the person triaging
+later finds an empty inbox for a bug the browser used to print for free.
+
+The `??` on the far side of the call is the second half of it. In
+`src/runtime/client/client.js`:
+
+```js
+function handle_error(error, event) {
+	if (error instanceof HttpError) {
+		return error.body;
+	}
+	// …
+	return (
+		app.hooks.handleError({ error, event, status, message }) ??
+			/** @type {any} */ ({ message })
+	);
+}
+```
+
+What the hook returns is the object `+error.svelte` renders, and the `??` is
+what makes returning nothing legal: the page then gets `{ message }` and nothing
+else — not the status code, not the stack. So the hook's return value has two
+consumers and they want different things, and the mistake is a hook that both
+reports and returns. Send the report and return nothing, or return something and
+do not report. The report is the reason the hook exists; the returned value is a
+page.
+
+```ts
+// src/hooks.ts
+import type { HandleClientError } from "@sveltejs/kit";
+import { buildReport, sendReport } from "bugbottle";
+
+export const handleError: HandleClientError = ({ error, message, event }) => {
+	void sendReport(buildReport({ type: "error", message, url: event.url.pathname }));
+	// Return nothing: the page renders its own message from the fallback above.
+};
+```
+
+`src/hooks.ts` is a **universal** hook, and that distinction is the point of the
+paragraph. It runs in the browser on client-side navigation and in Node on the
+server, out of the same file, and a `console.error` in it reaches the ring buffer
+in the first of those two only.
+
+### The server hook logs where nobody is listening
+
+The server's default is a different function, and it is different on purpose —
+`src/runtime/server/index.js`:
+
+```js
+handleError:
+	module.handleError ||
+	(({ status, error, event }) => {
+		const error_message = format_server_error(
+			status,
+			/** @type {Error} */ (error),
+			event
+		);
+		console.error(error_message);
+	}),
+```
+
+`format_server_error` is SvelteKit's own formatting, and that `console.error` is
+Node's. An error thrown while server-rendering is printed in the server log and
+nowhere else: no window, no ring buffer, no panel. Which is the correct place
+for it — a server log is where an SSR failure belongs — and is why
+`src/hooks.server.ts` is not where a bugbottle report comes from. Forward from
+there to whatever you already run for server errors; report from
+`src/hooks.ts`.
+
+**And a server error is deliberately not reported twice.** When a `load` fails
+on the server, the client gets the error as a `__data.json` response and turns
+it into an `HttpError` on purpose — `src/runtime/client/client.js`, in
+`load_data`:
+
+```js
+if (!res.ok) {
+	// error message is a JSON-stringified string which devalue can't handle at the top level
+	// turn it into a HttpError to not call handleError on the client again (was already handled on the server)
+```
+
+Read that comment as a specification: **the client hook does not fire for an
+error that already happened on the server.** So neither hook covers the app on
+its own:
+
+| Where the error happened | `src/hooks.ts` | `src/hooks.server.ts` |
+| --- | --- | --- |
+| A component throws during client-side navigation | yes | no |
+| A universal `load` throws on the client | yes | no |
+| A server `load` or a `+page.server.js` action throws | **no, on purpose** | yes |
+| A form action calls `fail()` | no | no |
+
+The last row is not a gap in the table, it is the rule: **`fail()` is a result,
+not an error.** It is a validation answer with a status code and a data object,
+and SvelteKit never routes it through `handleError`. If your users report "the
+form does nothing" and you have no reports, this row is why.
+
+### `error()` is not yours, and a server error arrives as a copy
+
+Two things from the [Svelte page](/docs/svelte/) carry over unchanged, so they
+are linked rather than repeated. `error(404, "Not found")` is an `HttpError`, so
+`handle_error` returns at its first line and your hook never sees it. And a
+server-rendered error handed to the client hook is a **deserialised copy**: the
+`Error` crossed the wire, so `instanceof` against your own error classes fails
+and the stack is whatever the server chose to send. Print it once from inside
+the hook to see what your own report will carry.
+
+The line that is missing everywhere else, and is the reason a SvelteKit report
+that goes missing usually has nothing to do with the hook: **a rejected promise
+is not a SvelteKit error.** `unhandledrejection` appears zero times in
+`@sveltejs/kit@2.70.3`. A `fetch` in a `load` that nobody awaits, or a remote
+function call a component forgets to catch, reaches the window, and the ring
+buffer is already patched for it. The hook will not see those, and does not need
+to.
+
+### Remote functions: the same trap on a second hook
+
+`sveltekit remote functions error handling` is the second autocomplete
+suggestion, and remote functions brought a second hook with the identical `||`
+shape. The default, again from `src/runtime/server/index.js`:
+
+```js
+handleValidationError:
+	module.handleValidationError ||
+	(({ issues }) => {
+		console.error('Remote function schema validation failed:', issues);
+		return { message: 'Bad Request' };
+	}),
+```
+
+A schema mismatch on a remote function's arguments is a **400 with a server-side
+`console.error`**: not an exception, not an `HttpError` you threw, and not
+something `handleError` ever sees. It is your own argument validation failing
+somewhere between the browser and the function, and by default the only trace is
+a line in a server log. Give it a `handleValidationError` in
+`src/hooks.server.ts` if you want those visible. The shape is the same choice as
+before: what the hook returns is the response body, so returning a different
+`message` is how you change what the browser is told.
+
+### The pages the panel is not on
+
+`+error.svelte` is a separate page load without the layout, so the panel is not
+mounted on it, and `src/error.html` is the static file SvelteKit serves when the
+app cannot boot — the same two answers as the other framework pages, and the
+[full snippet is on the Svelte page](/docs/svelte/#the-page-where-the-framework-is-gone).
+One note is SvelteKit's alone: `src/error.html` is served before any of your
+code runs, so it is the one page where the tag has to be inline in the markup,
+and it is also the page a reader lands on when the whole application is down.
+Mount the panel there the same way, knowing that nothing else in your app is
+available to it.
+
+### What to check before you ship it
+
+Four throws, and the reports that exist afterwards. First, throw inside a
+component during a client-side navigation with **no** `src/hooks.ts` at all and
+watch the console line appear — that is the generated default, and it is the
+baseline. Second, add the hook from the first section and throw again: the
+report arrives and the console line is gone. That silence is the hook doing its
+job, and it is worth knowing before somebody reports it as a regression. Third,
+build, serve the build, and throw inside a server-rendered page: the client hook
+does **not** fire and the server log is the only trace — the table's second half,
+measured rather than believed. Fourth, call a remote function with arguments
+that fail its schema, and confirm that no report appears anywhere: a 400 is not
+an error until somebody says it is.
+
 ## Next.js
 
 Next.js owns the error boundary in an App Router application, so

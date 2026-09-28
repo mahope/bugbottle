@@ -86,6 +86,8 @@ export const PAGE_DESCRIPTIONS = {
   react: "A plain React app has no error hook of its own. createRootErrorHandlers covers the root, and in React 19 it is not a development-only path.",
   "react-router":
     "React Router v7, v8 and Remix: the declarative and the data error boundary, useRevalidator on the error page, and three modes that differ.",
+  sveltekit:
+    "SvelteKit: adding handleError deletes the console line, the server hook logs where nobody listens, and a server load error is never reported twice.",
   "tanstack-router":
     "TanStack Router: onCatch never runs without an errorComponent, and the global boundary is silent in production. The one line that fixes both.",
   "tanstack-query":

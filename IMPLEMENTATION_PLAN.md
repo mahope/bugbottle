@@ -1179,18 +1179,69 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   budget flyttede sig. **Branchen er baseret på `ceo/script-tag-once-2`**, så
   opgave 29 og 30 ligger i én kø og merger sammen — se "Fund fra
   TanStack-Query-iterationen", punkt 5.
-- [ ] **31. SvelteKit har sin egen fejl-vej og kun nævnt i en halv side.**
-  `sveltekit error handling` er 7 forslag (28/9) — højere end
-  `svelte error handling`'s 3, og `/docs/svelte/` dækker den kun som et
-  afsnit. `handleError` i `hooks.server.ts` kører **på serveren**, hvor
-  panelet ikke findes, så den rigtige løsning er den samme
-  script-tag-fallback som TanStack Start. Kan slås sammen med opgave 29.
+- [x] **31. SvelteKit har sin egen fejl-vej.** 28/9, `ceo/sveltekit-side`,
+  `/docs/sveltekit/`. **Lukket.** Datagrund: `sveltekit error handling` er 7
+  suggestions mod `svelte error handling`'s 3, og autocomplete tilføjer de to
+  ingen anden ramme har — `sveltekit global error handling` og `sveltekit
+  remote functions error handling`. Læst i `@sveltejs/kit@2.70.3`'s
+  publicerede kilde. **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.**
+  Se fundene nedenfor — og de **retter planens egen hypotese**. 50 docs-sider
+  (fra 49), 253 søgeposter (fra 246), `npm run check` grøn (896 tests,
+  `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
+  budget flyttede sig (IIFE'erne uændrede 24 688 / 21 104).
 - [ ] **32. En `/docs/`-side der samler de otte framework-integrationer i én
   tabel.** Datagrund: otte sider der ligner hinanden, hver med sin egen
   "hvor mange kroge"-inddeling. En læser der *vil* vide hvilken de har,
   har i dag ingen side at finde det på. Advarsel fra CLAUDE.md: må ikke blive
   en tynd opslagsside — den skal have den fulde krog-tabel, ellers er den
   værre end ingen.
+
+### Fund fra SvelteKit-iterationen (28/9 10:3x) — fire fund, og de retter planen
+
+**1. Planens hypotese var forkert, og det er det vigtigste fund.** Skrevet i
+køen: *"`handleError` i `hooks.server.ts` kører **på serveren**, hvor panelet
+ikke findes, så den rigtige løsning er den samme script-tag-fallback som TanStack
+Start."* **Nej.** `src/hooks.server.ts` er Node — intet vindue, ingen
+ringbuffer, intet panel. Men `src/hooks.ts` er en **universal** krog: samme fil,
+browseren på klient-navigation, Node på serveren. Det er den, der sender
+rapporten, fordi det er den eneste af de to der kører der panelet findes. Så
+svaret er hverken script-tag-fallback eller to kroge — det er *én* krog i det
+rigtige filnavn, plus en tabel over hvad den dækker og hvad den med vilje
+ikke dækker.
+
+**2. Tilføjelsen af krogen sletter konsollinjen.** `src/core/sync/write_client_manifest.js`
+genererer klientens kroge, og den genererede linje er
+`handleError: client_hooks.handleError || (({ error }) => { console.error(error) })`.
+Læs den igen: **din krog, eller en funktion der logger.** Så en SvelteKit-app
+uden `src/hooks.ts` logger alle klientfejl i ringbufferen, og det øjeblik man
+tilføjer krogen for at få rapporter, forsvinder linjen — medmindre ens egen krog
+også kalder `console.error`. En udvikler der tester integrationen ser en
+fungerende rapport; den der triagerer senere finder en tom indbakke for en fejl
+browseren før printede gratis. Det er samme klasse som Vues "setting it deletes
+the console line" (den side), men mekanismen er en `||` i genereret kode, og
+den står ingen steder i SvelteKits egen dokumentation.
+
+**3. En serverfejl rapporteres aldrig to gange — med vilje.** `load_data` i
+`src/runtime/client/client.js` gør en fejl fra serveren til en `HttpError` med
+kommentaren *"to not call handleError on the client again (was already handled on
+the server)"*. Læs det som en specifikation: **klientkrogen fyrer aldrig for en
+fejl der skete på serveren.** Siden har derfor en tabel med fire rækker, hvor
+den fjerde er den der binder: `fail()` i en form action er et *resultat*, ikke en
+fejl, og går aldrig gennem `handleError`. "Formularen gør ingenting" + ingen
+rapporter = den række.
+
+**4. Remote functions har samme fælde på en anden krog.**
+`handleValidationError`'s default er `console.error('Remote function schema
+validation failed:', issues); return { message: 'Bad Request' }` — altså et 400
+med en linje i serverloggen, ikke en undtagelse, ikke noget `handleError` ser.
+Det er præcis den autocomplete-tilføjelse planen ikke havde set.
+
+**Deploy, genmålt 28/9 10:3x: uændret.** `/self-hosted/`, `/docs/svelte/` og
+`/docs/tanstack-query/` er stadig 404, sitemap'en stadig 47 `<loc>`. Der er
+intet nyt batch-vindue siden målingen kl. 08:29 (næste er 12:30), så det er
+forventet — og det bekræfter at blokeringen står. **Merges til `main` er stadig
+stoppet**; denne iteration ligger derfor på `ceo/sveltekit-side oven på
+`ceo/tanstack-query`, så opgave 29, 30 og 31 ligger i én kø.
 
 ## Fund fra Sentry-SDK-rækken (27/9) — hvorfor tallene er målt
 
