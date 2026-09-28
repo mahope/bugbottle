@@ -332,6 +332,22 @@ nextjs.org, angular.dev, nuxt.com.
   søgeposter (fra 217). **Ingen kodeændring** — begge IIFE'er vejer 24 688 /
   21 104 gzipped, uændrede, `check-dist` grøn på 208 filer, 896 tests grønne.
 
+- [ ] **24. `typescript` 5.9.3 → 7.x — den én major der ligger.** 28/9,
+  målt som den eneste tilbageværende major. **Ikke** en del af patch-runden, for
+ di den er den Go-byggede compiler med sit eget CLI, og vi kalder compileren på
+  tre måder (`tsc -p tsconfig.build.json`, `scripts/build-schema.ts`,
+  `scripts/build-openapi.ts`). **Accept:** `npm run check` grøn uden at røre de tre
+  opkald hvis det kan lade sig gøre, ellers ét samlet kald; `dist/` uændret i
+  størrelse (24 688 / 21 104 gzipped — TypeScript er ikke i nogen bundle, så det
+  *skal* være uændret, og en ændring betyder at noget andet rørte sig);
+  `dist/report.schema.json` og `dist/openapi.json` byte-identiske, fordi de er
+  serialiseret med sorterede nøgler og derfor *kan* sammenlignes; de 896 tests
+  grønne. **Og ét fra `docs/api-audit-1.0.md`:** en ny compiler kan ændre
+  `verbatimModuleSyntax`-håndhævelsen eller de `.d.ts`-emitter, så
+  `node scripts/api-table.mjs` skal køre igen og diffen læses — det er den
+  faldgrube, en major i en typechecker falder i her, fordi den eneste synlige
+  skade er en d.ts der lyder anderledes.
+
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -1363,12 +1379,60 @@ Vi arbejder kun i dette repo, så begge er forslag.
 
 ## Opgraderinger
 
-**Sikkerhed tjekket 27/9 (iteration 6): `npm audit` → 0 sårbarheder**, hverken i
-dev- eller i production-afhængigheder. Det er forventeligt: biblioteket har nul
-runtime-afhængigheder, så `package-lock.json` rummer kun byggeværktøjet.
-`~/.local/oxloop/AFHAENGIGHEDER.md` er stadig ikke læst; det er den næste
-iteration, der tager første afhængighedsopgave. Overfladen er devDependencies +
-Node-versionen i `site/Dockerfile` (node:22) og CI.
+**Sikkerhed tjekket 27/9 (iteration 6) og igen 28/9 kl. 06:2x:
+`npm audit` → 0 sårbarheder**, hverken i dev- eller i production-afhængigheder.
+Det er forventeligt: biblioteket har nul runtime-afhængigheder, så
+`package-lock.json` rummer kun byggeværktøjet.
+
+**`~/.local/oxloop/AFHAENGIGHEDER.md` er læst 28/9** (den stod åben siden
+iteration 6). **bugbottle står ikke i tabellen over de tjekkede projekter**, så
+der er ingen kendt sårbarhed at gå efter; overfladen er devDependencies +
+Node-versionen. **Runtime-erklæringen findes:** `package.json` har
+`"engines": { "node": ">=18" }` (linje 175) — altså er det jordemoderstudys
+manglende-`engines`-fælde, der ikke kan ske her. Der er **ingen `.nvmrc`**, og
+det er bevidst: CI kører en matrix (18/20/22) plus 22 til release og
+script-tag-byggene, og `site/Dockerfile` bruger `node:22-alpine`. En `.nvmrc`
+ville låse de tre steder til én version og så tvært mod `engines`.
+
+### Opgraderet 28/9 kl. 06:2x — otte devDependencies, patch og minor samlet
+
+Alle otte er byggeværktøj eller en testværts-framework; **biblioteket har ingen af
+dem ved runtime**, så intet her rører en forbruger. **Ingen kodeændring var
+nødvendig** — `npm run check` grøn første gang, 896 tests, og **ingen bundle
+flyttede sig** (24 688 / 21 104 gzipped, uændrede).
+
+| Pakke | Fra | Til |
+|---|---|---|
+| `@types/node` | ^26.4.1 | ^26.6.3 |
+| `@types/react` | ^19.0.0 | ^19.3.0 |
+| `happy-dom` | 20.14.0 | 20.14.5 |
+| `marked` | 18.0.12 | 18.0.14 |
+| `react` | ^19.2.8 | ^19.3.0 |
+| `react-dom` | 19.2.8 | 19.3.0 |
+| `svelte` | 5.57.0 | 5.57.1 |
+| `vue` | 3.5.42 | 3.5.43 |
+
+- **`svelte` 5.57.0 → 5.57.1** er den eneste med en bemærkning værd: Svelte-siden
+  (opgave 13) blev skrevet ud af **`svelte@5.57.1`**'s boundary-runtime, som var
+  den nyeste da researchen blev lavet, mens devDependency'en stadig stod på
+  5.57.0. Testværten og den dokumenterede kode er nu den **samme** version.
+- **Pinning-konventionen er bevaret.** `npm install --save-dev` ville have sat
+  `^` foran de fem pindede, så de blev sat tilbage til præcise tal: de er
+  pindede, fordi et docs-fund skal kunne læses i den version siden citerer, og
+  en `^` gør det umuligt at sige hvilken.
+- **En major er bevidst ikke taget:** `typescript` 5.9.3 → **7.0.2**. Reglen er
+  én major pr. commit, og den her kræver sin egen iteration: TS 7 er den
+  Go-byggede compiler, der kommer med sit eget CLI, og `scripts/build-schema.ts`
+  + `scripts/build-openapi.ts` + `tsc -p tsconfig.build.json` er tre forskellige
+  måder at kalde compileren på. Tages som opgave 24 når tiden er til det — ikke
+  som en linje i en patch-runde.
+- **De otte øvrige devDependencies er allerede nyeste** (`@testing-library/react`
+  16.3.3, `ajv` 8.20.0, `axe-core` 4.13.0, `esbuild` 0.28.2, `html-to-image`
+  1.11.13, `solid-js` 1.9.15, `ts-json-schema-generator` 2.9.0), målt med
+  `npm view <pakke> version` 28/9. Bemærk at CI **pinder esbuild til 0.24.0** i
+  måleopskrifterne til `measure-sinks.mjs` og `measure-competitors.mjs`, fordi et
+  måltal skal kunne sammenlignes med de tidligere — den pindning er ikke en
+  glemt opgradering.
 
 ## Log
 
