@@ -309,6 +309,24 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **Every page's `<meta name="description">` was the first paragraph of the
+  page, clipped mid-word.** `site/` took the description of a documentation page
+  from the paragraph under its heading, which is written for somebody who has
+  just clicked, and cut it at 157 characters. Forty of the forty-eight pages
+  ended in an ellipsis — the `Next.js` one lost the half of its sentence that
+  names the question it answers — and several quoted the site rather than the
+  page: `NestJS is the sixth framework in this row`, `Every other page on this
+  list is about a browser`, `Fastify is the framework with the most server-side
+  search behind it that this package does not yet have a page for`. A search
+  engine rewrites a description it does not trust, and a snippet that says
+  "this row" tells a stranger nothing. Each page now carries a written sentence
+  in `scripts/page-descriptions.mjs` — what the page is for, in the name
+  somebody types, such as `error.tsx`, `fastifyHandler` or `svelte:boundary` —
+  and `npm run build:docs` fails on a page that has none, on one that is
+  clipped or over 158 characters, and on one that talks about the site instead
+  of the page. The two hand-written landing pages were shortened by hand, since
+  nothing generates them.
+
 - **`createRootErrorHandlers` deleted the console line it was installed in place
   of.** React's own default for `onCaughtError` is one `console.error(error)` —
   in `react-dom@19.3.0`'s production bundle as well as the development one, read

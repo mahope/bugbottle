@@ -45,6 +45,11 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Marked } from "marked";
+import {
+  MAX_DESCRIPTION_CHARS,
+  PAGE_DESCRIPTIONS,
+  SELF_REFERENTIAL,
+} from "./page-descriptions.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = join(root, "site", "docs");
@@ -600,6 +605,27 @@ function describe(body) {
   const clipped = text.slice(0, 157);
   const cut = clipped.lastIndexOf(" ");
   return `${cut > 40 ? clipped.slice(0, cut) : clipped}…`;
+}
+
+/* The description a page carries, and the one place a page gets to say what it
+   is *for* rather than what it opens with. A written sentence wins; the first
+   paragraph is the fallback, and `blurred` remembers every page that fell back
+   so main() can refuse the build over it.
+
+   The fallback is not a mistake to be tolerated but a defect to be found: a
+   description Google clips is one Google replaces, and a paragraph written for
+   somebody who has already clicked is rarely an answer to a question typed into
+   a search box. Forty of the forty-eight pages this replaced were the clipped
+   kind. */
+const blurred = [];
+const described = [];
+
+function pageDescription(slug, body) {
+  const written = PAGE_DESCRIPTIONS[slug];
+  const text = written !== undefined ? written : describe(body);
+  if (written === undefined) blurred.push(slug);
+  described.push({ slug, text });
+  return text;
 }
 
 /* The plain prose of a slice of Markdown, for the search index: fenced code
@@ -1260,7 +1286,7 @@ async function main() {
       ...section,
       url,
       groupTitle: group?.title ?? "",
-      description: describe(section.body),
+      description: pageDescription(slug, section.body),
       ...(daUrl
         ? {
             enUrl: url,
@@ -1345,7 +1371,7 @@ async function main() {
     const page = {
       ...entry,
       html: marked.parse(body),
-      description: describe(body),
+      description: pageDescription(entry.id, body),
       headTitle: `${entry.heading} — bugbottle`,
       canonical: `${ORIGIN}${entry.url}`,
       alternates:
@@ -1401,7 +1427,7 @@ async function main() {
     const page = {
       ...CHANGELOG,
       html: `${lede}${releaseToc(releases, CHANGELOG.tocTitle)}${rest}`,
-      description: describe(body),
+      description: pageDescription(CHANGELOG.id, body),
       headTitle: `${CHANGELOG.heading} — bugbottle`,
       canonical: `${ORIGIN}${CHANGELOG.url}`,
       docsCurrent: true,
@@ -1450,6 +1476,35 @@ async function main() {
   ].filter((url) => !indexed.has(url));
   if (unindexed.length > 0) {
     throw new Error(`Pages missing from site/docs/search.json: ${unindexed.join(", ")}`);
+  }
+
+  /* A description is the one line of the page a reader sees before deciding,
+     and it is the only text on the site that is read outside it. Three ways to
+     get it wrong, all of which pass every other check: the first paragraph is
+     used because nobody wrote one, which leaves a sentence clipped mid-word
+     where a search engine rewrites it; it is longer than a snippet and loses
+     its ending to an ellipsis; or it is true here and meaningless there,
+     because it points at the surrounding pages. The last is the one worth a
+     list rather than a rule — a page may perfectly well say "the same
+     machine" three paragraphs down, and only the first line is ever quoted. */
+  const badDescriptions = described
+    .filter(({ text }) => text.length > MAX_DESCRIPTION_CHARS || text.includes("…"))
+    .map(({ slug }) => `${slug} (clipped or over ${MAX_DESCRIPTION_CHARS} characters)`)
+    .concat(
+      described
+        .filter(({ text }) => SELF_REFERENTIAL.some((phrase) => text.toLowerCase().includes(phrase)))
+        .map(({ slug }) => `${slug} (talks about the site rather than the page)`),
+    );
+  if (blurred.length > 0) {
+    badDescriptions.push(
+      `${blurred.length} page(s) with no written description, so the first paragraph is quoted: ${blurred.join(", ")}`,
+    );
+  }
+  if (badDescriptions.length > 0) {
+    throw new Error(
+      `Descriptions that will not survive a results page — add a sentence in ` +
+        `scripts/page-descriptions.mjs:\n  ${badDescriptions.join("\n  ")}`,
+    );
   }
   await writeFile(join(outDir, "search.json"), JSON.stringify(searchIndex), "utf8");
 
