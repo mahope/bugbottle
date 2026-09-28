@@ -414,6 +414,35 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Changed
 
+- **The `description` says what a search looks for, and the keywords carry what
+  it cannot.** npm's search index reads two fields — `description` and
+  `keywords` — and this one ranked **1** of 1 155 126 for the phrase `Your UI
+  your endpoint` and **2** of 20 859 for `evidence attached`, both sentences out
+  of the old description, so the description was already doing the work. What it
+  was not carrying is anything a person types: `sentry alternative` is a
+  24 022-result query that two packages reach for, `@mizchi/utels` and
+  `quto-logger`, and both hold the keyword `sentry-alternative` as well as the
+  two words in their description. Ours held neither, nor `self-hosted`, nor
+  `error-reporting`/`error-tracking` — it spent 148 characters explaining that
+  the package is headless and none of them naming a category. It now opens "Self-hosted
+  Sentry alternative for in-app bug reporting and user feedback", which is
+  still true of a library with no hosted service whose report is POSTed to an
+  endpoint the application owns, and keeps `Your UI, your endpoint` last because
+  that is the sentence measured at rank 1. Four keywords are added. **No export,
+  no option, no behaviour and no byte of `dist/` changes** — this is two fields
+  of `package.json`, so nothing an application imports is different.
+  - **A correction worth more than the change.** An earlier iteration measured
+    that this package is not in npm's top 250 for any of its own keywords
+    (`bug-report`: 82 818 results) and concluded the keywords were not worth
+    changing. That was the wrong test: it searched for each keyword *as a whole
+    query*, which is a head term nobody wins. The right test is whether the
+    token is present for a query it can win, and by that measure the keyword is
+    exactly what put `quto-logger` at rank 2. The same iteration also found
+    that **the README is not in npm's search index at all** — `checkoutEveryNms`
+    occurs eleven times in ours and the query returns one package, which is not
+    us — so a better README moves stars and the reader on npmjs.com, never this
+    ranking. A better README is still worth writing; it is just not this lever.
+
 - **The script tag's explanation is written once, and the build fails if a
   fourth page writes it again.** Four framework pages — Next.js, Angular, Nuxt
   and Astro — each carried their own paragraph on what the tag covers, in four
