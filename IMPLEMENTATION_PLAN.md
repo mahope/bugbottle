@@ -332,24 +332,124 @@ nextjs.org, angular.dev, nuxt.com.
   søgeposter (fra 217). **Ingen kodeændring** — begge IIFE'er vejer 24 688 /
   21 104 gzipped, uændrede, `check-dist` grøn på 208 filer, 896 tests grønne.
 
-- [ ] **24. `typescript` 5.9.3 → 7.x — den én major der ligger.** 28/9,
-  målt som den eneste tilbageværende major. **Ikke** en del af patch-runden, for
- di den er den Go-byggede compiler med sit eget CLI, og vi kalder compileren på
-  tre måder (`tsc -p tsconfig.build.json`, `scripts/build-schema.ts`,
-  `scripts/build-openapi.ts`). **Accept:** `npm run check` grøn uden at røre de tre
-  opkald hvis det kan lade sig gøre, ellers ét samlet kald; `dist/` uændret i
-  størrelse (24 688 / 21 104 gzipped — TypeScript er ikke i nogen bundle, så det
-  *skal* være uændret, og en ændring betyder at noget andet rørte sig);
-  `dist/report.schema.json` og `dist/openapi.json` byte-identiske, fordi de er
-  serialiseret med sorterede nøgler og derfor *kan* sammenlignes; de 896 tests
-  grønne. **Og ét fra `docs/api-audit-1.0.md`:** en ny compiler kan ændre
-  `verbatimModuleSyntax`-håndhævelsen eller de `.d.ts`-emitter, så
-  `node scripts/api-table.mjs` skal køre igen og diffen læses — det er den
-  faldgrube, en major i en typechecker falder i her, fordi den eneste synlige
-  skade er en d.ts der lyder anderledes.
+- [ ] **24. `typescript` 5.9.3 → 7.0.2 — den én major der ligger.**
+  **BLOCKED (28/9, `ceo/typescript-7`, rullet tilbage efter 55 min): tre
+  forhindringer, en af dem reel. Se "Fund fra TypeScript 7-iterationen" —
+  hele undersøgelsen er skrevet ud der, så næste iteration ikke gentager den.**
+  Kort sagt: **TypeScript 7's npm-pakke har ikke længere noget
+  JavaScript-compiler-API.** `tsc` virker (den er Go-bygget), men
+  `require("typescript")` svarer `{ version, versionMajorMinor }` og
+  `package.json#exports` har **ingen** `main` — kun `"./package.json"`, `"."`
+  (→ `lib/version.cjs`) og otte `unstable/*`-entries. Alt vi bruger
+  compiler-API'et til, holder derfor op at virke, og det er tre steder, ikke
+  ét. `npm run check` blev grøn alligevel, så porten er **ikke** gaten — det er
+  det tredje sted, `scripts/api-table.mjs`, der afgør om opgaven kan løses i
+  det hele. **Accept uændret** (grøn gaten, `dist/` uændret i størrelse, schema
+  og openapi byte-identiske, 896 tests grønne, `api-table.mjs` kørt og diffen
+### Fund fra TypeScript 7-iterationen (28/9) — opgave 24, rullet tilbage
 
-- [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
-  (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
+Jeg gennemførte hele opgraderingen på `ceo/typescript-7`, fik porten grøn, og
+rullede den så tilbage — fordi det **tredje** sted der bruger compiler-API'et
+ikke kan overlejre, og fordi det er det sted opgaven selv siger skal køre.
+55 minutter, ikke de 45. Alt nedenfor er målt, ikke formodet, så næste
+iteration starter derfra.
+
+**Det ene fund der afgør opgaven: `typescript@7` har ikke noget
+JavaScript-compiler-API.**
+
+```
+$ node -p "require('typescript/package.json').main"     →  undefined
+$ node -p "Object.keys(require('typescript'))"            →  [ 'version', 'versionMajorMinor' ]
+$ npx tsc --version                                      →  Version 7.0.2
+```
+
+`package.json#exports` er `"./package.json"`, `"."` → `./lib/version.cjs`, og
+otte `unstable/*`-entries (`sync`, `async`, `fs`, `proto`, `ast`, `ast/is`,
+`ast/factory`, `ast/utils`, `ast/scanner`, `ast/visitor`, `ast/clone`). Altså:
+`tsc` virker perfekt, og **alt** der læser et program gennem JS holder op at
+virke. Vi har tre sådanne steder, og de fejer på tre forskellige måder:
+
+1. **`tsc -p tsconfig.build.json` — én ny fejl, `TS5011`.** *"The common source
+   directory of 'tsconfig.build.json' is './src'. The 'rootDir' setting must be
+   explicitly set…"* Den peger på https://aka.ms/ts6. **Fix: `"rootDir": "src"`
+   i `tsconfig.build.json`.** Uden den lægger `tsc` output i `dist/src/…` i
+   stedet for `dist/…` — altså 204 filer på den **forkerte** side, som
+   `check-dist` korrekt nægter at se som trackede. (Den fælde er værd at kende
+   alene: `npm run check` grøn, `npm pack` pakkede en `dist/src/`-struktur.)
+2. **`ts-json-schema-generator` 2.9.0 dør med den.** Det er et **peer**
+   afhængighed på `typescript: ^5.9.3` og det bruger `ts.createProgram`. Der
+   findes en erstatning, `ts-json-schema-generator@3.0.0-native.5`
+   (dist-tag `native`), som *er* bygget til TS 7 — men se fund 2 og 3.
+3. **`scripts/api-table.mjs` dør med den, og det er her opgaven stopper.**
+   `api-table.mjs:31` kalder `ts.createProgram`, og resten af scriptet bruger
+   `ts.ScriptTarget`, `ts.ModuleKind`, `ts.isTypeAliasDeclaration` og
+   `checker.getSymbolAtLocation` — altså hele den typechecker-overflade, der
+   gør tabellen til en *frosset* API-kontrakt. Den har ingen `unstable/*`-
+   erstatning, jeg kan forsvare uden at læse den nye API's dokumentation, og
+   **en forkert export-tabel er værre end en gammel**, fordi den er citérbar.
+
+**Fund 2 — den native generator dropper et loft fra et publiceret artefakt.**
+`dist/report.schema.json` er `https://bugbottle.dev/schema/report.json` og er
+kontrakten for en modtager i et andet sprog. 2.9.0 skrev
+`maxLength: 200` under `ElementRef.properties.attributes`; 3.0.0-native.5
+gør **ikke**. Jeg bekræftede begge veje (native igen → linjen væk; 2.9.0 mod
+samme `tsconfig` → linjen er der), så det er generatoren, ikke vores typer. Og
+loftet er **sandt**: `normaliseElement` klipper hvert attributværdi med
+`slice(0, 200)`. Fixen er den samme som alle de andre lofter i
+`scripts/build-schema.ts` — skrive det eksplicit ned — plus en **navngivet
+konstant**: `MAX_ELEMENT_ATTRIBUTE_LENGTH = 200`. Ikke
+`MAX_ELEMENT_TEXT_LENGTH`, der også er 200, fordi de to betyder forskellige
+ting (en etiket og en attributværdi), og schemaet ville ljude om et loft, der
+ikke er der. *(Denne del lavede jeg færdig og rullede tilbage med resten.)*
+
+**Fund 3 — en test lænede sig på generatorens egenskab-rækkefølge.**
+`tests/schema.test.ts` kompilerer det *usorterede* schema-objekt
+(`buildReportSchema()`), ikke den serialiserede fil, og den testede at en ugyldig
+payload **indeholdt** en `enum`-fejl. Med ajv's `allErrors: false` er det kun
+den **første** fejl, ajv rapporterer, og hvilken den er, afhænger af den
+rækkefølge generatoren skriver `properties` i: 2.9.0 skriver
+`type` først (deklarationsrækkefølge), den native skriver alfabetisk, så
+`console` kom før `type`, og `console[0]` i testens egen fixture mangler `ts`.
+Testen fejlede altså på en ændring i et **værktøj**, ikke i det schema den
+ville. Bevis: filen er byte-identisk, så en ren genopbygning af `dist/` med 2.9.0
+giver *samme* fil. Fix: én ekstra kompileret validator med `allErrors: true`
+til den ene test der spørger *hvilken* regel, der faldt. *(Lavet, rullet
+tilbage.)*
+
+**Hvad der rent faktisk ændrede sig i `dist/`** (optaget, fordi det er det
+Accept-kriteriet ikke døde på): **ét** `.js`-fil, `dist/report-core.js`, med de
+14 linjer fra den nye konstant. **Ingen anden `.js` rørte sig.** `.d.ts` ændrede
+sig i de fire adapter-fabrikker (`solid`, `svelte`, `vue` og rettet af
+`react/use-bug-report`) ved at **`destroy` flyttede til sidst** i returtypen —
+samme medlemmer, samme typer, samme JSDoc, kun rækkefølge. Og de to
+publicerede artefakter blev **byte-identiske** igen, efter loftet blev skrevet
+ned eksplicit. IIFE'erne: 24 691 / 21 110 gzipped mod 24 691 / 21 109 før
+(mål lokalt med `gzip -9`; den slims +1 byte er den nye konstant, budget 21 504).
+
+**Beslutning for næste iteration — tre veje, og kun en af dem er gratis:**
+
+- **A (anbefalet, én lille iteration):** behold TypeScript på **5.9.3**, og skriv
+  fundene her ind i `CLAUDE.md` som grunden til at den *står* der. Det er den
+  ærlige version af beskedens "opgradér alt": TypeScript 7 er ikke en
+  afhængighedsopgradering her, det er en **migration af værktøjskæden**, fordi
+  vi — mods de fleste — bruger compiler-API'et i *builden* og ikke kun
+  `tsc`. Vi gør det med vilje: det er sådan `report.schema.json` og
+  `openapi.json` overhovedet kan genereres fra typerne i stedet for at blive
+  skrevet i hånden, og det er derfor schemaet ikke kan komme til at drifte fra
+  `BugReport`. Til gengæld bærer `npm install` **en Go-binær til seks
+  platforme** (`ts-json-schema-generator-darwin-arm64` m.fl. som
+  `optionalDependencies`) i stedet for nul.
+- **B (to iterationer, hvis Mads vil have hastigheden fra Go-compileren):**
+  skriv `scripts/api-table.mjs` om til `typescript@7`'s `unstable/ast`-API, og
+  **kør den mod en kopi af den nuværende tabel og diff de to** — ikke mod den
+  frosne 1.0-tabel, for så kan en fejl se ud som en stor diff. Gør det som sit
+  eget PR uden TS-opgraderingen, så det kan rulles tilbage uafhængigt.
+- **C (ikke en idé):** beholde begge compilere. Lockfilen kan have
+  `typescript@5.9.3` som devDependency *og* en alias på 7, men det er to
+  typecheckere i ét repo for at genskabe `api-table.mjs`, og ingen af dem er
+  gratis.
+
+- [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**  (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
 - [x] **15. `/docs/fastify/` + `fastifyHandler`-export.** 28/9,
   `ceo/fastify-handler`. Se "Fund fra Fastify-iterationen". **MÅL:
@@ -1290,6 +1390,22 @@ ikke noget en senere iteration bør prøve igen for hver side — hverken `a11y`
 eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
 
 ## ❓ Til Mads
+
+- **TypeScript 5.9.3 → 7.0.2: vil du have Go-compileren, og er du villig til at
+  betale for den med en omskrevet `api-table.mjs`?** 28/9. Jeg gennemførte
+  opgraderingen, fik porten grøn, og rullede den tilbage — se "Fund fra
+  TypeScript 7-iterationen". Kort: `typescript@7` har **intet
+  JavaScript-compiler-API**, og vi bruger det i *builden*, ikke kun `tsc`, fordi
+  det er sådan `report.schema.json` og `openapi.json` laves af typerne i stedet
+  for i hånden. `scripts/api-table.mjs` er det sted der ikke kan overleve
+  uden en omskrivning mod et `unstable/*`-API, og den tabel er den **frosne
+  1.0-API-kontrakt** — en forkert af den er værre end en gammel. **Min
+  anbefaling: lad den stå på 5.9.3**, og at vi så skriver fundene ind i
+  `CLAUDE.md` som *grunden* til at den ikke røres, så ingen efter os prøver igen
+  uden at læse hvorfor. Hvis du vil have hastigheden, er det to iterationer, og
+  `api-table.mjs`-skrivningen skal diffes mod en ** kopi** af den nuværende
+  tabel, ikke mod den frosne — ellers ser en fejl ud som en kæmpe diff. Sig til
+  hvilken vej, så gør jeg den; ellers er opgaven lukket som bevidst fravalgt.
 
 - **`createRootErrorHandlers` slettede konsollinjen den erstattede — rettet
   28/9.** Reacts egen standard for `onCaughtError` er én `console.error(error)`,
