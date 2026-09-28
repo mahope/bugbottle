@@ -188,6 +188,29 @@ test("only the newest maxEntries reports are kept", () => {
   assert.equal(queue.size(), 2);
 });
 
+test("a queue told to keep no reports keeps none", () => {
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    maxEntries: 0,
+    fetch: fakeFetch(503).fetch,
+  });
+  queue.enqueue(report("one"));
+  queue.enqueue(report("two"));
+  // `slice(-0)` is the whole array, so the bound would be no bound at all, and
+  // the key would only ever grow until the quota is refused.
+  assert.equal(queue.size(), 0, "a bound of nothing is nothing, not everything");
+});
+
+test("a maxEntries that is not a number falls back to the default bound", () => {
+  const queue = makeQueue({
+    endpoint: "/api/feedback",
+    maxEntries: Number.NaN,
+    fetch: fakeFetch(503).fetch,
+  });
+  for (let i = 0; i < 8; i++) queue.enqueue(report(`report ${i}`));
+  assert.equal(queue.size(), 5, "NaN must not remove the bound");
+});
+
 test("a report older than maxAgeMs is dropped rather than sent", async () => {
   const stale = JSON.stringify([{ at: Date.now() - 10_000, body: report("last week") }]);
   globals["localStorage"] = fakeStorage({ [KEY]: stale }).storage;

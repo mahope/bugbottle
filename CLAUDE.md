@@ -137,6 +137,16 @@ not closed and a branch is not merged with the docs lagging.
   decoded bytes, not the declared type.
 - **`log` and `debug` are not recorded**, and this is a feature. They are where
   stray user data ends up.
+- **`maxEntries` is resolved, never used raw.** `slice(-0)` is the whole array
+  and `slice(-NaN)` is too, so an unchecked `0` *removes* a ring buffer's bound
+  rather than enforcing it — and in `bugbottle/queue` that means a storage key
+  that only grows until the quota is refused and every report loses its
+  screenshot. All four ring buffers (`console-buffer`, `queue`, `breadcrumbs`,
+  `network`) therefore resolve it the same way through a local
+  `resolveMaxEntries`: an explicit `0` keeps nothing, anything that is not a
+  finite positive number falls back to the default. The helper is written out
+  in each module **on purpose** — each is its own entry point and none may grow
+  another's bundle — so a fifth buffer must copy it, not import it.
 - **`collectContext` sends path + query only** — no origin, no fragment. The
   optional facts around it (language, timezone, screen, colorScheme, online,
   connection) are the whole list: no canvas, no fonts, no device enumeration,
@@ -239,9 +249,18 @@ bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1728 bytes 
 `sign` seam — 26 bytes for one serialisation hoisted out of the request and one
 `await` — and 1645 after a deadline on each delivery attempt, an
 `AbortController` and a `clearTimeout` on top of the one `fetch`, 1565 → 1645
-and the budget 1600 → 1728, the same trade #85 made one layer down): it imports
+and the budget 1600 → 1728, the same trade #85 made one layer down, and 54 more
+(1637 → 1691) once `maxEntries` was resolved the way `breadcrumbs` and `network`
+already resolved theirs, so a `0` is a bound instead of `slice(-0)`'s the whole
+array): it imports
 only a type, so
-that number is the module itself. It was
+that number is the module itself. The two ring-buffer numbers are **deltas
+measured with this repository's own esbuild 0.28.2, which reads a little higher
+than the 0.24.0 CI pins** — the same 1637 against a recorded 1645 is the other way
+round on the core (1407 against a recorded 1384), so treat them as the size of the
+change rather than as a replacement for the recorded one. The budget did not
+move, and neither did the panel: `bugbottle/ui` and `bugbottle/react` came out
+one byte *smaller* on the same run, which is the compressor, not the code. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is
 delivered — which is a read-modify-write, a claim and a release where there

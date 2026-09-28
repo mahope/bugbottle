@@ -63,6 +63,26 @@ function serialise(args: unknown[], maxLength: number): string {
     .slice(0, maxLength);
 }
 
+/**
+ * How many entries to keep, given what the caller asked for.
+ *
+ * `slice(-0)` is the whole array and `slice(-NaN)` is too, so an unchecked 0 or
+ * NaN removes the bound instead of tightening it — the opposite of what anyone
+ * passing a small number meant, and a ring buffer that never rings. An explicit
+ * 0 is the one case where a caller plainly means "record nothing"; everything
+ * else that is not a finite positive number falls back to the default rather
+ * than to unbounded growth. This is the rule `bugbottle/breadcrumbs` and
+ * `bugbottle/network` already use, and it is written out in each of them rather
+ * than shared: each is its own entry point and none of them may grow the
+ * another's bundle.
+ */
+function resolveMaxEntries(requested: number | undefined): number {
+  if (requested === 0) return 0;
+  return typeof requested === "number" && Number.isFinite(requested) && requested > 0
+    ? Math.max(1, Math.floor(requested))
+    : DEFAULTS.maxEntries;
+}
+
 function push(level: ConsoleLevel, args: unknown[], stack?: StackFrame[]): void {
   const entry: ConsoleEntry = {
     ts: new Date().toISOString(),
@@ -80,7 +100,9 @@ function push(level: ConsoleLevel, args: unknown[], stack?: StackFrame[]): void 
  *
  * Safe to call more than once; only the first call patches the console. In a
  * server-rendered app, call it from client-only code: it patches whichever
- * `console` it finds, and on the server that is the server's.
+ * `console` it finds, and on the server it is the server's.
+ * `maxEntries: 0` records nothing and patches nothing at all, since a buffer
+ * that throws every entry away is pure cost.
  *
  * Returns the stop, `resetConsoleBuffer`, so a caller can put the console back
  * without importing a second name. Every `init*` in the package returns its
@@ -88,9 +110,11 @@ function push(level: ConsoleLevel, args: unknown[], stack?: StackFrame[]): void 
  */
 export function initConsoleBuffer(options: ConsoleBufferOptions = {}): () => void {
   if (initialised) return resetConsoleBuffer;
+  const cap = resolveMaxEntries(options.maxEntries);
+  if (cap === 0) return resetConsoleBuffer;
   initialised = true;
   limits = {
-    maxEntries: options.maxEntries ?? DEFAULTS.maxEntries,
+    maxEntries: cap,
     maxMessageLength: options.maxMessageLength ?? DEFAULTS.maxMessageLength,
   };
 

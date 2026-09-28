@@ -10,6 +10,17 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **`maxEntries: 0` removed the bound instead of enforcing it.** `slice(-0)` is
+  the whole array, so the two ring buffers that trimmed with it kept *every*
+  entry: `initConsoleBuffer({ maxEntries: 0 })` — the plain way to say "record
+  nothing" — filled a buffer that no longer rang, and `createQueue({ maxEntries:
+  0 })` never evicted, so the storage key only grew until the quota was refused
+  and **every** report was rewritten without its screenshot. `NaN` and a negative
+  number did the same. `bugbottle/breadcrumbs` and `bugbottle/network` have
+  resolved that option since 0.6; the console buffer and the queue now resolve it
+  the same way — an explicit `0` keeps nothing, anything else that is not a
+  finite positive number falls back to the default, and the console buffer
+  patches nothing at all when it is told to record nothing.
 - **One unanswered request wedged the whole offline queue.** `createQueue`
   called `fetch` with no `signal` and no deadline, where `sendReport` has
   bounded itself at 15 seconds for exactly this. A request that is written and

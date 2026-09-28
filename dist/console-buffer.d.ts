@@ -26,7 +26,9 @@ export type ConsoleBufferOptions = {
  *
  * Safe to call more than once; only the first call patches the console. In a
  * server-rendered app, call it from client-only code: it patches whichever
- * `console` it finds, and on the server that is the server's.
+ * `console` it finds, and on the server it is the server's.
+ * `maxEntries: 0` records nothing and patches nothing at all, since a buffer
+ * that throws every entry away is pure cost.
  *
  * Returns the stop, `resetConsoleBuffer`, so a caller can put the console back
  * without importing a second name. Every `init*` in the package returns its

@@ -5,6 +5,7 @@ import {
   getConsoleBuffer,
   resetConsoleBuffer,
 } from "../src/console-buffer.ts";
+import { MAX_CONSOLE_ENTRIES } from "../src/report-core.ts";
 
 afterEach(() => resetConsoleBuffer());
 
@@ -219,4 +220,33 @@ test("a second initConsoleBuffer returns the stop as well", () => {
     initConsoleBuffer();
     assert.equal(typeof initConsoleBuffer(), "function");
   });
+});
+
+test("maxEntries: 0 records nothing and patches nothing", () => {
+  const { seen } = withSilencedConsole(() => {
+    const real = console.error;
+    initConsoleBuffer({ maxEntries: 0 });
+    assert.equal(console.error, real, "an inert recorder does not patch the console");
+    console.error("save failed");
+    assert.equal(typeof initConsoleBuffer({ maxEntries: 0 }), "function");
+  });
+  assert.deepEqual(seen, [["save failed"]], "the application's own console is untouched");
+  assert.equal(getConsoleBuffer().length, 0, "and nothing was recorded");
+});
+
+test("a maxEntries that is not a number falls back to the default bound", () => {
+  withSilencedConsole(() => {
+    initConsoleBuffer({ maxEntries: Number.NaN });
+    for (let i = 0; i < MAX_CONSOLE_ENTRIES + 5; i++) console.error(`entry ${i}`);
+  });
+  assert.equal(
+    getConsoleBuffer().length,
+    MAX_CONSOLE_ENTRIES,
+    "NaN must not remove the bound",
+  );
+  assert.equal(
+    getConsoleBuffer().at(-1)?.message,
+    `entry ${MAX_CONSOLE_ENTRIES + 4}`,
+    "and the newest is the one that is kept",
+  );
 });

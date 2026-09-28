@@ -112,7 +112,11 @@ export type QueueOptions = {
   endpoint: string;
   /** `localStorage` key. Default `"bugbottle:queue"`. */
   storageKey?: string;
-  /** How many reports to keep. The oldest is evicted first. Default 5. */
+  /**
+   * How many reports to keep. The oldest is evicted first. Default 5. `0` keeps
+   * nothing, which is a queue nobody needs rather than one that keeps
+   * everything.
+   */
   maxEntries?: number;
   /** How long a report may wait before it is dropped. Default 7 days. */
   maxAgeMs?: number;
@@ -271,13 +275,33 @@ function localStorageQueue(key: string): QueueStorage | null {
 }
 
 /**
+ * How many reports to keep, given what the caller asked for.
+ *
+ * `slice(-0)` is the whole array and `slice(-NaN)` is too, so an unchecked 0 or
+ * NaN removes the bound instead of tightening it — the opposite of what anyone
+ * passing a small number meant, and here it costs every report its screenshot
+ * once the key it never prunes has filled the quota. An explicit 0 keeps
+ * nothing, which is what it says; everything else that is not a finite positive
+ * number falls back to the default rather than to unbounded growth. This is the
+ * rule `bugbottle/breadcrumbs` and `bugbottle/network` already use, and it is
+ * written out in each of them rather than shared: each is its own entry point
+ * and none of them may grow the another's bundle.
+ */
+function resolveMaxEntries(requested: number | undefined): number {
+  if (requested === 0) return 0;
+  return typeof requested === "number" && Number.isFinite(requested) && requested > 0
+    ? Math.max(1, Math.floor(requested))
+    : DEFAULT_MAX_ENTRIES;
+}
+
+/**
  * A queue in front of `endpoint`. Reads whatever an earlier visit left behind,
  * then tries to deliver it — on load, when the browser comes online, and when
  * the tab becomes visible.
  */
 export function createQueue(options: QueueOptions): Queue {
   const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
-  const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
+  const maxEntries = resolveMaxEntries(options.maxEntries);
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const timeoutMs = options.timeoutMs ?? CLAIM_MS;
   const storage = options.storage ?? localStorageQueue(storageKey);
@@ -319,10 +343,11 @@ export function createQueue(options: QueueOptions): Queue {
 
   function prune(list: QueuedReport[]): QueuedReport[] {
     const oldest = Date.now() - maxAgeMs;
-    return list
-      .filter((item) => item.at > oldest)
-      .sort((a, b) => a.at - b.at)
-      .slice(-maxEntries);
+    const kept = list.filter((item) => item.at > oldest).sort((a, b) => a.at - b.at);
+    // `slice(-0)` is the whole array, so a queue told to keep no reports would
+    // keep all of them — a storage key that only ever grows, until the quota is
+    // refused and every report is rewritten without its screenshot.
+    return maxEntries === 0 ? [] : kept.slice(-maxEntries);
   }
 
   /** One attempt at a stored write. A throw and a rejection mean the same thing. */

@@ -2,6 +2,9 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 50 — `maxEntries: 0` fjernede loftet i stedet for at håndhæve
+  det.** To af de fire ringbuffere gjorde det modsatte af hvad de skrev i deres
+  egen signatur. Se fundet nedenfor.
 - ✅ **Opgave 49 — køens leveringsforsøg har ingen deadline.** En rapport, der
   skrives på en tabt forbindelse, lå i hele sidens levetid og blokerede
   alle andre rapporter med. Se fundet nedenfor.
@@ -9,12 +12,107 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ Opgave 50 lukket: et loft på nul er et loft. Fire nye tests, alle
+  bevisst røde mod den gamle kode.
 - ✅ Opgave 46 lukket: jsDelivr-hits pr. version er det eneste skelnende
   adoption-tal. Baseline: 1.0.1 = 766 totalt, 725 i de seneste 7 dage.
-- ✅ Deploy er OK, alle tidligere noter lukket.
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 50 — `slice(-0)` er ikke et loft (29/9 01:2x)
+
+**Fundet af forrige iteration** og stående som dens første punkt under "To fund
+der ligger klar til næste iteration". Det er taget først, fordi det er det
+**ene fund der taber rapporter** af de to, og fordi det er halvdelen af en
+regel, de andre to ringbuffere allerede følger.
+
+**Følgen for køen er den dyre halvdel.** `createQueue({ maxEntries: 0 })` gav
+aldrig en eviction, så `localStorage`-nøglen kun voksede, indtil kvoten blev
+nægtet — og så skriver køen **hver** rapport igen uden sit screenshot
+(`SCREENSHOT_NOTE`). Det er en rapport, der ankommer, men mangler det
+bevis, der gør den læsbar. `initConsoleBuffer({ maxEntries: 0 })` fyldte en
+buffer, der ikke ringer mere — ubegrænset i en browser, der kører i timevis.
+
+**Rettelsen er ikke opfundet.** `breadcrumbs.ts` og `network.ts` har
+`resolveMaxEntries` siden 0.6, med præcis den regel: et eksplicit `0` betyder
+"behold intet", alt andet end et finit positivt tal falder tilbage på
+standarden. De to andre ringbuffere gjorde det modsatte, altså **samme navn,
+samme dokumentation, modsat betydning** — og en læser, der lærte reglen af
+`bugbottle/network`, fik præcis den modsatte i `bugbottle/queue` og i kernen.
+Hjælpen er skrevet ud i hver fil for sig selv, som de andre to gør det: hver
+buffer er sit eget entry point, og ingen må vokse en andens bundle. Den er nu
+også en regel i `CLAUDE.md`s "Rules that are not obvious from the code", så en
+femte buffer skal kopiere den og ikke finde på en tredje.
+
+**Bevis, at testene ikke er vakuum — alle fire røde mod den gamle kode:**
+
+| Hvad der var brudt | Hvilken test blev rød |
+|---|---|
+| `console-buffer.ts` + `queue.ts` gendannet fra `HEAD` | **4 af 4** nye tests |
+| — `maxEntries: 0` i console-bufferen | "maxEntries: 0 records nothing and patches nothing" |
+| — `maxEntries: NaN` i console-bufferen | "a maxEntries that is not a number falls back to the default bound" |
+| — `maxEntries: 0` i køen | "a queue told to keep no reports keeps none" |
+| — `maxEntries: NaN` i køen | "a maxEntries that is not a number falls back to the default bound" |
+
+**Målt før det blev skrevet ned** (samme opskrift som `ci.yml`, esbuild
+**0.28.2** som er repoets egen — CI pinner 0.24.0, som læser lidt lavere):
+`bugbottle/queue` **1637 → 1691** (+54, budget 1728), kernen **1407 → 1468**
+(+61, budget 1536), og `bugbottle/ui` 11732 → 11731 og `bugbottle/react`
+5772 → 5771 — ét byte *mindre*, altså kompressoren og ikke koden. **Ingen
+budget flyttet.** IIFE'erne **24 967 / 21 396** mod budgetterne 25 088 / 21 504.
+Gaten grøn med **944 tests** (fra 940, fire nye), `check-dist` grøn på 208
+filer, 52 docs-sider, 249 søgeposter, sitemap uændret.
+
+**⚠️ En fejl jeg selv lavede undervejs, skrevet ned fordi den er billig at
+gentage:** for at måle uden netværk symlinkede jeg repoets `node_modules/esbuild`
+og `node_modules/@esbuild` ind i et scratch-projekt, og den følgende `npm i`
+prunede **igennem symlinket** og slettede `@esbuild/darwin-arm64` i repoet —
+så `npm run build` døde med *"The package @esbuild/darwin-arm64 could not be
+found"*. Fikset med `npm install` (313 ms, nul kodeændring), og
+`package-lock.json`, som installen synkede med `package.json` oveni, blev
+rever-tet for at holde diffen kirurgisk. **Regel for næste måling:** kør
+`npm i --silent /tmp/…tgz esbuild@0.24.0` som `ci.yml` gør, eller find
+esbuild'en i **en global mappe** — symlink aldrig *ind i* et katalog, et
+`npm i` skal røre.
+
+- [x] **50. `maxEntries: 0` fjernede loftet i stedet for at håndhæve det.**
+  29/9, `ceo/ring-buffer-zero`. Datagrund: fund fra timeout-iterationen, fund 1
+  — og det er produktfasens prioritet 1, en fejl der rammer brugeren, målt i
+  stedet for antaget. **Accept:** `resolveMaxEntries` i `console-buffer.ts` og
+  `queue.ts` med samme regel som de to andre ringbuffere, et eksplicit `0`
+  beholder intet, `NaN` og negativ falder tilbage på standarden, console-
+  bufferen patcher intet når den skal optage intet, `prune` svarer `[]` frem
+  for hele arrayet, fire nye tests alle bevisst røde mod den gamle kode. Mål:
+  ingen trafikbaseline ændres (Plausible 5 besøgende/28 d, npm 210/uge, ★2 pr.
+  28/9) — effekten er at en rapport ikke længere mister sit screenshot fordi
+  en konfiguration sagde nul.
+
+**VERIFICÉR DEPLOY: ringbufferens nul `ceo/ring-buffer-zero` 2026-09-29 01:3x.**
+Accepter: `https://bugbottle.dev/docs/changelog/` har den nye sætning under
+*Unreleased → Fixed* — *"**`maxEntries: 0` removed the bound instead of
+enforcing it.**"* — og **`Ingen ny URL`**: sitemap'en skal fortsat tælle **61**
+`<loc>` og `/docs/search.json` **249** poster, fordi changelog-siden bygges fra
+`CHANGELOG.md` og intet andet på sitet rørtes. Biblioteket ligger i `dist/`, som
+er committet, så det er live med sitet; npm-siden afhænger ikke af deployet,
+fordi `CHANGELOG.md` først ligger i tarballet ved en release.
+
+### Fund 1 fra denne iteration — `report-core.ts` har den samme fejl på tre
+### steder, og den er bevidst **ikke** rettet her
+
+`normaliseConsole` (linje 565), `normaliseBreadcrumbs` (645) og
+`normaliseNetwork` (681) gør `out.slice(-maxEntries)` med den samme uløste
+`options.maxEntries ?? MAX_*`. Et `normaliseConsole(body.console, { maxEntries:
+0 })` beholder altså alt, hvor `bugbottle`'s egen ringbuffer nu beholder intet.
+**Ikke rettet i denne iteration, og grunden er målt:** tre ting. (1)
+Følgen er lille — inputtet er Serverens krop, som `DEFAULT_MAX_BODY_BYTES` på
+4 MiB allerede binder, så "ubegrænset" er fire megabyte, ikke en DoS. (2)
+`report-core` er den modul **hele** kernen hænger på, så en ny hjælper der
+koster kernen de 61 bytes den lige har vundet to gange i denne uge. (3) Det er en
+*modtager-side* adfærd, og den er frosset af `dist/report.schema.json` og
+`dist/openapi.json` — ændrer man den, skal begge regenereres og
+`tests/schema.test.ts` læses igen. Skrivet her, fordi næste iteration ellers
+læser fundet og går i gang; det er en **linje** pr. sted, ingen ny export.
 
 ## Fund fra timeout-iterationen (29/9 00:5x) — tre fund i biblioteket,
 ## og det første taber rapporter
@@ -71,20 +169,19 @@ den er skrevet ind i `ci.yml` og CLAUDE.md med målingen.
   Accepter: `/docs/install/` og køens afsnit nævner `timeoutMs`, og
   CHANGELOG'en har rettelsen under Unreleased → Fixed.
 
-### To fund der ligger klar til næste iteration
+### To fund der lå klar til næste iteration — det ene er lukket, det andet er
+### opgave 51
 
-De blev fundet i samme læsning, er verificeret mod den omgivende kode,
-og er **ikke** rettet her — de er små nok til at være en egen opgave
-hver, og de er ikke rapport-tabende.
+De blev fundet i samme læsning, er verificeret mod den omgivende kode, og
+**ikke** rettet her — de er små nok til at være en egen opgave hver, og de er
+ikke rapport-tabende.
 
-1. **`slice(-0)` fjerner et loft i stedet for at håndhæve det.**
-   `console-buffer.ts:74` og `queue.ts:306`: `[1,2,3].slice(-0)` er
-   `slice(0)`, altså hele arrayet. `initConsoleBuffer({ maxEntries: 0 })` —
-   den indlysende måde at sige "optag intet" på — beholder derfor
-   *alt* i en ring buffer der ikke ringer mere. I køen betyder
-   `maxEntries: 0` aldrig at evict, så `localStorage` vokser til kvoten
-   nægtes, og så taber **hver** rapport sit screenshot. Ét tegn i hver
-   af de to steder.
+1. ~~**`slice(-0)` fjerner et loft i stedet for at håndhæve det.**~~ **LUKKET
+   29/9 som opgave 50** — se afsnittet øverst. `console-buffer.ts:74` og
+   `queue.ts:325` (oprindeligt noteret som 306) er begge rettet, og fundet
+   viste sig at være *halvdelen* af en regel de to andre ringbuffere allerede
+   fulgte. Serverens tre `normalise*` har samme fejl og er bevidst ikke rørt —
+   se "Fund 1 fra denne iteration".
 2. **`KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, ikke bytes.**
    `send.ts:299`: `serialised.length < KEEPALIVE_MAX_BYTES` sammenligner
    kodeunits mod en konstant, hvis egen kommentar siger bytes og
@@ -92,6 +189,17 @@ hver, og de er ikke rapport-tabende.
    er ~150 kB UTF-8: den består, `keepalive` sættes, og fetch afviser den
    *helt* i stedet for at sende. Repoet har allerede `utf8Length` til
    netop den skelnen.
+
+- [ ] **51. `KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, så en rapport på
+  ikke-Latin-1 aldrig sendes.** Datagrund: fund 2 ovenfor, målt på koden.
+  **Accept:** tjekken bruger `utf8Length` (eller `TextEncoder`) frem for
+  `.length`, en test der beviser det med en rapport på kinesisk eller
+  emojisnyster så en payload over 64 kB **sendes** med `keepalive` frem for at
+  blive afvist af fetch, og ingen ny konstant. Mål: ingen trafikbaseline
+  ændres; effekten er at en rapport fra en ikke-Latin-1-app ikke forsvinder
+  stille. *(Bemærk til den der tager den: `utf8Length` ligger i `report-core`,
+  som `send.ts` allerede importerer, så det er en linje og en test.)*
+
 
 ## Gate-definition (første gang, 2026-09-27)
 

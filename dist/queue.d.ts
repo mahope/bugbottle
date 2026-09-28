@@ -107,7 +107,11 @@ export type QueueOptions = {
     endpoint: string;
     /** `localStorage` key. Default `"bugbottle:queue"`. */
     storageKey?: string;
-    /** How many reports to keep. The oldest is evicted first. Default 5. */
+    /**
+     * How many reports to keep. The oldest is evicted first. Default 5. `0` keeps
+     * nothing, which is a queue nobody needs rather than one that keeps
+     * everything.
+     */
     maxEntries?: number;
     /** How long a report may wait before it is dropped. Default 7 days. */
     maxAgeMs?: number;
