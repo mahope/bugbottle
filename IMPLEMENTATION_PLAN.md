@@ -412,7 +412,7 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   links og navigationsafsnittet bliver først synlige på npm-siden når Mads
   kører `npm run release`. Før det er de rettet på GitHub og på sitet, og på
   npm er de stadig de gamle. Sammenlign derfor **efter** release, ikke nu.
-- [ ] **40. `package.json#funding` mangler, så npm-siden har ingen tak-knap.**
+- [x] **40. `package.json#funding` mangler, så npm-siden har ingen tak-knap.**
   Datagrund: `.github/FUNDING.yml` har Stripe-linket, `/support/` har det
   samme, og missionen siger at linket skal stå "der, hvor en glad bruger
   naturligt ville sige tak" — og npm-siden er præcis det sted: den besøger
@@ -425,9 +425,86 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   *Én linje i `package.json` plus én test. Den er med her, fordi den er den
   billigste konvertering i hele køen: den koster ingenting at sætte op og
   ingenting hvis ingen bruger den.*
+  **28/9 16:2x, `ceo/npm-funding-button`.** Se "Fund fra funding-iterationen"
+  nedenfor — feltet var **målt** tomt (`npm view bugbottle funding` svarer
+  intet), og de tre steder der beder om penge var **to**; de er nu tre, og de
+  kan ikke glide fra hinanden. **MÅL: donations baseline 0 pr. 2026-09-28,
+  npm downloads 412/måned, 191/uge, ★2.** Sammenlign 5/10 og 5/11. **Bemærk:**
+  hele effekten ligger bag en release — før `npm publish` er der ingen knap at
+  tælle, kun et felt på GitHub.
 - [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
   Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
   måles.
+
+### Fund fra funding-iterationen (28/9 16:2x) — den eneste konvertering i
+### køen, der viste sig at være målbar inden den blev lavet
+
+**Opgave 40 var skrevet som en antagelse. Den var en måling, og det er
+bemærkelsesværdigt hvor let den var at få lavet forkert.**
+
+#### Fund 1 — feltet var tomt, og de to steder der *var* sat lå et andet sted
+
+28/9 16:1x, `npm view bugbottle funding`: **intet svar**. Så npmjs.com havde
+ingen tak-knap — for den ene side der tilhører de 434 downloads om måneden. Til
+sammenligning målte samme kommando på fire andre pakker, så jeg ikke byggede
+på en antagelse om at kommandoen virker overhovedet:
+
+| Pakke | `funding` som registryen serverer |
+|---|---|
+| `got` | `https://github.com/sindresorhus/got?sponsor=1` (ren streng) |
+| `nanoid` | `{ url: 'https://github.com/sponsors/ai', type: 'github' }` |
+| `rimraf` | `{ url: 'https://github.com/sponsors/isaacs' }` |
+| `core-js` | `{ url: 'https://opencollective.com/core-js', type: 'opencollective' }` |
+| **`bugbottle`** | **intet** |
+
+**De tre steder der beder om penge var to, og de to var ikke de samme slags
+sted.** `.github/FUNDING.yml` og `/support/` siger begge "donate", men kun den
+ene af dem er et sted en læser *landede* efter at have installeret pakken. Og
+den tredje — npm-siden — er den med flest besøgende pr. donator, fordi den er
+den besøgerne kommer fra.
+
+#### Fund 2 — den skal være en ren streng, ikke et objekt med en `type` jeg
+#### ikke har en konto på
+
+npm's dokumentation beskriver tre former for `funding` (ren URL, objekt med
+`url`, eller et array af begge) og **serverer alle tre uændret** — de to øverste
+i tabellen er målte. Jeg skrev først `{"type": "custom", "url": […]}`, fordi det
+er den form GitHub bruger, og gjorde den så til en ren streng igen. Grunden er
+ligetil: **`custom` er en nøgle i GitHub's format, ikke i npm's**, og de fire
+pakker jeg målte på den afslører at npm's pakkeside *kender* `github`,
+`opencollective` og lignende — men ingen af dem bruger `custom`. En `type` jeg
+ikke kan begrunde et rendereren-kender sig på er en måde at få *mindre* chance
+på en knap, ikke mere. Den rene streng er den form dokumentationen nævner
+først, og den kan ikke misforstås.
+
+#### Fund 3 — `/support/` lovede to steder, så den skulle have sagt tre
+
+Ikke en fejl, men en påstand der blev **falsk** af min egen rettelse:
+`site/support.md` skrev "One link, on this page and in the repository's
+`.github/FUNDING.yml`". Efter feltet er sat er der tre steder, og siden er
+den der forklarer hvad pengene gør, så den skal være den der siger det. Én
+sætning, plus en test der holder de tre samlet.
+
+#### Leveret 28/9 16:2x
+
+Én linje i `package.json`, én sætning i `site/support.md`, to tests i
+`tests/npm-metadata.test.ts`. **`npm run check` grøn: 922 tests** (fra 920),
+`check-dist` grøn på **208** filer, IIFE'erne **24 688 / 21 104** mod
+budgetterne 25 088 / 21 504 — **uændrede**, fordi intet i biblioteket rørte
+denne ændring. 51 docs-sider, 260 søgeposter, sitemap **60** `<loc>`.
+
+**Bevis at vagterne virker, begge veje — de to tests er rødført mod den fejl
+de beskriver, ikke bare grønne:** at slette `funding` fra `package.json` gør
+**test 7 og 8** røde (den anden fordi den så et andet antal destinationer), og
+at ændre ét tegn i Stripe-linket i `.github/FUNDING.yml` gør **kun test 8**
+rød. Den anden halvdel — at de tre steder peger på *samme* adresse — kan ikke
+bevises ved at læse koden, og den er hele pointen.
+
+**Kan ikke måles her, og det er ærligt sagt:** den *knap* npm tegner er npm's
+egen rendering, og den kan først ses efter `npm publish`. Alt hvad der er mit,
+er målt: feltet er sat, det er den dokumenterede form, og `npm view bugbottle
+funding` vil svare det samme som `got`'s streng. Det næste skridt er Mads'
+`npm run release`.
 
 ### Fund fra npm-search-iterationen (28/9 15:1x) — README'en er ikke i
 ### npm's søgeindeks, og Fund 1 målte keywordsne med den forkerte metode
@@ -2985,6 +3062,31 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
 
+- **2026-09-28, iteration 30** (`ceo/npm-funding-button`). Opgave 40.
+  Se "Fund fra funding-iterationen" (28/9 16:2x).
+  - **Målt, ikke antaget:** `npm view bugbottle funding` svarer **intet**, så
+    npmjs.com har ingen tak-knap. Fire andre pakker målt i samme kørsel som
+    kontrol, så kommandoen virker.
+  - **Skrevet som `{"type": "custom"}` og gjort til en ren streng igen.**
+    `custom` er GitHub-nøglen, ikke npm's, og de fire kontrolpakker bruger
+    `github`/`opencollective`/ingen. Den rene streng er den form npm's egen
+    dokumentation nævner først.
+  - **Den tredje halvdel lå i `/support/`:** siden skrev "One link, on this page
+    and in the repository's `.github/FUNDING.yml`", hvilket min egen rettelse
+    gjorde falsk. Nu siger den tre, og en test holder dem sammen.
+  - **Leveret:** én linje i `package.json`, én sætning i `site/support.md`, to
+    tests. Gaten grøn: **922 tests**, `check-dist` grøn på 208 filer, 51
+    docs-sider, 260 søgeposter, sitemap 60, **IIFE'erne 24 688 / 21 104 —
+    uændrede**, intet budget rykket, ingen kode- eller `dist/`-ændring.
+  - **Begge vagter rødført mod den fejl de beskriver:** slet `funding` → test 7
+    *og* 8 røde; ændr ét tegn i Stripe-linket i `FUNDING.yml` → kun test 8 rød.
+  - **MÅL: donations baseline 0 pr. 2026-09-28, npm downloads 412/måned,
+    191/uge, ★2.** Sammenlign 5/10 og 5/11, og skriv i målingen at førstnævnte
+    først kan stikke ad *efter* release — den knap er npm's at tegne.
+  - **⚠️ Ikke kørt lokalt:** `npm run a11y` (site ændret). Denne maskine har
+    hverken `puppeteer-core` eller Chrome, så CI's `browser`-job dækker det.
+    Ændringen er én sætning og ét link i `/support/`'s Donating-afsnit.
+
 - **2026-09-28, iteration 29** (`ceo/install-and-npm-links`, `f12faea`, merge
   `b12b123`). Opgave 39.
   Se "Fund fra install-link-iterationen" (28/9 15:5x).
@@ -3831,6 +3933,18 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Deploy-noter
 
+- `VERIFICÉR DEPLOY: /support/'s Donating-afsnit nævner den tredje sted der
+  beder om penge (opgave 40, `ceo/npm-funding-button`), merge <sha>, 16:3x,
+  2026-09-28.` Næste batch-vindue er **17:30 2026-09-28**. **Accepter:
+  `https://bugbottle.dev/support/` skal have sætningen "so the button on" og
+  linket `https://www.npmjs.com/package/bugbottle` i Donating-afsnittet**, og
+  siden skal stadig have **præcis én** `donate.stripe.com`-adresse. HTTP 200
+  beviser intet her — `/support/` svarer 200 både før og efter. **Ingen ny
+  URL**, så sitemap'en skal tælle **60** `<loc>`.
+  **Bemærk:** den anden halvdel af opgaven (`package.json#funding`) er **ikke**
+  en deploy-note — den læses af npm, ikke af bugbottle.dev, så intet på sitet
+  ændrer sig for den. Den kræver en *release*; se `KLAR TIL RELEASE: v1.1.0`.
+
 - **Ingen deploy-note for `ceo/npm-search-terms` (opgave 38, `14f0163`, merge
   `731b707`).**
   `package.json#description` og `#keywords` læses af **npm**, ikke af
@@ -3991,7 +4105,13 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   sidder i samme kø** (28/9 15:2x, `14f0163`) og er værd at huske her, fordi de
   er det eneste i batchen der *kun* virker efter `npm publish`:
   `npm view bugbottle description` svarer stadig den gamle, og det første du kan
-  se af effekten er den første uge *efter* release, ikke dagen før.
+  se af effekten er den første uge *efter* release, ikke dagen før. **Og nu er
+  opgave 40's `funding` i samme kø** (28/9 16:2x): `npm view bugbottle funding`
+  svarer stadig **intet** — feltet er sat i repoet, men npm serverer kun det der
+  ligger i en publiceret tarball, så **tak-knappen på pakkesiden dukker først
+  op efter `npm publish`**. Det er det tredje felt i trækken der kun virker
+  efter release, og det er det billigste af dem: donations-baseline er **0 pr.
+  28/9**, fordi der indtil nu ikke har været en knap at donere fra.
   `CHANGELOG.md`s *Unreleased* har nu fire
   poster, hvor de to nye er de
   der betyder mest: (1) det committede `dist` manglede

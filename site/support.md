@@ -79,7 +79,9 @@ Stripe handles the money, and bugbottle never sees a card number or an address:
 
 One link, on this page and in the repository's
 [`.github/FUNDING.yml`](https://github.com/mahope/bugbottle/blob/main/.github/FUNDING.yml),
-so GitHub's own Sponsor button points at the same place. It is not on the
+so GitHub's own Sponsor button points at the same place — and in
+`package.json`'s `funding`, so the button on
+[npmjs.com](https://www.npmjs.com/package/bugbottle) does too. It is not on the
 panel, not in the console, and not in a report, and there is no banner anywhere
 asking for money. If a donation is a good idea for you, this is where it is; if
 it is not, nothing here is in the way.

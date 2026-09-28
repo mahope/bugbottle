@@ -22,6 +22,9 @@
  * matches. They cannot prove a rank, because a rank is npm's and npm's
  * changes; what they can do is fail when a reword drops a term, which is the
  * failure mode that has actually happened.
+ *
+ * The `funding` tests at the bottom are the other half of the page: the search
+ * brings a reader here, and `funding` is the only field that can say thank you.
  */
 
 import { test } from "node:test";
@@ -33,6 +36,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const pkg = JSON.parse(readFileSync(root + "package.json", "utf8")) as {
   description: string;
   keywords: string[];
+  funding?: unknown;
 };
 
 /**
@@ -125,5 +129,89 @@ test("every keyword is a lowercase token npm can match, and none is repeated", (
     new Set(pkg.keywords).size,
     pkg.keywords.length,
     `a keyword is repeated: ${pkg.keywords.join(", ")}`,
+  );
+});
+
+/**
+ * `funding` was unset while the two places that were already asking for money
+ * — `.github/FUNDING.yml` and `/support/` — both carried the link. Measured on
+ * 28/9 with `npm view bugbottle funding`, which answers nothing, so npmjs.com
+ * had no button at all: the one page that belongs to the 434 people a month
+ * who downloaded the package was the one page that could not say thank you.
+ *
+ * The registry serves the field verbatim, so there is nothing between the field
+ * and the button that is ours to test. What *is* ours is the claim that the
+ * three places carry the same destination, and that there is only one of them:
+ * `/support/` promises "one link", and a second Stripe address would quietly
+ * make that a lie on the one page that explains what a donation buys.
+ */
+const PAYMENT_LINK = /https:\/\/donate\.stripe\.com\/[A-Za-z0-9_]+/g;
+
+function paymentLinks(text: string): string[] {
+  return text.match(PAYMENT_LINK) ?? [];
+}
+
+/**
+ * npm documents three shapes for `funding` — a URL string, an object with a
+ * `url`, or an array of either — and serves all of them. Ours is the bare
+ * string: it is the form the documentation lists first, and a `type` this
+ * package does not have a platform account for is a word the package page would
+ * have to know how to render. Reading every shape anyway means a deliberate
+ * change to another one fails on its destination rather than on its syntax.
+ */
+function fundingUrls(funding: unknown): string[] {
+  const urls: string[] = [];
+  for (const entry of Array.isArray(funding) ? funding : [funding]) {
+    if (typeof entry === "string") {
+      urls.push(entry);
+    } else if (typeof entry === "object" && entry !== null) {
+      const url = (entry as { url?: unknown }).url;
+      if (typeof url === "string") urls.push(url);
+      else if (Array.isArray(url)) {
+        for (const one of url) if (typeof one === "string") urls.push(one);
+      }
+    }
+  }
+  return urls;
+}
+
+test("the npm page carries the donation link, so the reader who just installed it can say thank you", () => {
+  const urls = fundingUrls(pkg.funding);
+  assert.equal(
+    urls.length,
+    1,
+    `package.json#funding is ${JSON.stringify(pkg.funding)}: npm has no single address to put behind a button` +
+      " (measured 28/9 — `npm view bugbottle funding` answered nothing at all, and the package page showed no button)",
+  );
+  assert.match(
+    urls[0] ?? "",
+    /^https:\/\//,
+    `the funding address is not https, so npm will not link it: ${urls[0]}`,
+  );
+});
+
+test("the funding button, the Sponsor button and /support/ all point at the same place", () => {
+  // Three files, one destination. `funding` is the only one npm can turn into a
+  // button, `.github/FUNDING.yml` the only one GitHub can, and `/support/` the
+  // one that explains what the money does — so if they drift, the reader who
+  // follows one of them arrives somewhere the other two do not name.
+  const fromNpm = fundingUrls(pkg.funding);
+  const fromGitHub = paymentLinks(readFileSync(root + ".github/FUNDING.yml", "utf8"));
+  const fromSupport = paymentLinks(readFileSync(root + "site/support.md", "utf8"));
+
+  assert.equal(
+    fromGitHub.length,
+    1,
+    `GitHub's Sponsor button has ${fromGitHub.length} destinations in .github/FUNDING.yml: ${fromGitHub.join(", ")}`,
+  );
+  assert.deepEqual(
+    fromNpm,
+    fromGitHub,
+    `package.json#funding and .github/FUNDING.yml do not point at the same place: ${fromNpm.join(", ")} vs ${fromGitHub.join(", ")}`,
+  );
+  assert.deepEqual(
+    fromSupport,
+    fromGitHub,
+    `/support/ and the Sponsor button do not point at the same place: ${fromSupport.join(", ")} vs ${fromGitHub.join(", ")}`,
   );
 });

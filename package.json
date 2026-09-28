@@ -28,6 +28,7 @@
   },
   "homepage": "https://bugbottle.dev",
   "bugs": "https://github.com/mahope/bugbottle/issues",
+  "funding": "https://donate.stripe.com/7sYeVcbn50wieFM8gDbMQ0c",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
