@@ -261,6 +261,16 @@ undocumented. The signature header is an `apiKey` scheme described as the spam
 deterrence it is. The document lints clean under a pinned Redocly, which CI
 runs after the build (#87).
 
+**Unreleased** — the script tag is explained once. Next.js, Angular, Nuxt and
+Astro each carried their own paragraph on what the tag covers, in four
+formulations of one claim, so a correction to three of them could leave the
+fourth asserting something no longer true. The explanation is now a single
+section on `/docs/one-script-tag/`, which those four pages link to while saying
+only what is different about their own copy — Angular's snippet, Nuxt's two
+placements, Astro's `is:inline`, Next.js's `global-error.tsx` — and
+`npm run build:docs` fails on a page that re-describes the tag, naming it.
+Nothing in the package changed.
+
 **Unreleased** — a theme playground on the documentation site
 (`/docs/languages-and-branding/#branding-and-theme`): labelled controls for the
 primary colour, ground, ink, radius, font, position and colour scheme,

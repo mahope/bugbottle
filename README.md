@@ -70,6 +70,59 @@ thing that turns *"it's broken"* into a reproducible payload, and stays out of
 the way otherwise. The optional panel in `bugbottle/ui` is a convenience over
 the same core, not the product.
 
+### A first report, end to end
+
+Everything above is a promise; this is the proof of it. Two files, and the
+first of them is the button. `initConsoleBuffer()` runs once at start-up,
+because a
+report can only carry the console errors that were recorded *before* the
+reporter pressed the button — that one call is the whole difference between a
+report and a screenshot:
+
+```ts
+// app/report-button.ts
+import { initConsoleBuffer, buildReport, sendReport } from "bugbottle";
+
+initConsoleBuffer();
+
+reportButton.addEventListener("click", async () => {
+  const report = buildReport({ type: "bug", message: messageInput.value });
+  const { id } = await sendReport("/api/bugbottle", report);
+  console.log("stored as", id);
+});
+```
+
+The receiving half is one route handler, and it needs no database — one JSON
+file per report, with the picture beside it when there is one:
+
+```ts
+// app/api/bugbottle/route.ts
+import { handleReport, fileStore } from "bugbottle/server";
+
+const store = fileStore({ dir: "./reports" }).store;
+
+export async function POST(request: Request) {
+  return handleReport(request, { store });
+}
+```
+
+`handleReport` checks every field before it reaches your disk, so the file in
+`./reports` is already a validated report and not a guess. The reply is
+`201 { id }`, and that `id` is the one `sendReport` handed back above.
+
+`export async function POST` is a Next.js route handler, a Hono handler minus
+the `app.post`, a Cloudflare Worker and a Bun route. The same file compiles
+wherever you already speak the web `Request`; where you do not,
+[`expressHandler`](#receiving-a-report) and
+[`fastifyHandler`](#receiving-a-report) are the translation.
+
+The report above carries no picture, on purpose: `captureScreenshot` needs
+`html-to-image`, and a report is worth sending without one. Add the capture
+when you want the screenshot, reach for
+[`bugbottle/ui`](#the-ready-made-panel) when you would rather not write the
+form, and read [Receiving a report](#receiving-a-report) when you want the
+sinks that turn the file into a Slack message, a GitHub issue or an email.
+
 ## Recording console errors
 
 Call this once, from client-side code, as early as your app can manage.
@@ -549,6 +602,152 @@ error is sent once per `dedupeMs` (60 000 by default, by the same fingerprint
 the client and the server share), so a component that throws on every render
 sends one report rather than a thousand. Say so in your privacy notice, and
 pass `scrub: scrubReport` if a message could carry anything personal.
+
+## Every framework, one table
+
+Eleven frameworks have a page here, and a reader who has just chosen one of them
+wants the same four facts from all of them: which hook to wire, which file it
+goes in, what it will catch, and what it will miss. That is this page. Everything
+below was read out of each framework's own published build or its own source,
+and every row links to the page that carries the code, the traps and the
+verification throws — this is the map, not a second copy of the eleven.
+
+Three of the four answers are not properties of the framework but of *your*
+application, which is why the tables are split. The hook is fixed and the file
+is fixed. What it catches depends on where you put the boundary, and what it
+misses is the same four classes in every framework, in different words.
+
+### The hook, and the file it goes in
+
+| Framework | The hook | The file | Page |
+|---|---|---|---|
+| React 19 | `onCaughtError` / `onUncaughtError` | your `createRoot(...)` call | [React](#react) |
+| Vue | `app.config.errorHandler` | `main.ts` | [Vue](#vue) |
+| Svelte 5 | `<svelte:boundary onerror>` | the component that wraps the app | [Svelte](#svelte) |
+| SvelteKit | `handleError` in `src/hooks.ts` | `src/hooks.ts` | [SvelteKit](#sveltekit) |
+| Next.js | `error.tsx`, `global-error.tsx` | `app/` | [Next.js](#nextjs) |
+| Angular | `ErrorHandler` | `app.config.ts` | [Angular](#angular) |
+| Nuxt | `vue:error`, `app:error`, `app:chunkError` | `plugins/bugbottle.client.ts` | [Nuxt](#nuxt) |
+| Astro | `astro:hydration-error` | `src/layouts/Base.astro` | [Astro](#astro) |
+| React Router | `onError` on `RouterProvider` or `HydratedRouter` | `entry.client.tsx` | [React Router](#react-router) |
+| TanStack Router | `onCatch` **plus** `errorComponent` | `router.tsx` | [TanStack Router](#tanstack-router) |
+| TanStack Query | `QueryCache`'s `onError` | `query-client.ts` | [TanStack Query](#tanstack-query) |
+
+Two rows in that table are not frameworks with a hook, and both are in it on
+purpose. **Astro has no error handler at all** — thirty guides and a hundred
+reference pages, none of them about errors — so the one client event it does
+emit is the whole integration, and an error inside an already-hydrated island
+still has to come from `window.onerror`. **TanStack Query is a data layer, not a
+router**: it has no boundary, it never throws by default, and a failed query is
+a value you render rather than an exception, so the hook is the cache's
+callback.
+
+The count is the thing people get wrong. There is no number of hooks per
+framework that predicts whether your reports arrive, because three of the eleven
+have a hook that is a *prop on a boundary* rather than a callback you register:
+Svelte's is an element in your markup, TanStack Router's is `onCatch` and does
+nothing at all unless the same route also has an `errorComponent`, and Next.js's
+`error.tsx` is a component the framework renders instead of the broken one.
+
+### What it misses, in four classes
+
+Every gap the eleven pages document is one of these four. They are worth
+naming together, because the first one is a framework, the second is a
+framework's silence about a *return value* instead of a throw, the third is
+production, and the fourth is a page.
+
+**1. A throw the framework never routes to a hook.** Most of it is your own
+code: an event handler, a `setTimeout` callback, a `fetch` that rejects inside a
+plain `async` function, a WebSocket, a third-party script. `window.onerror` and
+`unhandledrejection` are the two that see all of it, and the console buffer
+patches both from the first line of the script tag. Two frameworks have a
+*named* version of this gap, and both are quieter than a throw: Angular's
+`resource()` and `httpResource()` put the failure in `status()` and `error()`
+instead of throwing, and Astro's `action()` returns `{ data, error }` and never
+throws either. Nuxt's `useFetch` and `useAsyncData` are the same shape. A report
+integration that only has a framework hook misses every one of them, and what
+they have in common is that nobody calls them a failure.
+
+**2. A hook that replaces the console line.** This console ring buffer records
+`console.error` and `console.warn` and nothing else, so on several paths that
+line *is* the report's console section — and installing a hook is what deletes
+it. Vue's `errorHandler` returns before `logError`, which is where Vue's own
+`console.error` lives. SvelteKit's `src/hooks.ts` is *your hook, or a function
+that logs*: adding one replaces the generated `console.error` default. React
+Router's `onError` replaces a line that the render path prints itself and that
+the data path — `console.error` appears zero times in `router.js` — never
+prints at all. Astro's is subtler and worse: `astro:hydration-error` is
+`cancelable`, and a listener that calls `preventDefault()` switches off the one
+`console.error` that carries both the component URL and the raw error text. The
+fix is the same in every case and it is one line: `console.error(error)` before
+you send.
+
+**3. A hook that does not work in production.** Vue rethrows in development and
+only logs in a production build, and `console.warn` appears zero times in
+`runtime-core.cjs.prod.js` — so "it crashes locally" is not a property of the
+production path. Angular's `provideBrowserGlobalErrorListeners()` works, an
+`ErrorHandler` in the wrong provider does not. TanStack Router's global
+catch boundary logs a warning under `NODE_ENV !== "production"` and nothing
+else, so **in the build you ship it is silent**: a loader error with no
+`errorComponent` anywhere gives no page, no console line and no report. The
+throw you verify against `npm run dev` is not the throw that ships.
+
+**4. The error page, where the framework is gone.** An error page is a
+*different page*: no layout, no providers, no plugin, no app instance. In
+Next.js, `global-error.tsx` writes its own `<html>`; in Nuxt, `error.vue` is
+rendered by a plugin like any other, so a plugin that threw is a page nobody can
+report from; in Astro, `500.astro` is a fresh document with none of the layout
+above it; in SvelteKit, `+error.svelte` renders without the layout and
+`src/error.html` is served before any of your code runs. What survives is the
+evidence — `console.error` ran before the page was swapped, and the console
+buffer is not React — so the report you want from that page is one somebody
+sends, and the integration there is a single button. That is a class, not a
+detail, and it is the same answer in all four.
+
+### The page where the panel is not mounted
+
+| Framework | The page | What it takes |
+|---|---|---|
+| Next.js | `global-error.tsx` | the script tag inline, or a button |
+| Nuxt | `error.vue` | a button; a plugin that threw never loads the panel |
+| Astro | `src/pages/500.astro` | a button, and keep this file to the button |
+| SvelteKit | `+error.svelte`, `src/error.html` | a button; `error.html` needs the tag inline |
+| React Router | the root `ErrorBoundary` | `BugReportBoundary` with a fallback that sends |
+
+The panel is mounted from your app's code, and on these five pages there is no
+app code running. One button is the whole integration, and the four
+framework pages carry the snippet for their own page.
+
+### A framework page and a framework hook
+
+The tag and the hook are not alternatives; they cover different halves. The
+hook sees what the framework routes to it. The tag — and `openOnError` with it —
+sees the throws that reach `window`, which is the class-1 gap above and the only
+thing that works on a page with no app instance. [One script tag](#one-script-tag)
+has the attributes and the two builds; the framework pages say where their own
+copy goes. Vue is the one framework where the tag is *half* an integration, for
+a structural reason rather than a bug: `app.config.errorHandler` lives on the app
+instance, and no `<script>` tag can reach it.
+
+### What to check before you ship it
+
+Each framework page ends with its own list, because the throws are the
+framework's. The shape is the same everywhere, and four of them are worth
+knowing before you start:
+
+- **Throw from a render, a click handler, and a `setTimeout`.** The first two
+  should open the panel; the third is the gap, and the report exists only if
+  somebody presses the trigger. That asymmetry is the integration working, not
+  failing.
+- **Build it, serve the build, and throw again.** Vue only logs in production,
+  and TanStack Router's global boundary is silent in it. A verification run
+  against `npm run dev` has verified nothing about the shipping path.
+- **Delete the hook and watch the console line come back.** That is the
+  baseline: the generated default, the framework's own printer, the line the
+  ring buffer records.
+- **Make your reporter throw on purpose.** A `console.error` shim that throws
+  replaces the real error inside TanStack Query's `onError`, and a
+  `widget.open()` that throws turns one failure into a different one.
 
 ## React
 
@@ -1156,6 +1355,213 @@ handler is called with a deserialised copy, and printing it is the only way to
 see that. Throw from the `failed` snippet too, since the runtime re-throws that
 one on purpose.
 
+## SvelteKit
+
+SvelteKit is not a rendering library with a router bolted on, and that is why it
+has an error story the [page above](/docs/svelte/) cannot tell: **it owns the
+error.** `sveltekit error handling` is seven suggestions on Google, more than
+twice `svelte error handling`'s three, and the two the autocomplete adds that
+the others do not have are `sveltekit global error handling` and `sveltekit
+remote functions error handling`. That is a framework with hooks of its own, and
+therefore a page of its own.
+
+Everything below was read out of `@sveltejs/kit@2.70.3`, the published package,
+not out of the documentation. The documentation is good, and it describes
+`handleError` as the place to log an error. The first thing below is the
+opposite of what adding one does, and it is not written down anywhere.
+
+**The correction to the obvious plan, first, because it is the whole page:** the
+hook that files a report is the one in `src/hooks.ts`, not the one in
+`src/hooks.server.ts`. A server hook runs in Node, where there is no window, no
+ring buffer and no panel to open — a report sent from it describes a machine
+your user is not looking at. The universal hook runs in the browser, on
+client-side navigation, which is where the panel is. You want both, for different
+reasons, and the second half of this page is what each one is for.
+
+### The hook that decides whether you have any reports at all
+
+A SvelteKit application with no `src/hooks.ts` still logs its client-side
+errors. The client runtime's hooks are generated into the manifest, and the
+generated line is this — `src/core/sync/write_client_manifest.js` in the kit
+package:
+
+```js
+export const hooks = {
+	handleError: ${client_hooks_file ? 'client_hooks.handleError || ' : ''}(({ error }) => { console.error(error) }),
+	${client_hooks_file ? 'init: client_hooks.init,' : ''}
+	reroute: ${universal_hooks_file ? 'universal_hooks.reroute || ' : ''}(() => {}),
+	transport: ${universal_hooks_file ? 'universal_hooks.transport || ' : ''}{}
+};
+```
+
+Read the middle of that line twice. It is **your hook, or a function that logs.**
+Adding a `handleError` to `src/hooks.ts` replaces the logging function with
+yours — so if your hook posts a report and does not itself `console.error`, the
+console line disappears at the exact moment you wire the integration up. A
+developer testing the integration sees a working report; the person triaging
+later finds an empty inbox for a bug the browser used to print for free.
+
+The `??` on the far side of the call is the second half of it. In
+`src/runtime/client/client.js`:
+
+```js
+function handle_error(error, event) {
+	if (error instanceof HttpError) {
+		return error.body;
+	}
+	// …
+	return (
+		app.hooks.handleError({ error, event, status, message }) ??
+			/** @type {any} */ ({ message })
+	);
+}
+```
+
+What the hook returns is the object `+error.svelte` renders, and the `??` is
+what makes returning nothing legal: the page then gets `{ message }` and nothing
+else — not the status code, not the stack. So the hook's return value has two
+consumers and they want different things, and the mistake is a hook that both
+reports and returns. Send the report and return nothing, or return something and
+do not report. The report is the reason the hook exists; the returned value is a
+page.
+
+```ts
+// src/hooks.ts
+import type { HandleClientError } from "@sveltejs/kit";
+import { buildReport, sendReport } from "bugbottle";
+
+export const handleError: HandleClientError = ({ error, message, event }) => {
+	void sendReport(buildReport({ type: "error", message, url: event.url.pathname }));
+	// Return nothing: the page renders its own message from the fallback above.
+};
+```
+
+`src/hooks.ts` is a **universal** hook, and that distinction is the point of the
+paragraph. It runs in the browser on client-side navigation and in Node on the
+server, out of the same file, and a `console.error` in it reaches the ring buffer
+in the first of those two only.
+
+### The server hook logs where nobody is listening
+
+The server's default is a different function, and it is different on purpose —
+`src/runtime/server/index.js`:
+
+```js
+handleError:
+	module.handleError ||
+	(({ status, error, event }) => {
+		const error_message = format_server_error(
+			status,
+			/** @type {Error} */ (error),
+			event
+		);
+		console.error(error_message);
+	}),
+```
+
+`format_server_error` is SvelteKit's own formatting, and that `console.error` is
+Node's. An error thrown while server-rendering is printed in the server log and
+nowhere else: no window, no ring buffer, no panel. Which is the correct place
+for it — a server log is where an SSR failure belongs — and is why
+`src/hooks.server.ts` is not where a bugbottle report comes from. Forward from
+there to whatever you already run for server errors; report from
+`src/hooks.ts`.
+
+**And a server error is deliberately not reported twice.** When a `load` fails
+on the server, the client gets the error as a `__data.json` response and turns
+it into an `HttpError` on purpose — `src/runtime/client/client.js`, in
+`load_data`:
+
+```js
+if (!res.ok) {
+	// error message is a JSON-stringified string which devalue can't handle at the top level
+	// turn it into a HttpError to not call handleError on the client again (was already handled on the server)
+```
+
+Read that comment as a specification: **the client hook does not fire for an
+error that already happened on the server.** So neither hook covers the app on
+its own:
+
+| Where the error happened | `src/hooks.ts` | `src/hooks.server.ts` |
+| --- | --- | --- |
+| A component throws during client-side navigation | yes | no |
+| A universal `load` throws on the client | yes | no |
+| A server `load` or a `+page.server.js` action throws | **no, on purpose** | yes |
+| A form action calls `fail()` | no | no |
+
+The last row is not a gap in the table, it is the rule: **`fail()` is a result,
+not an error.** It is a validation answer with a status code and a data object,
+and SvelteKit never routes it through `handleError`. If your users report "the
+form does nothing" and you have no reports, this row is why.
+
+### `error()` is not yours, and a server error arrives as a copy
+
+Two things from the [Svelte page](/docs/svelte/) carry over unchanged, so they
+are linked rather than repeated. `error(404, "Not found")` is an `HttpError`, so
+`handle_error` returns at its first line and your hook never sees it. And a
+server-rendered error handed to the client hook is a **deserialised copy**: the
+`Error` crossed the wire, so `instanceof` against your own error classes fails
+and the stack is whatever the server chose to send. Print it once from inside
+the hook to see what your own report will carry.
+
+The line that is missing everywhere else, and is the reason a SvelteKit report
+that goes missing usually has nothing to do with the hook: **a rejected promise
+is not a SvelteKit error.** `unhandledrejection` appears zero times in
+`@sveltejs/kit@2.70.3`. A `fetch` in a `load` that nobody awaits, or a remote
+function call a component forgets to catch, reaches the window, and the ring
+buffer is already patched for it. The hook will not see those, and does not need
+to.
+
+### Remote functions: the same trap on a second hook
+
+`sveltekit remote functions error handling` is the second autocomplete
+suggestion, and remote functions brought a second hook with the identical `||`
+shape. The default, again from `src/runtime/server/index.js`:
+
+```js
+handleValidationError:
+	module.handleValidationError ||
+	(({ issues }) => {
+		console.error('Remote function schema validation failed:', issues);
+		return { message: 'Bad Request' };
+	}),
+```
+
+A schema mismatch on a remote function's arguments is a **400 with a server-side
+`console.error`**: not an exception, not an `HttpError` you threw, and not
+something `handleError` ever sees. It is your own argument validation failing
+somewhere between the browser and the function, and by default the only trace is
+a line in a server log. Give it a `handleValidationError` in
+`src/hooks.server.ts` if you want those visible. The shape is the same choice as
+before: what the hook returns is the response body, so returning a different
+`message` is how you change what the browser is told.
+
+### The pages the panel is not on
+
+`+error.svelte` is a separate page load without the layout, so the panel is not
+mounted on it, and `src/error.html` is the static file SvelteKit serves when the
+app cannot boot — the same two answers as the other framework pages, and the
+[full snippet is on the Svelte page](/docs/svelte/#the-page-where-the-framework-is-gone).
+One note is SvelteKit's alone: `src/error.html` is served before any of your
+code runs, so it is the one page where the tag has to be inline in the markup,
+and it is also the page a reader lands on when the whole application is down.
+Mount the panel there the same way, knowing that nothing else in your app is
+available to it.
+
+### What to check before you ship it
+
+Four throws, and the reports that exist afterwards. First, throw inside a
+component during a client-side navigation with **no** `src/hooks.ts` at all and
+watch the console line appear — that is the generated default, and it is the
+baseline. Second, add the hook from the first section and throw again: the
+report arrives and the console line is gone. That silence is the hook doing its
+job, and it is worth knowing before somebody reports it as a regression. Third,
+build, serve the build, and throw inside a server-rendered page: the client hook
+does **not** fire and the server log is the only trace — the table's second half,
+measured rather than believed. Fourth, call a remote function with arguments
+that fail its schema, and confirm that no report appears anywhere: a 400 is not
+an error until somebody says it is.
+
 ## Next.js
 
 Next.js owns the error boundary in an App Router application, so
@@ -1278,9 +1684,10 @@ export function ReportButton() {
 ```
 
 For an application that does not bundle, "One script tag" is the whole
-integration: one `<script>` tag reads the same `data-*` attributes, needs no
-`"use client"`, no provider and no hydration, and carries the ready-made panel
-so there is no form to write.
+integration, and the placement is the same as any other page: the tag goes in
+the root layout's body, and it needs no `"use client"` because a plain
+`<script>` is not a component. That also makes it the only answer on
+`global-error.tsx`, which is a separate page load without the layout.
 
 **Receiving it.** A route handler is a `Request` in and a `Response` out, and
 `handleReport` is the one that answers:
@@ -1289,7 +1696,7 @@ so there is no form to write.
 // app/api/feedback/route.ts
 import { handleReport, fileStore, slackSink } from "bugbottle/server";
 
-const store = fileStore({ dir: "./reports" });
+const store = fileStore({ dir: "./reports" }).store;
 const notify = slackSink({ webhookUrl: process.env.SLACK_WEBHOOK_URL! });
 
 export async function POST(request: Request) {
@@ -1499,9 +1906,10 @@ export class ReportButton {
 ```
 
 **One script tag.** For an application that does not bundle, `One script tag`
-is the whole integration. It reads the same `data-*` attributes, carries the
-panel and the annotator, and needs no provider, no service and no injector —
-drop it in `index.html` and the work above is unnecessary:
+is the whole integration, and an Angular app has the shortest version of that
+sentence in this row: `index.html` has no plugin system, no provider and no
+injector to wire anything into, so the tag goes beside the other assets and the
+work above is unnecessary:
 
 ```html
 <script
@@ -1512,6 +1920,10 @@ drop it in `index.html` and the work above is unnecessary:
 ></script>
 ```
 
+What it cannot reach is `ErrorHandler`, which is why the work above is not
+optional in a real application — see `One script tag` on what the tag does and
+does not cover.
+
 **Receiving it.** The Angular CLI dev server has no API routes, so the
 endpoint is not a route handler — it is a small server beside it, or the
 Express one an SSR application already has. `expressHandler` builds the
@@ -1521,7 +1933,7 @@ Express one an SSR application already has. `expressHandler` builds the
 import express from "express";
 import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
 
-const store = fileStore({ dir: "./reports" });
+const store = fileStore({ dir: "./reports" }).store;
 
 app.post(
   "/api/feedback",
@@ -1845,10 +2257,10 @@ render a message and put a `ReportProblem` button under it, which is the
 version that reaches a person who is not an engineer.
 
 **One script tag.** For an application that does not bundle, `One script tag` is
-the whole integration: no plugin, no `enforce`, no plugin ordering to get wrong,
-and the same `data-*` attributes as everywhere else. In a Nuxt app put it in
-`app.vue` behind `ClientOnly`, or in `nuxt.config.ts`'s `app.head.script` with
-`tagPosition: "bodyClose"`, so it lands after the app's own markup:
+the whole integration, and a Nuxt app has two places to put it and no ordering
+to get wrong: `app.vue` behind `ClientOnly`, or `nuxt.config.ts`'s
+`app.head.script` with `tagPosition: "bodyClose"`, so it lands after the app's
+own markup:
 
 ```ts
 // nuxt.config.ts
@@ -2959,6 +3371,351 @@ as well, the way `Next` above does it, and you have a button before the module
 that renders the button has loaded. `data-shake` is off by default; the iOS
 permission gate and the secure-context rule are as they are everywhere else.
 
+## TanStack Query
+
+Three of the nine suggestions under `tanstack error boundary` are
+`tanstack query error boundary`, and this is the half of TanStack the
+[page above](/docs/tanstack-router/) does not cover. The difference is not
+cosmetic: **TanStack Query is a data layer, not a router.** It has no boundary of
+its own, it never throws by default, and the place a query failure surfaces is
+your own render — which means a render error boundary catches it *nowhere*.
+
+Everything below was read out of `@tanstack/query-core@5.104.0` and
+`@tanstack/react-query@5.104.0`, the **published** `build/modern`, not the
+prose. The documentation for this library is good and it is written around
+`isError`; four things below are not in it, and three of them are the difference
+between a working bug inbox and one that either stays empty or takes the site down
+with it.
+
+One thing to know before the rest: **`QueryCache`'s `onError` fires once, after
+the last retry, with the query's state already updated.** That is the hook you
+want, and the reason it is the hook you want is in the next section.
+
+### The one hook, and where it is called from
+
+`QueryCacheConfig` has three callbacks and one of them is the whole integration:
+
+```ts
+interface QueryCacheConfig {
+  /** Called when any query in the cache encounters an error. */
+  onError?: (error: DefaultError, query: Query) => void;
+  onSuccess?: (data: unknown, query: Query) => void;
+  onSettled?: (data: unknown | undefined, error: DefaultError | null, query: Query) => void;
+}
+```
+
+It is called from `query.fetch`, in the `catch`, and the order inside that block
+is the whole design of this page:
+
+```js
+} catch (error) {
+  if (error instanceof CancelledError) { … }
+  this.#dispatch({ type: "error", error });
+  this.#cache.config.onError?.(error, this);
+  this.#cache.config.onSettled?.(this.state.data, error, this);
+  throw error;
+}
+```
+
+Three facts in four lines, and all three matter:
+
+- **It is after `await retryer.start()`**, which resolves only when the retryer
+  gives up. So one report per failed fetch, not one per attempt — a query that
+  retries three times files **one** report, at the end, with the final error.
+- **It is after the state dispatch.** `query.state.error` is already the real
+  error and `errorUpdateCount` has gone up, so you can read the query key, the
+  `meta` you attached to it and the failure count without waiting for a
+  re-render. Nothing here needs a component mounted.
+- **It is not awaited and not wrapped in a `try`** — which is the sharp edge, and
+  it has its own section below.
+
+So the wiring is a `QueryClient` with a cache that has an `onError`:
+
+```tsx
+// query-client.ts
+import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { reportQueryError } from "./report";
+
+export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => reportQueryError(error, query.queryKey),
+  }),
+  defaultOptions: {
+    queries: {
+      // 404 is not a crash and 401 is not a bug. Without this, every missing
+      // record is retried three times and then filed — see "Retries" below.
+      retry: (failureCount, error) =>
+        !isHttpError(error, [404, 401, 403]) && failureCount < 3,
+    },
+  },
+});
+```
+
+`QueryClientConfig` takes `queryCache` and `mutationCache` directly, and builds
+one of each if you do not pass them, so this is the only place a cache is
+constructed. If you already have a `QueryClient` in a file, you have found the
+one place this hook goes.
+
+```ts
+// report.ts
+import type { QueryKey } from "@tanstack/react-query";
+import { widget } from "./widget";
+
+export function reportQueryError(error: unknown, key: QueryKey) {
+  const text = error instanceof Error ? error.message : String(error);
+  widget.open({ message: `query ${JSON.stringify(key)} failed: ${text}` });
+  // The ring buffer records console.error and console.warn and nothing else, so
+  // this line *is* the report's console section. Without it a report arrives
+  // with a URL and an empty console, which is the report nobody reads.
+  console.error("[bugbottle] query failed", error);
+}
+```
+
+Mutations have the same hook with a different signature, and one difference that
+is not cosmetic — see "A throw in your reporter" below:
+
+```ts
+import { MutationCache } from "@tanstack/react-query";
+
+new QueryClient({
+  mutationCache: new MutationCache({
+    onError: (error, variables, _onMutateResult, mutation) =>
+      reportMutationError(error, mutation.options.mutationKey, variables),
+  }),
+});
+```
+
+### `isError` is true while `data` is still the last good value
+
+This is the first of the four things the documentation does not say, and it is
+the reason `throwOnError` is the wrong tool for a bug report. The reducer clears
+the error on a new fetch **only when there is no data**:
+
+```js
+function fetchState(data, options) {
+  return {
+    fetchFailureCount: 0,
+    fetchFailureReason: null,
+    fetchStatus: canFetch(options.networkMode) ? "fetching" : "paused",
+    ...data === void 0 && { error: null, status: "pending" },
+  };
+}
+```
+
+Read the spread condition. A query that has fetched once and then fails a
+background refetch keeps its `error`, and `status` stays `"error"`, because
+`data` is not `undefined`. The result object has a flag for exactly this, and the
+build computes it from the same two fields:
+
+```js
+const isError = status === "error";
+…
+isLoadingError: isError && !hasData,
+isRefetchError: isError && hasData,
+```
+
+So after a refetch that fails over good data, `isError` **and** `data` are both
+true, `isRefetchError` is true and `isLoadingError` is false. Branch on those two,
+not on `isError`:
+
+```tsx
+const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
+
+// A first load that failed: there is nothing to show but the reason.
+if (orders.isLoadingError) return <p>{String(orders.error)}</p>;
+// A refetch that failed: the list on screen is real and one edit old.
+// A full-page error here is the bug this section is about.
+if (orders.isRefetchError) return <p className="stale">Showing the last saved list.</p>;
+return <Orders rows={orders.data} />;
+```
+
+### `throwOnError` takes a working screen down with it
+
+The tempting wiring is one line in `defaultOptions`, and it is wrong:
+
+```ts
+defaultOptions: { queries: { throwOnError: true } }   // do not
+```
+
+Here is what that does. `useBaseQuery` ends with two `throw`s, and the second one
+is the error boundary's share:
+
+```js
+if (shouldSuspend(defaultedOptions, result)) throw fetchOptimistic(…);
+if (getHasError({ result, errorResetBoundary, throwOnError: defaultedOptions.throwOnError, query, suspense: … }))
+  throw result.error;
+```
+
+and `getHasError` is one line:
+
+```js
+return result.isError && !errorResetBoundary.isReset() && !result.isFetching && query &&
+  (suspense && result.data === void 0 || shouldThrowError(throwOnError, [result.error, query]));
+```
+
+The condition is `isError`, not `isLoadingError`. So the failed background
+refetch from the section above — the one where `data` is a perfectly good list
+from a minute ago — **throws out of render**, React unmounts the subtree into
+whatever boundary is above, and the page the visitor was reading is replaced by
+an error screen. The refetch failed; nothing is wrong with the data. `isRefetchError`
+was right there in the result and the throw does not consult it.
+
+Two things about that throw that are *not* problems, because both are asked about
+constantly:
+
+- **It fires once, not once per retry.** `!result.isFetching` is in the
+  condition, and the retries are what keep `fetchStatus` at `"fetching"`. The
+  error is thrown when fetching stops, which is when the retryer has given up.
+- **A reset does not re-throw forever.** `ensurePreventErrorBoundaryRetry` sets
+  `retryOnMount = false` when `suspense` or `throwOnError` is on, so the retry
+  button on your error page does not start a fetch that lands straight back in
+  the same boundary.
+
+So the correct shape is the opposite of the tempting one: **leave `throwOnError`
+off, report from the cache's `onError`, and let the component's own
+`isLoadingError` branch render.** The boundary stays what it is for — the things
+that genuinely throw during render — and a flaky endpoint costs a stale badge
+instead of a lost page.
+
+### A throw in your reporter replaces the real error
+
+The sharpest of the four, and the one that costs an afternoon. The query callback
+is a bare call in a `catch` block with nothing around it:
+
+```js
+this.#dispatch({ type: "error", error });
+this.#cache.config.onError?.(error, this);   // ← if this throws
+this.#cache.config.onSettled?.(this.state.data, error, this);
+throw error;                                 // ← this line never runs
+```
+
+So if `onError` throws — a `console.error` shim that throws, a `widget.open()`
+that throws, anything in your own code — **the app never sees the query's error.**
+It sees yours. `await queryClient.fetchQuery(…)` rejects with the reporter's
+failure, `error.status === 404` is not there, and the state says `"error"` while
+the rejection says something else entirely. The UI looks right, because the
+dispatch already happened, and the code that inspects the error is wrong.
+
+The mutation side is guarded, differently:
+
+```js
+} catch (error) {
+  try { await this.#mutationCache.config.onError?.(error, variables, …); }
+  catch (e) { Promise.reject(e); }
+  …
+  this.#dispatch({ type: "error", error });
+  throw error;
+}
+```
+
+Two consequences, and the second is the one to design around. First, a throw from
+your mutation reporter does **not** reach the app — it is converted into an
+unhandled rejection, which is the same channel `openOnError` listens on, so a
+broken reporter can open the panel a second time from its own error. Second,
+and this is the design fact: **the mutation callback is awaited**, so the
+reporter sits in the application's `mutate()` path. A slow report — a screenshot
+to upload, a slow endpoint — delays `onSettled` and delays the promise your
+`mutateAsync` caller is awaiting, by the report's whole round trip. Do not
+`await` the send inside `onError`; open the panel and let `openOnError`'s own
+delivery take its time.
+
+```ts
+mutationCache: new MutationCache({
+  onError: (error, variables, _r, mutation) => {
+    // Fire and forget on purpose: this callback is awaited by mutate().
+    void reportMutationError(error, mutation.options.mutationKey, variables);
+  },
+}),
+```
+
+### Retries: three on the client, none on the server, and no 4xx exemption
+
+`retry` defaults to **3 on the client and 0 on the server** — that is the
+documented default and the delay function is in the build:
+
+```js
+function defaultRetryDelay(failureCount) {
+  return Math.min(1e3 * 2 ** failureCount, 3e4);
+}
+```
+
+So a failing query takes **1 s + 2 s + 4 s = 7 seconds** before your `onError`
+runs and the report exists. That is the honest answer to "why did the report
+arrive so late", and it is worth knowing before you go looking for a queue bug.
+
+The retry predicate inspects the error and nothing else:
+
+```js
+const shouldRetry = retry === true ||
+  typeof retry === "number" && failureCount < retry ||
+  typeof retry === "function" && retry(failureCount, error);
+```
+
+There is **no built-in exemption for a 4xx.** A record that does not exist, an
+unauthenticated request, a validation error — all three are retried three times
+with backoff, and then filed. A bug inbox that receives a report for every
+missed record is an inbox people mute, and the `retry` predicate at the top of
+this page is the fix. Keep the `failureCount < 3` tail: without it a genuine
+flaky network is reported on the first attempt instead of the last.
+
+The server/client split has a consequence for the panel. On the server the retry
+count is 0, and the `QueryClient` is built per request, so a query that fails
+during SSR fails **on the server** — where there is no `widget`, no ring buffer
+and no visitor. Those failures cannot be reported by the cache hook, because the
+cache hook runs in the same process that has no panel. Put the script tag in the
+root document as well, the way the router page above does it, so an error thrown
+while the client bundle is still loading has a button. Where the tag goes and
+what it covers is written once, under
+[One script tag](/docs/one-script-tag/#in-a-framework-application); what is
+different here is only that a data-layer failure can happen before any of your
+JavaScript has run.
+
+### Failures that reach the panel with nobody watching
+
+Three, and they are the ones a `useQuery`-only integration misses:
+
+- **A failed prefetch.** `prefetchQuery` goes through the same
+  `query.fetch`, so `onError` fires — and `prefetchQuery` swallows the rejection
+  at the client (`this.fetchQuery(options).then(noop).catch(noop)`), so nothing in
+  your code ever sees it. Prefetching is how an application warms a cache for a
+  route the visitor has not asked for yet, which means **reports with a query key
+  nobody is on the page for.** That is not a bug in your wiring; it is the hook
+  telling you the truth, and the report's `url` field is how you tell them apart.
+- **A query removed mid-flight does not report.** `Query#destroy` cancels with
+  `{ silent: true }`, and the `catch` above returns the pending promise for a
+  silent cancellation, so a query evicted by `gcTime` or by `queryClient.clear()`
+  reports nothing. Good — that is the noise you would otherwise have. But a
+  `query.cancel()` you call yourself passes no options, so the error is neither
+  `silent` nor `revert` and **falls through to the dispatch and to `onError`.** If
+  you cancel by hand, you get a report for the cancellation.
+- **A query with no observer at all.** `onError` is on the `Query`, not on the
+  observer, so a fetch started by `queryClient.fetchQuery`, `ensureQueryData` or
+  an `invalidateQueries` cascade reports whether or not anything is rendering the
+  result. This is the feature: an error in a background refresh is exactly the
+  one nobody sees.
+
+### What to check before you ship it
+
+Four failures, and a report from each. First, return a 500 from the endpoint for
+one `queryKey` and load the page: the panel opens, and **the report arrives
+about seven seconds later**, not immediately — that is the retry default, and if
+you want it faster, lower `retry` in the same place. Second, and this is the one
+this page is for: make the endpoint return 500 **once** and then succeed, with
+good data cached and `staleTime: 0`, and trigger a refetch. You should get a
+report, **no error boundary, and the list still on screen.** If you get an error
+page instead, you have `throwOnError` on. Third, put a 404 on a different
+`queryKey`: with the `retry` predicate at the top there is no report and no
+retries; without it you get three retries and a report. Fourth, break the reporter
+on purpose — make `reportQueryError` throw — then `await queryClient.fetchQuery(…)`
+and confirm the rejection is *your* error and not the endpoint's. That is the trap
+in "A throw in your reporter", reproduced on purpose, and it is the test that
+tells you the `try` is load-bearing.
+
+Then build it and serve the build. Every warning on this page that mentions
+`NODE_ENV` disappears in production, including the one about a query function
+returning `undefined`, which throws a different error in production than the
+`console.error` in development suggests. Verify the production path.
+
 ## Opening it without a button
 
 A form nobody can find is a form nobody uses, and a floating button is not
@@ -3597,7 +4354,7 @@ app.post("/api/feedback", (c) =>
   handleReport(c.req.raw, {
     // Header or signature — the first thing a public endpoint needs.
     authorize: (req) => req.headers.get("x-bugbottle-key") === REPORT_KEY,
-    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
     sinks: [slackSink({ webhookUrl: SLACK_WEBHOOK })],
   }),
 );
@@ -3823,7 +4580,7 @@ const app = Fastify({ bodyLimit: 5 * 1024 * 1024 });
 app.post(
   "/api/bug-report",
   fastifyHandler({
-    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
     sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
   }),
 );
@@ -4021,7 +4778,7 @@ import { expressHandler, fileStore, toWebhook } from "bugbottle/server";
 import type { ExpressRequestLike, ExpressResponseLike } from "bugbottle/server";
 
 const receive = expressHandler({
-  store: fileStore({ dir: "./reports", maxReports: 2000 }),
+  store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
   sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
 });
 
@@ -4208,7 +4965,7 @@ app.post(
   "/api/bug-report",
   express.json({ limit: "5mb" }),
   expressHandler({
-    store: fileStore({ dir: "./reports", maxReports: 2000 }),
+    store: fileStore({ dir: "./reports", maxReports: 2000 }).store,
     sinks: [toWebhook({ endpoint: process.env.SLACK_WEBHOOK_URL!, format: "slack" })],
   }),
 );
@@ -4449,6 +5206,25 @@ that mounts the panel from the tag itself, the annotator included. About
 `https://cdn.jsdelivr.net/gh/mahope/bugbottle@v1.0.1/dist/bugbottle.js`. Pin a
 version in either form; `@latest` is a way to have a stranger's next release
 run on your page.
+
+### In a framework application
+
+This is the whole integration for a page with no build step, and on a page that
+*does* have one it is a complete fallback rather than a second way to do the
+same job. The tag reads the same `data-*` attributes, carries the panel and the
+annotator, and starts the console buffer and the two window events itself — so
+nothing above it is needed to catch a throw that reached `window.onerror`, and
+there is no form to write, no provider, no plugin, no injector and no
+hydration.
+
+What the tag cannot do is reach a framework's own error hook, because those
+live on the app instance where no `<script>` tag can get at them. So a
+framework page usually wants both: the framework integration for the errors the
+framework routes to it, and the tag for everything else. `Next.js`, `Angular`,
+`Nuxt` and `Astro` each say where their own version of the tag goes, and
+`Vue` says the same thing as a warning rather than a recipe. The framework
+error page is the case where the tag is genuinely the *only* answer, because a
+separate page load has no layout and no mount.
 
 ### Two builds
 

@@ -10,6 +10,19 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **The README's opening now carries a whole report, both halves of it.** The
+  opening is what a reader on npmjs.com and a visitor to `/docs/install/` sees
+  instead of reading the rest, and its first line of code was
+  `initConsoleBuffer()` — which on its own sends nothing. The first snippet that
+  built a report was 3 700 lines down, the first complete round trip 7 800, in a
+  file of 7 956. A new "A first report, end to end" section closes the opening
+  with the two files a first report actually is: the button, and one route
+  handler whose `fileStore` needs no database. Two facts it now says out loud,
+  because both are traps: `initConsoleBuffer()` has to run at start-up or the
+  report arrives without the console errors that named the package, and the
+  report needs no screenshot to be worth sending, which is why
+  `html-to-image` is still optional in the example. No new export, no new page
+  and no code — the opening was already `/docs/install/`.
 - **`widget.open({ message })` — open the panel with the text already in the
   box.** The panel's `open()` took no arguments, so every caller that already
   knew why it was opening — a framework's `ErrorHandler`,
@@ -399,8 +412,38 @@ attribute needs a major version, and a new entry point needs a minor one.
   what they do not get: no queue, no alerting, no time series, replay only with
   their own rrweb, and one browser in CI.
 
+### Changed
+
+- **The script tag's explanation is written once, and the build fails if a
+  fourth page writes it again.** Four framework pages — Next.js, Angular, Nuxt
+  and Astro — each carried their own paragraph on what the tag covers, in four
+  slightly different formulations. Prose that exists in four places is prose
+  that goes wrong in one of them: a pinned version, an attribute name or a
+  claim about coverage can be corrected on three pages and left stale on the
+  fourth, and nothing notices. The shared explanation is now one section on
+  "One script tag", which the four pages link to while saying only what is
+  different about their own copy — Angular keeps its snippet, Nuxt the two
+  places its tag can go, Astro the `is:inline` trap, Next.js that the tag needs
+  no `"use client"` and is the only answer on `global-error.tsx`. Vue was left
+  alone, because its section is a warning that the tag is *half* an
+  integration rather than a recipe. `npm run build:docs` now fails on a
+  framework page that re-describes the tag, naming the page and the reason —
+  the same shape as the build's other prose guards. No new URL, no new page,
+  and nothing in the package changed.
+
 ### Fixed
 
+- **Six README snippets passed `fileStore()` straight in as a `store`, so a
+  pasted one answered 500.** `fileStore` answers an *object* — `store`, `list`,
+  `read`, `remove`, `prune`, `refresh` — and `handleReport`'s `store` option is
+  a function it calls, so a reader who copied the Hono, Express, Fastify or
+  NestJS example got a `TypeError`, a 500, and no report. The type was never
+  the problem: the API section has always said "whose store answers `store`",
+  and the examples contradicted it. All six now write `.store`, and
+  `tests/readme-snippets.test.ts` fails on any README snippet that builds a
+  `fileStore` and hands it to a store without reaching through — the guard was
+  proved by breaking one snippet and watching the test name the line.
+  Documentation only; no behaviour changed and no bundle moved.
 - **The published server entry threw on import: `dist/server/fastify.js` was
   never committed.** `dist/` is force-added rather than un-ignored, and the
   four files `fastifyHandler` needed landed untracked when that export was

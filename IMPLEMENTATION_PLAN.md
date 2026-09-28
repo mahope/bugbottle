@@ -29,6 +29,12 @@ næste iteration ikke skal opdage det samme igen.
 
 ### DEPLOY-MISSING: 28/9 08:29 — to batch-vinduer tabt, merges til `main` er stoppet
 
+**Genmålt 28/9 09:2x: uændret.** Alle ni sider er stadig 404, sitemap'en er
+stadig 47 mod 57, og den nye måling har nu **lokaliseret den tabte klamme** —
+se "Fund fra deploy-iterationen" nedenfor. Kort: live er bygget af en commit
+**mellem 23:04 og 23:34 den 27/9**, altså et 30-minutters vindue der ikke er
+nogen af de fire batch-tider. Blokeringen står.
+
 Målt på det *live* site kl. **08:29**, altså **en time efter** 07:30-vinduet,
 så det er ikke et vindue der stadig kører:
 
@@ -44,9 +50,12 @@ så det er ikke et vindue der stadig kører:
 | `/self-hosted/` | 28/9 05:37 | **404** |
 | `/docs/global-errors/` | 28/9 06:17 | **404** |
 
-Sitemap'en har **47 `<loc>`** mod de 59 den rene build producerer (48 docs-sider
-+ 6 egne sider + changelog). Live site er stadig præcis standen fra
-`/docs/vue/`-mergen 27/9 23:04.
+Sitemap'en har 47 `<loc>` mod de **57** den rene build producerer (48
+  docs-sider + 6 egne sider + changelog + 2 landingssider). *(Gårs udgave af
+  denne note sagde 59; det var en regnefejl, rettet 28/9 — se "Fund fra
+  deploy-iterationen".)* Live site er stadig præcis standen fra
+  `/docs/vue/`-mergen 27/9 23:04.
+
 
 **To batch-vinduer** er gået uden at ændringerne er live: 21:30 27/9 og
 07:30 28/9. Det er `DEPLOY-MISSING` efter kontrakten, og **jeg merger ikke til
@@ -65,7 +74,55 @@ målt, altså under reglen om ét tabt vindue. Den er korrekt på sitet, men den
 liger i samme kø som de andre og bliver live af det næste fungerende vindue.
 
 
-## Baseline — trafik (2026-09-27)
+### Fund fra deploy-iterationen (28/9 09:2x) — live-builden er stillet på et tidspunkt
+
+**Den afgørende måling er en diff af de to sitemap'er, ikke et par 404'er.**
+Live 47 `<loc>`, den rene build fra `main` **57**. *(Gårs plan sagde 59; det
+er en regnefejl — 48 docs-sider + 6 egne sider + changelog + de to
+landingssider er 57, ikke 59. Tallet 57 er talt, ikke anslået.)* De 57 er
+heller ikke en superset-fejl: `comm` i begge retninger giver **ti sider kun på
+min** og **nul sider kun på live**, altså ingen forsvundne sider og ingen
+omdøbning. De ti er præcis de ni 404'er fra gårs plan plus
+`/docs/tanstack-router/`:
+
+`/docs/express/`, `/docs/fastify/`, `/docs/global-errors/`, `/docs/hono/`,
+`/docs/nestjs/`, `/docs/react-router/`, `/docs/svelte/`,
+`/docs/tanstack-router/`, `/self-hosted/`, `/support/`
+
+**Og her er det nye, som gør fejlen lokaliserbar.** Jeg holdt de 47 live-URL'er
+op mod min egen `git log` og fandt den **præcise klamme**: live har Vue, Next.js
+og Angular, men **ikke** Svelte. Svelte-mergen er `dc1515c` **27/9 00:54**,
+og support-siden er `e26cba2` **27/9 23:34**. Altså:
+
+> **Live-builden er bygget af en commit mellem `26281b3` (Vue, 27/9 23:04) og
+> `d056439` (support, 27/9 23:34).**
+
+Det er et **30-minutters vindue** den 27/9 om aftenen. **Ingen af de fire
+batch-tider (07:30 / 12:30 / 17:30 / 21:30) falder i det.** 21:30 er før Vue,
+og det næste er 07:30 28/9 — som planen i forvejen har målt som tabt. Så den
+ene reelle kandidat er en **manuel eller ad-hoc kørsel** en halv time efter
+Vue-mergen, og **ikke** en batch. Det er en stærkere hypotese end "batchen
+fejlede": en batch der kører kl. 23:1x og kun en gang forlader den gamle
+tilstand.
+
+**Hvad det *ikke* er:** det er ikke en build der fejler. Jeg kørte
+`npm run build:docs` på `main` lige nu, og den er grøn og skriver 57 sider —
+så det er ikke et build-problem i repoet, det er **hvilken ref der bliver
+bygget**. Og det er ikke en cache: en 404 forsvinder ikke i sig selv, og de
+ti sider er alle nyere end live-builden.
+
+**Bemærk et versions-spor:** livesitet svarer `changelog/#1-0-1`, og
+`package.json` er på `1.0.1` — altså ingen ny release er forklaringen. Og
+`dist/` er jo force-addet i hver push, så et billede bygget fra den gamle commit
+har den gamle `dist` med, hvilket er konsistent med det vi ser.
+
+**Det kan stadig ikke løses fra repoet** — `site/Dockerfile` bygger ikke i CI,
+og ingen af de to workflows bygger eller skubber billedet. Men ❓-spørgsmålet
+er nu **snævrere og bedre stillet**: det er ikke længere "mod `main` eller mod
+et tag", fordi det *er* bygget af en commit på `main` — det er **"hvorfor
+kørte der en build kl. 23:1x den 27/9, og hvorfor har ingen kørsel siden
+overhalet den?"**. Se ❓ til Mads.
+
 
 | Kilde | Tal | Bemærkning |
 |---|---|---|
@@ -1057,39 +1114,235 @@ viser 1 besøgende på 28 dage: der er ingen trafik at konvertere endnu, så nyt
 indhold købes først som en søgning, der fanges, ikke som en side der besøges.
 
 - [ ] **27. Genfind det tabte deploy-vindue — blokeringen over alt andet.**
-  **Datagrund: to batch-vinduer (21:30 27/9, 07:30 28/9) tabt, 9 sider er
-  404, sitemap'en har 47 mod 59 `<loc>`.** Alt indhold der er lavet siden
+  **Datagrund: to batch-vinduer (21:30 27/9, 07:30 28/9) tabt, 10 sider er
+  404, sitemap'en har 47 mod 57 `<loc>`.** Alt indhold der er lavet siden
   27/9 23:34 er skrevet, committet, gaten grøn — og **usynligt**. Før nogen
   ny side skriver vi flere sider ind i det samme mørke. Acceptkriterium:
   `/self-hosted/` svarer 200 **med sit indhold** (ikke bare 200) på det live
-  site, og sitemap'en tæller 59. Dette kan ikke løses fra repoet — se ❓.
-- [ ] **28. Søgningssætning for de otte nye framework-sider er skrevet, men
-  `/docs/tanstack-router/` er den eneste uden et målt CTR-baseline.**lav
-  prioritet: samme behandling som opgave 17, lavet i samme script.
-  **Datagrund: 9 suggest mod 0 sider før 28/9.**
-- [ ] **29. Script-tagonlysningen, skrevet en gang.** Betalt for **fire**
-  gange nu (Vue + React Router + Svelte + TanStack). Datagrund: det er fire
-  sider der hver gengiver den samme kode, og den er den mest søgte kode på
-  hver af dem.
-- [ ] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 3 af de
+  site, og sitemap'en tæller 57. Dette kan ikke løses fra repoet — se ❓.
+  **Delvis løst 28/9 09:2x (se "Fund fra deploy-iterationen"):** klammen er
+  indsnævret til en commit **mellem `26281b3` (Vue, 27/9 23:04) og `d056439`
+  (support, 27/9 23:34)** — et 30-minutters vindue, ikke en batch-tid — og
+  `comm` begge veje beviser at **intet er forsvundet, kun ikke kommet med**.
+  `npm run build:docs` er grøn på `main` (57 sider), så det er ikke et
+  build-problem. Det mangler nu kun svaret på hvorfor den kørsel skete, og det
+  ligger i Dokploys log, ikke i repoet.
+- [x] **28. Søgningssætning for `/docs/tanstack-router/`.** **Lukket 28/9 som
+  allerede gjort:** sætningen *er* skrevet (opgave 17 lavede den samme dag), og
+  det eneste der manglede var en **målt CTR-baseline**, som kræver Search
+  Console-eksporten (opgave 7, stadig på Mads). Bevis i den byggede side:
+  `site/docs/tanstack-router/index.html` har
+  *"TanStack Router: onCatch never runs without an errorComponent, and the
+  global boundary is silent in production. The one line that fixes both."* —
+  altså søgeordene i sætningen, ikke sitet i stedet for siden. **MÅL:
+  `/docs/tanstack-router/` baseline 0 besøgende (siden findes ikke) pr.
+  2026-09-28.** Kan ikke måles før eksporten.
+- [x] **29. Script-tagonlysningen, skrevet en gang.** 28/9, `ceo/script-tag-once-2`.
+  **Planen havde de fire forkerte sider** (Vue + React Router + Svelte +
+  TanStack) — de gentager *ikke* script-tagen. De fire der gør, er **Next.js,
+  Angular, Nuxt og Astro**, målt ved at læse dem igennem: hver eneste havde sit
+  eget afsnit med den samme påstand om, hvad taggen dækker, i fire
+  ordlyd-formuleringer ("it reads the same `data-*` attributes", "no provider,
+  no service and no injector", "no plugin, no `enforce`, no plugin ordering").
+  **Rettet:** den fælles forklaring ligger nu som sit eget afsnit
+  (`### In a framework application`) på `/docs/one-script-tag/`, og de fire sider
+  linker derhen og siger kun hvad der er **anderledes** ved deres egen kopi —
+  Angular beholder sin kode (korteste vej ind), Nuxt de to steder taggen kan
+  ligge i, Astro `is:inline`-fælden, Next.js at taggen ikke skal have
+  `"use client"` og at den er det eneste svar på `global-error.tsx`. Vue blev
+  **ikke** rørt: dens afsnit er en advarsel om at taggen er *halv* en
+  integration, ikke en opskrift, og den skal blive stående som den er.
+  **Og bygningen vogter det nu** — samme slags som de tre andre byggevåbner:
+  `npm run build:docs` fejler på en frameworkside der genfortælder taggen, med
+  sidens navn og grunden. Bevis for at vagten virker: den er provokeret ved at
+  lægge Angulars formulering ind i Vue-siden, og builden fejlede med
+  `/vue/ (re-describes the tag's attributes)` og
+  `/vue/ (re-describes what the tag needs no wiring for)`. Den fangede også
+  en restance i min egen Next.js-omskrivning i samme kørsel. **Ingen ny URL,
+  ingen ny side, ingen kodeændring ud over README og vagten** — de fire sides
+  byggede HTML var de eneste forskel. 238 søgeposter (fra 237), 896 tests
+  grønne, `check-dist` grøn på 208 filer, ingen budget flyttede sig
+  (IIFE'erne uændrede 24 688 / 21 104 mod 25 088 / 21 504, fordi det er
+  dokumentation og en byggevågt).
+- [x] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 28/9,
+  `ceo/tanstack-query`, commit `3e74a2d`. **Lukket.** 3 af de
   9 forslag under `tanstack error boundary` er `tanstack query error
   boundary`, og TanStack Query er et **datalag, ikke en router** — det fanger
   intet sig selv og har ingen boundary, så siden handler om
   `QueryCache`'s `onError` og `useQuery`'s `error`-rendering. Forsk først:
   læs `@tanstack/query-core`'s publicerede build.
-  **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.**
-- [ ] **31. SvelteKit har sin egen fejl-vej og kun nævnt i en halv side.**
-  `sveltekit error handling` er 7 forslag (28/9) — højere end
-  `svelte error handling`'s 3, og `/docs/svelte/` dækker den kun som et
-  afsnit. `handleError` i `hooks.server.ts` kører **på serveren**, hvor
-  panelet ikke findes, så den rigtige løsning er den samme
-  script-tag-fallback som TanStack Start. Kan slås sammen med opgave 29.
-- [ ] **32. En `/docs/`-side der samler de otte framework-integrationer i én
-  tabel.** Datagrund: otte sider der ligner hinanden, hver med sin egen
+  **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.** Se "Fund fra
+  TanStack-Query-iterationen" nedenfor — **fire fund, alle fire i kode, og tre
+  af dem ville have kostet en bruger deres rapporter eller deres side.** 49
+  docs-sider (fra 48), 246 søgeposter (fra 245). `npm run check` grøn (896
+  tests, `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
+  budget flyttede sig. **Branchen er baseret på `ceo/script-tag-once-2`**, så
+  opgave 29 og 30 ligger i én kø og merger sammen — se "Fund fra
+  TanStack-Query-iterationen", punkt 5.
+- [x] **31. SvelteKit har sin egen fejl-vej.** 28/9, `ceo/sveltekit-side`,
+  `/docs/sveltekit/`. **Lukket.** Datagrund: `sveltekit error handling` er 7
+  suggestions mod `svelte error handling`'s 3, og autocomplete tilføjer de to
+  ingen anden ramme har — `sveltekit global error handling` og `sveltekit
+  remote functions error handling`. Læst i `@sveltejs/kit@2.70.3`'s
+  publicerede kilde. **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.**
+  Se fundene nedenfor — og de **retter planens egen hypotese**. 50 docs-sider
+  (fra 49), 253 søgeposter (fra 246), `npm run check` grøn (896 tests,
+  `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
+  budget flyttede sig (IIFE'erne uændrede 24 688 / 21 104).
+- [x] **32. `/docs/every-framework-one-table/` — de elleve
+  framework-integrationer i én tabel.** 28/9, `ceo/which-framework`.
+  **Lukket.** Datagrund: elleve sider der ligner hinanden, hver med sin egen
   "hvor mange kroge"-inddeling. En læser der *vil* vide hvilken de har,
   har i dag ingen side at finde det på. Advarsel fra CLAUDE.md: må ikke blive
   en tynd opslagsside — den skal have den fulde krog-tabel, ellers er den
-  værre end ingen.
+  værre end ingen. **MÅL: `/docs/every-framework-one-table/` baseline 0
+  (siden findes ikke) pr. 2026-09-28.** Se fundene nedenfor. 51 docs-sider
+  (fra 50), 259 søgeposter (fra 253), `npm run check` grøn (896 tests,
+  `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
+  budget flyttede sig (IIFE'erne uændrede 24 688 / 21 104).
+  **  Sitemap-tallet er nu 60 `<loc>`, ikke 57** — den gamle note regnede fra 48
+  docs-sider, og der har været tre siden. Den næste deploy-måling skal holde
+  mod 60, ellers ser den rigtige build ud som en fejl.
+- [x] **33. En hel rapport i README's åbning — de to filer en første rapport
+  er.** 28/9, `ceo/readme-first-report`. **Datagrund: npm-siden er den eneste
+  overflade der er live.** 191 downloads/uge, 412/måned, ★2 stjerner, og alle
+  dem læser README — og GitHub-clones læser den samme fil. Den er **7 956
+  linjer lang**, og åbningens første kodelinje var `initConsoleBuffer()`, som
+  alene ikke sender noget: det første snippet der *bygger* en rapport lå
+  3 700 linjer nede, det første komplette rundt trip 7 800. Så den ene
+  overflade vi faktisk kan nå en læser på, havde ingen komplet rapport på den.
+  Ny `### A first report, end to end` lukker åbningen med de to filer: en
+  knap og én route handler, hvis `fileStore` ikke kræver en database. **Og den
+  fandt en fejl, der lå i seks snippets** — se fundene. **MÅL: npm-siden og
+  `/docs/install/` — ingen målbar baseline (Plausible 1 besøgende/28 d,
+  Search Console-eksporten stadig på Mads, opgave 7). Måles først på
+  npm-downloads og stjerner; sammenlign 25/10.
+
+### Fund fra readme-first-report-iterationen (28/9 11:5x) — seks snippets der
+### ville have svaret 500
+
+**1. `fileStore()` svarer et objekt, og seks snippets skrev det som et
+`store`.** `fileStore` svarer `{ store, list, read, remove, prune, refresh }`,
+mens `handleReport`s `store`-option er en **funktion** den kalder
+(`src/server/handle.ts:1330` — `await options.store(report, screenshot)`). En
+læser der indsatte Hono-, Express-, Fastify- eller NestJS-snippet fik derfor
+`TypeError` → **500** og ingen rapport. Fundet fordi jeg selv skrev det
+forkert i den nye åbning og stoppede for at tjekke typen. **Rektorens egen
+API-sektion har altid sagt det rigtige** — *"whose store answers `store`,
+`list`, `read`, `remove`, `prune` and `refresh`"* — så det var aldrig typen
+der var forkert, kun eksemplerne. Alle seks skriver nu `.store`, og den
+**ene** i README der var rigtig (`Storing it`, linje 6125) er den der viste
+mig at objektet er formen.
+
+**2. Vagten er skrevet, og den er provokeret.** `tests/readme-snippets.test.ts`
+fails på ethvert README-snippet der bygger en `fileStore` og afleverer den
+til en `store` uden at nå gennem `.store`. Bevis: linje 1699 rettet tilbage
+til den gamle form → testen fejler og *navngiver linjen*. Den slipper
+med vilje `prune()`-eksemplet, der kun læser katalogen og aldrig afleverer
+nogen noget — så reglen er "afleverer den", ikke "nævner den".
+
+**3. Den anden vagt er den der burde have været der fra starten.** README's
+åbning importerer `initConsoleBuffer`, `buildReport`, `sendReport`,
+`handleReport` og `fileStore` — og de er nu pinet mod de rigtige entries, så
+en rename ikke kan efterlade hurtigstarten med et navn der ikke findes. Det er
+samme slags pin som `exports.test.ts` lavet til subpaths'ne.
+
+**4. Deploy-klammen står uændret, og sitemap'en er stadig 47 mod 60.**
+
+### Fund fra one-table-iterationen (28/9 10:5x) — fire fund, og tre af dem er
+### ikke om bugbottle
+
+**1. Der er elleve framework-sider, ikke otte.** Opgaven sagde otte. Talt er
+der **elleve** i `Integrations`: React, Vue, Svelte, SvelteKit, Next.js,
+Angular, Nuxt, Astro, React Router, TanStack Router og TanStack Query — de otte
+`framework`-navne plus de tre TanStack/React-Router-sider, der kom efter at
+opgaven blev skrevet. Siden er skrevet til alle elleve, og det er ikke en
+forskel i formuleringen: **Svelte og SvelteKit er to sider om to kroge i to
+filer**, og en tabel der tæller fejl ville sendt en SvelteKit-læser til
+Svelte-siden og ladet dem lede efter en `onerror` der ikke findes der.
+
+**2. "Hvor mange kroge har den her framework" er det spørgsmål, der ikke
+virker.** Planen har selv skrevet det tre gange siden TanStack-siden, og
+skrevet at man skal starte med det. Siden gennemgår alle elleve og **den
+egenskab holder ikke**: tre af elleve har ikke en krog, men en *prop på en
+boundary* — Svelte's `<svelte:boundary onerror>` er et element i markup'en,
+TanStack Router's `onCatch` er `componentDidCatch` på en boundary der kun
+mountes med et `errorComponent`, og Next.js's `error.tsx` er en komponent
+frameworken renderer i stedet for den brudte. Tælleren siger "1" for alle tre,
+og den siger det samme som "1" for `app.config.errorHandler` i Vue, som
+fungerer helt andet. **Siden siger derfor i stedet fire klasser af det krogen
+ikke ser** — egen kode frameworken ikke ruter til, en krog der erstatter
+konsolinien, en krog der ikke virker i produktion, og fejlsiden hvor
+frameworket er væk — fordi klasserne er det læseren kan *handle på*, uanset
+hvilken framework de har.
+
+**3. Den fælles nævner for de elleve er ikke antallet af kroge, men at de
+otte af dem sletter konsolinien.** Vue, React 19's `onCaughtError`, SvelteKits
+`src/hooks.ts`, React Router's `onError` i data-mode, Nuxts
+`vueApp.config.errorHandler` og Astros `preventDefault()` gør alle seks den
+*samme* ting: de erstatter præcis den `console.error` som ringbufferen
+optager. Det er fundet der gjorde klassifikationen værd at skrive, fordi det er
+**ét** afsnit og **én** linie rettelse (`console.error(error)` før send) i stedet
+for seks. Og Astro's er det værste af dem, fordi det ikke er en krog der
+erstatter en linje, men en `preventDefault()` der **slukker** den eneste linje
+der bærer både komponent-URL'en og den rå fejltekst.
+
+**4. En fejl der *returneres* er en klasse for sig, og den er den stille
+fælde.** Angulars `resource()`/`httpResource()`, Nuxt's `useFetch().error.value`,
+Astro's `action()` og TanStack Query's `isError` lægger alle fejlen i en
+*værdi* frem for at kaste den — så ingen krog i nogen af de elleve ser den, og
+ingen af dem kalder det en fejl. Siden tager den som klasse 1 og siger det
+pligtigt: *en rapportintegration der kun har en frameworkkrog misser alle fire,
+og det de har til fælles er at ingen kalder dem en fejl.* Det er den samme
+indsigt som `resource()`-fundet på Angular-siden, løftet op så de fire rammer
+kan se den samme ting.
+
+### Fund fra SvelteKit-iterationen (28/9 10:3x) — fire fund, og de retter planen
+
+**1. Planens hypotese var forkert, og det er det vigtigste fund.** Skrevet i
+køen: *"`handleError` i `hooks.server.ts` kører **på serveren**, hvor panelet
+ikke findes, så den rigtige løsning er den samme script-tag-fallback som TanStack
+Start."* **Nej.** `src/hooks.server.ts` er Node — intet vindue, ingen
+ringbuffer, intet panel. Men `src/hooks.ts` er en **universal** krog: samme fil,
+browseren på klient-navigation, Node på serveren. Det er den, der sender
+rapporten, fordi det er den eneste af de to der kører der panelet findes. Så
+svaret er hverken script-tag-fallback eller to kroge — det er *én* krog i det
+rigtige filnavn, plus en tabel over hvad den dækker og hvad den med vilje
+ikke dækker.
+
+**2. Tilføjelsen af krogen sletter konsollinjen.** `src/core/sync/write_client_manifest.js`
+genererer klientens kroge, og den genererede linje er
+`handleError: client_hooks.handleError || (({ error }) => { console.error(error) })`.
+Læs den igen: **din krog, eller en funktion der logger.** Så en SvelteKit-app
+uden `src/hooks.ts` logger alle klientfejl i ringbufferen, og det øjeblik man
+tilføjer krogen for at få rapporter, forsvinder linjen — medmindre ens egen krog
+også kalder `console.error`. En udvikler der tester integrationen ser en
+fungerende rapport; den der triagerer senere finder en tom indbakke for en fejl
+browseren før printede gratis. Det er samme klasse som Vues "setting it deletes
+the console line" (den side), men mekanismen er en `||` i genereret kode, og
+den står ingen steder i SvelteKits egen dokumentation.
+
+**3. En serverfejl rapporteres aldrig to gange — med vilje.** `load_data` i
+`src/runtime/client/client.js` gør en fejl fra serveren til en `HttpError` med
+kommentaren *"to not call handleError on the client again (was already handled on
+the server)"*. Læs det som en specifikation: **klientkrogen fyrer aldrig for en
+fejl der skete på serveren.** Siden har derfor en tabel med fire rækker, hvor
+den fjerde er den der binder: `fail()` i en form action er et *resultat*, ikke en
+fejl, og går aldrig gennem `handleError`. "Formularen gør ingenting" + ingen
+rapporter = den række.
+
+**4. Remote functions har samme fælde på en anden krog.**
+`handleValidationError`'s default er `console.error('Remote function schema
+validation failed:', issues); return { message: 'Bad Request' }` — altså et 400
+med en linje i serverloggen, ikke en undtagelse, ikke noget `handleError` ser.
+Det er præcis den autocomplete-tilføjelse planen ikke havde set.
+
+**Deploy, genmålt 28/9 10:3x: uændret.** `/self-hosted/`, `/docs/svelte/` og
+`/docs/tanstack-query/` er stadig 404, sitemap'en stadig 47 `<loc>`. Der er
+intet nyt batch-vindue siden målingen kl. 08:29 (næste er 12:30), så det er
+forventet — og det bekræfter at blokeringen står. **Merges til `main` er stadig
+stoppet**; denne iteration ligger derfor på `ceo/sveltekit-side oven på
+`ceo/tanstack-query`, så opgave 29, 30 og 31 ligger i én kø.
 
 ## Fund fra Sentry-SDK-rækken (27/9) — hvorfor tallene er målt
 
@@ -1667,22 +1920,173 @@ Windows-sti på denne maskine, `/Applications/Google Chrome.app` findes ikke, og
 ikke noget en senere iteration bør prøve igen for hver side — hverken `a11y`
 eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
 
+## Fund fra TanStack-Query-iterationen (28/9 09:5x) — fire fund, og tre af dem
+### koster rapporter eller en hel side
+
+Metoden er den ottende gang den samme: `npm pack @tanstack/query-core@5.104.0`
+og `@tanstack/react-query@5.104.0`, læs `build/modern/*.js`, ikke dokumentationen.
+Det er den rigtige metode for **dette** bibliotek af en grund der er værd at
+skrive ned: TanStaks egen dokumentation er god, men den er skrevet omkring
+`isError`, og `isError` er netop det felt der er **forbudt at bruge alene** —
+se punkt 1.
+
+**Først det strukturelle:** TanStack Query er det eneste på denne side der
+**ikke er en renderer**. Den tager ingen `errorComponent`, den har ingen
+boundary, og den kaster ikke medmindre `throwOnError` eller `suspense` bliver
+sat. En render-error-boundary fanger derfor **intenting** fra den — så det er
+ikke "sæt en fejlgrænse om den", det er "`QueryCache` har en `onError`", og
+det er hele siden.
+
+**1. `isError` er sand medens `data` stadig er den sidste gode værdi.** Den
+oprindelige tilstand nulstilles kun under én betingelse:
+
+```js
+function fetchState(data, options) {
+  return { fetchFailureCount: 0, fetchFailureReason: null, fetchStatus: …,
+           ...data === void 0 && { error: null, status: "pending" } };
+}
+```
+
+Læs spread-betingelsen. En query der har hentet én gang og så fejler en
+baggrunds-refetch **beholder** sin `error` og sin `status: "error"`, fordi
+`data` ikke er `undefined`. Bygget har to flag til præcis det, og de er
+udregnet af de samme to felter: `isLoadingError: isError && !hasData` og
+`isRefetchError: isError && hasData`. Siden siger derfor: **forgrening på
+`isLoadingError` / `isRefetchError`, aldrig på `isError`.**
+
+**2. `throwOnError` tager en fungerende side ned med sig.** Den fristende
+one-liner er `defaultOptions: { queries: { throwOnError: true } }`, og den er
+forkert. `useBaseQuery` ender på to `throw`s, og `getHasError` er én linje:
+
+```js
+return result.isError && !errorResetBoundary.isReset() && !result.isFetching && query &&
+  (suspense && result.data === void 0 || shouldThrowError(throwOnError, [result.error, query]));
+```
+
+Betingelsen er `isError`, **ikke** `isLoadingError` — så den fejlede
+baggrunds-refetch fra punkt 1, den hvor `data` er en fuldstændig brugbar liste
+fra et minut siden, **kaster ud af render**, React afmonterer subtræet, og den
+side læseren læser bliver erstattet af en fejlskærm. `isRefetchError` lå i
+resultatet og kastet spørger ikke til det. To ting ved kastet er *ikke* et
+problem, fordi begge bliver spurgt om hele tiden: det fyrer **én gang og ikke
+én gang pr. retry** (`!result.isFetching` står i betingelsen, og det er
+retries der holder `fetchStatus` på `"fetching"`), og et reset kaster ikke for
+evigt (`ensurePreventErrorBoundaryRetry` sætter `retryOnMount = false`).
+**Konklusionen er modsat den fristende:** `throwOnError` **fra**, rapportér fra
+cachens `onError`, og lad komponentens egen `isLoadingError`-grene tegne.
+
+**3. En exception i reporterens egen `onError` fortrænger den rigtige fejl.**
+Det skarpe af de fire, og det der koster en eftermiddag. Query-callbacket er et
+nøgent kald i catch-blokken uden omkringliggende `try`:
+
+```js
+this.#dispatch({ type: "error", error });
+this.#cache.config.onError?.(error, this);   // ← kaster dette
+this.#cache.config.onSettled?.(this.state.data, error, this);
+throw error;                                 // ← denne linje køres aldrig
+```
+
+Kaster `onError` — en `console.error`-shim der kaster, en `widget.open()` der
+kaster, alt i egen kode — **ser applikationen aldrig queryens fejl.** Den ser
+din. `await queryClient.fetchQuery(…)` rejecter med reporterens fejl,
+`error.status === 404` er ikke der, og tilstanden siger `"error"` mens
+rejectionen siger noget andet. UI'et ser rigtigt ud, fordi dispatchet skete
+først. Mutationssiden er omvendt **awaitet og vasket** — `try { await … } catch
+(e) { Promise.reject(e) }` — så en kastende reporter dér ikke når appen, men
+bliver til en `unhandledrejection`, som er **samme kanal som `openOnError`
+lytter på**, altså kan en defekt reporter åbne panelet en gang til fra sin egen
+fejl. Og fordi den awaites, sidder reporteren i `mutate()`-stien: en langsom
+rapport forsinker `onSettled` og `mutateAsync`'s promise med hele rapportens
+round trip. Siden siger derfor eksplicit: `void reportMutationError(…)`.
+
+**4. `retry` er 3 på clienten og 0 på serveren, og der er ingen 4xs-undtagelse.**
+Forsinkelsen ligger i bygget: `Math.min(1e3 * 2 ** failureCount, 3e4)` →
+**1 s + 2 s + 4 s = 7 sekunder** før `onError` overhovedet kører. Det er det
+ærlige svar på "hvorfor kom rapporten så sent", og det er værd at vide **før**
+man går på jagt efter en kø-fejl. Prædikaten kigger på fejlen og intet andet:
+
+```js
+const shouldRetry = retry === true || typeof retry === "number" && failureCount < retry ||
+  typeof retry === "function" && retry(failureCount, error);
+```
+
+Der er **ingen indbygget undtagelse for 4xx** — en post der ikke findes, en
+ikke-autentificeret forespørgsel og en valideringsfejl retries alle tre gange og
+rapporteres så. En bugboks der får en rapport for hver manglende post er en
+bugboks man slår fra. Siden giver prædikaten i toppen og siger at
+`failureCount < 3`-halen skal stå: uden den rapporteres et reelt flakket netværk
+ved det første forsøg.
+
+**Plus de tre stier, der ikke nogen `useQuery`-integration ser:** en
+**fejlet `prefetchQuery`** fyrer `onError` og bliver slugt i klienten
+(`.then(noop).catch(noop)`) — altså rapporter med et query key ingen står på
+siden for, hvilket ikke er en fejl i wiringet men hooken der forteller
+sandheden, og `url`-feltet er måden at skelne dem. En query der fjernes under en
+kørende fetch **rapporterer ikke** (`destroy` cancellerer med `{ silent: true }`),
+men et `query.cancel()` du selv kalder uden argumenter er hverken `silent` eller
+`revert` og **falder igennem til dispatchen og til `onError`**. Og `onError`
+sidder på `Query` ikke på observatøren, så en fetch startet af `fetchQuery`,
+`ensureQueryData` eller en `invalidateQueries`-kaskade rapporterer uanset om
+noget renderer resultatet — **det er den egenskab, der gør en baggrundsfejl
+finde overhovedet.**
+
+**5. Et fund uden for opgaven, som er grunden til at denne branch ikke er baseret
+på `main`.** Da jeg checkede `main` ud faldt `IMPLEMENTATION_PLAN.md` fra 3117
+til 2977 linjer, fordi `b989752` (script-tag-noterne fra opgave 29) **kun**
+findes på `ceo/script-tag-once-2` og ikke er merget. En ny branch baseret på
+`main` ville derfor have skullet skrevet 140 linjer delt state oveni en tekst,
+hvorfra opgave 29s noter mangler, og de to brancher ville kollidere i planen ved
+den første merge. **Løsningen er at basere opgave 30s branch på
+`ceo/script-tag-once-2`**, så de to ligger i én kø. Det krævede én konflikt i
+planen (opgave 28/29 lå der i to versioner) og blev løst ved at beholde den
+rettede version og droppe den ældre. **Følge til Mads:** `git merge --no-ff
+ceo/tanstack-query` tager nu **begge** færdige opgaver med, opgave 29 og 30, i
+én bevægelse.
+
+**Deploy: uændret, og merges til `main` er stadig stoppet.** Genmålt 28/9 09:51
+inden denne iteration: live har **47** `<loc>` (den rene build fra `main` havde
+57 før denne iteration, 58 efter), og `/self-hosted/`, `/docs/express/`,
+`/docs/tanstack-router/` og `/support/` er alle **404**. Der er ikke gået et
+nyt batch-vindue siden målingen kl. 09:2x (næste er 12:30), så det er ikke en
+ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
+
 ## ❓ Til Mads
 
+- **🟡 GitHub har ingen topics på `mahope/bugbottle`, og det er den
+  billigste discovery der findes.** ★2 stjerner, 0 watchers, 4 visninger på 14
+  dage — et repo uden topics findes ikke, uanset hvor god README'en er. Jeg har
+  **ikke** kørt det, fordi det er en skrivning mod en ekstern API og kontrakten
+  forbyder udadvendte handlinger. Det er én kommando, når du vil:
+  ```bash
+  gh repo edit mahope/bugbottle --add-topic bug-report,error-reporting,error-tracking,user-feedback,sentry-alternative,headless,screenshot,console-log,self-hosted,nextjs,react,vue,svelte,solid,astro
+  ```
+  Samme for `mahope/bugbottle-wordpress` og `mahope/bugbottle-action`, som også
+  står på 0.
 - **🔴 Deployet er gået i stykker, og det kan ikke rettes fra repoet.** 28/9.
-  To batch-vinduer er gået tabt i træk (21:30 27/9 og 07:30 28/9), og ni
-  sider er 404 på bugbottle.dev, selv om de er committet og gaten er grøn:
-  `/support/`, `/self-hosted/`, `/docs/react-router/`, `/docs/svelte/`,
-  `/docs/express/`, `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/`,
-  `/docs/global-errors/`. Sitemap'en har 47 `<loc>` mod de 59 builden
-  producerer. **Jeg har stoppet med at merge til `main`**, som kontrakten siger
-  ved to tabte vinduer, og arbejder videre på branches indtil du kigger.
-  `/docs/vue/`, `/docs/nextjs/` og `/docs/angular/` *er* live, så et vindue har
-  virket — batchen fejlede altså efter 21:30 27/9, eller den bygger mod et
-  ældre udtræk end `main`. **Spørgsmålet:** bygger den mod `main` eller mod et
-  tag/pin, og kan du se dens log fra de to kørsler? Jeg rører ikke Dokploy og
-  ikke DNS, og i repoet ligger intet at fejlsøge i — `site/Dockerfile` bygger
-  ikke i CI, og ingen af de to workflows bygger eller skubber billedet.
+  Opdateret 09:2x med en måling der indsnævrer spørgsmådet fra "mod `main`
+  eller mod et tag" til **"hvorfor kørte der en build kl. 23:1x den 27/9, og
+  hvorfor har ingen kørsel siden overhalet den?"**. To batch-vinduer er gået
+  tabt i træk (21:30 27/9 og 07:30 28/9), og **ti** sider er 404 på
+  bugbottle.dev, selv om de er committet og gaten er grøn: `/support/`,
+  `/self-hosted/`, `/docs/react-router/`, `/docs/svelte/`, `/docs/express/`,
+  `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/`, `/docs/global-errors/`,
+  `/docs/tanstack-router/`. Sitemap'en har 47 `<loc>` mod de 57 builden
+  producerer, og de 47 er præcis de 47 fra **før** de ti. **Jeg har stoppet
+  med at merge til `main`**, som kontrakten siger ved to tabte vinduer, og
+  arbejder videre på branches indtil du kigger.
+  **Beviset, så du ikke skal lede i loggen:** jeg diffede de to sitemap'er
+  (`comm` begge veje) og fik **ti sider kun på min og nul kun på live** — altså
+  er intet forsvundet, kun ikke kommet med. Og live har Vue, Next.js og Angular
+  men **ikke** Svelte, hvilket indsnævler klammen til en commit **mellem
+  `26281b3` (Vue, 27/9 23:04) og `d056439` (support, 27/9 23:34)**. Det er et
+  30-minutters vindue, og **ingen af de fire batch-tider (07:30/12:30/17:30/
+  21:30) ligger i det** — 21:30 er før Vue. Så den kørsle var enten manuel eller
+  ad hoc. **Spørgsmålet:** kan du se en kørsel i Dokploys log 27/9 omkring 23:1x,
+  og hvad udløste den — og har du en kredential eller et webhook, der kører
+  builden uden om de fire tider? Jeg rører ikke Dokploy og ikke DNS, og i
+  repoet ligger intet at fejlsøge i: `site/Dockerfile` bygger ikke i CI, ingen
+  af de to workflows bygger eller skubber billedet, og `npm run build:docs` er
+  grøn på `main` lige nu (57 sider), så det er **ikke** et build-problem.
 
 - **Search Console-eksporten (opgave 7) — stadig den vigtigste ulævede
   ting.** 28/9. Vi har nu 48 docs-sider og alle har en håndskrevet
@@ -1925,6 +2329,69 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-28, iteration 25** (`ceo/readme-first-report`, oven på
+  `ceo/sveltekit-side`). Opgave 33. Se opgaven og fundene ovenfor.
+  - **Deploy, genmålt 28/9 11:4x: uændret.** Live-sitemap'en har **47**
+    `<loc>` mod **60** i den rene build. Der er ikke gået et nyt batch-vindue
+    siden målingen kl. 09:2x — næste er **12:30** — så det er forventet.
+    **Merges til `main` er derfor stadig stoppet**, og branchen ligger oven på
+    `ceo/sveltekit-side` som de tre forrige: opgave 29–33 ligger i **én** kø.
+  - **Gaten:** `npm run check` grøn — **900 tests** (fra 896, fire nye),
+    `check-dist` grøn på 208 filer, `build:docs` skriver **51 docs-sider** og
+    **260 søgeposter** (fra 259, den nye `###` på åbningen), sitemap'en
+    uændret på 60 `<loc>`. **Ingen kode- eller `dist/`-ændring**: IIFE'erne
+    vejer 24 688 / 21 104 mod budgetterne 25 088 / 21 504, uændrede, fordi det
+    er dokumentation og to tests.
+  - **Bygget bekræfter de tre `#anchor`e** i den nye sektion: de renderes som
+    `/docs/receiving-a-report/` og `/docs/the-ready-made-panel/`, ikke som
+    `#`-links til GitHub. `/docs/install/` har nu "A first report, end to end"
+    som sit tredje afsnit.
+
+- **2026-09-28, iteration 24** (`ceo/which-framework`, oven på
+  `ceo/sveltekit-side`). Opgave 32: `/docs/every-framework-one-table/`.
+  Se opgaven og fundene nedenfor.
+  - **Deploy, genmålt 28/9 10:3x før arbejdet og igen efter gaten: uændret.**
+    `/self-hosted/`, `/docs/svelte/`, `/docs/tanstack-query/`, `/support/` og
+    `/docs/sveltekit/` er alle stadig **404**, og sitemap'en har stadig **47**
+    `<loc>`. Der er ikke gået et nyt batch-vindue siden målingen kl. 08:29 —
+    næste er **12:30** — så det er forventet, og det bekræfter at blokeringen
+    står. **Merges til `main` er derfor stadig stoppet**, og denne iteration
+    ligger derfor oven på `ceo/sveltekit-side` som de to forrige: opgave 29, 30,
+    31 og 32 ligger i **én** kø og merger sammen, når blokeringen hæves.
+  - **Et tal i planen var forkert, og det er det tredje tal i tre iterationer
+    der peger på det samme.** Sitemap'en blev målt til 57 `<loc>` i
+    deploy-noten, og `comm` sagde "ti sider kun på min". Siden den måling er
+    **tre** docs-sider kommet til (TanStack Query, SvelteKit og nu denne), så
+    den rene build skriver **60**, ikke 57. En deploy-måling der holder mod 57
+    ville have rapporteret en rigtig build som en fejl. Rettet i opgaven.
+
+- **2026-09-28, iteration 22** (`ceo/script-tag-once-2`). Opgave 29, plus
+  en deploy-måling der indsnævrer blokeringen. **Merges til `main` er stadig
+  stoppet** (to tabte vinduer), så dette er en branch, ikke en merge.
+  - **Deploy først, altid.** Genmålt 09:2x: uændret, ni sider 404. Men så
+    diffede jeg de to sitemap'er i stedet for at tælle 404'er, og det gav
+    **to ting gårs måling ikke havde**: (1) de 47 live-URL'er mod `git log`
+    indsnævrer klammen til **mellem 23:04 og 23:34 den 27/9**, altså et
+    30-minutters vindue der ikke er nogen batch-tid; (2) **null sider kun på
+    live** — intet er forsvundet, kun ikke kommet med, så det er ikke en
+    omdøbning eller en cache. Se "Fund fra deploy-iterationen" og ❓.
+  - **Planens opgave 29 var ude ved at gøre det forkert.** Den navngav fire
+    sider (Vue + React Router + Svelte + TanStack) som *"gentager den samme
+    kode"*. Jeg læste dem, og de gør **ikke** — ingen af dem har en
+    `data-endpoint`-snippet. De fire der gør, er **Next.js, Angular, Nuxt og
+    Astro**, og de gentager ikke *koden* men en **påstand om hvad taggen
+    dækker**, i fire formuleringer. Så opgaven blev skrevet om efter at være
+    læst; det er den anden gang en kø-post har peget på de forkerte sider, så
+    **mål siderne før du skriver dem** — det er to minutter mod en hel time.
+  - **Rettelsen er en vagt, ikke en omformulering.** At skrive afsnittet ét
+    sted er halvdelen; at bygningen *fejler* når en fjerde side gør det samme
+    igen er den anden halvdel, og den er den der holder. Samme mønster som de
+    tre andre byggevåbner. Bevis: provokeret med Angulars formulering i
+    Vue-siden, og builden fejlede med sidens navn og grunden.
+  - **Næste iteration:** mål deployen efter **12:30**-vinduet. Er `/self-hosted/`
+    stadig 404, er det **tre** tabte vinduer og ❓-punktet er det eneste
+    indhold. Ellers: ryd blokeringen og merge denne branch.
 
 - **2026-09-28, iteration 21** (`ceo/pin-typescript`). Opgave 24, vej A.
   Se opgaven og "Fund fra baseline-iterationen" ovenfor.
@@ -2975,3 +3442,51 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   TanStack-guiden med `ResolvedCatchBoundary`-eksemplet og
   `NODE_ENV !== "production"`-afsnittet, og `Integrations` i sidebaren skal
   have tretten sider.
+- **OPGAVE 29 — IKKE MERGET, ligger på `ceo/script-tag-once-2`, commit
+  `0318698`, 28/9 09:3x.** Script-tagonlysningen står nu ét sted med en
+  byggevågt; `npm run check` grøn (896 tests, 238 søgeposter fra 237,
+  `check-dist` grøn på 208 filer, ingen budget flyttede sig). **Ingen ny URL
+  og ingen ny side**, så den har ingen egen VERIFICÉR-note: den ændrer kun de
+  fire sides byggede HTML. **Den skal merges til `main` samme dag
+  blokeringen hæves** — ellers ligger den færdige rettelse bare og bliver
+  ældre end de ti sider der allerede venter. Merge den med
+  `git merge --no-ff ceo/script-tag-once-2` når du kigger.
+
+- **OPGAVE 30 — LIGGER PÅ `ceo/tanstack-query`, commit `3e74a2d`, 28/9 09:5x.**
+  `/docs/tanstack-query/` er skrevet, gaten er grøn (896 tests, `check-dist` grøn
+  på 208 filer, ingen kode- eller `dist/`-ændring, ingen budget flyttede sig),
+  49 docs-sider (fra 48), 246 søgeposter (fra 245). Branchen er **baseret på
+  `ceo/script-tag-once-2`**, så den indeholder både opgave 29 og opgave 30 — én
+  `git merge --no-ff ceo/tanstack-query` tager begge. **Ingen egen
+  VERIFICÉR-note endnu:** den arver opgave 29s, fordi merges til `main` er
+  stoppet af `DEPLOY-MISSING`. Når blokeringen hæves og der merges, skal
+  `https://bugbottle.dev/docs/tanstack-query/` vise TanStack Query-siden med
+  `QueryCache`'s `onError`-kodeblok og `isRefetchError`-afsnittet, og
+  `Integrations` i sidebaren skal have **fireten** sider (den var tretten efter
+  TanStack Router).
+
+- **OPGAVE 32 — LIGGER PÅ `ceo/sveltekit-side`, oven på `3e74a2d`, 28/9 10:5x.**
+  `/docs/every-framework-one-table/` er skrevet, gaten er grøn (896 tests,
+  `check-dist` grøn på 208 filer, ingen kode- eller `dist/`-ændring, ingen budget
+  flyttede sig), 51 docs-sider (fra 50), 259 søgeposter (fra 253), og **sitemap'en
+  skriver nu 60 `<loc>`** (den rene build; live har stadig 47).
+  **VERIFICÉR DEPLOY: `/docs/every-framework-one-table/` 28/9 10:5x.** Den skal
+  vise hook-tabellen med elleve rækker og de fire klasser, og `Integrations` i
+  sidebaren skal have **femten** sider (den var fjorten efter TanStack Query).
+  Branchen indeholder samlet opgave 29, 30, 31 og 32, så **én**
+  `git merge --no-ff ceo/sveltekit-side` tager dem alle fire.
+
+- **OPGAVE 33 — LIGGER PÅ `ceo/readme-first-report`, oven på `fc8f6c0`, 28/9 11:5x.**
+  README's åbning har nu "A first report, end to end": de to filer en første
+  rapport er, med `initConsoleBuffer()` og uden en database. Seks snippets der
+  skrev `fileStore()` som et `store` er rettet (de ville have svaret 500), og
+  `tests/readme-snippets.test.ts` vogter både dem og åbningens imports mod de
+  rigtige entries. Gaten er grøn (900 tests, `check-dist` grøn på 208 filer,
+  ingen kode- eller `dist/`-ændring, ingen budget flyttede sig).
+  **VERIFICÉR DEPLOY: `https://bugbottle.dev/docs/install/` skal vise afsnittet
+  "A first report, end to end" med de to kodeblokke og de tre links ud til
+  `/docs/receiving-a-report/` og `/docs/the-ready-made-panel/`.** Den samme
+  ændring skal ses på **npm-siden** (`npmjs.com/package/bugbottle`), som ikke
+  afhænger af deployet — README'en er den der, uanset hvad sitet gør.
+  Branchen indeholder samlet opgave 29, 30, 31, 32 og 33, så **én**
+  `git merge --no-ff ceo/readme-first-report` tager dem alle fem.
