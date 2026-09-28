@@ -1834,7 +1834,7 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   open({ message }) — /docs/vue/, /docs/nuxt/, /docs/astro/, /docs/svelte/ og
   /docs/angular/ — og den kommentar der sagde "open() takes no arguments, so the
   box opens empty" er væk fra begge steder, hvor den stod (Astro og SvelteKit).
-  <merge-sha>, merge <merge-sha> ~05:4x, 2026-09-28` — næste batch-vindue er
+  31b3eda, merge b324f87 ~05:46, 2026-09-28` — næste batch-vindue er
   **07:30 2026-09-28**, samme som de ni notes ovenfor, så **én kørsel dækker
   alle ti**. Verificér **indhold**: `https://bugbottle.dev/docs/astro/` skal
   vise `widget.open({ message: ...never hydrated... })` og må **ikke** vise
