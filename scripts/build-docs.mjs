@@ -206,6 +206,7 @@ const GROUPS = [
       "wordpress",
       "hono",
       "fastify",
+      "nestjs",
     ],
   },
   {
