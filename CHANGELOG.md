@@ -10,6 +10,19 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **`/docs/solid/`: the last shipped adapter had no page of its own.**
+  `bugbottle/solid` has been an entry point since 0.6 and was documented as a
+  form and a row in the API list, but a Solid application found no page that
+  spoke about its framework. It does now, with four claims read out of
+  `solid-js@1.9.15` rather than assumed: `ErrorBoundary` has no `onerror` prop
+  and it **replaces** an inherited `onError` list, so the two are alternatives
+  rather than complements; `onError` called outside a component is discarded
+  by an empty statement in the runtime, silently; an error thrown in an event
+  handler is called straight out of the delegated listener, so it reaches
+  `window.onerror` and no boundary at all; and a thrown non-`Error` is replaced
+  by a new `Error` whose stack points into `solid-js`, with the original in
+  `cause`. The framework table and the four gap classes count twelve now.
+
 - **The confirmation names the report the server stored.** `handleReport`
   answers with the id it gave the report, and until now the panel read it, put
   it in `status.id` and then dropped it on the floor: a reporter was told the

@@ -223,6 +223,7 @@ const GROUPS = [
       "vue",
       "svelte",
       "sveltekit",
+      "solid",
       "nextjs",
       "angular",
       "nuxt",

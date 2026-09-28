@@ -445,6 +445,67 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   ingen trafikbaseline ændres (Plausible 1 besøgende/28 d pr. 28/9, npm 210
   downloads/uge, ★2) — effekten er tillid, og den første målbare ting bliver
   `onSent`-kald i en app der logger id'et.
+- [x] **44. `bugbottle/solid` er det eneste adapter uden en side — en Solid-app
+  fandt intet om sit framework.** 28/9 20:5x, `ceo/solid-guide`. Datagrund:
+  ikke trafik, men missionens "flere integrationer" mødt med **optællingen**:
+  elleve frameworks har en side, og `bugbottle/solid` har været et entry point
+  siden 0.6 uden at være på listen. Den tælles tre steder (side, krog-tabel,
+  de fire fejlklasser), så den voksede til tolv overalt. **Accept:** siden er
+  skrevet fra `solid-js@1.9.15`'s **egen kilde** (ikke dokumentationen), fire
+  fælder er dokumenteret med kildeuddrag, `/docs/solid/` ligger i
+  `Integrations`, `scripts/page-descriptions.mjs` har en beskrivelse, og de to
+  nye links er absolute (README-vagten sagde rød, først da den kørte). Mål:
+  ingen trafikbaseline ændres (Plausible 1 besøgende/28 d, npm 210
+  downloads/uge, ★2 pr. 28/9) — effekten er dækning af en shippet adapter.
+**MÅL: npm downloads 210/uge, ★2 pr. 2026-09-28.** Sammenlign 5/10 og 12/11.
+
+### Fund fra Solid-iterationen (28/9 20:5x) — fire fælder i ryggraden af
+### `solid-js`, og tre af dem er tavse
+
+**Fund 1 — `ErrorBoundary` og `onError` er alternativer, ikke maktere.** Det er
+den ene ting der gør siden værd at læse. `catchError` bygger en *ny* kontekst
+for sit subtree (`{...Owner.context, [ERROR]: [handler]}`), så grænsens
+`setErrored` **erstatter** den arvede `onError`-liste: `handleError` finder kun
+`[setErrored]`, og fejlen forlader aldrig grænsen. En `onError` over en
+`ErrorBoundary` hører aldrig om noget indeni den. Og der er ingen `onerror`-prop
+at give den — props er `fallback` og `children`.
+
+**Fund 2 — `onError` uden en owner forsvinder i en tom sætning.**
+`if (Owner === null) ;else if (...)` — det første led er en *tøm statement*
+(`dist/solid.js:1044`). Kaldt i modulscope eller uden for komponenten er
+handleren væk uden advarsel. Det er Svelte's "boundary med kun `pending`" igen,
+men mere stille.
+
+**Fund 3 — en fejl i en event handler når hverken af dem.** `delegateEvents`
+lægger én `eventHandler` på `document`, og den kalder handleren **direkte**
+(`web/dist/web.js:490-498`): ingen `runUpdates`, ingen owner sat. Den
+ikke-delegerede vej er samme sag. Så `initConsoleBuffer`'s `window.onerror`
+er den eneste del af fejlvejen en grænse ikke dækker — i en Solid-app er det
+ikke en valgfri linje.
+
+**Fund 4 — det der ankommer er ikke det der blev kastet.** `castError` gør en
+`new Error("Unknown error", {cause: err})` af alt hvad der ikke er en `Error`,
+**og den nye stack peger ind i `solid-js`**. For et rapporteringsbibliotek er
+det den dyre halvdel: en rapport bygget på et kastet objekt har Solid's frames,
+ikke dine. `throw { code: 500 }` koster stacken.
+
+**Fund 5 — `onError` og `ErrorBoundary` sluger begge konsollen.** Fejlklasse 2
+fik Solid som sit tredje navn, fordi begge **forbruger** fejlen i stedet for at
+logge den: en fanget fejl er en rapport med tom konsolsektion.
+
+**Målt:** `npm run check` grøn — **934 tests** (uændret, de tre røde var de to
+repo-vagter plus deres følgevirkning), 52 docs-sider (fra 51), 249 søgeposter
+(fra 242), **sitemap 61 `<loc>`** (fra 60), `check-dist` grøn på 208 filer.
+Ingen bibliotekskode rørtes, så ingen bundle-budget flyttede sig.
+
+**VERIFICÉR DEPLOY: `/docs/solid/` (den tolvte frameworkside) `ceo/solid-guide`
+28/9 20:5x.** Accepter mod indhold på `https://bugbottle.dev/sitemap.xml`: den
+skal tælle **61** `<loc>` (60 nu), og `https://bugbottle.dev/docs/solid/` skal
+vise de fire kildeuddrag (`catchError`, `onError`, `eventHandler`,
+`castError`) og krok-tabellen skal have **tolv** rækker. Samme måling på
+`https://bugbottle.dev/docs/search.json`: **249** poster (242 nu), og ingen af
+de 61 sider må miste en post.
+
 - [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
   Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
   måles.

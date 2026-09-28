@@ -110,6 +110,8 @@ export const PAGE_DESCRIPTIONS = {
     "Eleven sinks in bugbottle/server: Slack, Discord, Teams, mail, GitHub, Linear, Jira, GitLab, Sentry, SMTP and a plain webhook.",
   support: "There is no paid tier. What a donation to bugbottle goes to, what it does not buy, and how to help without spending money.",
   svelte: "svelte:boundary in Svelte 5 and SvelteKit: onerror, failed, the errors the boundary never sees, and the panel on your error page.",
+  solid:
+    "onError and ErrorBoundary in Solid: the boundary that takes the handler\u2019s place, the event handler that reaches neither, and castError\u2019s new stack.",
   "the-form-anything-else":
     "No adapter and no framework: buildReport, collectContext and sendReport, and a form is a textarea, a button and somewhere for the picture.",
   "the-form-react":

@@ -610,12 +610,12 @@ pass `scrub: scrubReport` if a message could carry anything personal.
 
 ## Every framework, one table
 
-Eleven frameworks have a page here, and a reader who has just chosen one of them
+Twelve frameworks have a page here, and a reader who has just chosen one of them
 wants the same four facts from all of them: which hook to wire, which file it
 goes in, what it will catch, and what it will miss. That is this page. Everything
 below was read out of each framework's own published build or its own source,
 and every row links to the page that carries the code, the traps and the
-verification throws — this is the map, not a second copy of the eleven.
+verification throws — this is the map, not a second copy of the twelve.
 
 Three of the four answers are not properties of the framework but of *your*
 application, which is why the tables are split. The hook is fixed and the file
@@ -630,6 +630,7 @@ misses is the same four classes in every framework, in different words.
 | Vue | `app.config.errorHandler` | `main.ts` | [Vue](#vue) |
 | Svelte 5 | `<svelte:boundary onerror>` | the component that wraps the app | [Svelte](#svelte) |
 | SvelteKit | `handleError` in `src/hooks.ts` | `src/hooks.ts` | [SvelteKit](#sveltekit) |
+| Solid | `onError` in a component, **instead of** `<ErrorBoundary>` | the component that wraps the app | [Solid](#solid) |
 | Next.js | `error.tsx`, `global-error.tsx` | `app/` | [Next.js](#nextjs) |
 | Angular | `ErrorHandler` | `app.config.ts` | [Angular](#angular) |
 | Nuxt | `vue:error`, `app:error`, `app:chunkError` | `plugins/bugbottle.client.ts` | [Nuxt](#nuxt) |
@@ -648,7 +649,7 @@ a value you render rather than an exception, so the hook is the cache's
 callback.
 
 The count is the thing people get wrong. There is no number of hooks per
-framework that predicts whether your reports arrive, because three of the eleven
+framework that predicts whether your reports arrive, because three of the twelve
 have a hook that is a *prop on a boundary* rather than a callback you register:
 Svelte's is an element in your markup, TanStack Router's is `onCatch` and does
 nothing at all unless the same route also has an `errorComponent`, and Next.js's
@@ -656,7 +657,7 @@ nothing at all unless the same route also has an `errorComponent`, and Next.js's
 
 ### What it misses, in four classes
 
-Every gap the eleven pages document is one of these four. They are worth
+Every gap the twelve pages document is one of these four. They are worth
 naming together, because the first one is a framework, the second is a
 framework's silence about a *return value* instead of a throw, the third is
 production, and the fourth is a page.
@@ -665,8 +666,10 @@ production, and the fourth is a page.
 code: an event handler, a `setTimeout` callback, a `fetch` that rejects inside a
 plain `async` function, a WebSocket, a third-party script. `window.onerror` and
 `unhandledrejection` are the two that see all of it, and the console buffer
-patches both from the first line of the script tag. Two frameworks have a
-*named* version of this gap, and both are quieter than a throw: Angular's
+patches both from the first line of the script tag. Three frameworks have a
+*named* version of this gap, and all three are quieter than a throw: Solid's
+`delegateEvents` calls your handler directly, so an `onClick` throw reaches
+`window.onerror` and neither `onError` nor `<ErrorBoundary>` ever hears of it; Angular's
 `resource()` and `httpResource()` put the failure in `status()` and `error()`
 instead of throwing, and Astro's `action()` returns `{ data, error }` and never
 throws either. Nuxt's `useFetch` and `useAsyncData` are the same shape. A report
@@ -683,9 +686,11 @@ Router's `onError` replaces a line that the render path prints itself and that
 the data path — `console.error` appears zero times in `router.js` — never
 prints at all. Astro's is subtler and worse: `astro:hydration-error` is
 `cancelable`, and a listener that calls `preventDefault()` switches off the one
-`console.error` that carries both the component URL and the raw error text. The
-fix is the same in every case and it is one line: `console.error(error)` before
-you send.
+`console.error` that carries both the component URL and the raw error text. Solid is the same
+shape once more: both `onError` and `<ErrorBoundary>` **consume** the error
+rather than logging it, so a caught error is a report with an empty console
+section. The fix is the same in every case and it is one line:
+`console.error(error)` before you send.
 
 **3. A hook that does not work in production.** Vue rethrows in development and
 only logs in a production build, and `console.warn` appears zero times in
@@ -1566,6 +1571,165 @@ does **not** fire and the server log is the only trace — the table's second ha
 measured rather than believed. Fourth, call a remote function with arguments
 that fail its schema, and confirm that no report appears anywhere: a 400 is not
 an error until somebody says it is.
+
+## Solid
+
+Solid is the one framework on this list whose errors reach you through a
+function you *call* rather than a callback you hand over, and that single
+difference decides most of what follows: `onError` and `<ErrorBoundary>` are
+**alternatives, not complements**, and neither of them sees an error thrown in
+an event handler. Every claim below was read out of `solid-js@1.9.15` in this
+repository's `node_modules` — the source, not the documentation, which is
+silent on two of the four things that matter.
+
+### The integration
+
+```tsx
+// App.tsx — the component that wraps the app
+import { ErrorBoundary, onError } from "solid-js";
+import { mountBugbottle } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image"; // optional
+import { da } from "bugbottle/locales";
+
+const widget = mountBugbottle({
+  endpoint: "/api/feedback",
+  screenshot: htmlToImage,
+  locale: da,
+  openOnError: { prefill: true },
+});
+
+export default function App(props: { children?: JSX.Element }) {
+  // Registered in the component, never at module scope. See below.
+  onError((error) => {
+    widget.open();
+    // Keep the console. A handler is not a logger; it swallows the error.
+    console.error(error);
+  });
+
+  return <ErrorBoundary fallback={(error) => <Crash error={error} />}>{props.children}</ErrorBoundary>;
+}
+```
+
+`onError` sits in the component and not in the module because of the first trap.
+It catches render errors, and `handleError` reads the handler list off the owner
+it is called with — so it covers the component it is called in and the
+computations created under it, and nothing outside. A handler in the component
+that *threw* is too late; one at the top of the tree is right.
+
+### `ErrorBoundary` has no `onerror` prop, and it takes `onError`'s place
+
+```js
+// node_modules/solid-js/dist/solid.js
+function ErrorBoundary(props) {
+  let err;
+  if (sharedConfig.context && sharedConfig.load) err = sharedConfig.load(sharedConfig.getContextId());
+  const [errored, setErrored] = createSignal(err, undefined);
+  ...
+  return createMemo(() => {
+    let e;
+    if (e = errored()) {
+      const f = props.fallback;
+      return typeof f === "function" && f.length ? untrack(() => f(e, () => setErrored())) : f;
+    }
+    return catchError(() => props.children, setErrored);
+  }, undefined, undefined);
+}
+```
+
+The props are `fallback` and `children`. There is no `onerror` to pass, and the
+handler the boundary installs for its own subtree is `setErrored` — it stores
+the error and renders your fallback, which is the whole job. Two details worth
+knowing: the fallback is called with `(error, reset)` **only if it declares
+parameters** (`f.length` is the test), so `fallback={() => <p>Broken</p>}` is
+rendered as a value rather than called; and `catchError` builds a *fresh*
+context for the subtree,
+
+```js
+// node_modules/solid-js/dist/solid.js
+function catchError(fn, handler) {
+  ERROR || (ERROR = Symbol("error"));
+  Owner = createComputation(undefined, undefined, true);
+  Owner.context = { ...Owner.context, [ERROR]: [handler] };
+```
+
+so the boundary **replaces** the inherited `onError` list for everything inside
+it. Put `onError` above an `ErrorBoundary` expecting to be told about errors
+inside it and nothing happens: the boundary's `setErrored` is the only handler
+in that context, and the error never leaves. Pick the one you want — a report
+per caught error (`onError`, no boundary, the integration above) or a fallback
+that renders (`ErrorBoundary`, and read the error out of the render prop).
+
+### `onError` outside a component is discarded without a word
+
+```js
+// node_modules/solid-js/dist/solid.js
+function onError(fn) {
+  ERROR || (ERROR = Symbol("error"));
+  if (Owner === null) ;else if (Owner.context === null || !Owner.context[ERROR]) {
+```
+
+The first branch is an **empty statement**. Call `onError` at module scope, in a
+`createRoot` callback that has already returned, or in a helper invoked from
+outside the component tree, and the handler is dropped: no warning, no error,
+and the error goes to the window instead. This is the Solid version of
+[Svelte's boundary with only a `pending` snippet](#a-boundary-with-only-a-pending-snippet-is-invisible),
+and it is quieter — that one at least reaches the console.
+
+### An error in an event handler reaches neither of them
+
+```js
+// node_modules/solid-js/web/dist/web.js
+const handleNode = () => {
+  const handler = node[key];
+  if (handler && !node.disabled) {
+    const data = node[`${key}Data`];
+    data !== undefined ? handler.call(node, data, e) : handler.call(node, e);
+```
+
+`delegateEvents` registers one `eventHandler` per event name on the document,
+and it calls your handler **directly**: no `runUpdates` wrapper, no owner set.
+The non-delegated path is the same — `addEventListener` wraps the listener in
+`e => handlerFn.call(node, handler[1], e)`. So a throw inside an `onClick`
+leaves the DOM listener through the browser's own error path, which means
+`ErrorBoundary` never sees it and `onError` never runs. The only thing that
+catches it is the `window.onerror` patch
+[`initConsoleBuffer`](https://bugbottle.dev/docs/recording-console-errors/) already does, which is
+why that call is not optional in a Solid application: it is the one part of the
+error path a boundary does not cover. `onUncaughtError` is not a Solid hook, so
+there is nothing to wire in its place.
+
+### What arrives is not what you threw
+
+```js
+// node_modules/solid-js/dist/solid.js
+function castError(err) {
+  if (err instanceof Error) return err;
+  return new Error(typeof err === "string" ? err : "Unknown error", { cause: err });
+}
+```
+
+An `Error` arrives as itself. **Anything else is replaced** by a new `Error`
+carrying the original as `cause` — and that new error's `stack` is created
+inside `solid-js`, so a report built from a thrown object or a thrown string
+carries Solid's frames rather than yours. Three consequences: `console.error`
+in the handler prints a copy whose stack points into the runtime,
+`error instanceof TypeError` is false for anything that was not a `TypeError`
+to begin with, and `error.cause` is where the value you actually threw is. Throw
+`Error` objects; a `throw { code: 500 }` costs you the stack.
+
+### The adapter
+
+[`createBugReport`](https://bugbottle.dev/docs/the-form-solid/) is the same state machine as the
+React hook, exposed as accessors — `message()`, `elements()`, `statusMessage()`
+— over a single signal, so `state()` in JSX tracks everything and nothing has
+to subscribe by hand. Two things are specific to it. It calls `onCleanup(destroy)`
+itself, so **call it inside a component**: outside an owner it returns a `destroy`
+you are expected to call, and the `createSignal` warns about the missing owner.
+And nothing browser-only runs when you create it — the machine builds its state
+without touching `window`, `document` or `navigator` — so a SolidStart or
+`renderToString` pass that constructs it will not fail. The panel and the
+screenshot do need the browser, which is what `mountBugbottle` and
+`onMount` are for.
 
 ## Next.js
 
