@@ -18,6 +18,8 @@ viewport, the recent console errors, the element they point at, optionally a
 picture of what they were looking at — and POSTs it as JSON to a route you
 already own.
 
+![The bugbottle panel open over a page: a message about a save button that does nothing, the element the reporter pointed at, and a send button.](https://bugbottle.dev/panel-narrow.png)
+
 ```bash
 npm install bugbottle
 npm install html-to-image   # optional, only if you want screenshots

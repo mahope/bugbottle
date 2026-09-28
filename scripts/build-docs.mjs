@@ -41,6 +41,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -859,12 +860,73 @@ function renderer(page, links) {
       return `<a href="${escapeHtml(href)}"${rel}>${text}</a>`;
     },
 
-    /* The footer promises no external request. An image from the README would
-       break that promise on a docs page, so images become their alt text. */
+    /* The footer promises no external request, and that promise is about the
+       *host*: a picture served from bugbottle.dev is this site asking itself
+       for a file, which is what the landing page's own panel shot already
+       does. So an image whose src is the site's own (or a path under it) is
+       rendered, and only a genuinely foreign one becomes its alt text — which
+       is what the badge row in the intro needs, since shields.io is
+       somebody else's host.
+
+       A docs page that showed a bare sentence where a picture belongs is the
+       reader's first impression of the panel, and the panel is the product.
+       `tests/docs-images.test.ts` drives this rule from both sides. */
     image(token) {
-      return escapeHtml(token.text ?? token.title ?? "");
+      const src = token.href ?? "";
+      const own = src === ORIGIN || src.startsWith(`${ORIGIN}/`) || src.startsWith("/");
+      if (!own) return escapeHtml(token.text ?? token.title ?? "");
+
+      /* `loading="lazy"` because a docs page is read top to bottom and the
+         panel shot is not the reason anybody arrived; `decoding="async"` so
+         the text paints while it decodes. Neither is load-bearing.
+
+         The intrinsic `width`/`height` are read out of the file rather than
+         written down here, because an `<img>` without them has no size until
+         it loads and the text under it jumps when it does. The site holds a
+         performance floor (CLAUDE.md), and a picture that shifts the paragraph
+         beneath it is the cheapest way to lose it. A file that is not a PNG we
+         can measure simply goes without them. */
+      const size = pngSize(src);
+      const dims = size ? ` width="${size.width}" height="${size.height}"` : "";
+
+      return (
+        `<img src="${escapeHtml(src)}" alt="${escapeHtml(token.text ?? "")}"` +
+        `${dims} loading="lazy" decoding="async">\n`
+      );
     },
   };
+}
+
+/* The width and height out of a PNG's IHDR, which is the first thing after the
+   eight-byte signature: a length, the word "IHDR", then the two big-endian
+   32-bit numbers. Read once per path, because a README that shows the same
+   picture twice would otherwise be measured twice. Anything that is not a
+   readable PNG answers `undefined` and the caller omits the attributes.
+
+   The README points at the picture by its absolute address, because that is
+   the one form that resolves on npmjs.com and on GitHub as well as here — a
+   root-relative `/panel-narrow.png` means nothing outside this site. So the
+   site's own origin is trimmed back off before the path is looked up, which
+   puts the two spellings on one path. */
+const pngSizes = new Map();
+function pngSize(src) {
+  const path = join(root, "site", src.replace(`${ORIGIN}`, "").replace(/^\//, "").split("?")[0]);
+  const cached = pngSizes.get(path);
+  if (cached !== undefined) return cached;
+  let size;
+  try {
+    const head = readFileSync(path).subarray(0, 24);
+    const isPng =
+      head.length >= 24 &&
+      head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) &&
+      head.subarray(12, 16).toString("latin1") === "IHDR";
+    if (isPng) size = { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+  } catch {
+    /* A src that is not a file in the repository. `tests/docs-images.test.ts`
+       asks the question at build time, where the file is known to exist. */
+  }
+  pngSizes.set(path, size);
+  return size;
 }
 
 /* The changelog's own heading rule, on top of the renderer above. A release
