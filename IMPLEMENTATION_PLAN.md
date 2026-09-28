@@ -394,12 +394,37 @@ dækket der — men det er *ikke* kørt lokalt, og det er derfor billedet fik
   er ude. `package.json#description` er kun det npm *serverer* efter
   `npm publish`, så `npm view bugbottle description` svarer stadig den gamle
   indtil Mads kører `npm run release`. Se `KLAR TIL RELEASE: v1.1.0`.
-- [ ] **39. `/docs/install/` og npm-siden skal pege på hinanden, så de to
+- [x] **39. `/docs/install/` og npm-siden skal pege på hinanden, så de to
   veje hænger sammen.** Datagrund: de er i dag to *kopier* af samme åbning,
   og de kan glide fra hinanden — præcis som de otte framework-sider gjorde
   med `open()` (opgave 21). **Accept:** hver af de to har et link til den anden,
   og `tests/readme-snippets.test.ts` dækker de snippets de deler, så en
   rettelse kun kan ske i den ene.
+  **28/9 15:5x, `ceo/install-and-npm-links`, `f12faea` (merge `b12b123`).**
+  Se "Fund fra install-link-iterationen" nedenfor — opgavens egen forudsætning
+  var **forkert på en måde, der viste sig at være det største fund**: de to er
+  ikke to kopier, de er *én* tekst med tre læsere, og den halvdel af
+  acceptkriteriet der krævede et link var allerede opfyldt den anden vej.
+  **MÅL: npm downloads 412/måned, 191/uge, ★2 pr. 2026-09-28** (uændret fra
+  opgave 37 og 38 — samme mål i samme enhed). Sammenlign 5/11 og 12/11.
+  **Bemærk til næste iteration:** denne rettelse er den første, hvis *hele*
+  effekt ligger bag en release — README'en er den der i tarballet, så de syv
+  links og navigationsafsnittet bliver først synlige på npm-siden når Mads
+  kører `npm run release`. Før det er de rettet på GitHub og på sitet, og på
+  npm er de stadig de gamle. Sammenlign derfor **efter** release, ikke nu.
+- [ ] **40. `package.json#funding` mangler, så npm-siden har ingen tak-knap.**
+  Datagrund: `.github/FUNDING.yml` har Stripe-linket, `/support/` har det
+  samme, og missionen siger at linket skal stå "der, hvor en glad bruger
+  naturligt ville sige tak" — og npm-siden er præcis det sted: den besøger
+  der lige har installeret pakken. npm læser `funding` fra `package.json` og
+  tegner en knap på pakkesiden; feltet er **ikke sat**. **Accept:**
+  `funding` svar til samme Stripe-link som `.github/FUNDING.yml`, en test der
+  siger at de to peger på det samme (så de ikke kan glide fra hinanden), og
+  `npm view bugbottle funding` efter release. Mål: donations pr. måned,
+  baseline **0 pr. 2026-09-28** (der er ingen knap at donere fra).
+  *Én linje i `package.json` plus én test. Den er med her, fordi den er den
+  billigste konvertering i hele køen: den koster ingenting at sætte op og
+  ingenting hvis ingen bruger den.*
 - [ ] **7. CTR-måling.** Uændret **BLOCKED** på din Search Console-eksport.
   Det er stadig den vigtigste ulævede ting: 51 docs-sider og ingen af dem kan
   måles.
@@ -522,6 +547,95 @@ der intet siger:**
 - **Større uforholdsmæssighed, opgave 7 er stadig blocked:** 51 docs-sider, og
   ingen af dem har en trafik-baseline. Denne iteration gjorde det modsatte for
   én vare, som er den eneste adoption-måling jeg kan hente selv.
+
+### Fund fra install-link-iterationen (28/9 15:5x) — syv links var døde på to
+### af de tre steder der serverer den samme tekst
+
+#### Fund A — opgaven forudså to kopier. Der er én tekst og tre læsere.
+
+Opgave 39 skrev, at `/docs/install/` og npm-siden "er i dag to *kopier* af
+samme åbning, og de kan glide fra hinanden". Den første halvdel er **forker**,
+og det er derfor fundet blev det største i stedet for det mindste:
+`site/docs/install/index.html` bygges af `scripts/build-docs.mjs` ud af
+**præcis de samme linjer** som README's åbning (`sliceSections`, intro-præcis
+op til det første `##`). De kan ikke glide fra hinanden, fordi den ene *er*
+den anden. Og den anden halvdel af acceptkriteriet — at de to pejer på
+hinanden — var **allerede halv opfyldt**: docs-siden har linket til npm siden
+første gang den blev bygget, i den fælles footer på **alle** 51 sider
+(`build-docs.mjs:1042`, målt: `grep -c npmjs.com site/docs/install/index.html`
+= 2, hvoraf den ene er headerens `npm` og den anden footerens "bugbottle on
+npm"). **Den eneste vej der manglede var npm → docs.**
+
+#### Fund B — den rettelse opgaven bad om, havde man lavet forkert
+
+Den naturlige måde at give npm-siden et link til referencen på er
+`](/docs/install/)`, fordi det er sådan de otte andre krydslinks i README'en
+ser ud. **Det ville have været et 404 på npm-siden** — det er hele fundet:
+
+| Hvor README'en serveres | Opløser `/docs/svelte/` som |
+|---|---|
+| `bugbottle.dev/docs/install/` | `https://bugbottle.dev/docs/svelte/` — **virker** |
+| `github.com/mahope/bugbottle` | `https://github.com/docs/svelte/` — **404** |
+| `npmjs.com/package/bugbottle` | `https://npmjs.com/docs/svelte/` — **404** |
+
+README'en er én tekst med tre læsere, og en rod-eller-reletiv link kan kun
+løses af den første. **Syv af README's links var skrevet sådan** — `./LICENSE`
+og seks `/docs/…` — så de var døde på de to andre. De var usynlige herfra,
+fordi det eneste sted de nogensinde blev fulgt efter er det ene sted de virker
+(`site/self-hosted.md` og de andre site-filer bruger samme form, og det er
+korrekt der, fordi de kun findes på sitet).
+
+**Rettelsen er den absolute form**, fordi den er den eneste der er rigtig alle
+tre steder. Alle syv er absoute nu, og det er samme form `site/compare.md`
+allerede bruger for en fil i repoet
+(`[LICENSE](https://github.com/mahope/bugbottle/blob/main/LICENSE)`). De otte
+fragmenter er efterprøvet mod de genererede sider: alle otte `id` findes.
+
+#### Fund C — navparagraphen måtte udvides, og byggens drop-regel med
+
+Linket til referencen måtte **ikke** stå i den prose byggen beholder, fordi
+`/docs/install/` så ville linke til sig selv. Den nuværende drop-regel er
+linje-baseret (`/^\[bugbottle\.dev\]/`), og det afsnit jeg skrev bryder over
+fire linjer — så kun den første forsvandt, og de tre sidste blev stående som
+en linkløs sætning om sitets egen forside. Bevis, før og efter:
+
+| | `/docs/install/` efter `build:docs` |
+|---|---|
+| Før (reglen kun på første linje) | 4 forekomster af `/docs/install/`, 1 tilfældig tekst om egen forside |
+| Efter (reglen følger hele afsnittet) | **3** — og alle tre er `<head>`: `canonical`, `hreflang`, `og:url` |
+
+De tre er korrekte og skal være der. Kroppen har **nul** selvlinks. Den nye
+regel bruger et flag, fordi et brudt afsnit er tre eller fire linjer og kun den
+første starter sætningen; en blank linje lukker afsnittet.
+
+#### Fund D — tre tests, hver rødført mod den fejl den beskriver
+
+En test der kun passer siger intet, så alle tre er brudt med vilje og set
+røde, og det er gjort igen efter rettelsen:
+
+| Hvad der blev brudt | Hvilken test blev rød |
+|---|---|
+| ét link gjort relativt igen | "no link in the README is relative" |
+| referencelinket fjernet fra åbningen | "the npm page's opening points at the docs" |
+| **byggens drop-regel forladt** (`isNav` → `false`) | "the npm page's opening points at the docs" — den anden halv |
+| ét versions-pin lavet om til `v1.0.0` | "both pinned install snippets… name the version this build is" |
+
+Den fjerde er ikke en opfindelse fra denne iteration: `scripts/release.mjs`
+flytter alle pins med **én** strengerstatut (`v${before}` → `v${version}`), så
+de kan kun glide fra hinanden ved en håndredigering — og så 404'er den ene
+adresse, mens README'en stadig ser rigtig ud.
+
+#### Hvad næste iteration skal vide
+
+- **Mål kun efter release.** Dette er den anden opgave i trækken (med 38),
+  hvis hele effekt ligger bag `npm publish`, fordi README'en er den der i
+  tarballet. GitHub og sitet har rettelsen nu; npm-siden har den gamle.
+- **Adoption-tal, uændret:** npm 412/måned, 191/uge, ★2, 0 forks pr. 28/9.
+  Sammenlign 5/11 og 12/11 — og skriv i målingen at de to første tal først kan
+  stikke ad *efter* release, ellers læses stilheden som en fejl.
+- **Opgave 40 er den billigste konvertering i køen** (én linje i
+  `package.json`), og den er den eneste i rækken hvis effekt ikke er
+  afhængig af en måling fra dig.
 
 ### Det nye billede på de 27 opgaver, og hvorfor Fase 3's rækkefølge holdt
 
@@ -2871,6 +2985,31 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
 
+- **2026-09-28, iteration 29** (`ceo/install-and-npm-links`, `f12faea`, merge
+  `b12b123`). Opgave 39.
+  Se "Fund fra install-link-iterationen" (28/9 15:5x).
+  - **Opgavens forudsætning var forkert, og det gav det største fund.**
+    `/docs/install/` og npm-siden er ikke to kopier af åbningen: den første
+    *er* den anden, bygget af de samme linjer. Og docs → npm lå allerede i
+    footeren på alle 51 sider. Den eneste manglende vej var npm → docs.
+  - **Syv links i README'en var døde på to af de tre steder der serverer den.**
+    `./LICENSE` og seks `/docs/…` er rigtige på sitet og 404 på GitHub og på
+    npm, fordi de to løser dem på *deres* vært. Den naturlige rettelse
+    (`](/docs/install/)`) ville selv have været et 404 på npm-siden.
+  - **Byggens drop-regel måtte følge et helt afsnit, ikke en linje.** Bevist på
+    den genererede side: 4 → 3 forekomster af `/docs/install/`, hvor de tre er
+    `canonical`, `hreflang` og `og:url` i `<head>`. Kroppen har nul
+    selvlinks, som før.
+  - **Leveret:** syv absolute links, navparagraphen der navngiver referencen,
+    og tre tests i `tests/readme-snippets.test.ts` — hver rødført mod den
+    fejl den beskriver, og drop-reglen med. Gaten grøn: **920 tests**,
+    `check-dist` grøn på 208 filer, 51 docs-sider, 260 søgeposter, sitemap 60,
+    **IIFE'erne 24 688 / 21 104 — uændrede**, ingen budget flyttede sig, ingen
+    kode- eller `dist/`-ændring.
+  - **MÅL: npm downloads 412/måned, 191/uge, ★2 pr. 2026-09-28.** Sammenlign
+    5/11 og 12/11, og skriv i målingen at npm-siden først fik rettelsen efter
+    `npm publish` — den får den med `KLAR TIL RELEASE: v1.1.0`.
+
 - **2026-09-28, iteration 28** (`ceo/npm-search-terms`, `14f0163`, merge
   `731b707`). Opgave 38.
   Se "Fund fra npm-search-iterationen" (28/9 15:1x).
@@ -4178,3 +4317,18 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   afhænger af deployet — README'en er den der, uanset hvad sitet gør.
   Branchen indeholder samlet opgave 29, 30, 31, 32 og 33, så **én**
   `git merge --no-ff ceo/readme-first-report` tager dem alle fem.
+
+- **VERIFICÉR DEPLOY: de syv absolute README-links + navparagraphen `b12b123`
+  28/9 15:5x.** Accepter mod **indhold**, ikke mod status: (1)
+  `https://bugbottle.dev/docs/install/` skal **ikke** have et link til sig selv
+  i kroppen — de tre forekomster af `/docs/install/` i HTML'en skal alle ligge
+  i `<head>` (`canonical`, `hreflang`, `og:url`), og teksten "full reference"
+  skal ikke findes på siden; (2) `/docs/svelte/` skal have **to** links til
+  sig som `https://bugbottle.dev/docs/svelte/` (fra SvelteKit- og
+  TanStack-Query-siderne), fordi de før var `href="/docs/svelte/"` skrevet i
+  README'en; (3) `/docs/privacy-checklist/`, `/docs/tanstack-router/`,
+  `/docs/one-script-tag/#in-a-framework-application` og
+  `/docs/opening-it-without-a-button/#shake-to-report` skal være absolutte i
+  den byggede HTML. **npm-siden afhænger IKKE af deployet** — README'en er den
+  der i tarballet, så de syv links og navparagraphet kommer først på
+  `npmjs.com/package/bugbottle` efter `npm publish`.
