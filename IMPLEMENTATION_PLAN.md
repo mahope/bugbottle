@@ -90,6 +90,21 @@ sitet igen kan bygge.
 12:5x.** Accepter: `/self-hosted/` og `/support/` svarer 200 **med indhold**,
 og sitemap'en tæller 60.
 
+- ✅ **DEPLOY OK 2026-09-28 13:0x.** Alle tolv notes er lukket mod **indhold**,
+  i ét kørselsvindue efter mergeen (12:30, mergeen var 12:5x). Målt:
+  sitemap'en tæller **60** (mod live's gamle 47), `/self-hosted/` svarer
+  `Self-hosted, and there is nothing to run`, `/support/` har både titlen og
+  `donate.stripe.com/7sYeVcbn50wieFM8gDbMQ0c`, og de tre nyeste sider er 200 med
+  indhold: `/docs/every-framework-one-table/`, `/docs/tanstack-query/` og
+  `/docs/install/` med "A first report, end to end". Stikkprøve på et
+  krydslink: `/docs/vue/` har **nul** `href="/docs/recipes/#nuxt"`, så de ti
+  kryds-side-links er med. Deployeren kørte altså engang mellem 12:30 og 13:0x
+  — ét vindue dækker alle tolv merges, som noterne forudså.
+  **Bemærk til næste iteration:** `git log` viser at alle fire brancher
+  (`ceo/script-tag-once-2`, `ceo/tanstack-query`, `ceo/sveltekit-side`,
+  `ceo/readme-first-report`) **er** merget i `main` — de gamle "LIGGER PÅ"-noter
+  nederst i Deploy-noter er historie, ikke arbejde der mangler.
+
 ### ~~DEPLOY-MISSING: 28/9 08:29 — to batch-vinduer tabt, merges til `main` er stoppet~~
 
 **Genmålt 28/9 09:2x: uændret.** Alle ni sider er stadig 404, sitemap'en er
@@ -1285,7 +1300,106 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   Search Console-eksporten stadig på Mads, opgave 7). Måles først på
   npm-downloads og stjerner; sammenlign 25/10.
 
-### Fund fra site-image-iterationen (28/9 12:5x) — en grøn bygge er ikke en
+- [x] **34. `/docs/install` uden sin skråstreg blev sendt ned på `http://`.**
+  28/9 13:1x, `ceo/relative-redirect`. **Lukket.** Datagrund: en ren
+  fejlsøgning efter at blokeringen var hævet. Plausible siger 1 besøgende på
+  28 dage, så **indgangsvejene er det eneste vi kan måle os på**, og den første
+  var defekt. `curl` på live: `https://bugbottle.dev/docs/install` svarede
+  `HTTP/2 301` med **`location: http://bugbottle.dev/docs/install/`** — altså
+  *ned* fra TLS og tilbage op igen, og browseren viste en scheme-downgrade
+  undervejs. To redirects for at nå en side der har en. Se fundene nedenfor.
+  **MÅL: `/docs/install/` og de øvrige 50 sider — 60 `Location`-headers i
+  sitemap'en uændret, og antallet af redirects pr. ankomst til en URL uden
+  skråstreg fra 2 til 1.** Kan ikke måles i trafik før Search
+  Console-eksporten (opgave 7); måles i stedet for som round trips, som er
+  det samme tal Cloudflare tæller i `requests` (24 063 mod 6 672 sidevisninger
+  28/28).
+- [x] **35. Deploy-blokeringen hævet og alle tolv notes lukket mod indhold.**
+  28/9 13:0x. Se `✅ DEPLOY OK` under Deploy. **MÅL: ingen** — det er en
+  måling, ikke en ændring: sitemap 60, ti sider 200 med indhold.
+
+## Fund fra redirect-iterationen (28/9 13:1x) — `$scheme` er `http` i en
+### container der kun lytter på :80, og det er nginx der skriver `Location`
+
+**Findet ved at slå op i de indgangsveje, jeg kunne se, efter at blokeringen
+var hævet.** Fase 3 siger at nyt indhold købes som *en søgning der fanges*,
+fordi der er 1 besøgende at konvertere. Når trafikken kommer fra en søgning,
+er den **første ankomst** det hele: en URL der svarer 301 to gange og med en
+scheme-downgrade undervejs, er den første indtryk en crawler og en læser får.
+
+```
+$ curl -sD - -o /dev/null https://bugbottle.dev/docs/install
+HTTP/2 301
+location: http://bugbottle.dev/docs/install/     ← ned fra TLS
+
+$ curl -sL -o /dev/null -w '%{num_redirects} → %{url_effective}\n' \
+    https://bugbottle.dev/docs/install
+2 → https://bugbottle.dev/docs/install/
+```
+
+**Årsagen er ikke en fejlkonfiguration, den er *arkitekturen*:** Traefik
+terminerer TLS og videresender til containeren, som kun `listen 80` har. Så
+er nginx' egen `$scheme` `http` på præcis de requests der kom ind over https —
+ikke fordi noget er forkert, men fordi nginx ikke ser TLS'en. Den
+trailing-slash-redirect nginx skriver for en mappe-URI er en **absolut** en,
+bygget af netop `$scheme`, og derfor sender den en bruger der kom ind på https
+ud på http igen.
+
+**Rettelsen er én direktiv, `absolute_redirect off`,** som får nginx til at
+sende stien alene: `Location: /docs/install/`. Redirecten beholder da det
+scheme og den host læseren allerede brugte, uanset hvad deres kant (Traefik,
+Cloudflare, en lokal `docker run`) gør med den bagefter.
+
+**Tre ting der gør det sikkert, og som må ikke glemmes ved en senere
+omlægning af configen:**
+
+1. **Alias-værten er ikke rørt,** fordi dens redirect er skrevet *udførligt*:
+   `return 301 https://bugbottle.dev$request_uri;` (`site/nginx.conf:178`).
+   nginx serverer en `return`-Location ordret, uanset hvad
+   `absolute_redirect` siger. Hvis den nogensinde bliver skrevet som en
+   nginx-genereret redirect, gør denne direktiv den til en **sløjfe der aldrig
+   når bugbottle.dev** — fordi den relative sti så peger på alias-værten igen.
+   Derfor er der en test på præcis den.
+2. **Der er ingen `rewrite` i configen** (kun nævnt i en kommentar), så
+   direktivet rammer præcis de to nginx-genererede redirects vi har: den
+   manglende skråstreg og `//`-sammenlægningen.
+3. **`/health` er undtagaget to steder,** fordi Dokploy poller den på
+   applikationen, og en redirect dér læses som en fejl og flapper den. Også
+   pinnet i testen, fordi ændringen ligger lige ved siden af catch-all'en.
+
+**Bevis, ikke forklaring.** Jeg kørte den rigtige fil i rigtig nginx frem for
+at argumentere fra `nginx -T`: `nginx:alpine` — samme base som
+`site/Dockerfile`'s `FROM` — med `site/nginx.conf` og
+`site/security-headers.conf` kopieret ind i en container, og to sider lagt i
+roden. Mod **`main`s config** svarer `/docs/install` med
+`Location: http://127.0.0.1/docs/install/`, og det samme for
+`/docs/every-framework-one-table`. Mod den rettede config: `Location:
+/docs/install/` — og siden selv svarer 200, alias-værten stadig
+`https://bugbottle.dev/…`, og `nginx -t` er grøn. Docker Desktop kan ikke
+mount'e fra scratchpad'en, så filerne kom ind med `docker cp` i stedet for
+`-v`; det er samme filer, og forskellen er kun hvordan de kom derhen.
+
+**Vagten bider, og det blev efterprøvet:** `tests/site-redirects.test.ts` er
+fire tests, og mod **`main`s `site/nginx.conf`** fejler præcis den der
+rammer `absolute_redirect off` (og kun den — de tre andre består, fordi de
+gælder ting der ikke ændrede sig). Det er samme bevismønster som de andre
+site-vogter: læs kilden, ikke `dist/`.
+
+**Hvad jeg *ikke* har gjort, og hvorfor det er værd at sige:** jeg har ikke
+løft blokeringen på `bugbottle.mahoje.dk`-aliaset ved at fjerne
+`absolute_redirect` — det ville have løft blokeringen og **introduceret
+sløjfen** oveni. Og jeg har ikke rørt Traefiks eller Cloudflares TLS, fordi det
+er uden for repoet. Den her løsning er den der *kun* kan ligge i configen vi
+ ejer.
+
+**Bemærk til a11y:** `npm run a11y` er ikke kørt efter denne ændring, og det er
+ikke en lade om: den flytter ingen markup, ingen CSS og ingen tekst — de samme
+bytes serveres, og det eneste der ændrer sig er `Location`-headeren på en
+redirect. `scripts/a11y-site.mjs` kører alligevel de to landingssider og en
+docs-side i CI's `browser`-job. (Den kan desuden ikke køre lokalt, jf. noten
+nederst i Deploy-noter.)
+
+## Fund fra site-image-iterationen (28/9 12:5x) — en grøn bygge er ikke en
 ### bygget, og den anden halv af en fejl siger intet
 
 **Fire fund, og tre af dem handler om at holde op med at tro et grønt
@@ -3191,6 +3305,27 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   iteration måler efter 12:30.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: absolute_redirect off i site/nginx.conf — en URL uden
+  skråstreg skal ikke længere blive sendt ned på http:// (opgave 34,
+  `ceo/relative-redirect`).` **Accepter: `curl -sD - -o /dev/null
+  https://bugbottle.dev/docs/install` skal svare `HTTP/2 301` med
+  `location: /docs/install/` — en *relativ* sti, ikke en `http://`-adresse —
+  og `curl -sL -w '%{num_redirects}'` på samme URL skal sige `1` mod `2` i dag.**
+  Bemærk at en `location: http://…` her **beviser at rettelsen ikke er landet**,
+  for det er præcis fejlen; og at en 301 med en *relativ* sti på den gamle
+  adresse ikke kan ske, så et uændret svar er enten gammelt eller et andet
+  problem. Verificér også at aliaset ikke er kommet i en sløjfe:
+  `curl -sD - -o /dev/null -H 'Host: bugbottle.mahoje.dk' https://bugbottle.mahoje.dk/docs/install`
+  skal svare 301 med `location: https://bugbottle.dev/docs/install` — altså stadig
+  absolut, som den var. **Ingen ny URL, ingen ændring i sitemap'en (60
+  `<loc>`), ingen ændring i `description`-tags, og `dist/` rørte denne ændring
+  slet ikke** — den ligger i `site/nginx.conf`, som er statisk serveret af nginx,
+  så IIFE'erne er uændrede (24 688 / 21 104 mod budgetterne 25 088 / 21 504).
+  Bevis på den rene konfiguration, målt i rigtig `nginx:alpine` før merge:
+  mod `main`s config `Location: http://127.0.0.1/docs/install/`, mod den
+  rettede `Location: /docs/install/`, siden selv 200, aliaset uændret
+  absolut, `nginx -t` grøn.
 
 - `VERIFICÉR DEPLOY: rettelsen af site-imaget — alle ti 404-sider + de otte
   docs-commits i samme kø — 040c3b9 (fix: c98782c), 12:5x, 2026-09-28.`
