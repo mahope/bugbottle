@@ -399,6 +399,25 @@ attribute needs a major version, and a new entry point needs a minor one.
   what they do not get: no queue, no alerting, no time series, replay only with
   their own rrweb, and one browser in CI.
 
+### Changed
+
+- **The script tag's explanation is written once, and the build fails if a
+  fourth page writes it again.** Four framework pages — Next.js, Angular, Nuxt
+  and Astro — each carried their own paragraph on what the tag covers, in four
+  slightly different formulations. Prose that exists in four places is prose
+  that goes wrong in one of them: a pinned version, an attribute name or a
+  claim about coverage can be corrected on three pages and left stale on the
+  fourth, and nothing notices. The shared explanation is now one section on
+  "One script tag", which the four pages link to while saying only what is
+  different about their own copy — Angular keeps its snippet, Nuxt the two
+  places its tag can go, Astro the `is:inline` trap, Next.js that the tag needs
+  no `"use client"` and is the only answer on `global-error.tsx`. Vue was left
+  alone, because its section is a warning that the tag is *half* an
+  integration rather than a recipe. `npm run build:docs` now fails on a
+  framework page that re-describes the tag, naming the page and the reason —
+  the same shape as the build's other prose guards. No new URL, no new page,
+  and nothing in the package changed.
+
 ### Fixed
 
 - **The published server entry threw on import: `dist/server/fastify.js` was

@@ -29,6 +29,12 @@ næste iteration ikke skal opdage det samme igen.
 
 ### DEPLOY-MISSING: 28/9 08:29 — to batch-vinduer tabt, merges til `main` er stoppet
 
+**Genmålt 28/9 09:2x: uændret.** Alle ni sider er stadig 404, sitemap'en er
+stadig 47 mod 57, og den nye måling har nu **lokaliseret den tabte klamme** —
+se "Fund fra deploy-iterationen" nedenfor. Kort: live er bygget af en commit
+**mellem 23:04 og 23:34 den 27/9**, altså et 30-minutters vindue der ikke er
+nogen af de fire batch-tider. Blokeringen står.
+
 Målt på det *live* site kl. **08:29**, altså **en time efter** 07:30-vinduet,
 så det er ikke et vindue der stadig kører:
 
@@ -44,9 +50,12 @@ så det er ikke et vindue der stadig kører:
 | `/self-hosted/` | 28/9 05:37 | **404** |
 | `/docs/global-errors/` | 28/9 06:17 | **404** |
 
-Sitemap'en har **47 `<loc>`** mod de 59 den rene build producerer (48 docs-sider
-+ 6 egne sider + changelog). Live site er stadig præcis standen fra
-`/docs/vue/`-mergen 27/9 23:04.
+Sitemap'en har 47 `<loc>` mod de **57** den rene build producerer (48
+  docs-sider + 6 egne sider + changelog + 2 landingssider). *(Gårs udgave af
+  denne note sagde 59; det var en regnefejl, rettet 28/9 — se "Fund fra
+  deploy-iterationen".)* Live site er stadig præcis standen fra
+  `/docs/vue/`-mergen 27/9 23:04.
+
 
 **To batch-vinduer** er gået uden at ændringerne er live: 21:30 27/9 og
 07:30 28/9. Det er `DEPLOY-MISSING` efter kontrakten, og **jeg merger ikke til
@@ -65,7 +74,55 @@ målt, altså under reglen om ét tabt vindue. Den er korrekt på sitet, men den
 liger i samme kø som de andre og bliver live af det næste fungerende vindue.
 
 
-## Baseline — trafik (2026-09-27)
+### Fund fra deploy-iterationen (28/9 09:2x) — live-builden er stillet på et tidspunkt
+
+**Den afgørende måling er en diff af de to sitemap'er, ikke et par 404'er.**
+Live 47 `<loc>`, den rene build fra `main` **57**. *(Gårs plan sagde 59; det
+er en regnefejl — 48 docs-sider + 6 egne sider + changelog + de to
+landingssider er 57, ikke 59. Tallet 57 er talt, ikke anslået.)* De 57 er
+heller ikke en superset-fejl: `comm` i begge retninger giver **ti sider kun på
+min** og **nul sider kun på live**, altså ingen forsvundne sider og ingen
+omdøbning. De ti er præcis de ni 404'er fra gårs plan plus
+`/docs/tanstack-router/`:
+
+`/docs/express/`, `/docs/fastify/`, `/docs/global-errors/`, `/docs/hono/`,
+`/docs/nestjs/`, `/docs/react-router/`, `/docs/svelte/`,
+`/docs/tanstack-router/`, `/self-hosted/`, `/support/`
+
+**Og her er det nye, som gør fejlen lokaliserbar.** Jeg holdt de 47 live-URL'er
+op mod min egen `git log` og fandt den **præcise klamme**: live har Vue, Next.js
+og Angular, men **ikke** Svelte. Svelte-mergen er `dc1515c` **27/9 00:54**,
+og support-siden er `e26cba2` **27/9 23:34**. Altså:
+
+> **Live-builden er bygget af en commit mellem `26281b3` (Vue, 27/9 23:04) og
+> `d056439` (support, 27/9 23:34).**
+
+Det er et **30-minutters vindue** den 27/9 om aftenen. **Ingen af de fire
+batch-tider (07:30 / 12:30 / 17:30 / 21:30) falder i det.** 21:30 er før Vue,
+og det næste er 07:30 28/9 — som planen i forvejen har målt som tabt. Så den
+ene reelle kandidat er en **manuel eller ad-hoc kørsel** en halv time efter
+Vue-mergen, og **ikke** en batch. Det er en stærkere hypotese end "batchen
+fejlede": en batch der kører kl. 23:1x og kun en gang forlader den gamle
+tilstand.
+
+**Hvad det *ikke* er:** det er ikke en build der fejler. Jeg kørte
+`npm run build:docs` på `main` lige nu, og den er grøn og skriver 57 sider —
+så det er ikke et build-problem i repoet, det er **hvilken ref der bliver
+bygget**. Og det er ikke en cache: en 404 forsvinder ikke i sig selv, og de
+ti sider er alle nyere end live-builden.
+
+**Bemærk et versions-spor:** livesitet svarer `changelog/#1-0-1`, og
+`package.json` er på `1.0.1` — altså ingen ny release er forklaringen. Og
+`dist/` er jo force-addet i hver push, så et billede bygget fra den gamle commit
+har den gamle `dist` med, hvilket er konsistent med det vi ser.
+
+**Det kan stadig ikke løses fra repoet** — `site/Dockerfile` bygger ikke i CI,
+og ingen af de to workflows bygger eller skubber billedet. Men ❓-spørgsmålet
+er nu **snævrere og bedre stillet**: det er ikke længere "mod `main` eller mod
+et tag", fordi det *er* bygget af en commit på `main` — det er **"hvorfor
+kørte der en build kl. 23:1x den 27/9, og hvorfor har ingen kørsel siden
+overhalet den?"**. Se ❓ til Mads.
+
 
 | Kilde | Tal | Bemærkning |
 |---|---|---|
@@ -1057,20 +1114,56 @@ viser 1 besøgende på 28 dage: der er ingen trafik at konvertere endnu, så nyt
 indhold købes først som en søgning, der fanges, ikke som en side der besøges.
 
 - [ ] **27. Genfind det tabte deploy-vindue — blokeringen over alt andet.**
-  **Datagrund: to batch-vinduer (21:30 27/9, 07:30 28/9) tabt, 9 sider er
-  404, sitemap'en har 47 mod 59 `<loc>`.** Alt indhold der er lavet siden
+  **Datagrund: to batch-vinduer (21:30 27/9, 07:30 28/9) tabt, 10 sider er
+  404, sitemap'en har 47 mod 57 `<loc>`.** Alt indhold der er lavet siden
   27/9 23:34 er skrevet, committet, gaten grøn — og **usynligt**. Før nogen
   ny side skriver vi flere sider ind i det samme mørke. Acceptkriterium:
   `/self-hosted/` svarer 200 **med sit indhold** (ikke bare 200) på det live
-  site, og sitemap'en tæller 59. Dette kan ikke løses fra repoet — se ❓.
-- [ ] **28. Søgningssætning for de otte nye framework-sider er skrevet, men
-  `/docs/tanstack-router/` er den eneste uden et målt CTR-baseline.**lav
-  prioritet: samme behandling som opgave 17, lavet i samme script.
-  **Datagrund: 9 suggest mod 0 sider før 28/9.**
-- [ ] **29. Script-tagonlysningen, skrevet en gang.** Betalt for **fire**
-  gange nu (Vue + React Router + Svelte + TanStack). Datagrund: det er fire
-  sider der hver gengiver den samme kode, og den er den mest søgte kode på
-  hver af dem.
+  site, og sitemap'en tæller 57. Dette kan ikke løses fra repoet — se ❓.
+  **Delvis løst 28/9 09:2x (se "Fund fra deploy-iterationen"):** klammen er
+  indsnævret til en commit **mellem `26281b3` (Vue, 27/9 23:04) og `d056439`
+  (support, 27/9 23:34)** — et 30-minutters vindue, ikke en batch-tid — og
+  `comm` begge veje beviser at **intet er forsvundet, kun ikke kommet med**.
+  `npm run build:docs` er grøn på `main` (57 sider), så det er ikke et
+  build-problem. Det mangler nu kun svaret på hvorfor den kørsel skete, og det
+  ligger i Dokploys log, ikke i repoet.
+- [x] **28. Søgningssætning for `/docs/tanstack-router/`.** **Lukket 28/9 som
+  allerede gjort:** sætningen *er* skrevet (opgave 17 lavede den samme dag), og
+  det eneste der manglede var en **målt CTR-baseline**, som kræver Search
+  Console-eksporten (opgave 7, stadig på Mads). Bevis i den byggede side:
+  `site/docs/tanstack-router/index.html` har
+  *"TanStack Router: onCatch never runs without an errorComponent, and the
+  global boundary is silent in production. The one line that fixes both."* —
+  altså søgeordene i sætningen, ikke sitet i stedet for siden. **MÅL:
+  `/docs/tanstack-router/` baseline 0 besøgende (siden findes ikke) pr.
+  2026-09-28.** Kan ikke måles før eksporten.
+- [x] **29. Script-tagonlysningen, skrevet en gang.** 28/9, `ceo/script-tag-once-2`.
+  **Planen havde de fire forkerte sider** (Vue + React Router + Svelte +
+  TanStack) — de gentager *ikke* script-tagen. De fire der gør, er **Next.js,
+  Angular, Nuxt og Astro**, målt ved at læse dem igennem: hver eneste havde sit
+  eget afsnit med den samme påstand om, hvad taggen dækker, i fire
+  ordlyd-formuleringer ("it reads the same `data-*` attributes", "no provider,
+  no service and no injector", "no plugin, no `enforce`, no plugin ordering").
+  **Rettet:** den fælles forklaring ligger nu som sit eget afsnit
+  (`### In a framework application`) på `/docs/one-script-tag/`, og de fire sider
+  linker derhen og siger kun hvad der er **anderledes** ved deres egen kopi —
+  Angular beholder sin kode (korteste vej ind), Nuxt de to steder taggen kan
+  ligge i, Astro `is:inline`-fælden, Next.js at taggen ikke skal have
+  `"use client"` og at den er det eneste svar på `global-error.tsx`. Vue blev
+  **ikke** rørt: dens afsnit er en advarsel om at taggen er *halv* en
+  integration, ikke en opskrift, og den skal blive stående som den er.
+  **Og bygningen vogter det nu** — samme slags som de tre andre byggevåbner:
+  `npm run build:docs` fejler på en frameworkside der genfortælder taggen, med
+  sidens navn og grunden. Bevis for at vagten virker: den er provokeret ved at
+  lægge Angulars formulering ind i Vue-siden, og builden fejlede med
+  `/vue/ (re-describes the tag's attributes)` og
+  `/vue/ (re-describes what the tag needs no wiring for)`. Den fangede også
+  en restance i min egen Next.js-omskrivning i samme kørsel. **Ingen ny URL,
+  ingen ny side, ingen kodeændring ud over README og vagten** — de fire sides
+  byggede HTML var de eneste forskel. 238 søgeposter (fra 237), 896 tests
+  grønne, `check-dist` grøn på 208 filer, ingen budget flyttede sig
+  (IIFE'erne uændrede 24 688 / 21 104 mod 25 088 / 21 504, fordi det er
+  dokumentation og en byggevågt).
 - [ ] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 3 af de
   9 forslag under `tanstack error boundary` er `tanstack query error
   boundary`, og TanStack Query er et **datalag, ikke en router** — det fanger
@@ -1670,19 +1763,30 @@ eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
 ## ❓ Til Mads
 
 - **🔴 Deployet er gået i stykker, og det kan ikke rettes fra repoet.** 28/9.
-  To batch-vinduer er gået tabt i træk (21:30 27/9 og 07:30 28/9), og ni
-  sider er 404 på bugbottle.dev, selv om de er committet og gaten er grøn:
-  `/support/`, `/self-hosted/`, `/docs/react-router/`, `/docs/svelte/`,
-  `/docs/express/`, `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/`,
-  `/docs/global-errors/`. Sitemap'en har 47 `<loc>` mod de 59 builden
-  producerer. **Jeg har stoppet med at merge til `main`**, som kontrakten siger
-  ved to tabte vinduer, og arbejder videre på branches indtil du kigger.
-  `/docs/vue/`, `/docs/nextjs/` og `/docs/angular/` *er* live, så et vindue har
-  virket — batchen fejlede altså efter 21:30 27/9, eller den bygger mod et
-  ældre udtræk end `main`. **Spørgsmålet:** bygger den mod `main` eller mod et
-  tag/pin, og kan du se dens log fra de to kørsler? Jeg rører ikke Dokploy og
-  ikke DNS, og i repoet ligger intet at fejlsøge i — `site/Dockerfile` bygger
-  ikke i CI, og ingen af de to workflows bygger eller skubber billedet.
+  Opdateret 09:2x med en måling der indsnævrer spørgsmådet fra "mod `main`
+  eller mod et tag" til **"hvorfor kørte der en build kl. 23:1x den 27/9, og
+  hvorfor har ingen kørsel siden overhalet den?"**. To batch-vinduer er gået
+  tabt i træk (21:30 27/9 og 07:30 28/9), og **ti** sider er 404 på
+  bugbottle.dev, selv om de er committet og gaten er grøn: `/support/`,
+  `/self-hosted/`, `/docs/react-router/`, `/docs/svelte/`, `/docs/express/`,
+  `/docs/hono/`, `/docs/fastify/`, `/docs/nestjs/`, `/docs/global-errors/`,
+  `/docs/tanstack-router/`. Sitemap'en har 47 `<loc>` mod de 57 builden
+  producerer, og de 47 er præcis de 47 fra **før** de ti. **Jeg har stoppet
+  med at merge til `main`**, som kontrakten siger ved to tabte vinduer, og
+  arbejder videre på branches indtil du kigger.
+  **Beviset, så du ikke skal lede i loggen:** jeg diffede de to sitemap'er
+  (`comm` begge veje) og fik **ti sider kun på min og nul kun på live** — altså
+  er intet forsvundet, kun ikke kommet med. Og live har Vue, Next.js og Angular
+  men **ikke** Svelte, hvilket indsnævler klammen til en commit **mellem
+  `26281b3` (Vue, 27/9 23:04) og `d056439` (support, 27/9 23:34)**. Det er et
+  30-minutters vindue, og **ingen af de fire batch-tider (07:30/12:30/17:30/
+  21:30) ligger i det** — 21:30 er før Vue. Så den kørsle var enten manuel eller
+  ad hoc. **Spørgsmålet:** kan du se en kørsel i Dokploys log 27/9 omkring 23:1x,
+  og hvad udløste den — og har du en kredential eller et webhook, der kører
+  builden uden om de fire tider? Jeg rører ikke Dokploy og ikke DNS, og i
+  repoet ligger intet at fejlsøge i: `site/Dockerfile` bygger ikke i CI, ingen
+  af de to workflows bygger eller skubber billedet, og `npm run build:docs` er
+  grøn på `main` lige nu (57 sider), så det er **ikke** et build-problem.
 
 - **Search Console-eksporten (opgave 7) — stadig den vigtigste ulævede
   ting.** 28/9. Vi har nu 48 docs-sider og alle har en håndskrevet
@@ -1925,6 +2029,33 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-28, iteration 22** (`ceo/script-tag-once-2`). Opgave 29, plus
+  en deploy-måling der indsnævrer blokeringen. **Merges til `main` er stadig
+  stoppet** (to tabte vinduer), så dette er en branch, ikke en merge.
+  - **Deploy først, altid.** Genmålt 09:2x: uændret, ni sider 404. Men så
+    diffede jeg de to sitemap'er i stedet for at tælle 404'er, og det gav
+    **to ting gårs måling ikke havde**: (1) de 47 live-URL'er mod `git log`
+    indsnævrer klammen til **mellem 23:04 og 23:34 den 27/9**, altså et
+    30-minutters vindue der ikke er nogen batch-tid; (2) **null sider kun på
+    live** — intet er forsvundet, kun ikke kommet med, så det er ikke en
+    omdøbning eller en cache. Se "Fund fra deploy-iterationen" og ❓.
+  - **Planens opgave 29 var ude ved at gøre det forkert.** Den navngav fire
+    sider (Vue + React Router + Svelte + TanStack) som *"gentager den samme
+    kode"*. Jeg læste dem, og de gør **ikke** — ingen af dem har en
+    `data-endpoint`-snippet. De fire der gør, er **Next.js, Angular, Nuxt og
+    Astro**, og de gentager ikke *koden* men en **påstand om hvad taggen
+    dækker**, i fire formuleringer. Så opgaven blev skrevet om efter at være
+    læst; det er den anden gang en kø-post har peget på de forkerte sider, så
+    **mål siderne før du skriver dem** — det er to minutter mod en hel time.
+  - **Rettelsen er en vagt, ikke en omformulering.** At skrive afsnittet ét
+    sted er halvdelen; at bygningen *fejler* når en fjerde side gør det samme
+    igen er den anden halvdel, og den er den der holder. Samme mønster som de
+    tre andre byggevåbner. Bevis: provokeret med Angulars formulering i
+    Vue-siden, og builden fejlede med sidens navn og grunden.
+  - **Næste iteration:** mål deployen efter **12:30**-vinduet. Er `/self-hosted/`
+    stadig 404, er det **tre** tabte vinduer og ❓-punktet er det eneste
+    indhold. Ellers: ryd blokeringen og merge denne branch.
 
 - **2026-09-28, iteration 21** (`ceo/pin-typescript`). Opgave 24, vej A.
   Se opgaven og "Fund fra baseline-iterationen" ovenfor.
@@ -2975,3 +3106,12 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   TanStack-guiden med `ResolvedCatchBoundary`-eksemplet og
   `NODE_ENV !== "production"`-afsnittet, og `Integrations` i sidebaren skal
   have tretten sider.
+- **OPGAVE 29 — IKKE MERGET, ligger på `ceo/script-tag-once-2`, commit
+  `0318698`, 28/9 09:3x.** Script-tagonlysningen står nu ét sted med en
+  byggevågt; `npm run check` grøn (896 tests, 238 søgeposter fra 237,
+  `check-dist` grøn på 208 filer, ingen budget flyttede sig). **Ingen ny URL
+  og ingen ny side**, så den har ingen egen VERIFICÉR-note: den ændrer kun de
+  fire sides byggede HTML. **Den skal merges til `main` samme dag
+  blokeringen hæves** — ellers ligger den færdige rettelse bare og bliver
+  ældre end de ti sider der allerede venter. Merge den med
+  `git merge --no-ff ceo/script-tag-once-2` når du kigger.
