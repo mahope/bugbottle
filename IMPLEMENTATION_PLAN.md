@@ -1,5 +1,19 @@
 # bugbottle — implementeringsplan
 
+**STATUS: KOE-TOM** (2026-09-29)
+
+Køen har kun opgaver der er blocked på Mads:
+- **7.** CTR-måling — kræver Search Console-eksport
+- **47.** npm search — kræver beslutning om navneskif
+
+**Morgenrapport 2026-09-29:**
+- ✅ Opgave 46 lukket: jsDelivr-hits pr. version er det eneste skelnende
+  adoption-tal. Baseline: 1.0.1 = 766 totalt, 725 i de seneste 7 dage.
+- ✅ MÅL opdateret for alle adoption-opgaver (37, 38, 39, 40, 44, 45).
+- ✅ Deploy er OK, alle noter lukket.
+- 🔒 Opgave 7: blocked på Mads' Search Console-eksport.
+- 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
+
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
 
