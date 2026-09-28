@@ -1164,14 +1164,21 @@ indhold købes først som en søgning, der fanges, ikke som en side der besøges
   grønne, `check-dist` grøn på 208 filer, ingen budget flyttede sig
   (IIFE'erne uændrede 24 688 / 21 104 mod 25 088 / 21 504, fordi det er
   dokumentation og en byggevågt).
-- [ ] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 28/9,
-  `ceo/tanstack-query`. 3 af de
+- [x] **30. `/docs/tanstack-query/` — den anden halvdel af TanStack.** 28/9,
+  `ceo/tanstack-query`, commit `3e74a2d`. **Lukket.** 3 af de
   9 forslag under `tanstack error boundary` er `tanstack query error
   boundary`, og TanStack Query er et **datalag, ikke en router** — det fanger
   intet sig selv og har ingen boundary, så siden handler om
   `QueryCache`'s `onError` og `useQuery`'s `error`-rendering. Forsk først:
   læs `@tanstack/query-core`'s publicerede build.
-  **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.**
+  **MÅL: baseline 0 (siden findes ikke) pr. 2026-09-28.** Se "Fund fra
+  TanStack-Query-iterationen" nedenfor — **fire fund, alle fire i kode, og tre
+  af dem ville have kostet en bruger deres rapporter eller deres side.** 49
+  docs-sider (fra 48), 246 søgeposter (fra 245). `npm run check` grøn (896
+  tests, `check-dist` grøn på 208 filer), ingen kode- eller `dist/`-ændring, ingen
+  budget flyttede sig. **Branchen er baseret på `ceo/script-tag-once-2`**, så
+  opgave 29 og 30 ligger i én kø og merger sammen — se "Fund fra
+  TanStack-Query-iterationen", punkt 5.
 - [ ] **31. SvelteKit har sin egen fejl-vej og kun nævnt i en halv side.**
   `sveltekit error handling` er 7 forslag (28/9) — højere end
   `svelte error handling`'s 3, og `/docs/svelte/` dækker den kun som et
@@ -1760,6 +1767,136 @@ Windows-sti på denne maskine, `/Applications/Google Chrome.app` findes ikke, og
 `CHROME_BIN` er ikke sat. Det er **ikke** en fejl i repoet, og det er heller
 ikke noget en senere iteration bør prøve igen for hver side — hverken `a11y`
 eller `smoke:annotate` kan køre her. CI's `browser`-job dækker dem.
+
+## Fund fra TanStack-Query-iterationen (28/9 09:5x) — fire fund, og tre af dem
+### koster rapporter eller en hel side
+
+Metoden er den ottende gang den samme: `npm pack @tanstack/query-core@5.104.0`
+og `@tanstack/react-query@5.104.0`, læs `build/modern/*.js`, ikke dokumentationen.
+Det er den rigtige metode for **dette** bibliotek af en grund der er værd at
+skrive ned: TanStaks egen dokumentation er god, men den er skrevet omkring
+`isError`, og `isError` er netop det felt der er **forbudt at bruge alene** —
+se punkt 1.
+
+**Først det strukturelle:** TanStack Query er det eneste på denne side der
+**ikke er en renderer**. Den tager ingen `errorComponent`, den har ingen
+boundary, og den kaster ikke medmindre `throwOnError` eller `suspense` bliver
+sat. En render-error-boundary fanger derfor **intenting** fra den — så det er
+ikke "sæt en fejlgrænse om den", det er "`QueryCache` har en `onError`", og
+det er hele siden.
+
+**1. `isError` er sand medens `data` stadig er den sidste gode værdi.** Den
+oprindelige tilstand nulstilles kun under én betingelse:
+
+```js
+function fetchState(data, options) {
+  return { fetchFailureCount: 0, fetchFailureReason: null, fetchStatus: …,
+           ...data === void 0 && { error: null, status: "pending" } };
+}
+```
+
+Læs spread-betingelsen. En query der har hentet én gang og så fejler en
+baggrunds-refetch **beholder** sin `error` og sin `status: "error"`, fordi
+`data` ikke er `undefined`. Bygget har to flag til præcis det, og de er
+udregnet af de samme to felter: `isLoadingError: isError && !hasData` og
+`isRefetchError: isError && hasData`. Siden siger derfor: **forgrening på
+`isLoadingError` / `isRefetchError`, aldrig på `isError`.**
+
+**2. `throwOnError` tager en fungerende side ned med sig.** Den fristende
+one-liner er `defaultOptions: { queries: { throwOnError: true } }`, og den er
+forkert. `useBaseQuery` ender på to `throw`s, og `getHasError` er én linje:
+
+```js
+return result.isError && !errorResetBoundary.isReset() && !result.isFetching && query &&
+  (suspense && result.data === void 0 || shouldThrowError(throwOnError, [result.error, query]));
+```
+
+Betingelsen er `isError`, **ikke** `isLoadingError` — så den fejlede
+baggrunds-refetch fra punkt 1, den hvor `data` er en fuldstændig brugbar liste
+fra et minut siden, **kaster ud af render**, React afmonterer subtræet, og den
+side læseren læser bliver erstattet af en fejlskærm. `isRefetchError` lå i
+resultatet og kastet spørger ikke til det. To ting ved kastet er *ikke* et
+problem, fordi begge bliver spurgt om hele tiden: det fyrer **én gang og ikke
+én gang pr. retry** (`!result.isFetching` står i betingelsen, og det er
+retries der holder `fetchStatus` på `"fetching"`), og et reset kaster ikke for
+evigt (`ensurePreventErrorBoundaryRetry` sætter `retryOnMount = false`).
+**Konklusionen er modsat den fristende:** `throwOnError` **fra**, rapportér fra
+cachens `onError`, og lad komponentens egen `isLoadingError`-grene tegne.
+
+**3. En exception i reporterens egen `onError` fortrænger den rigtige fejl.**
+Det skarpe af de fire, og det der koster en eftermiddag. Query-callbacket er et
+nøgent kald i catch-blokken uden omkringliggende `try`:
+
+```js
+this.#dispatch({ type: "error", error });
+this.#cache.config.onError?.(error, this);   // ← kaster dette
+this.#cache.config.onSettled?.(this.state.data, error, this);
+throw error;                                 // ← denne linje køres aldrig
+```
+
+Kaster `onError` — en `console.error`-shim der kaster, en `widget.open()` der
+kaster, alt i egen kode — **ser applikationen aldrig queryens fejl.** Den ser
+din. `await queryClient.fetchQuery(…)` rejecter med reporterens fejl,
+`error.status === 404` er ikke der, og tilstanden siger `"error"` mens
+rejectionen siger noget andet. UI'et ser rigtigt ud, fordi dispatchet skete
+først. Mutationssiden er omvendt **awaitet og vasket** — `try { await … } catch
+(e) { Promise.reject(e) }` — så en kastende reporter dér ikke når appen, men
+bliver til en `unhandledrejection`, som er **samme kanal som `openOnError`
+lytter på**, altså kan en defekt reporter åbne panelet en gang til fra sin egen
+fejl. Og fordi den awaites, sidder reporteren i `mutate()`-stien: en langsom
+rapport forsinker `onSettled` og `mutateAsync`'s promise med hele rapportens
+round trip. Siden siger derfor eksplicit: `void reportMutationError(…)`.
+
+**4. `retry` er 3 på clienten og 0 på serveren, og der er ingen 4xs-undtagelse.**
+Forsinkelsen ligger i bygget: `Math.min(1e3 * 2 ** failureCount, 3e4)` →
+**1 s + 2 s + 4 s = 7 sekunder** før `onError` overhovedet kører. Det er det
+ærlige svar på "hvorfor kom rapporten så sent", og det er værd at vide **før**
+man går på jagt efter en kø-fejl. Prædikaten kigger på fejlen og intet andet:
+
+```js
+const shouldRetry = retry === true || typeof retry === "number" && failureCount < retry ||
+  typeof retry === "function" && retry(failureCount, error);
+```
+
+Der er **ingen indbygget undtagelse for 4xx** — en post der ikke findes, en
+ikke-autentificeret forespørgsel og en valideringsfejl retries alle tre gange og
+rapporteres så. En bugboks der får en rapport for hver manglende post er en
+bugboks man slår fra. Siden giver prædikaten i toppen og siger at
+`failureCount < 3`-halen skal stå: uden den rapporteres et reelt flakket netværk
+ved det første forsøg.
+
+**Plus de tre stier, der ikke nogen `useQuery`-integration ser:** en
+**fejlet `prefetchQuery`** fyrer `onError` og bliver slugt i klienten
+(`.then(noop).catch(noop)`) — altså rapporter med et query key ingen står på
+siden for, hvilket ikke er en fejl i wiringet men hooken der forteller
+sandheden, og `url`-feltet er måden at skelne dem. En query der fjernes under en
+kørende fetch **rapporterer ikke** (`destroy` cancellerer med `{ silent: true }`),
+men et `query.cancel()` du selv kalder uden argumenter er hverken `silent` eller
+`revert` og **falder igennem til dispatchen og til `onError`**. Og `onError`
+sidder på `Query` ikke på observatøren, så en fetch startet af `fetchQuery`,
+`ensureQueryData` eller en `invalidateQueries`-kaskade rapporterer uanset om
+noget renderer resultatet — **det er den egenskab, der gør en baggrundsfejl
+finde overhovedet.**
+
+**5. Et fund uden for opgaven, som er grunden til at denne branch ikke er baseret
+på `main`.** Da jeg checkede `main` ud faldt `IMPLEMENTATION_PLAN.md` fra 3117
+til 2977 linjer, fordi `b989752` (script-tag-noterne fra opgave 29) **kun**
+findes på `ceo/script-tag-once-2` og ikke er merget. En ny branch baseret på
+`main` ville derfor have skullet skrevet 140 linjer delt state oveni en tekst,
+hvorfra opgave 29s noter mangler, og de to brancher ville kollidere i planen ved
+den første merge. **Løsningen er at basere opgave 30s branch på
+`ceo/script-tag-once-2`**, så de to ligger i én kø. Det krævede én konflikt i
+planen (opgave 28/29 lå der i to versioner) og blev løst ved at beholde den
+rettede version og droppe den ældre. **Følge til Mads:** `git merge --no-ff
+ceo/tanstack-query` tager nu **begge** færdige opgaver med, opgave 29 og 30, i
+én bevægelse.
+
+**Deploy: uændret, og merges til `main` er stadig stoppet.** Genmålt 28/9 09:51
+inden denne iteration: live har **47** `<loc>` (den rene build fra `main` havde
+57 før denne iteration, 58 efter), og `/self-hosted/`, `/docs/express/`,
+`/docs/tanstack-router/` og `/support/` er alle **404**. Der er ikke gået et
+nyt batch-vindue siden målingen kl. 09:2x (næste er 12:30), så det er ikke en
+ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
 
 ## ❓ Til Mads
 
@@ -3116,3 +3253,16 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   blokeringen hæves** — ellers ligger den færdige rettelse bare og bliver
   ældre end de ti sider der allerede venter. Merge den med
   `git merge --no-ff ceo/script-tag-once-2` når du kigger.
+
+- **OPGAVE 30 — LIGGER PÅ `ceo/tanstack-query`, commit `3e74a2d`, 28/9 09:5x.**
+  `/docs/tanstack-query/` er skrevet, gaten er grøn (896 tests, `check-dist` grøn
+  på 208 filer, ingen kode- eller `dist/`-ændring, ingen budget flyttede sig),
+  49 docs-sider (fra 48), 246 søgeposter (fra 245). Branchen er **baseret på
+  `ceo/script-tag-once-2`**, så den indeholder både opgave 29 og opgave 30 — én
+  `git merge --no-ff ceo/tanstack-query` tager begge. **Ingen egen
+  VERIFICÉR-note endnu:** den arver opgave 29s, fordi merges til `main` er
+  stoppet af `DEPLOY-MISSING`. Når blokeringen hæves og der merges, skal
+  `https://bugbottle.dev/docs/tanstack-query/` vise TanStack Query-siden med
+  `QueryCache`'s `onError`-kodeblok og `isRefetchError`-afsnittet, og
+  `Integrations` i sidebaren skal have **fireten** sider (den var tretten efter
+  TanStack Router).
