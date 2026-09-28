@@ -4070,7 +4070,10 @@ the tab becomes visible again. A failed attempt backs off exponentially, from
 one second to five minutes. A 5xx or a network error keeps the report; a 4xx
 drops it, because the server has already said this report is not acceptable and
 retrying it would only fail again more quietly — nothing is ever queued on a
-4xx in the first place.
+4xx in the first place. `timeoutMs` (30 seconds by default) bounds one attempt:
+a request that is written and then never answered is the dropped mobile
+connection, and it is the report the queue exists to save, so the attempt is
+given up on, released and retried on the backoff rather than waited for.
 
 ```ts
 const queue = createQueue({
@@ -4078,6 +4081,7 @@ const queue = createQueue({
   storageKey: "bugbottle:queue", // where in localStorage
   maxEntries: 5,                 // the oldest is evicted first
   maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+  timeoutMs: 30_000,            // one attempt, then it is released and retried
   headers: { Authorization: `Bearer ${token}` },
   sign: createSigner({ key: SIGN_KEY }), // for a signed endpoint; see below
 });

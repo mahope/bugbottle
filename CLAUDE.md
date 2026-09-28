@@ -234,10 +234,13 @@ buffer, the checkout trim and the byte cap, importing two types and nothing at
 run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
 script tag nothing at all — the IIFE does not export it, because a page with no
-bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1600 bytes and measures
-1565 (1545 until 1.0 removed the `maxItems` alias, 1539 until #98 gave it the
+bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1728 bytes and measures
+1645 (1565 until 1.0 removed the `maxItems` alias and #98 gave it the
 `sign` seam — 26 bytes for one serialisation hoisted out of the request and one
-`await`): it imports only a type, so
+`await` — and 1645 after a deadline on each delivery attempt, an
+`AbortController` and a `clearTimeout` on top of the one `fetch`, 1565 → 1645
+and the budget 1600 → 1728, the same trade #85 made one layer down): it imports
+only a type, so
 that number is the module itself. It was
 986 against a 1024 budget until the multi-tab fix — every write re-reads
 storage and merges by report id, and a report is claimed before it is

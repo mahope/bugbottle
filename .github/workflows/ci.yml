@@ -326,9 +326,17 @@ jobs:
           # note that says so, and the merged array kept in memory when even
           # that is refused. The alternative was losing the report, which is
           # what the queue exists to prevent.
+          # A deadline on one delivery attempt then took it 1565 -> 1645 and the
+          # budget 1600 -> 1728. The same argument applies, one layer down: an
+          # attempt that is written and never answered left the flush pending
+          # for the life of the page, and because every later flush, `online`
+          # and tab focus hands back that same promise, no other queued report
+          # was delivered either. It is an AbortController, a timer and a
+          # `clearTimeout` on top of the one `fetch`, and there is no smaller
+          # spelling of "stop waiting for an answer that is not coming".
           queue=$(gzip -c out-queue.js | wc -c)
-          if [ "$queue" -gt 1600 ]; then
-            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1600" >&2
+          if [ "$queue" -gt 1728 ]; then
+            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1728" >&2
             exit 1
           fi
           # The IndexedDB storage is its own entry so that the default pays

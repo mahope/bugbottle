@@ -120,6 +120,24 @@ export type QueueOptions = {
   headers?: Record<string, string>;
   /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
   credentials?: RequestCredentials;
+  /**
+   * How long one delivery attempt may wait for an answer before it is called
+   * failed, released and retried. Default 30 seconds, the length of the claim
+   * the attempt is holding: a claim nobody is using is the same as no claim, so
+   * the two expire together on purpose.
+   *
+   * `sendReport` bounds itself too, and a queue needs the same bound for the
+   * same reason — a request that is written and then never answered is the
+   * captive portal and the dropped mobile connection, and it is exactly the
+   * report the queue exists to save. Unbounded, it wedges the whole queue: the
+   * flush is still awaiting it, so every later `online`, tab focus and backoff
+   * timer hands back the same stuck promise and nothing else is delivered
+   * either. Only a reload recovered from that.
+   *
+   * Set to `0` to wait for an answer however long it takes, which is almost
+   * never what an application wants.
+   */
+  timeoutMs?: number;
   /** Replace the global `fetch`, mostly for tests. */
   fetch?: typeof globalThis.fetch;
   /**
@@ -261,6 +279,7 @@ export function createQueue(options: QueueOptions): Queue {
   const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
+  const timeoutMs = options.timeoutMs ?? CLAIM_MS;
   const storage = options.storage ?? localStorageQueue(storageKey);
 
   let items: QueuedReport[] = [];
@@ -444,11 +463,27 @@ export function createQueue(options: QueueOptions): Queue {
         if (options.sign) Object.assign(headers, await options.sign(body));
         const init: RequestInit = { method: "POST", headers, body };
         if (options.credentials) init.credentials = options.credentials;
-        const response = await doFetch(options.endpoint, init);
-        // A 4xx is the server saying this report is not acceptable — a
-        // malformed body, a revoked token, a rejected origin. Retrying it
-        // changes nothing, so it goes. A 5xx is the server having a bad day.
-        done = response.ok || (response.status >= 400 && response.status < 500);
+        // One attempt is on the clock, for the length of the claim it holds. A
+        // request that is written and then never answered is the dropped mobile
+        // connection and the captive portal, and without a bound the `await`
+        // below never returns: the flush stays pending, so every later
+        // `online`, tab focus and backoff timer hands back the same stuck
+        // promise and no other report is delivered either. Only a reload
+        // recovered from that, and the report it lost is the one the queue was
+        // written for. A timeout ends the attempt, not the queue — `done` stays
+        // false, the claim is released and the backoff schedules the retry.
+        const controller = new AbortController();
+        init.signal = controller.signal;
+        const clock = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
+        try {
+          const response = await doFetch(options.endpoint, init);
+          // A 4xx is the server saying this report is not acceptable — a
+          // malformed body, a revoked token, a rejected origin. Retrying it
+          // changes nothing, so it goes. A 5xx is the server having a bad day.
+          done = response.ok || (response.status >= 400 && response.status < 500);
+        } finally {
+          if (clock !== null) clearTimeout(clock);
+        }
       } catch {
         done = false;
       }

@@ -10,6 +10,17 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **One unanswered request wedged the whole offline queue.** `createQueue`
+  called `fetch` with no `signal` and no deadline, where `sendReport` has
+  bounded itself at 15 seconds for exactly this. A request that is written and
+  then never answered — the dropped mobile connection, the captive portal — left
+  the flush awaiting for the life of the page, and because every later `online`,
+  tab focus and backoff timer hands back that same pending promise, no other
+  queued report was ever delivered either. The report it lost is the one the
+  queue was written for. A new `timeoutMs` option (30 seconds by default, the
+  length of the claim the attempt holds, so the two expire together) gives up
+  the attempt; it is released and retried on the backoff like any other failed
+  delivery.
 - **Every script tag the site publishes was cut off at the `@` by Cloudflare.**
   bugbottle.dev runs with email obfuscation on, and `bugbottle@1.0.1` reads as
   an address, so the edge rewrote every jsDelivr URL the documentation and the

@@ -158,6 +158,7 @@ export function createQueue(options) {
     const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
     const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
     const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
+    const timeoutMs = options.timeoutMs ?? CLAIM_MS;
     const storage = options.storage ?? localStorageQueue(storageKey);
     let items = [];
     // Storage that reads but will not be written — a full quota, a locked-down
@@ -330,11 +331,29 @@ export function createQueue(options) {
                 const init = { method: "POST", headers, body };
                 if (options.credentials)
                     init.credentials = options.credentials;
-                const response = await doFetch(options.endpoint, init);
-                // A 4xx is the server saying this report is not acceptable — a
-                // malformed body, a revoked token, a rejected origin. Retrying it
-                // changes nothing, so it goes. A 5xx is the server having a bad day.
-                done = response.ok || (response.status >= 400 && response.status < 500);
+                // One attempt is on the clock, for the length of the claim it holds. A
+                // request that is written and then never answered is the dropped mobile
+                // connection and the captive portal, and without a bound the `await`
+                // below never returns: the flush stays pending, so every later
+                // `online`, tab focus and backoff timer hands back the same stuck
+                // promise and no other report is delivered either. Only a reload
+                // recovered from that, and the report it lost is the one the queue was
+                // written for. A timeout ends the attempt, not the queue — `done` stays
+                // false, the claim is released and the backoff schedules the retry.
+                const controller = new AbortController();
+                init.signal = controller.signal;
+                const clock = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
+                try {
+                    const response = await doFetch(options.endpoint, init);
+                    // A 4xx is the server saying this report is not acceptable — a
+                    // malformed body, a revoked token, a rejected origin. Retrying it
+                    // changes nothing, so it goes. A 5xx is the server having a bad day.
+                    done = response.ok || (response.status >= 400 && response.status < 500);
+                }
+                finally {
+                    if (clock !== null)
+                        clearTimeout(clock);
+                }
             }
             catch {
                 done = false;

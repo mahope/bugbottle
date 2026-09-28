@@ -115,6 +115,24 @@ export type QueueOptions = {
     headers?: Record<string, string>;
     /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
     credentials?: RequestCredentials;
+    /**
+     * How long one delivery attempt may wait for an answer before it is called
+     * failed, released and retried. Default 30 seconds, the length of the claim
+     * the attempt is holding: a claim nobody is using is the same as no claim, so
+     * the two expire together on purpose.
+     *
+     * `sendReport` bounds itself too, and a queue needs the same bound for the
+     * same reason — a request that is written and then never answered is the
+     * captive portal and the dropped mobile connection, and it is exactly the
+     * report the queue exists to save. Unbounded, it wedges the whole queue: the
+     * flush is still awaiting it, so every later `online`, tab focus and backoff
+     * timer hands back the same stuck promise and nothing else is delivered
+     * either. Only a reload recovered from that.
+     *
+     * Set to `0` to wait for an answer however long it takes, which is almost
+     * never what an application wants.
+     */
+    timeoutMs?: number;
     /** Replace the global `fetch`, mostly for tests. */
     fetch?: typeof globalThis.fetch;
     /**

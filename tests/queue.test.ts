@@ -669,3 +669,26 @@ test("a queue without a signer sends no signature header", async () => {
   assert.equal(seen[0]?.headers[DEFAULT_SIGNATURE_HEADER], undefined);
   assert.equal(seen[0]?.headers["Content-Type"], "application/json");
 });
+
+test("a delivery attempt that is never answered is given up on rather than wedging the queue", async () => {
+  let attempts = 0;
+  // The connection drops after the request is written: the promise never
+  // settles until the attempt's signal aborts, which is what a real request
+  // that was accepted and then never answered looks like from here.
+  const fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    attempts += 1;
+    return await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    });
+  }) as typeof globalThis.fetch;
+
+  const queue = makeQueue({ endpoint: "/api/feedback", fetch, timeoutMs: 20 });
+  queue.enqueue(report("written on a train, in a tunnel"));
+  // Unbounded, this `await` never returns, and with it the whole queue: the
+  // flush stays pending, so every later flush, `online` and tab focus hands
+  // back the same stuck promise and no report is ever delivered again.
+  const left = await queue.flush();
+  assert.equal(attempts, 1, "one attempt, and no retry inside the same flush");
+  assert.equal(left, 1, "the report is still waiting rather than lost");
+  assert.equal(queue.size(), 1, "the report is in the queue and no longer claimed");
+});

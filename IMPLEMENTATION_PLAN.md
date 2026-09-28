@@ -1,21 +1,97 @@
 # bugbottle — implementeringsplan
 
-**STATUS: KOE-TOM** (2026-09-29)
+**STATUS: KØRER** (2026-09-29)
 
-Køen har kun opgaver der er blocked på Mads:
-- **7.** CTR-måling — kræver Search Console-eksport
-- **47.** npm search — kræver beslutning om navneskif
-
-**Morgenrapport 2026-09-29:**
-- ✅ Opgave 46 lukket: jsDelivr-hits pr. version er det eneste skelnende
-  adoption-tal. Baseline: 1.0.1 = 766 totalt, 725 i de seneste 7 dage.
-- ✅ MÅL opdateret for alle adoption-opgaver (37, 38, 39, 40, 44, 45).
-- ✅ Deploy er OK, alle noter lukket.
+- ✅ **Opgave 49 — køens leveringsforsøg har ingen deadline.** En rapport, der
+  skrives på en tabt forbindelse, lå i hele sidens levetid og blokerede
+  alle andre rapporter med. Se fundet nedenfor.
 - 🔒 Opgave 7: blocked på Mads' Search Console-eksport.
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
+**Morgenrapport 2026-09-29 (seneste):**
+- ✅ Opgave 46 lukket: jsDelivr-hits pr. version er det eneste skelnende
+  adoption-tal. Baseline: 1.0.1 = 766 totalt, 725 i de seneste 7 dage.
+- ✅ Deploy er OK, alle tidligere noter lukket.
+
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Fund fra timeout-iterationen (29/9 00:5x) — tre fund i biblioteket,
+## og det første taber rapporter
+
+Iterationen startede med at finde køen tom for ulæset arbejde: de to åbne
+opgaver (7, 47) er begge blocked på Mads, og en iteration der kun ændrer
+planen er spildt. Så jeg gik efter det produktfasen siger er
+prioritet **1 — fejl der rammer brugere** — og læste biblioteket for
+rigtige fejl i stedet for at finde endnu en side.
+
+**Fund 1 (denne iterations opgave) — ét ubesvaret svar klemte hele køen.**
+
+`createQueue` kaldte `fetch` uden `signal` og uden tidsgrænse, mens
+`sendReport` har bundet sig selv i 15 sekunder *af præcis samme grund*
+og med den samme begrundelse i kommentaren ("A hung request must not
+leave a form stuck"). Forskellen er ikke tilfældig: `queue.ts` har sin
+egen `fetch` med vilje, fordi den ikke importerer `send.ts`.
+
+Følgen: i `deliver()` står `await doFetch(...)` uden udløb. `flush()`
+gated på `if (pending) return pending`, og `pending` ryddes først i en
+`.finally` — så den bliver siddende. Hvert senere `online`,
+`visibilitychange` og backoff-timer får **samme** klemte promise, så
+*ingen* anden rapporter leveres heller. Den rapport, der går tabt, er
+præcis den køen blev skrevet for: skrevet mens applikationen var brudt
+og netværket døde bagefter.
+
+Dette er den mobile/captive-portal-casen — forbindelsen dør *efter* at
+anmodningen er skrevet, og svaret kommer aldrig. Recovery krævede en
+reload.
+
+**Rettelsen** bruger en ny `timeoutMs` (30 sekunder, standard) og ingen
+ny konstant: grænsen er `CLAIM_MS`, længden af det claim forsøget holder,
+så de udløber sammen med vilje — "et claim ingen bruger er det samme
+som intet claim". `0` slår grænsen fra. Et `AbortController` og en
+`clearTimeout` oven på den ene `fetch`.
+
+**Bevis, at testen ikke er vakuum:** med rettelsen fjernet (`init.signal`
+udeladt) hænger den nye test sig — `node --test` dræbes af timeout'en,
+fordi flushen aldrig kommer tilbage. Det *er* klemmen, målt. Med
+rettelsen er den grøn på 21 ms.
+
+**Kostnad målt før den blev skrevet ned:** `bugbottle/queue` 1565 → 1645
+gzipped, budgetten 1600 → 1728. Samme afvejning som #85 én lag ned, og
+den er skrevet ind i `ci.yml` og CLAUDE.md med målingen.
+
+- [x] **49. Ét ubesvaret svar klemte hele offline-køen.** Ny `timeoutMs`
+  på `createQueue`, standard 30 sekunder = claimets længde. **Accept:**
+  en `fetch` der aldrig svarer giver `flush()` et svar, og rapporten er
+  stadig i køen og ikke længere claimet — dækket af
+  `tests/queue.test.ts` ("a delivery attempt that is never answered is
+  given up on rather than wedging the queue"). ✅ `ceo/queue-delivery-timeout` 29/9 00:5x.
+
+  **VERIFICÉR DEPLOY: queue-delivery-timeout ceo/queue-delivery-timeout 2026-09-29 00:5x.**
+  Accepter: `/docs/install/` og køens afsnit nævner `timeoutMs`, og
+  CHANGELOG'en har rettelsen under Unreleased → Fixed.
+
+### To fund der ligger klar til næste iteration
+
+De blev fundet i samme læsning, er verificeret mod den omgivende kode,
+og er **ikke** rettet her — de er små nok til at være en egen opgave
+hver, og de er ikke rapport-tabende.
+
+1. **`slice(-0)` fjerner et loft i stedet for at håndhæve det.**
+   `console-buffer.ts:74` og `queue.ts:306`: `[1,2,3].slice(-0)` er
+   `slice(0)`, altså hele arrayet. `initConsoleBuffer({ maxEntries: 0 })` —
+   den indlysende måde at sige "optag intet" på — beholder derfor
+   *alt* i en ring buffer der ikke ringer mere. I køen betyder
+   `maxEntries: 0` aldrig at evict, så `localStorage` vokser til kvoten
+   nægtes, og så taber **hver** rapport sit screenshot. Ét tegn i hver
+   af de to steder.
+2. **`KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, ikke bytes.**
+   `send.ts:299`: `serialised.length < KEEPALIVE_MAX_BYTES` sammenligner
+   kodeunits mod en konstant, hvis egen kommentar siger bytes og
+   begrunderer med spec'ens 64 kB. ~55 000 kodeunits med ikke-Latin-1-tekst
+   er ~150 kB UTF-8: den består, `keepalive` sættes, og fetch afviser den
+   *helt* i stedet for at sende. Repoet har allerede `utf8Length` til
+   netop den skelnen.
 
 ## Gate-definition (første gang, 2026-09-27)
 
