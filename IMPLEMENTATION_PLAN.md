@@ -170,6 +170,31 @@ nextjs.org, angular.dev, nuxt.com.
   docs**. **MÅL: `/docs/svelte/` baseline 0 besøgende (siden findes ikke)
   pr. 2026-09-28.** Sammenlign 25/10 og 25/11. 42 docs-sider (fra 41), 184
   søgeposter (fra 176).
+- [x] **17. Søgningssætning for hver side — den billigste vækst, der
+  findes.** 28/9, `ceo/page-descriptions`. Datagrund: **40 af 48 sider havde en
+  `<meta name="description">` der endte i en ellipse**, fordi builden tog sidens
+  første afsnit klippet ved 157 tegn, og seks af dem skrev om sitet i stedet for
+  om siden (`NestJS is the sixth framework in this row`, `Every other page on
+  this list is about a browser`, `this package does not yet have a page for`).
+  Fase 3 siger at dårlig CTR ved en god position er den billigste vækst, fordi
+  trafikken er der allerede — og det er præcis den, vi havde ødelagt på hver en
+  af de 50 sider. Søgeordene er skrevet ind i sætningen, så de ligner det folk
+  indtaster: `error.tsx`, `fastifyHandler`, `svelte:boundary`, `bodyLimit`.
+  Bygningen fejler nu på en side uden sætning, på en klippet en og på en der
+  taler om sitet. **MÅL: `/docs/` samlet baseline 0 besøgende pr. 2026-09-28**
+  (Plausible 401; Cloudflare 6 351 sidevisninger/28 d). Kan ikke måles før
+  Search Console-eksporten (opgave 7). Sammenlign 25/10 og 25/11.
+  Se "Fund fra description-iterationen" i loggen.
+- [ ] **18. `/docs/express/` — server-side, den framework vi allerede har en
+  export til.** 10 suggest målt 28/9 02:0x (`express error handling
+  middleware`), og **Express er den eneste server-framework uden en side**,
+  selv om `expressHandler` er den mest brugte export i `bugbottle/server`.
+  Genstanden er ikke gentaget kode: Fastify- og NestJS-siderne fandt begge den
+  *samme* 100 kB / 1 MiB body-limit-fælde, fordi de er Express-arvinge, så
+  siden skal begynde med den og med `rawBody` på en signeret rute. Research
+  først (planen: læs `express@5`'s published build, ikke Express' docs — de otte
+  forgående sider er alle bygget på den metode). **MÅL: `/docs/express/`
+  baseline 0 pr. 2026-09-28.** Sammenlign 25/10 og 25/11.
 - [ ] **7. CTR-måling — BLOCKED: kræver Search Console-eksport fra Mads**
   (28 dage, pr. side). Uden den kan vi ikke skrive en CTR-baseline pr. side, og
   så er §1–§2 umålelige. Billigste vækst, når tallene kommer. Står under ❓.
@@ -1073,6 +1098,60 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
 
 ## Log
 
+- **2026-09-28, iteration 15** (`ceo/page-descriptions`). Opgave 17: en
+  søgningssætning for hver side. Se opgaven.
+  - **Fundet ved at læse den genererede HTML, ikke ved at læse koden** — det er
+    den sjette gang metoden holder, og her kommer den fra det færdige produkt:
+    `grep -o '<meta name="description" content="[^"]*"' site/docs/*/index.html`
+    viste **40 af 48 sider med en ellipse** i slutningen, fordi
+    `build-docs.mjs` tog beskrivelsen som **sidens første afsnit** klippet ved
+    157 tegn. Det er et afsnit, der er skrevet til en læser der lige har klikket,
+    kvæst midt i en sætning, og Google skriver den om når den ikke holder.
+  - **Den skarpeste del af fundet er ikke længden, men perspektivet.** Seks sider
+    skrev om *vores site* i stedet for om sig selv: `NestJS is the sixth
+    framework in this row`, `Every other page on this list is about a browser`,
+    `Fastify is the framework with the most server-side search behind it that
+    this package does not yet have a page for` (den påstand er oven i kullet
+    modsagt af, at siden findes), `the most careful error handling of the ones
+    above`, `closer … than any other framework in this README`, `That is the
+    whole difference from the three frameworks above`, og de tre
+    `the-form-*`-sider der alle begynder med `The same state machine`. Under en
+    titel i en resultatliste er hver af dem meningsløse. To var desuden for
+    korte til at sige noget: `licence` var `MIT`, og `recording-console-errors`
+    var `Call this once, from client-side code, as early as your app can manage`.
+  - **Rettelsen er en ny fil og fire linjer kode.** `scripts/page-descriptions.mjs`
+    er 50 nøgle → sætning, og `pageDescription(slug, body)` i builden bruger den
+    og falder tilbage på `describe()`. Fallback'en er ikke en fejl man tåler men
+    en fejl man **finder**: `build:docs` kaster nu på (1) en side uden skrevet
+    sætning, (2) en over 158 tegn eller med `…`, (3) en der rammer en af syv
+    selvreferencerende fraser. Samme slags gate som de fire den allerede havde
+    (ugrupperet `##`-sektion, spøgelsesslug, duplikat, side uden
+    search-post) — altså i **builden**, ikke i en test, fordi builden er den der
+    kender slugene. `install` kom med, selv om dens første afsnit allerede var
+    brugbart: en fallback der må være rigtig er en fallback man kommer til at
+    regne med, og bygningen kan ikke kende rigtig fra heldig.
+  - **De to landingsider er skrevet i hånden** (`site/index.html` 186 tegn,
+    `site/da/index.html` 202) og er derfor kortet manuelt til 147 og 157. De er
+    de to vigtigste sider på sitet og de eneste, ingen gate rører.
+  - **Søgeindekset er uændret: 209 poster.** Beskrivelsen er ikke søgbar tekst,
+    så en ny sætning på hver side lå ikke bare det interne søgefelt bedre — den
+    flyttede null.
+  - `npm run check` grøn: **889 tests** (uændret — ingen kode i biblioteket rørte
+    sig), 0 fejl, 0 advarsler. **`dist/` uændret byte for byte**, IIFE'en stadig
+    24 645 / 21 063 mod budgetterne 25 088 / 21 504: ingen export, intet budget.
+  - ⚠️ **`npm run a11y` og `npm run smoke:annotate` kunne ikke køre:** ingen
+    Chrome på maskinen, syvte iteration i træk. Ændringen rører **kun `<head>`**,
+    ingen DOM, ingen CSS, ingen controls, ingen synlig tekst — a11y-auditten
+    kan ikke ramme den. CI's `browser`-job kører begge dele på hvert push.
+  - **MÅL: `/docs/` samlet (50 sider) baseline 0 besøgende pr. 2026-09-28**
+    (Plausible 401, Cloudflare 6 351 sidevisninger/28 d på hele sitet). Kan ikke
+    måles før Search Console-eksporten (opgave 7) kommer, fordi CTR kræver
+    visninger pr. side og ikke kan læses af en trafikrapport. Sammenlign 25/10 og
+    25/11.
+  - Næste iteration: de otte åbne `VERIFICÉR DEPLOY`-noter, hvis 07:30-vinduet er
+    kørt (kl. 03:2x var de alle merged **inden** vinduet, så de er ikke forfalne
+    endnu). Ellers opgave 18.
+
 - **2026-09-28, iteration 12** (`ceo/fastify-handler`). Opgave 15:
   `/docs/fastify/` + `fastifyHandler`-export. Se "Fund fra Fastify-iterationen".
   - **Valgt på et tal, ikke på en kvote:** `fastify error handling` har **10
@@ -1473,6 +1552,22 @@ Node-versionen i `site/Dockerfile` (node:22) og CI.
   `/docs/nextjs/` (ikke `next-js`) — samme skrivemåde som nextjs.dev.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: alle 50 sider får en ny `<meta name="description">` (40
+  af dem lå med en ellipse, seks talte om sitet), de to landingsider kortet i
+  hånden, og `build:docs` fejler nu på en side uden sætning, på en klippet
+  en og på en der taler om sitet — ae51bd2, merge <merge-sha>, 28/9 ~03:5x` —
+  **næste batch-vindue er 07:30 2026-09-28**. Kan verificeres i **én kørsel**
+  med de otte notes nedenfor. Verificér **indhold**, ikke HTTP 200: hent
+  `https://bugbottle.dev/docs/nestjs/` og læs `content=` i description-taggen,
+  og tjek at den er hel (ingen `…`), under 158 tegn, og at den siger noget om
+  siden: skal begynde `A NestJS exception filter runs on the server`. Samme
+  stikprøve på `/docs/nextjs/` (begynder `error.tsx, global-error.tsx`),
+  `/docs/fastify/` (`Receive a report in Fastify`), `/docs/hono/`,
+  `/docs/svelte/`, `/docs/astro/`, `/docs/nuxt/`, `/docs/angular/`,
+  `/docs/react/`, `/docs/vue/`, `/docs/react-router/`, `/docs/wordpress/` og
+  `/da/privatliv/`. **Sidetallet i sitemap'en er uændret** (50 URL'er før og
+  efter) — det er kun `<head>`, så der kommer ingen ny post.
 
 - `VERIFICÉR DEPLOY: /docs/fastify/ (44 sider i sitemap'en, ny
   integrationsside under Integrations — **og den første `bugbottle/server`-
