@@ -4233,6 +4233,15 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
 
+- **2026-09-29, iteration 32** (`ceo/remaining-titles`). Opgave 54.
+  - Alle 52 sider har nu en håndskrevet titel. `build:docs` printer ikke længere
+    "still generated" — `generatedTitles.length === 0`.
+  - 34 nye titler i `scripts/page-descriptions.mjs`, alle i 30–60 tegn, alle
+    unikke, alle navngiver opgaven og ikke produktet.
+  - Gaten grøn: 946 tests, 52 docs-sider, 249 søgeposter, sitemap 61 `<loc>`,
+    IIFE'erne 24 984 / 21 416 mod budgetterne 25 088 / 21 504.
+  - Ingen kodeændring, ingen `dist/`-ændring, ingen budget flyttet.
+
 - **2026-09-29, iteration 31** (`ceo/adoption-metric`). Opgave 46.
   Se "Fund fra adoption-metric-iterationen" ovenfor.
   - **jsDelivr er det eneste skelnende adoption-tal.** Målt: 1.0.1 = 766
