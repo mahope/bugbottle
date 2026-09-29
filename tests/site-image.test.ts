@@ -40,7 +40,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -248,16 +248,24 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
      amount of reading the Dockerfile can find: `COPY .dockerignore .git* ./gitdir/`
      and `ENV GIT_DIR=/build/gitdir` are each individually reasonable, and only
      their disagreement is wrong. The scratch directory reproduces the image's
-     layout — the history inside the directory the COPY writes to, the
-     `.dockerignore` beside it, and a working tree that has the file the sitemap
-     asks about — and then asks git the same question `lastmod()` asks.
+     layout, and then asks git the same question `lastmod()` asks.
 
      With GIT_DIR naming the parent, git answers `fatal: not a git repository`
      and `lastmod()` falls back to today. That is invisible: the build succeeds,
      the sitemap is well-formed, and the dates are simply wrong. Live served
      that from at least the deploy that introduced the pages, and the one
      difference between a page that moved and a page that did not had been
-     erased for every URL at once. */
+     erased for every URL at once.
+
+     The layout is built with Docker's semantics and not a reader's: a `COPY`
+     whose source is a *directory* copies that directory's contents into the
+     destination, so `.git`'s HEAD, objects and refs land directly in
+     `/build/gitdir` and there is no `/build/gitdir/.git`. That is measured,
+     not assumed — see the `docker build` in this file's sibling test — and it
+     is the whole reason the wrong value looks reasonable. A version of this
+     test built the layout the other way round, with the history nested one
+     level deeper, and therefore agreed with the assumption it was meant to
+     check by construction. */
   const dir = gitDirEnv();
   const destination = gitCopyDestination();
   assert.ok(dir, "site/Dockerfile has no `ENV GIT_DIR` in the builder stage");
@@ -271,12 +279,15 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
     cpSync(join(root, "site/compare.md"), join(work, "site/compare.md"));
     cpSync(join(root, "CHANGELOG.md"), join(work, "CHANGELOG.md"));
 
-    // The layout the COPY leaves behind, at the path it names. The Dockerfile
-    // writes in image paths, so the scratch root stands in for the WORKDIR and
-    // the same prefix is stripped off GIT_DIR below.
+    // The layout the COPY leaves behind, at the path it names: the *contents*
+    // of `.git` inside the directory, which is what copying a directory means.
+    // The Dockerfile writes in image paths, so the scratch root stands in for
+    // the WORKDIR and the same prefix is stripped off GIT_DIR below.
     const root_ = builderWorkdir();
     mkdirSync(join(work, destination), { recursive: true });
-    cpSync(join(root, ".git"), join(work, destination, ".git"), { recursive: true });
+    for (const entry of readdirSync(join(root, ".git"))) {
+      cpSync(join(root, ".git", entry), join(work, destination, entry), { recursive: true });
+    }
     writeFileSync(join(work, destination, ".dockerignore"), "");
 
     // GIT_DIR is absolute in the Dockerfile; rebase it onto the scratch root,
@@ -305,9 +316,9 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
       failed,
       false,
       `git cannot read the history in the layout site/Dockerfile builds: GIT_DIR is ` +
-        `${dir} but the COPY puts it at ${destination}/.git. Every <lastmod> then ` +
-        `falls back to today, so the sitemap claims the whole site changed on ` +
-        `every deploy.`,
+        `${dir}, and the COPY writes .git's contents into ${destination} rather than ` +
+        `.git itself. Every <lastmod> then falls back to today, so the sitemap claims ` +
+        `the whole site changed on every deploy.`,
     );
     assert.equal(
       out,
@@ -318,4 +329,121 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
+});
+
+/**
+ * The dates in the sitemap, as `scripts/build-docs.mjs` writes them, for a
+ * build whose `.git` is a real `--depth 1` clone of this repository whose tip
+ * commit carries a deliberately unmistakable date.
+ */
+const SHALLOW_TIP_DATE = "2019-01-01";
+
+function shallowSitemapLastmods(): string[] {
+  const dir = mkdtempSync(join(tmpdir(), "bugbottle-shallow-"));
+  try {
+    const repo = join(dir, "repo");
+    // `--depth 1` is what a deploy platform cloning this repository hands the
+    // image, and it is the case the GIT_DIR test above cannot see: the history
+    // is present and readable, so nothing fails, and every answer is still
+    // wrong.
+    execFileSync("git", ["clone", "-q", "--depth", "1", `file://${root}`, repo], {
+      stdio: "pipe",
+    });
+    // The one commit a shallow clone has is dated like a deploy, so the test
+    // cannot tell "git answered with the tip" from "the build fell back to
+    // today" by looking at the value — and a version of this test that left
+    // the date alone passed against the code it was written to catch, because
+    // the tip commit happened to be from today. Rewriting it to a fixed date
+    // two years back makes the two answers differ on any day this runs.
+    execFileSync(
+      "git",
+      ["-c", "user.email=ci@example.invalid", "-c", "user.name=ci", "commit", "-q", "--amend",
+       "--no-edit", "--reset-author"],
+      { cwd: repo, stdio: "pipe", env: { ...process.env, GIT_COMMITTER_DATE: `${SHALLOW_TIP_DATE}T00:00:00Z` } },
+    );
+    /* The clone is here for its history — a shallow one — and for nothing
+       else, so the working tree is laid over it. Without this the build would
+       run the *committed* `build-docs.mjs` and the test would quietly measure
+       `main` instead of the change in front of it, which is how a test for an
+       unfixed bug comes out green. */
+    cpSync(join(root, "scripts"), join(repo, "scripts"), { recursive: true });
+    cpSync(join(root, "site"), join(repo, "site"), { recursive: true });
+    for (const name of ["README.md", "package.json", "CHANGELOG.md"]) {
+      cpSync(join(root, name), join(repo, name));
+    }
+    /* `marked` is the build's only dependency and it is already installed in
+       the repository, so a symlink stands in for the `npm ci` the image runs. */
+    symlinkSync(join(root, "node_modules"), join(repo, "node_modules"), "dir");
+    execFileSync(process.execPath, [join(repo, "scripts", "build-docs.mjs")], {
+      cwd: repo,
+      stdio: "pipe",
+    });
+    const xml = readFileSync(join(repo, "site", "sitemap.xml"), "utf8");
+    return [...xml.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)].map((m) => m[1] as string);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("a shallow clone does not date every page with the deploy's own commit", () => {
+  /* The failure this file's other test was written for, fixed and then still
+     not fixed. With `GIT_DIR` pointing at the right place, a `--depth 1` clone
+     is a perfectly readable repository: `git log -1 -- <file>` exits 0, and it
+     answers with **the tip commit's date for every path**, because a shallow
+     clone has no history for the path filter to walk. Measured here, in a
+     clone of this repository: `git log -1 --format=%cs -- site/compare.md`
+     answered the tip's date in the shallow clone and 2026-09-28 in the full
+     one, with no error from either.
+
+     The honest answer from a history that cannot answer is `TODAY`, which is
+     what the fallback already does and is at least a true statement about the
+     build. So every `<lastmod>` in a shallow build has to be the same value,
+     and it must not be the tip's — the tip is the deploy, and dating the whole
+     site with the deploy's date is the exact thing the element exists to
+     prevent. */
+  const lastmods = shallowSitemapLastmods();
+  assert.ok(lastmods.length >= 50, `the sitemap should carry one <lastmod> per URL, got ${lastmods.length}`);
+
+  const distinct = new Set(lastmods);
+  assert.equal(
+    distinct.size,
+    1,
+    `a --depth 1 clone cannot say when each file changed, and the sitemap answered with ` +
+      `${distinct.size} different dates: ${[...distinct].sort().join(", ")}. Git reports the ` +
+      `tip commit for every path in a shallow history, so the only way to get more than one ` +
+      `date is for lastmod() to be asking a repository that cannot answer.`,
+  );
+
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(
+    [...distinct][0],
+    today,
+    `a build from a shallow clone must fall back to the build's own date. It answered ` +
+      `${[...distinct][0]}, which is the tip commit's date and therefore the date of the ` +
+      `deploy rather than the date of the change — a more convincing lie than "today", ` +
+      `because it is a real commit date.`,
+  );
+  assert.notEqual(
+    [...distinct][0],
+    SHALLOW_TIP_DATE,
+    `every <lastmod> is the tip commit's date: the sitemap claims the whole site changed on ` +
+      `the day of the deploy, which is the one thing <lastmod> must not say.`,
+  );
+});
+
+test("a full history does date pages separately, so the shallow test above can fail", () => {
+  /* The other half of proving the guard: a suite in which every test can only
+     pass is a suite that proves nothing. If `lastmod()` ignored every
+     repository and always answered "today", the shallow test would be green
+     and this one would be the only thing standing between that and a sitemap
+     that says the site never changed. The full history here is this
+     repository's own, whose sources genuinely have different commit dates. */
+  const xml = readFileSync(join(root, "site", "sitemap.xml"), "utf8");
+  const lastmods = [...xml.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)].map((m) => m[1] as string);
+  assert.ok(lastmods.length > 0, "the built sitemap has no <lastmod> to compare");
+  assert.ok(
+    new Set(lastmods).size > 1,
+    "built from the full history, the sitemap should carry more than one date — if it " +
+      "carries one, lastmod() is not reading git at all and the shallow guard proves nothing",
+  );
 });

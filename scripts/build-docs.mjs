@@ -1224,23 +1224,58 @@ ${foot(page)}`;
    When there is no usable repository — a source export, or the site image
    built from a context whose .git did not travel — every page is dated today.
    That is a truthful answer for a build that just happened, and it keeps the
-   file valid rather than dropping the element from half the URLs. */
+   file valid rather than dropping the element from half the URLs.
+
+   A repository that is *usable but shallow* is a third case, and it is the one
+   that produces the same wrong answer for a different reason. A platform that
+   deploys from a `--depth 1` clone has exactly one commit, so the history the
+   path filter walks simply is not there: `git log -1 -- site/compare.md`
+   answers with the tip commit's date, for that file and for every other one,
+   and it exits 0, so nothing looks wrong. Every URL would then carry the date
+   of the deploy rather than the date of the commit that produced it, which is
+   the same lie as "today" with a more convincing hat on it. `isShallow()` asks
+   git directly and the answer is taken only when the history can answer, so a
+   shallow build falls back to today — a date that is at least *true of the
+   build* — instead of a precise-looking wrong one. */
 const TODAY = new Date().toISOString().slice(0, 10);
 const lastmods = new Map();
+
+/* One question, asked once, about the whole repository rather than about each
+   file: `is-shallow-repository` is a property of the history, so asking it per
+   URL would spawn a process per page to learn the same thing 61 times. */
+let shallow = null;
+function isShallow() {
+  if (shallow !== null) return shallow;
+  try {
+    const out = execFileSync("git", ["rev-parse", "--is-shallow-repository"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    shallow = out === "true";
+  } catch {
+    /* git missing, or not a repository. lastmod() will fail on its own and
+       fall back; treat the history as unusable either way. */
+    shallow = true;
+  }
+  return shallow;
+}
 
 function lastmod(source) {
   const cached = lastmods.get(source);
   if (cached !== undefined) return cached;
   let date = TODAY;
-  try {
-    const out = execFileSync("git", ["log", "-1", "--format=%cs", "--", source], {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(out)) date = out;
-  } catch {
-    /* git missing, or not a repository. TODAY already stands. */
+  if (!isShallow()) {
+    try {
+      const out = execFileSync("git", ["log", "-1", "--format=%cs", "--", source], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(out)) date = out;
+    } catch {
+      /* git missing, or not a repository. TODAY already stands. */
+    }
   }
   lastmods.set(source, date);
   return date;

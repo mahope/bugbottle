@@ -67,28 +67,40 @@ COPY site/panel-narrow.png ./site/
 # reach from in here. A wildcard needs at least one match to be legal, and
 # .dockerignore is the cheapest file that always exists.
 #
-# GIT_DIR has to name the `.git` *inside* that directory, not the directory
-# itself, and the difference is the whole feature. The `COPY` below lands
-# `.git` in `/build/gitdir/.git`, so `/build/gitdir` is a directory holding
-# `.git` and `.dockerignore` — which is not a repository, and git answers
-# `fatal: not a git repository`. `lastmod()` in `build-docs.mjs` catches that,
-# falls back to today, and writes a valid sitemap in which **every** URL claims
-# to have changed on the day of the deploy. That is precisely the thing the
-# comment above this step exists to prevent, and it shipped: live dated all 61
-# URLs 2026-09-29 while the commits that produced them were from the 27th and
-# the 28th. A `lastmod` that always reads "now" tells a crawler the whole site
-# is new on every deploy, so the one signal that could tell it which pages
-# actually moved says nothing at all.
-# `tests/site-image.test.ts` builds this exact layout in a scratch directory
-# and runs `git log` against it, so the pointer and the `COPY` cannot drift
-# apart again without the suite going red.
+# GIT_DIR is the directory the COPY below writes into, and it is correct: a
+# `COPY` whose source is a *directory* copies that directory's **contents**,
+# not the directory itself, so `.git`'s `HEAD`, `objects` and `refs` land
+# directly in `/build/gitdir` and `/build/gitdir` is the repository. Measured
+# in `alpine` with git 2.54, not reasoned about: `COPY .git* ./gitdir/` leaves
+# `/gitdir/HEAD` and `/gitdir/objects`, there is no `/gitdir/.git`, and
+# `GIT_DIR=/gitdir git log -1` answers with the real commit date.
+#
+# A previous version of this file pointed GIT_DIR at `/build/gitdir/.git` on the
+# theory that the COPY nested the directory. It does not, so that value made
+# git answer `fatal: not a git repository` — the identical symptom the original
+# was meant to fix, reintroduced. The test that shipped with it built the
+# assumed layout by hand with `cpSync`, so it agreed with the assumption by
+# construction and could not have caught it. `tests/site-image.test.ts` now
+# derives the layout from what `COPY` does rather than from what a reader
+# expects it to do.
+#
+# The history is only half the answer, and the half that is easy to miss: a
+# deploy platform that clones with `--depth 1` has one commit, and
+# `git log -1 -- <file>` in a shallow repository answers with **that** commit's
+# date for every path — a shallow clone has no history to walk, so the path
+# filter matches nothing and git reports the tip. That is the same lie as
+# "today", wearing a different hat: every URL would carry the date of the
+# deploy instead of the date of the commit that produced it. `lastmod()` in
+# `build-docs.mjs` asks `git rev-parse --is-shallow-repository` and refuses to
+# answer per-file from a history that cannot answer, which is what makes the
+# fallback honest rather than merely valid.
 #
 # When what arrived is not a repository at all — a source export, or a worktree
 # whose `.git` file points at a path that does not exist in here — git still
 # fails, the script still catches it, and every page is dated today. That
 # fallback is the one honest answer available, and it is now the *only* path
 # that reaches it.
-ENV GIT_DIR=/build/gitdir/.git
+ENV GIT_DIR=/build/gitdir
 COPY .dockerignore .git* ./gitdir/
 RUN node scripts/build-docs.mjs
 

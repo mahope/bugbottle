@@ -2,6 +2,9 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 56 — opgave 55's rettelse var den fejl den skulle rette, målt i
+  rigtig Docker.** `COPY .git* ./gitdir/` lægger `.git`s *indhold* i mappen,
+  så `GIT_DIR=/build/gitdir` var rigtig hele vejen. Se fundet nedenfor.
 - ✅ **Opgave 55 — sitemapens `<lastmod>` læste dagens dato for alle 61
   sider.** `GIT_DIR` pegede på en mappe, ikke på `.git` i den. Se fundet nedenfor.
 - ✅ **Opgave 54 — de 34 resterende sider havde en genereret titel.** Alle 52
@@ -23,6 +26,26 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ⚠️ **Opgave 55 var ikke lukket — dens rettelse var selv fejlen, fundet ved
+  at verificere dens egen deploy-note.** Live daterede stadig alle 61 sider i
+  dag *efter* at 07:30-vinduet havde kørt med rettelsen (bevist: sidens
+  `last-modified` = 06:41 CEST = merge-tidspunktet). `COPY .git* ./gitdir/`
+  kopierer `.git`s **indhold** ind i mappen — målt i `alpine` med git 2.54,
+  ikke resonneret om — så `/build/gitdir` *er* repositoryet, og `cdae149`s
+  `/build/gitdir/.git` får git til at svare `fatal: not a git repository`.
+  Rettelsen tilbageført. Dybere årsag fundet samme sted: en `--depth 1` klone
+  svarer `2026-09-29` på `git log -- site/compare.md` hvor det fulde repo
+  siger `2026-09-28`, fordi sti-filteret i en shallow historie ingen commits har
+  at gå igennem. `lastmod()` spørger nu `git rev-parse
+  --is-shallow-repository` én gang og svarer ikke per-fil fra en historie der
+  ikke kan. To tests, **begge bevisst røde mod hver sin gamle kode**. 949
+  tests grøn, IIFE'erne 24 984 / 21 416 uændrede.
+- **📌 Læsning for næste iteration, fordi den er dyr at genfinde:** en test
+  der *bygger* sit emne i stedet for at *måle* det, er grøn mod sin egen
+  antagelse. Det skete to gange i samme time: `cpSync(.git, dest/.git)` skrev
+  den antagelse ud i koden, og en test der klonae repoet kørte `main` i stedet
+  for den kode den skulle dømme. Begge fangedes kun ved at spørge "hvilken kode
+  kører den her egentlig?".
 - ✅ Opgave 55 lukket: sitemapens `<lastmod>` læste dagens dato for alle 61
   sider, fordi `ENV GIT_DIR=/build/gitdir` pegede på mappen og ikke på `.git` i
   den. Live daterede **61 af 61** sider `2026-09-29`; git siger `2026-09-28` for
@@ -50,6 +73,122 @@
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 56 — opgave 55's rettelse var den fejl den skulle rette (29/9 07:5x)
+
+**Iterationen begynder med at verificere opgave 55's deploy-note**, fordi
+vinduet 07:30 var gået. Og målingen siger noget intet andet end "ok":
+
+```
+$ curl -sI https://bugbottle.dev/docs/nextjs/ | rg -i last-modified
+last-modified: Tue, 29 Sep 2026 04:41:16 GMT     ← 06:41 CEST = cdae149
+$ curl -s https://bugbottle.dev/sitemap.xml | rg -o "<lastmod>[^<]*</lastmod>" | sort | uniq -c
+     61 <lastmod>2026-09-29</lastmod>              ← stadig alle 61 i dag
+```
+
+**Deployen kørte.** Sidens `last-modified` er præcis merge-tidspunktet for
+`cdae149`, så 07:30-vinduet byggede billedet *med* rettelsen — og de 61 sider
+har stadig dagens dato. Rettelsen virkede ikke. Den gjorde faktisk det samme
+som den fejl den var skrevet til at rette.
+
+**Årsagen er `COPY`-semantik, som jeg målte i rigtig Docker i stedet for at
+resonnere om den.** Et `COPY` med en *mappe* som kilde kopierer mappe**indholdet**
+ind i destinationen, ikke mappen selv:
+
+```
+$ docker build   # FROM alpine, COPY .dockerignore .git* ./gitdir/, i et rigtigt repo
+$ find /gitdir -maxdepth 1
+/gitdir/HEAD  /gitdir/config  /gitdir/index  /gitdir/objects  /gitdir/refs …
+/gitdir/.git   → No such file or directory
+
+GIT_DIR=/gitdir      git log -1 --format=%cs -- a.txt  →  2026-09-29   ✓
+GIT_DIR=/gitdir/.git git log -1 --format=%cs -- a.txt  →  fatal: not a git repository
+```
+
+Så `/build/gitdir` **er** repositoryet, og `ENV GIT_DIR=/build/gitdir` — den
+oprindelige værdi — var rigtig hele vejen. `cdae149` rettede den til
+`/build/gitdir/.git` ud fra antagelsen om at `COPY` graver mappen *indeni*, så
+den gjorde en virkende linje virkende igen. **Bemærk hvad det siger om den
+oprindelige diagnose:** den havde ret om *symptomet* (alle 61 daterede i dag)
+og om *hvor* det lå (Dockerfilens git-linjer), men den havde aldrig kørt de to
+linjer. Den ville have været fundet på ti minutter med den `docker build` ovenfor.
+
+**Og testen der kom med rettelsen kunne ikke have fundet den.** Den byggede
+layoutet i hånden med `cpSync(.git, destination/.git)` — altså den antagelse,
+den skulle efterprøve, skrevet ud i en `cpSync`. Den var grøn mod sin egen
+forudsætning, så den bekræftede den. **Det er den anden halvdel af fundet, og
+den er dyrere end den første:** en test der bygger det den tester i stedet for
+det der sker, er ikke en svag test, den er en der *ligner* en stærk.
+
+### Den dybere årsag, som stadig er live efter GIT_DIR
+
+Med `GIT_DIR` rigtig tilbage er der **to** måder en deploy stadig kan datere
+alle 61 sider med deployens egen dato, og den anden er den plausibel:
+
+**En `--depth 1` klone kan ikke svare på et per-fil-spørgsmål.** Den har én
+commit, så sti-filteret i `git log -1 -- site/compare.md` har ingen historik at
+gå igennem, og git svarer med **spids-committen for alle stier** — exit 0,
+intet der ser forkert ud. Målt i en rigtig klone af dette repo:
+
+| Forespørgsel | Fuldt repo (432 commits) | `--depth 1` (1 commit) |
+|---|---|---|
+| `git log -1 --format=%cs -- site/compare.md` | **2026-09-28** | **2026-09-29** |
+| `git rev-parse --is-shallow-repository` | `false` | `true` |
+
+Så en platform der deployer fra en shallow klone ville have dateret hele sitet
+med deployens dato — **samme løgn som "i dag", bare med en mere overbevisende
+hat på**, fordi den er en rigtig commit-dato. Og det er den samme fejl
+`cdae149` ville have rettet, så rettelsen ville have ladet den stå.
+
+**Rettelsen er derfor to halve, ikke én.** `lastmod()` spørger
+`git rev-parse --is-shallow-repository` **én gang** (det er en egenskab ved
+historien, ikke ved filen — at spørge pr. URL ville starte 61 processer for at
+lære det samme) og svarer slet ikke per-fil fra en historie, der ikke kan.
+En shallow build falder så tilbage på `TODAY` — en dato der i det mindste er
+*sand om byggen* — i stedet for en precise-lignende forkert.
+
+### Bevis, at de to nye tests kan fejle — begge veje målt
+
+| Modsætning | Resultat |
+|---|---|
+| Uden `isShallow()`-guarden (den gamle kode) | test 7 **rød**: svarede `2019-01-01` (spids-committen) |
+| `GIT_DIR=/build/gitdir/.git` (cdae149s værdi) | test 6 **rød**: `fatal: not a git repository` |
+| Rettet kode | **8/8 grøn** |
+
+**Og en ting, der kostede mig en halv time og er værd at skrive ned:** den
+første udgave af test 7 **pakkede mod den kode den skulle fange.** Den klonae
+repoet, og repoet har den gamle kode i `HEAD` — så testen kørte `main` og var
+grøn. Nu kopierer den det arbejdstræ oveni klonen, fordi klonen er der for
+`.git`'s skyld og intet andet. Samme fælde som `cpSync` ovenfor, en niveau
+længere nede: **en test der bygger sit emne, skal bygge det fra det samme sted
+som den læser den kode den vil dømme.**
+
+Den anden fælde i samme test: spids-committen i et repo der merges hver time
+*er* dagens dato, så "git svarede med spids'en" og "builden faldt tilbage på
+i dag" gav **det samme tal**, og testen var grøn mod den gamle kode. Nu dateres
+spids-committen eksplicit til `2019-01-01`, så de to svar er forskellige på
+ enhver dag testen kører.
+
+### Målt efter rettelsen
+
+`npm run check` grøn — **949 tests** (fra 946, tre nye), `check-dist` grøn på
+208 filer, **IIFE'erne 24 984 / 21 416 mod budgetterne 25 088 / 21 504
+(uændrede — intet i pakken rørte)**, 52 docs-sider, 249 søgeposter. Den rene
+build har nu spredte datoer i stedet for én: **53 × 29/9, 6 × 28/9, 2 × 27/9**,
+og `/compare/` er dateret `2026-09-28`, som er præcis hvad git siger om
+`site/compare.md`.
+
+**Ingen ny URL:** sitemap **61** `<loc>`, `robots.txt` uændret, `dist/` urørt.
+
+**Det ændrede ikke ved sig, men står her fordi det er det næste spørgsmål:**
+denne rettelse gør *sitemappen* ærlig på en build fra en shallow klone, men
+den giver **stadig ikke de rigtige datoer** i det tilfælde — den siger "i dag"
+ærligt i stedet for deployens dato. For at få de rigtige tal skal deployeren
+klone med fuld historie (`--depth 0`, eller et `git fetch --unshallow` i
+Dockerfilens docs-trin). **Det er en beslutning om deploy-konfigurationen, som
+jeg ikke kan træffe fra her** — se ❓. Sitemapens 61 sider er under tre måneder
+gamle, så prisen ved at lade den stå er lille, og løgnen er nu en sand
+tilbagetrækning frem for en falsk præcision.
 
 ## Opgave 55 — sitemapens `<lastmod>` læste dagens dato for alle 61 sider (29/9 06:5x)
 
@@ -1229,6 +1368,43 @@ kører begge dele på hvert push.
   overhovedet har adoption som formål. **LUKKET:** jsDelivr-hits pr. version
   er det eneste skelnende tal. Baseline: 1.0.1 = 766 totalt, 725 i de seneste
   7 dage pr. 2026-09-28. Se "Fund fra adoption-metric-iterationen" nedenfor.
+- [x] **56. Opgave 55's rettelse var selv fejlen, og en shallow klone er den
+  dybere grund.** 29/9 08:0x, `ceo/sitemap-lastmod-shallow`. Datagrund: ikke
+  trafik fra målingen — fra at opgave 55's deploy-note skulle verificeres, fordi
+  vinduet 07:30 var gået. **Målingen sagde at rettelsen ikke virkede:** live
+  daterede stadig alle 61 sider i dag, selv om sidens `last-modified` viste at
+  07:30-vinduet netop havde bygget *med* den. `COPY .git* ./gitdir/` kopierer
+  `.git`s **indhold**, så `/build/gitdir` er repositoryet og `GIT_DIR`
+  pegede rigtigt hele vejen; cdae149s `/build/gitdir/.git` får git til at
+  svare `fatal: not a git repository`. Målt i `alpine` med git 2.54. **Accept:**
+  `GIT_DIR` er tilbage på `/build/gitdir` og en `docker build` beviser det;
+  `lastmod()` spørger `git rev-parse --is-shallow-repository` én gang og
+  svarer ikke per-fil fra en historie der ikke kan, så en `--depth 1` deploy
+  falder tilbage på `TODAY` frem for på spids-committen; to tests, begge
+  **bevist røde mod hver sin gamle kode** (test 6 mod cdae149s værdi, test 7
+  mod den kode der manglede guarden). Mål: ingen trafikbaseline ændres — den
+  reelle effekt er at det eneste signal en crawler har til at vælge hvad den
+  genindhenter, ikke længere siger "alt er nyt" på hvert deploy.
+  **Målt:** `npm run check` grøn, 949 tests, 61 `<loc>`, rene build har
+  **53 × 29/9, 6 × 28/9, 2 × 27/9** og `/compare/` dateret `2026-09-28`.
+
+- [ ] **57. Deploy-klonen skal have fuld historie, ellers er `<lastmod>` en
+  sand men ubrugelig tilbagetrækning.** 29/9, `ceo/sitemap-lastmod-shallow`.
+  Datagrund: opgave 56's måling — `git log -1 -- site/compare.md` svarer
+  `2026-09-28` i et fuldt repo og `2026-09-29` i en `--depth 1` klone, fordi
+  sti-filteret i en shallow historie ingen commits har at gå igennem og git
+  rapporterer spidsen for alle stier. Efter opgave 56 siger den samme build
+  "i dag" i stedet for deployens dato, hvilket er ærligt men ikke nyttigt for
+  en crawler. **Accept:** enten deploy-platformen kloner med fuld historie
+  (`--depth 0`), eller `site/Dockerfile`'s docs-trin laver
+  `git fetch --unshallow --quiet || true` lige efter `COPY … .git*`. **Dette
+  er en beslutning om deploy-konfigurationen, som ligger uden for repoet og
+  derfor uden for mine hænder** — se ❓. Beviset er den samme måling som
+  opgave 56, genkørt mod live-sitemapen efter et deploy: den skal have
+  mindst to forskellige `<lastmod>`-værdier, og **ikke** alle dateret i dag.
+  Pris ved at lade stå: sitemapens 61 sider er under tre måneder gamle, så
+  det er en voksende unøjagtighed, ikke en ødelagt funktion.
+
 - [ ] **47. `npm search` er lukket for et navn der er ét ord, og det kræver
   en beslutning Mads ikke har truffet.** Datagrund: fund 2 — tre *eksakte*
   publicerede keywords, ingen plads i top 250, og top-25 listen er små
@@ -4031,6 +4207,25 @@ ny måling — det er samme tilstand. `DEPLOY-MISSING` står, og se ❓.
 
 ## ❓ Til Mads
 
+- **❓ Deploy-klonen: fuld historie eller ej (opgave 57, 29/9).** Du deployer
+  bugbottle.dev uden for dette repo, og derfor ved jeg ikke hvordan den kloner.
+  **Spørgsmålet er ét ord: `--depth 1` eller fuld historie?** Målt i en klone
+  af netop dette repo: `git log -1 --format=%cs -- site/compare.md` svarer
+  `2026-09-28` i det fulde repo (432 commits) og `2026-09-29` i `--depth 1` (1
+  commit) — en shallow klone **kan ikke svare på et per-fil-spørgsmål**, fordi
+  sti-filteret ingen historik har at gå igennem, så git rapporterer spids-
+  committen for alle filer. **Hvis din platform kloner shallow, er `<lastmod>`
+  i sitemapen efter opgave 56 en ærlig tilbagetrækning ("i dag") frem for de
+  rigtige datoer.** To veje, og du kender kun den første: (a) klon med
+  `--depth 0`, hvis platformen tilbyder det; (b) `site/Dockerfile`'s docs-trin
+  får `RUN git fetch --unshallow --quiet || true` lige efter `COPY … .git*` —
+  den tilføjer ~20 MB til **byggetrinnet** (aldrig til det image der serveres)
+  og kræver at builden kan nå origin. **Jeg har ikke lavet (b)**, fordi det er
+  en beslutning om byggetid og netværksadgang i dit deploy-setup, ikke en
+  kodefejl. Hvis du vil have (b) uden at tænke, sig det — det er to linjer.
+  **Målet:** sitemapen skal have mindst to forskellige `<lastmod>`-værdier
+  efter et deploy, og `/compare/` skal være dateret `2026-09-28`.
+
 - **✅ Adoption-tal fundet (opgave 46, 28/9).** `npm downloads pr. uge` kan
   ikke bære en vægt (uge 2 = 42, uge 3 = 210 — 5x uden at ét menneske er
   kommet til). **Løsningen er jsDelivr-hits pr. version**: det eneste tal der
@@ -4359,6 +4554,35 @@ uden indgang har. Det er derfor eksporten står som den vigtigste ulævede ting
 i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
+
+- **2026-09-29, iteration 34** (`ceo/sitemap-lastmod-shallow`). Opgave 56.
+  - Startede med at verificere opgave 55's deploy-note, fordi vinduet 07:30 var
+    gået. Målingen sagde at rettelsen ikke virkede: live daterede stadig alle
+    61 sider i dag, selv om `last-modified` viste at billedet netop var bygget
+    med den. `COPY .git* ./gitdir/` kopierer `.git`s **indhold** ind i mappen,
+    så `/build/gitdir` er repositoryet — målt i `alpine` med git 2.54, ikke
+    resonneret om. `cdae149`s `/build/gitdir/.git` giver `fatal: not a git
+    repository`. Rettelsen tilbageført.
+  - Dybere årsag: `git log -1 -- <fil>` i en `--depth 1` klone svarer
+    **spids-committen for alle stier** (2026-09-29 mod 2026-09-28 i det fulde
+    repo), fordi sti-filteret ingen historik har at gå igennem. `lastmod()`
+    spørger nu `git rev-parse --is-shallow-repository` én gang og svarer ikke
+    per-fil fra en historie der ikke kan.
+  - To tests, begge **bevist røde mod hver sin gamle kode**: mod cdae149s
+    `GIT_DIR`-værdi, og mod koden uden shallow-guarden.
+  - **To fælder fundet undervejs, begge i testene:** (1) den gamle test byggede
+    layoutet med `cpSync(.git, dest/.git)` — altså den antagelse den skulle
+    efterprøve; (2) min første shallow-test klonae repoet og kørte derfor
+    `HEAD` i stedet for arbejdstræet, og dens spids-commit var *dagens* dato så
+    "git svarede med spidsen" og "faldt tilbage på i dag" gav samme tal. Begge
+    fangedes ved at spørge hvilken kode testen egentlig kørte.
+  - Målt: `npm run check` grøn, **949 tests** (fra 946), `check-dist` grøn på
+    208 filer, IIFE'erne **24 984 / 21 416** mod budgetterne 25 088 / 21 504
+    (uændrede), 52 docs-sider, 249 søgeposter, sitemap **61** `<loc>`.
+    Den rene build har nu **53 × 29/9, 6 × 28/9, 2 × 27/9**.
+  - Åbent opgave 57: deploy-klonens dybde afgør om vi får de rigtige datoer
+    eller en ærlig tilbagetrækning. Det er en beslutning uden for repoet —
+    spørgsmål stillet under ❓.
 
 - **2026-09-29, iteration 32** (`ceo/remaining-titles`). Opgave 54.
   - Alle 52 sider har nu en håndskrevet titel. `build:docs` printer ikke længere
@@ -5255,16 +5479,27 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Deploy-noter
 
-- `VERIFICÉR DEPLOY: sitemapens `<lastmod>` læser igen den commit der rørte
-  kilden (opgave 55, `ceo/sitemap-lastmod-gitdir`), 2026-09-29 06:5x.` Næste
-  batch-vindue er **07:30 2026-09-29**. **Accepter:
-  `https://bugbottle.dev/sitemap.xml` skal have mindst tre forskellige
+- ⚠️ **`VERIFICÉR DEPLOY: opgave 55's rettelse var selv fejlen (opgave 56,
+  `ceo/sitemap-lastmod-shallow`), 2026-09-29 08:0x.** Næste
+  batch-vindue er **12:30 2026-09-29**. **Accepter:**
+  `https://bugbottle.dev/sitemap.xml` skal have **mindst to forskellige**
   `<lastmod>`-værdier, og `<loc>https://bugbottle.dev/compare/</loc>` skal
-  følges af `<lastmod>2026-09-28</lastmod>`.** HTTP 200 beviser intet her —
-  den nuværende sitemap er gyldig og svarer 200, den er bare dateret i dag, så
-  målingen er tallet og ikke svarekoden. **Ingen ny URL:** sitemap **61**
-  `<loc>`, `search.json` **249** poster, `robots.txt` uændret, `dist/` urørt
-  (IIFE'erne 24 984 / 21 416).
+  følges af `<lastmod>2026-09-28</lastmod>`. HTTP 200 beviser intet — den
+  nuværende sitemap er gyldig og svarer 200, den er bare dateret i dag, så
+  målingen er tallet og ikke svarekoden. **Se opgave 56:** `cdae149` rettede
+  `GIT_DIR` til en værdi, der får git til at svare `fatal: not a git
+  repository`, så den efterlod præcis det den skulle rette. Målt i `alpine`
+  med git 2.54, ikke resonneret om. **Ingen ny URL:** sitemap **61** `<loc>`,
+  `search.json` **249** poster, `robots.txt` uændret, `dist/` urørt (IIFE'erne
+  24 984 / 21 416). **Bemærk hvad der så ud til at ske:** 07:30-vinduet kørte
+  og rettelsen virkede ikke, så en note der kun spørger "er den live?" ville
+  have svaret ja og lukket den fejlt.
+
+- ⚠️ `VERIFICÉR DEPLOY: sitemapens `<lastmod>` læser igen den commit der rørte
+  kilden (opgave 55, `ceo/sitemap-lastmod-gitdir`), 2026-09-29 06:5x.`
+  **Erstat af opgave 56 ovenfor** — rettelsen virkede ikke, så acceptkriteriet
+  var aldrig opfyldt. Historien er bevaret fordi målingen (61/61 dateret i dag)
+  er den der ledte til den rigtige årsag.
 
 - ✅ `VERIFICÉR DEPLOY: /support/'s Donating-afsnit nævner den tredje sted der
   beder om penge (opgave 40, `ceo/npm-funding-button`), `0b9d5a4`, merge
