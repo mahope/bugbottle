@@ -24,6 +24,7 @@ import {
   MAX_SCREENSHOT_DATA_URL_LENGTH,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
+  MAX_TIMESTAMP_LENGTH,
   MAX_COOKIE_NAMES,
   MAX_STORAGE_KEYS,
   MAX_STORAGE_KEY_LENGTH,
@@ -106,6 +107,12 @@ test("the stack and context ceilings travel with the schema too", () => {
   assert.equal(frame.file?.maxLength, MAX_STACK_STRING_LENGTH);
   assert.equal(frame.fn?.maxLength, MAX_STACK_STRING_LENGTH);
   assert.ok(!("source" in frame), "a frame never carries source text");
+
+  // The three recorders that carry a timestamp all clip it, so a receiver in
+  // another language has no other way to learn the ceiling.
+  for (const def of ["ConsoleEntry", "Breadcrumb", "NetworkEntry"] as const) {
+    assert.equal(defs[def]!.properties!.ts?.maxLength, MAX_TIMESTAMP_LENGTH, `${def}.ts`);
+  }
 
   const sepia = { ...fullReportBody.context, colorScheme: "sepia" };
   assert.equal(

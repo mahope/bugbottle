@@ -38,6 +38,16 @@ export const MAX_NOTES = 5;
 /** Longest a single note may be. They are one sentence each. */
 export const MAX_NOTE_LENGTH = 200;
 
+/**
+ * Longest a timestamp may be. `Date.toISOString()` writes 24 characters, so 64
+ * leaves room for a library that writes an offset or fractional seconds and
+ * still refuses anything larger. The three recorders that carry one all
+ * validate it by `Date.parse` and then stored it verbatim, so the ceiling was
+ * the only thing standing between a browser and two megabytes of text in a
+ * column a receiver is about to insert — see `normaliseTimestamp`.
+ */
+export const MAX_TIMESTAMP_LENGTH = 64;
+
 /** How many console entries a report may carry. Oldest are dropped first. */
 export const MAX_CONSOLE_ENTRIES = 50;
 
@@ -388,6 +398,62 @@ function stripNullBytes(text: string): string {
 }
 
 /**
+ * How many entries a ring buffer keeps, given what the caller asked for.
+ *
+ * `slice(-0)` is the whole array and `slice(-NaN)` is too, so an unchecked `0`
+ * removes the bound instead of tightening it — the opposite of what a caller
+ * who passed a small number meant. An explicit `0` is the one value that
+ * plainly means "keep nothing"; anything else that is not a finite positive
+ * number falls back to the default rather than to unbounded growth.
+ *
+ * The four recorders already resolve their own the same way, written out in
+ * each because each is its own entry point and none may grow another's bundle.
+ * These three are the server side of the same buffers, in this one module, so
+ * one copy here is what they share.
+ */
+function resolveMaxEntries(requested: number | undefined, fallback: number): number {
+  if (requested === 0) return 0;
+  return typeof requested === "number" && Number.isFinite(requested) && requested > 0
+    ? Math.max(1, Math.floor(requested))
+    : fallback;
+}
+
+/**
+ * The last `maxEntries` entries — a start index rather than `slice(-n)`, which
+ * reads a resolved `0` as `-0` and hands back the whole array.
+ */
+function keepNewest<T>(entries: T[], maxEntries: number): T[] {
+  const start = entries.length - maxEntries;
+  return start > 0 ? entries.slice(start) : entries;
+}
+
+/**
+ * The timestamp on a console entry, a breadcrumb and a request — the one
+ * string in this file that used to reach storage untouched.
+ *
+ * `Date.parse` is a check that a value *looks* like a timestamp, not a length
+ * bound, and it ignores a trailing null byte the way it ignores trailing
+ * whitespace. So a browser could send `ts` carrying one, and it would pass the
+ * parse and be stored with the byte in it — the exact insert failure
+ * `stripNullBytes` exists to prevent, in the one field that skipped it. The
+ * same value could be two megabytes of a parseable date, well under
+ * `DEFAULT_MAX_BODY_BYTES`, and the 500-character clip on `message` beside it
+ * never applied.
+ *
+ * Both are now closed here rather than at the three call sites, because three
+ * copies of "parse it, then strip it, then clip it" is how the third one was
+ * forgotten in the first place. Stripping before clipping means the two rules
+ * compose the way every other field's do.
+ */
+function normaliseTimestamp(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  const ts = stripNullBytes(raw);
+  if (Number.isNaN(Date.parse(ts))) return "";
+  return ts.slice(0, MAX_TIMESTAMP_LENGTH);
+}
+
+
+/**
  * Writes one own property under a key the sender chose.
  *
  * `target[key] = value` reaches the prototype setter when the key is
@@ -541,7 +607,7 @@ export function normaliseConsole(
     maxStackStringLength?: number;
   } = {},
 ): ConsoleEntry[] {
-  const maxEntries = options.maxEntries ?? MAX_CONSOLE_ENTRIES;
+  const maxEntries = resolveMaxEntries(options.maxEntries, MAX_CONSOLE_ENTRIES);
   const maxMessageLength = options.maxMessageLength ?? MAX_CONSOLE_MESSAGE_LENGTH;
   const maxStackFrames = options.maxStackFrames ?? MAX_STACK_FRAMES;
   const maxStackStringLength = options.maxStackStringLength ?? MAX_STACK_STRING_LENGTH;
@@ -554,7 +620,7 @@ export function normaliseConsole(
     if (level !== "error" && level !== "warn") continue;
     if (typeof message !== "string") continue;
     const entry: ConsoleEntry = {
-      ts: typeof ts === "string" && !Number.isNaN(Date.parse(ts)) ? ts : "",
+      ts: normaliseTimestamp(ts),
       level,
       message: stripNullBytes(message).slice(0, maxMessageLength),
     };
@@ -562,7 +628,7 @@ export function normaliseConsole(
     if (frames.length > 0) entry.stack = frames;
     out.push(entry);
   }
-  return out.length > maxEntries ? out.slice(-maxEntries) : out;
+  return keepNewest(out, maxEntries);
 }
 
 /**
@@ -619,7 +685,7 @@ export function normaliseBreadcrumbs(
   raw: unknown,
   options: { maxBreadcrumbs?: number } = {},
 ): Breadcrumb[] {
-  const maxBreadcrumbs = options.maxBreadcrumbs ?? MAX_BREADCRUMBS;
+  const maxBreadcrumbs = resolveMaxEntries(options.maxBreadcrumbs, MAX_BREADCRUMBS);
   if (!Array.isArray(raw)) return [];
 
   const out: Breadcrumb[] = [];
@@ -631,7 +697,7 @@ export function normaliseBreadcrumbs(
       continue;
     }
     const crumb: Breadcrumb = {
-      ts: typeof o.ts === "string" && !Number.isNaN(Date.parse(o.ts)) ? o.ts : "",
+      ts: normaliseTimestamp(o.ts),
       kind: kind as BreadcrumbKind,
     };
     if (typeof o.target === "string") crumb.target = stripNullBytes(o.target).slice(0, 500);
@@ -642,7 +708,7 @@ export function normaliseBreadcrumbs(
     if (typeof o.to === "string") crumb.to = stripNullBytes(o.to).slice(0, 500);
     out.push(crumb);
   }
-  return out.length > maxBreadcrumbs ? out.slice(-maxBreadcrumbs) : out;
+  return keepNewest(out, maxBreadcrumbs);
 }
 
 /**
@@ -656,7 +722,7 @@ export function normaliseNetwork(
   raw: unknown,
   options: { maxEntries?: number } = {},
 ): NetworkEntry[] {
-  const maxEntries = options.maxEntries ?? MAX_NETWORK_ENTRIES;
+  const maxEntries = resolveMaxEntries(options.maxEntries, MAX_NETWORK_ENTRIES);
   if (!Array.isArray(raw)) return [];
 
   const out: NetworkEntry[] = [];
@@ -667,7 +733,7 @@ export function normaliseNetwork(
     const status = typeof o.status === "number" && Number.isFinite(o.status) ? o.status : 0;
     const ms = typeof o.ms === "number" && Number.isFinite(o.ms) ? o.ms : 0;
     const entry: NetworkEntry = {
-      ts: typeof o.ts === "string" && !Number.isNaN(Date.parse(o.ts)) ? o.ts : "",
+      ts: normaliseTimestamp(o.ts),
       // A method is a short token by definition, so anything longer is either
       // a mistake or an attempt to smuggle text through a field nobody reads.
       method: typeof o.method === "string" ? stripNullBytes(o.method).slice(0, 20) : "GET",
@@ -678,7 +744,7 @@ export function normaliseNetwork(
     if (o.error === true) entry.error = true;
     out.push(entry);
   }
-  return out.length > maxEntries ? out.slice(-maxEntries) : out;
+  return keepNewest(out, maxEntries);
 }
 
 /**

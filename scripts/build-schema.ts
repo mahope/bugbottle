@@ -42,6 +42,7 @@ import {
   MAX_SCREENSHOT_DATA_URL_LENGTH,
   MAX_STACK_FRAMES,
   MAX_STACK_STRING_LENGTH,
+  MAX_TIMESTAMP_LENGTH,
   MAX_STORAGE_KEYS,
   MAX_STORAGE_KEY_LENGTH,
   MAX_STORAGE_VALUE_LENGTH,
@@ -150,6 +151,12 @@ export function buildReportSchema(): Json {
   const entry = at(defs, ["ConsoleEntry", "properties"]);
   at(entry, ["message"]).maxLength = MAX_CONSOLE_MESSAGE_LENGTH;
   at(entry, ["stack"]).maxItems = MAX_STACK_FRAMES;
+
+  // The three recorders that carry a timestamp all clip it in `normaliseTimestamp`,
+  // so a receiver in another language has no other way to learn the ceiling.
+  for (const def of ["ConsoleEntry", "Breadcrumb", "NetworkEntry"]) {
+    at(defs, [def, "properties", "ts"]).maxLength = MAX_TIMESTAMP_LENGTH;
+  }
 
   const frame = at(defs, ["StackFrame", "properties"]);
   at(frame, ["file"]).maxLength = MAX_STACK_STRING_LENGTH;

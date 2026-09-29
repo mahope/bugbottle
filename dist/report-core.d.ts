@@ -30,6 +30,15 @@ export declare const MAX_CONTACT_LENGTH = 200;
 export declare const MAX_NOTES = 5;
 /** Longest a single note may be. They are one sentence each. */
 export declare const MAX_NOTE_LENGTH = 200;
+/**
+ * Longest a timestamp may be. `Date.toISOString()` writes 24 characters, so 64
+ * leaves room for a library that writes an offset or fractional seconds and
+ * still refuses anything larger. The three recorders that carry one all
+ * validate it by `Date.parse` and then stored it verbatim, so the ceiling was
+ * the only thing standing between a browser and two megabytes of text in a
+ * column a receiver is about to insert — see `normaliseTimestamp`.
+ */
+export declare const MAX_TIMESTAMP_LENGTH = 64;
 /** How many console entries a report may carry. Oldest are dropped first. */
 export declare const MAX_CONSOLE_ENTRIES = 50;
 /** Longest a single console message may be before it is clipped. */

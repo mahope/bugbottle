@@ -134,7 +134,26 @@ not closed and a branch is not merged with the docs lagging.
 - **The server trusts nothing.** Every field from the browser is
   attacker-controlled input about to hit storage. Validators clip lengths,
   strip null bytes (Postgres refuses them), and check the PNG signature in the
-  decoded bytes, not the declared type.
+  decoded bytes, not the declared type. **A validator that reads a string
+  through its own `if` and stores it is a field the other two rules never
+  reached**, and `ts` was one: `Date.parse` looks like validation and is only a
+  *shape* check, so it accepted a trailing null byte and a two-megabyte value,
+  while the 500-character clip beside it on `message` never applied. Every
+  string in `report-core` goes through `stripNullBytes(...).slice(0, max)` or
+  through `normaliseTimestamp`, which is the one place a timestamp is read —
+  three copies of "parse, then strip, then clip" is how the third one was
+  forgotten. A fifth string needs the same question: *which of the three rules
+  does this field skip, and does the check that replaced them actually bound
+  anything?*
+- **An assertion that cannot fail is worse than none, because it is reported
+  as coverage.** `tests/fuzz.test.ts` asserted "no validator may leak a null
+  byte" on `JSON.stringify(output)` — and `JSON.stringify` writes a null byte
+  as the six characters `\u0000`, so the guard was green on every field on
+  every iteration while a report carrying one reached storage. `assertNoNulDeep`
+  walks the values instead. When a guard is added, prove it is **red** against
+  the bug it describes before believing it: here, two mutations of
+  `normaliseTimestamp` (the old body, and the old body without the strip) make
+  it fail with the field named.
 - **`log` and `debug` are not recorded**, and this is a feature. They are where
   stray user data ends up.
 - **`maxEntries` is resolved, never used raw.** `slice(-0)` is the whole array
@@ -146,7 +165,14 @@ not closed and a branch is not merged with the docs lagging.
   `resolveMaxEntries`: an explicit `0` keeps nothing, anything that is not a
   finite positive number falls back to the default. The helper is written out
   in each module **on purpose** — each is its own entry point and none may grow
-  another's bundle — so a fifth buffer must copy it, not import it.
+  another's bundle — so a fifth buffer must copy it, not import it. The three
+  *validators* that cap the same way on the server
+  (`normaliseConsole`, `normaliseBreadcrumbs`, `normaliseNetwork`) had kept
+  `slice(-maxEntries)` with the option resolved by `??`, which is the same
+  defect one layer down: `toMarkdown(report, { maxConsoleEntries: 0 })` gave all
+  fifty entries. They share one `resolveMaxEntries` and a `keepNewest` that
+  trims from a start index, both in `report-core` — one module, so one copy is
+  what they share rather than five to keep in step.
 - **`collectContext` sends path + query only** — no origin, no fragment. The
   optional facts around it (language, timezone, screen, colorScheme, online,
   connection) are the whole list: no canvas, no fonts, no device enumeration,

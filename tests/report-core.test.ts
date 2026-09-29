@@ -6,9 +6,11 @@ import {
   isReportType,
   looksLikeEmail,
   normaliseConsole,
+  normaliseBreadcrumbs,
   normaliseContact,
   normaliseContext,
   normaliseMessage,
+  normaliseNetwork,
   normalisePerf,
   normaliseStorage,
   MAX_CONSOLE_ENTRIES,
@@ -22,6 +24,7 @@ import {
   MAX_STORAGE_KEYS,
   MAX_STORAGE_KEY_LENGTH,
   MAX_STORAGE_VALUE_LENGTH,
+  MAX_TIMESTAMP_LENGTH,
   MAX_PERF_MS,
   MAX_SCREENSHOT_BYTES,
   REPORT_TYPES,
@@ -209,6 +212,54 @@ test("console entries are validated, clipped and capped at the most recent", () 
   assert.equal(capped.length, MAX_CONSOLE_ENTRIES);
   assert.equal(capped[0]?.message, "e30", "the oldest are dropped");
   assert.equal(normaliseConsole(many, { maxEntries: 5 }).length, 5);
+});
+
+test("a cap of zero keeps nothing, in the three validators that drop the oldest", () => {
+  const console_ = Array.from({ length: 20 }, () => ({ ts: "", level: "error", message: "m" }));
+  assert.equal(normaliseConsole(console_, { maxEntries: 0 }).length, 0);
+
+  const crumbs = Array.from({ length: 20 }, () => ({ ts: "", kind: "click" as const, target: "t" }));
+  assert.equal(normaliseBreadcrumbs(crumbs, { maxBreadcrumbs: 0 }).length, 0);
+
+  const requests = Array.from({ length: 20 }, () => ({ url: "https://example.test/", ts: "" }));
+  assert.equal(normaliseNetwork(requests, { maxEntries: 0 }).length, 0);
+});
+
+test("a cap that is not a positive number falls back to the default rather than to nothing", () => {
+  const console_ = Array.from({ length: 80 }, () => ({ ts: "", level: "error", message: "m" }));
+  for (const maxEntries of [Number.NaN, Number.POSITIVE_INFINITY, -5]) {
+    assert.equal(normaliseConsole(console_, { maxEntries }).length, MAX_CONSOLE_ENTRIES);
+  }
+  assert.equal(normaliseConsole(console_, { maxEntries: 3.9 }).length, 3, "a fraction is floored");
+});
+
+test("a timestamp carrying a null byte is stripped, because Date.parse ignores one", () => {
+  const nul = String.fromCharCode(0);
+  const ts = `2026-09-07T08:00:00.000Z${nul}`;
+  assert.ok(!Number.isNaN(Date.parse(ts)), "the old check accepted it, which is the point");
+
+  const [entry] = normaliseConsole([{ ts, level: "error", message: "m" }]);
+  assert.equal(entry?.ts, "2026-09-07T08:00:00.000Z");
+
+  const [crumb] = normaliseBreadcrumbs([{ ts, kind: "click" }]);
+  assert.equal(crumb?.ts, "2026-09-07T08:00:00.000Z");
+
+  const [request] = normaliseNetwork([{ url: "https://example.test/", ts }]);
+  assert.equal(request?.ts, "2026-09-07T08:00:00.000Z");
+});
+
+test("a timestamp padded with null bytes is clipped, not stored whole", () => {
+  // A null byte is the only padding `Date.parse` still accepts, so it is the
+  // only way to make a parseable timestamp long — and two megabytes of it is
+  // well under `DEFAULT_MAX_BODY_BYTES`, so the body cap never saw it.
+  const nul = String.fromCharCode(0);
+  const padded = `2026-09-07T08:00:00.000Z${nul.repeat(2_000_000)}`;
+  assert.ok(!Number.isNaN(Date.parse(padded)));
+  assert.ok(padded.length > 2_000_000);
+
+  const [entry] = normaliseConsole([{ ts: padded, level: "error", message: "m" }]);
+  assert.equal(entry?.ts, "2026-09-07T08:00:00.000Z");
+  assert.ok((entry?.ts.length ?? 0) <= MAX_TIMESTAMP_LENGTH);
 });
 
 test("stack frames are validated, clipped and capped, and a malformed one is dropped", () => {

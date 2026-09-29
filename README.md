@@ -7947,7 +7947,7 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`,
 `REPORT_TYPES`, `isReportType`, and the shared types and limits — including the
 `StackFrame` type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`,
-`MAX_CONTACT_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+`MAX_CONTACT_LENGTH`, `MAX_TIMESTAMP_LENGTH` and `MAX_CONTEXT_LENGTHS`.
 
 The validators and `toMarkdown` are **not** here: they are what a receiving
 server does with a report that has arrived, so since 1.0 they live on
@@ -8110,7 +8110,8 @@ the `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_BODY_TIMEOUT_MS` and
 `MAX_SIGNATURE_SECONDS`,
 `BAD_SIGNATURE_ERROR`, the two refusal messages `EMPTY_MESSAGE_ERROR` and
 `TOO_LARGE_ERROR`, the `StackFrame` type, and the `MAX_*` limits, including
-`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_CONTEXT_LENGTHS`,
+`MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`, `MAX_TIMESTAMP_LENGTH`,
+`MAX_CONTEXT_LENGTHS`,
 `MAX_EXTRA_KEYS`, `MAX_EXTRA_STRING_LENGTH`, `MAX_DEDUPE_ENTRIES`,
 `MAX_RATE_LIMIT_BUCKETS` and `MAX_RATE_LIMIT_KEY_LENGTH`.
 

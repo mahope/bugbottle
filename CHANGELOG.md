@@ -10,6 +10,44 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **The timestamp on a console entry, a breadcrumb and a request was the one
+  string in the validators that skipped both rules.** Every other string in
+  `report-core` went through `stripNullBytes` and a length clip; `ts` was
+  checked with `Date.parse` and then stored verbatim. `Date.parse` ignores a
+  trailing null byte the way it ignores trailing whitespace, so
+  `"2026-09-07T08:00:00.000Z\u0000"` passed the check and was stored with the byte
+  in it — the exact insert failure `stripNullBytes` exists to prevent, in the
+  one field that skipped it. The same value could carry two megabytes of null
+  bytes, which is under `DEFAULT_MAX_BODY_BYTES` and so never met the body cap,
+  while the 500-character clip on `message` beside it never applied. All three
+  now read `ts` through one `normaliseTimestamp`, which strips before it clips
+  so the two rules compose as they do everywhere else, and
+  `MAX_TIMESTAMP_LENGTH` (64, against the 24 `toISOString()` writes) is the
+  exported ceiling — now also on `ConsoleEntry`, `Breadcrumb` and
+  `NetworkEntry` in `report.schema.json`, which is how a receiver in another
+  language learns it.
+
+- **A cap of `0` returned everything, in the three validators that drop the
+  oldest.** `normaliseConsole`, `normaliseBreadcrumbs` and `normaliseNetwork`
+  trimmed with `out.slice(-maxEntries)`, and `slice(-0)` is `slice(0)` — the
+  whole array. The bound was *removed* rather than tightened, the opposite of
+  what a caller passing a small number meant, and the same defect the four ring
+  buffers had already been taught. It is reachable from a public option: an
+  integrator writing `toMarkdown(report, { maxConsoleEntries: 0 })` to keep the
+  console out of a GitHub issue body or an email got all fifty entries.
+  `normaliseElements` and `normaliseStack` were already right, which is what
+  made the three look deliberate. All three now resolve the option the way the
+  recorders do — an explicit `0` keeps nothing, anything that is not a finite
+  positive number falls back to the default — and trim from a start index.
+
+- **The fuzz test's null-byte guard could not fail.** It asserted on
+  `JSON.stringify(output)`, and `JSON.stringify` writes a null byte as the six
+  characters `\u0000`. So the assertion was green on every field, on every
+  iteration, whatever went in — and was reported as coverage. It walks the
+  values instead, its generator now emits the two timestamps a browser cannot
+  write, and it asserts the three ceilings it never did. Both fixes above were
+  found by reading the code; they are now found by the test that claims to.
+
 - **Twenty-six of the sixty-one pages spent their `<title>` on the product's
   name.** The docs build composed every title as `<section> — bugbottle docs`,
   which is fine for `/docs/licence/` and useless for the pages that answer a

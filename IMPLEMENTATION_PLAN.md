@@ -2,6 +2,10 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 59 — `ts` var den ene streng i de tre validatorer, der sprang
+  både `stripNullBytes` og klippet forbi, og en `0` i de tre ringbufferes
+  validatorer *fjernede* loftet.** Begge nåede storage, og den vagt der skulle
+  have fanget dem, kunne ikke fejle. Se fundet nedenfor.
 - ✅ **Opgave 58 — `main` var stadig rød, og det var den samme klasse fejl for
   tredje gang: testen låner CI's checkout som sit emne.** `actions/checkout`
   giver `--depth 1`, og git fører *shallowhed* videre til et clone af et
@@ -34,6 +38,9 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ **Opgave 59 lukket: to rigtige fejl i `report-core`, begge målte og begge
+  **bevist røde mod hver sin mutation** — og den tredje ting var den vigtigste:
+  *vagten der skulle have fanget dem, kunne ikke fejle*.** Se fundet nedenfor.
 - ✅ **Opgave 58 lukket: `main` var rød på tredje dagen i træk, og årsagen var
   igen testen, ikke koden.** CI-kørslen `npm test` tjekker ud med
   `actions/checkout@v7` **uden `fetch-depth: 0`** (`.github/workflows/ci.yml`
@@ -136,6 +143,150 @@
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 59 — `ts` sprang begge regler forbi, en `0` fjernede loftet, og
+## vagten der skulle have fanget dem kunne ikke fejle
+
+**Branch `ceo/timestamp-and-zero-caps`. Datagrund: ikke trafik — fra at måle
+hvad der faktisk kan fejle. Køen var tom (57 og 47 kræver Mads, 7 kræver din
+Search Console-eksport), så dette er en research-iteration der ifølge
+kontrakten skulle levere en rigtig forbedring, ikke kun en plan.**
+
+**Først målt, fordi intet andet var at måle:** alle **61** sider i den rene
+sitemap hentet og hverken én fejl — 200 overalt, `<title>` i 20–70 tegn,
+`<meta name="description">` på 60–200, canonical der matcher URL'en, præcis ét
+`<h1>`, `twitter:card` på alle, og **nul** interne links til en side der ikke
+findes. Sitemap, robots og `search.json` (249 poster) er i orden. **Sitet er
+ikke flaskehalsen.** Cloudflare email-obfuscation rammer 21 sider, men
+afkodet er det **én** streng — `mads@mahope.dk` — på tre sider, altså en
+kontaktadresse der skal skjules. De fire `cdn-cgi/…`-404'er var min egen
+`HEAD` på en URL Cloudflare selv serverer.
+
+### Fund 1 — `ts` var den ene streng i `report-core` uden `stripNullBytes` og
+### uden klip, og `Date.parse` er en formkontrol, ikke en længdegrænse
+
+`src/report-core.ts`, tre steder med identisk kode:
+
+```ts
+ts: typeof ts === "string" && !Number.isNaN(Date.parse(ts)) ? ts : "",
+```
+
+**Målt:**
+
+| Input | `Date.parse` | Gemt `ts` | Forventet |
+|---|---|---|---|
+| `2026-01-01T00:00:00.000Z` + NUL | **sandt** | 25 tegn, **med NUL** | uden NUL |
+| `2026-01-01T00:00:00.000Z` + NUL × 10 000 | **sandt** | 10 024 tegn | ≤ 64 |
+| `2026-01-01T00:00:00.000Z` + NUL × 500 000 | **sandt** | 500 024 tegn | ≤ 64 |
+
+`Date.parse` ignorerer en afsluttende null byte, som den ignorerer
+afsluttende mellemrum — og en null byte er det **eneste** padding den stadig
+accepterer (målt: 100 000 tabulatorer, mellemrum og linjeskift giver alle
+`parse=false`). Så de to fejl er *én* fejl: null-byten er den vej, længden
+kommer bag den. 50 console entries med hver 2 000 NUL er **603 201 bytes** i
+den JSON, serveren skriver — under `DEFAULT_MAX_BODY_BYTES` (4 MB), så
+body-loftet så den aldrig. Og 500-tegners klippet på `message` lige ved siden
+blev aldrig anvendt.
+
+**Rettelsen er ét sted, ikke tre.** `normaliseTimestamp` gør *parse, så strip,
+så klip* — strip **før** klip, så de to regler sammensættes som i alle andre
+felter. `MAX_TIMESTAMP_LENGTH = 64` (mod de 24 `toISOString()` skriver) er den
+navngivne konstant, og den står nu på `ConsoleEntry`, `Breadcrumb` og
+`NetworkEntry` i `report.schema.json` — ellers har en modtager i et andet
+sprog ingen anden vej til loftet.
+
+### Fund 2 — de tre validatorers `slice(-0)` fjernede loftet, og det nås fra
+### et publiceret option
+
+```ts
+return out.length > maxEntries ? out.slice(-maxEntries) : out;   // ← slice(-0) = slice(0)
+```
+
+Med `maxEntries = 0` er `out.length > 0` sand for ethvert array, så **alle**
+entries kommer ud. Målt: `normaliseConsole({maxEntries: 0})` → **50**,
+`normaliseBreadcrumbs({maxBreadcrumbs: 0})` → **30**, `normaliseNetwork({maxEntries: 0})` → **30**.
+
+**Det er ikke et kunstigt kald.** `src/markdown.ts:175` læser
+`maxConsoleEntries`, og `MarkdownOptions.maxConsoleEntries` er dokumenteret som
+*"How many console entries to include, newest kept"*. Målt:
+`toMarkdown(report, { maxConsoleEntries: 0 })` gav **alle 50 entries** — en
+integrator der skriver det for at holde konsollen ude af en GitHub-issue eller
+en mail får det modsatte. Vejen er åben fra alle fem sinks.
+
+**Den asymmetri der gør det til en fejl og ikke et valg:** `normaliseElements`
+og `normaliseStack` bruger `if (out.length >= max) break;`, som klarer `0`
+rigtigt. Kun de tre `slice(-max)` var forkerte — præcis de tre der ligner de
+fire ringbuffere, der fik rettelsen i opgave 50 for to dage siden.
+
+Rettelsen er **én** `resolveMaxEntries` og **én** `keepNewest` i `report-core`
+(de trimmer fra et start-indeks, fordi `-0` er `0`). Ikke tre kopier, fordi de
+tre ligger i ét modul.
+
+### Fund 3 — den vigtigste: fuzz-testens vagt på null bytes **kunne ikke fejle**
+
+```ts
+assertNoNul(JSON.stringify(entries), "normaliseConsole");   // ← 6 kald
+```
+
+`JSON.stringify` skriver en null byte som de seks tegn `\u0000`, så
+`text.includes(NUL)` er **altid** `false`. Målt direkte: rå NUL i
+`JSON.stringify`-output → `false`. Vagten var grøn på **hvert felt, hver
+iteration**, uanset hvad der kom ind — og blev rapporteret som dækning. Den
+er grøn mens en rapport med en NUL i `ts` nåede storage, altså mens den gjorde
+præcis det den blev skrevet for at fange.
+
+Generatoren hjalp heller ikke: `scalar()` case 20 gav kun fire faste
+dato-strenge, ingen med en NUL. Så selv en ærlig vagt ville ikke have set det.
+
+**Rettelsen er to ting:** `assertNoNulDeep` går værdierne igennem i stedet for
+at serialisere, og generatoren sender nu de to timestamps en browser ikke kan
+skrive. Plus de tre længde-asserts der aldrig har været der.
+
+### Bevis, at vagterne virker, alle tre veje
+
+Den rækkefølge er hele pointen: **testen skrives, mutationerne køres, og først
+derefter grøn.**
+
+| Mutation | Resultat |
+|---|---|
+| `normaliseTimestamp` = den gamle krop | fuzz **rød**: `console ts over its limit` |
+| samme uden `stripNullBytes` (klip beholdt) | fuzz **rød**: `normaliseConsole kept a null byte` |
+| `keepNewest` tilbage til `slice(-0)` | `report-core.test.ts` **rød**: *a cap of zero keeps nothing* |
+| `dist/report-core.ts` fra HEAD | `SyntaxError: does not provide an export named 'MAX_TIMESTAMP_LENGTH'` |
+
+**Fund fra mutationerne, og det er fundet værd:** mutation 2 (`slice(-0)`)
+gjorde **ikke** fuzz-testen rød. Den kalder validatorerne uden options, så
+`maxEntries` er altid default. Den fejl kræver sit eget navngivne
+regressionstest — som den nu har, i `report-core.test.ts` sammen med de to
+timestamp-tests. *Fuzz-testen dækker den klasse; den enkelte fejl kræver den
+kontekst, fuzz ikke har.*
+
+### Målt
+
+`npm run check` grøn — **956 tests** (fra 953, tre nye), `check-dist` grøn på
+208 filer efter `git add -f dist`, 52 docs-sider, 249 søgeposter, sitemap
+**61** `<loc>`. **IIFE'erne 24 984 / 21 414 mod budgetterne 25 088 / 21 504 —
+uændrede**, fordi de tre validatorer ikke ligger på den vej et script-tag
+går (`dist/report-core.js` +197 minificerede byte, og ingen af dem er i
+IIFE'en). Ingen ny URL, ingen ny side, ingen ændring i sitemap'en eller
+søgeindekset.
+
+**Mål:** ingen trafikbaseline ændres — Plausible **5** besøgende/28 d
+pr. 2026-09-29, npm **210**/uge, **434**/måned, ★2. Effekten er at **én**
+felt ikke længere kan lægge to megabytes og en NUL i en række en modtager er
+ved at indsætte, og at **en** publiceret mulighed gør det den siger.
+
+### Køen efter denne iteration
+
+- [x] **59. `ts` sprang to regler forbi, `0` fjernede tre loft, og vagten
+  kunne ikke fejle.** 29/9 10:4x, `ceo/timestamp-and-zero-caps`. Datagrund:
+  ikke trafik — fra at måle hvad der *kan* fejle, da køen var tom. Se fundene
+  ovenfor. **Accept:** `normaliseTimestamp` er det ene sted et timestamp læses,
+  `MAX_TIMESTAMP_LENGTH` står i schemaen på alle tre, de tre validatorers
+  `slice(-0)` er væk, og fuzz-vagten går værdierne igennem frem for
+  `JSON.stringify`. Bevis: tre mutationer, hver rød med sit felt navngivet.
+  Mål: ingen trafikbaseline ændres (Plausible 5/28 d, npm 210/uge, ★2) —
+  effekten er en række en modtager ikke kan få ødelagt.
 
 ## Opgave 58 — `main` var stadig rød, og det var den samme klasse fejl igen
 
@@ -4755,6 +4906,30 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
 
 ## Log
 
+- **2026-09-29, iteration 35** (`ceo/timestamp-and-zero-caps`). Opgave 59.
+  - Køen var tom: 57 og 47 kræver Mads' beslutning, 7 kræver hans Search
+    Console-eksport. Så research-iteration, og ifølge kontrakten skulle den
+    levere en rigtig forbedring med.
+  - **Først målt sitet, fordi intet andet var at måle:** alle 61 sider hentet —
+    nul fejl, nul manglende tags, nul brudte interne links. Cloudflare
+    email-obfuscation rammer 21 sider, men afkodet er det én streng
+    (`mads@mahope.dk` på tre sider). **Sitet er ikke flaskehalsen.**
+  - Tre fund i `src/report-core.ts`, alle målte: (1) `ts` sprang
+    `stripNullBytes` og klippet forbi, og `Date.parse` accepterer en
+    afsluttende NUL, så 500 024 tegn nåede storage; (2) `slice(-0)` i de tre
+    validatorer fjernede loftet, nået fra det publicerede
+    `toMarkdown(report, { maxConsoleEntries: 0 })`; (3) fuzz-testens
+    null-byte-vagt serialiserede før den søgte, så den var grøn på alt.
+  - **Den tredje var den vigtigste.** Testen skrev jeg først, mutationerne
+    købte jeg bagefter: to mutationer af `normaliseTimestamp` gør fuzz rød
+    med feltet navngivet, mutationen af `keepNewest` gør den navngivede test
+    rød.
+  - **Fund fra mutationerne:** `slice(-0)`-mutationen gjorde *ikke* fuzz rød —
+    den kalder validatorerne uden options, så den fejl kræver sit eget test.
+  - Målt: `npm run check` grøn, **956 tests** (fra 953), `check-dist` grøn på
+    208 filer, 52 docs-sider, 249 søgeposter, sitemap 61 `<loc>`, IIFE'erne
+    **24 984 / 21 414 uændrede** mod budgetterne 25 088 / 21 504.
+
 - **2026-09-29, iteration 34** (`ceo/sitemap-lastmod-shallow`). Opgave 56.
   - Startede med at verificere opgave 55's deploy-note, fordi vinduet 07:30 var
     gået. Målingen sagde at rettelsen ikke virkede: live daterede stadig alle
@@ -5678,6 +5853,20 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   iteration måler efter 12:30.
 
 ## Deploy-noter
+
+- ⚠️ `VERIFICÉR DEPLOY: et timestamp går gennem ét sted, og en `0` i de tre
+  validatorers loft giver nul (opgave 59, `ceo/timestamp-and-zero-caps`),
+  2026-09-29 10:5x.` Næste batch-vindue er **12:30 2026-09-29**. **Accept:**
+  `https://bugbottle.dev/schema/report.json` skal have `maxLength: 64` på
+  `ts` under **alle tre** af `ConsoleEntry`, `Breadcrumb` og `NetworkEntry`.
+  HTTP 200 beviser intet — filen er gyldig begge veje, og den gamle uden
+  `maxLength` så fuldkommen ud. **Ingen ny URL:** sitemap skal fortsat tælle
+  **61** `<loc>`, `/docs/search.json` **249** poster, ingen af de 52 sider må
+  miste en post. `dist/` røres kun fordi `dist/report.schema.json` er det
+  publicerede artefakt, en modtager i et andet sprog henter; **IIFE'erne skal
+  fortsat være 24 984 / 21 414**, fordi ingen af de tre rettelser ligger på en
+  script-tags vej — en stigning dér betyder at noget uventet nåede bundtet og
+  er værd at se på.
 
 - ⚠️ **`VERIFICÉR DEPLOY: opgave 55's rettelse var selv fejlen (opgave 56,
   `ceo/sitemap-lastmod-shallow`), 2026-09-29 08:0x.** Næste

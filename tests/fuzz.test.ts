@@ -45,6 +45,7 @@ import {
   MAX_STORAGE_KEY_LENGTH,
   MAX_STORAGE_VALUES,
   MAX_STORAGE_VALUE_LENGTH,
+  MAX_TIMESTAMP_LENGTH,
   normaliseBreadcrumbs,
   normaliseConsole,
   normaliseContact,
@@ -150,6 +151,13 @@ function scalar(random: Random): unknown {
         "not a date",
         "2026-13-45T99:99:99Z",
         "0000-01-01T00:00:00Z",
+        // A timestamp a browser could not have written, and the three
+        // validators stored verbatim: `Date.parse` ignores a trailing null
+        // byte the way it ignores trailing whitespace, so this one passed.
+        `2026-09-08T10:00:00.000Z${NUL}`,
+        `2026-09-08T10:00:00.000Z${NUL.repeat(500)}`,
+        // Parseable and two megabytes long, which is under the body cap.
+        `2026-09-08T10:00:00.000Z${"0".repeat(2_000_000)}`,
       ]);
     default:
       return pick(random, ["click", "navigation", "submit", "visibility", "swipe"]);
@@ -385,6 +393,31 @@ function assertNoNul(text: string, where: string): void {
   assert.ok(!text.includes(NUL), `${where} kept a null byte`);
 }
 
+/**
+ * The same rule over a validator's whole output, field by field.
+ *
+ * This was `assertNoNul(JSON.stringify(entries))`, and that could never fail:
+ * `JSON.stringify` writes a null byte as the six characters `\u0000`, so the
+ * serialised form is clean whatever went in. The guard was green while a
+ * report carrying a NUL in `ts` reached storage, which is the whole failure it
+ * was written to catch — a vacuous assertion is worse than none, because it is
+ * reported as coverage. So it walks the values instead of serialising them.
+ */
+function assertNoNulDeep(value: unknown, where: string, depth = 0): void {
+  if (depth > 12) return;
+  if (typeof value === "string") {
+    assertNoNul(value, where);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoNulDeep(item, where, depth + 1);
+    return;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) assertNoNulDeep(item, where, depth + 1);
+  }
+}
+
 /** Every `MAX_*` the validated report is answerable for. */
 function assertLimits(payload: Record<string, unknown>): void {
   const message = normaliseMessage(payload.message);
@@ -406,11 +439,12 @@ function assertLimits(payload: Record<string, unknown>): void {
     const fact = (context as Record<string, unknown>)[key];
     if (typeof fact === "string") assert.ok(fact.length <= max, `context.${key} over its limit`);
   }
-  assertNoNul(JSON.stringify(context), "normaliseContext");
+  assertNoNulDeep(context, "normaliseContext");
 
   const entries = normaliseConsole(payload.console);
   assert.ok(entries.length <= MAX_CONSOLE_ENTRIES, "too many console entries");
   for (const item of entries) {
+    assert.ok(item.ts.length <= MAX_TIMESTAMP_LENGTH, "console ts over its limit");
     assert.ok(item.message.length <= MAX_CONSOLE_MESSAGE_LENGTH, "console message over its limit");
     assert.ok((item.stack ?? []).length <= MAX_STACK_FRAMES, "too many stack frames");
     for (const frame of item.stack ?? []) {
@@ -420,7 +454,7 @@ function assertLimits(payload: Record<string, unknown>): void {
       assert.ok(Number.isInteger(frame.col) && frame.col >= 0, "stack col is not a position");
     }
   }
-  assertNoNul(JSON.stringify(entries), "normaliseConsole");
+  assertNoNulDeep(entries, "normaliseConsole");
 
   const elements = normaliseElements(payload.elements);
   assert.ok(elements.length <= MAX_ELEMENTS, "too many elements");
@@ -436,27 +470,29 @@ function assertLimits(payload: Record<string, unknown>): void {
       assert.ok(Number.isFinite(side), "rect side is not a finite number");
     }
   }
-  assertNoNul(JSON.stringify(elements), "normaliseElements");
+  assertNoNulDeep(elements, "normaliseElements");
 
   const crumbs = normaliseBreadcrumbs(payload.breadcrumbs);
   assert.ok(crumbs.length <= MAX_BREADCRUMBS, "too many breadcrumbs");
   for (const crumb of crumbs) {
+    assert.ok(crumb.ts.length <= MAX_TIMESTAMP_LENGTH, "crumb ts over its limit");
     assert.ok((crumb.text ?? "").length <= MAX_BREADCRUMB_TEXT_LENGTH, "crumb text over its limit");
     for (const key of ["target", "from", "to"] as const) {
       assert.ok((crumb[key] ?? "").length <= 500, `crumb ${key} over its limit`);
     }
   }
-  assertNoNul(JSON.stringify(crumbs), "normaliseBreadcrumbs");
+  assertNoNulDeep(crumbs, "normaliseBreadcrumbs");
 
   const network = normaliseNetwork(payload.network);
   assert.ok(network.length <= MAX_NETWORK_ENTRIES, "too many requests");
   for (const item of network) {
+    assert.ok(item.ts.length <= MAX_TIMESTAMP_LENGTH, "network ts over its limit");
     assert.ok(item.method.length <= 20, "method over its limit");
     assert.ok(item.url.length <= 500, "url over its limit");
     assert.ok(Number.isInteger(item.status) && item.status >= 0 && item.status <= 999, "status");
     assert.ok(Number.isInteger(item.ms) && item.ms >= 0 && item.ms <= MAX_PERF_MS, "ms");
   }
-  assertNoNul(JSON.stringify(network), "normaliseNetwork");
+  assertNoNulDeep(network, "normaliseNetwork");
 
   const perf = normalisePerf(payload.perf);
   if (perf) {
@@ -501,7 +537,7 @@ function assertLimits(payload: Record<string, unknown>): void {
       assert.ok(key.length <= MAX_STORAGE_KEY_LENGTH, "storage value key over its limit");
       assert.ok(item.length <= MAX_STORAGE_VALUE_LENGTH, "storage value over its limit");
     }
-    assertNoNul(JSON.stringify(storage), "normaliseStorage");
+    assertNoNulDeep(storage, "normaliseStorage");
     assertOwnPrototypes(storage, "normaliseStorage");
   }
 
@@ -510,7 +546,7 @@ function assertLimits(payload: Record<string, unknown>): void {
     assert.ok(replay.events.length <= MAX_REPLAY_EVENTS, "too many replay events");
     assert.ok(utf8Length(JSON.stringify(replay.events)) <= MAX_REPLAY_BYTES, "replay too large");
     assert.ok(Number.isInteger(replay.seconds) && replay.seconds >= 0, "replay seconds");
-    assertNoNul(JSON.stringify(replay.events), "normaliseReplay");
+    assertNoNulDeep(replay.events, "normaliseReplay");
     assertOwnPrototypes(replay.events, "normaliseReplay");
   }
 
