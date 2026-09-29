@@ -2,6 +2,8 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 55 — sitemapens `<lastmod>` læste dagens dato for alle 61
+  sider.** `GIT_DIR` pegede på en mappe, ikke på `.git` i den. Se fundet nedenfor.
 - ✅ **Opgave 54 — de 34 resterende sider havde en genereret titel.** Alle 52
   sider har nu en håndskrevet titel i 30–60 tegn. Se fundet nedenfor.
 - ✅ **Opgave 53 — 26 af 61 sider brugte hele `<title>` på produktets navn.**
@@ -21,6 +23,11 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ Opgave 55 lukket: sitemapens `<lastmod>` læste dagens dato for alle 61
+  sider, fordi `ENV GIT_DIR=/build/gitdir` pegede på mappen og ikke på `.git` i
+  den. Live daterede **61 af 61** sider `2026-09-29`; git siger `2026-09-28` for
+  tre af kilderne. Ét tegn rettet, og en test der bygger layoutet frem for at
+  læse Dockerfile'en — rød mod den gamle værdi, målt.
 - ✅ Opgave 54 lukket: alle 52 sider har nu en håndskrevet titel. `build:docs`
   printer ikke længere "still generated" — `generatedTitles.length === 0`.
   Gaten grøn: 946 tests, 52 docs-sider, 249 søgeposter, sitemap 61 `<loc>`,
@@ -43,6 +50,126 @@
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 55 — sitemapens `<lastmod>` læste dagens dato for alle 61 sider (29/9 06:5x)
+
+**Køen var tom** undtagen opgave 7 (din Search Console-eksport) og opgave 47
+(din navnebeslutning), så dette er en research-iteration — og fundet er en
+rigtig fejl, ikke en rapport.
+
+**Først målingen, fordi den er det hele fundet.** Jeg hentede live-sitemapen og
+tællede `<lastmod>`:
+
+```
+$ curl -s https://bugbottle.dev/sitemap.xml | rg -o "<lastmod>[^<]*</lastmod>" | sort | uniq -c
+     61 <lastmod>2026-09-29</lastmod>
+```
+
+**Alle 61. Samme dato. Dagens dato.** Men git siger noget helt andet om de
+filer, siderne genereres fra:
+
+| Kilde | Sidst ændret | Sitemap siger |
+|---|---|---|
+| `site/index.html` (`/`) | 2026-09-28 | 2026-09-29 |
+| `site/compare.md` (`/compare/`) | 2026-09-28 | 2026-09-29 |
+| `site/support.md` (`/support/`) | 2026-09-28 | 2026-09-29 |
+| `site/da/kom-i-gang.md` | 2026-09-28 | 2026-09-29 |
+
+Den rene build i repoet har **rigtige** datoer — 53 stk 29/9, 6 stk 28/9, 2 stk
+27/9, fordi den kører i et arbejdertræ med `.git` i. **Så fejlen er ikke i
+logikken, den er i billedet.** Og den er usynlig på hver den måde, der findes:
+builden er grøn, sitemap'en er velformet, valideringsskemaet er tilfreds, og
+`npm run check` siger intet. Det eneste tegn er tallet, og det står i en fil,
+ingen læser.
+
+**Årsagen er to linjer, der begge er rimelige, og ingen af dem er forkert alene:**
+
+```dockerfile
+ENV GIT_DIR=/build/gitdir              # peger på MAPPEN
+COPY .dockerignore .git* ./gitdir/     # lander .git som /build/gitdir/.git
+```
+
+`COPY` med destinationen `./gitdir/` lægger `.git` *indeni* den mappe. Så
+`/build/gitdir` er en mappe der indeholder `.git` og `.dockerignore` — hvilket
+ikke er et git-repository, og git siger `fatal: not a git repository`.
+`lastmod()` i `build-docs.mjs` fanger det, falder tilbage på `TODAY`, og skriver
+en gyldig sitemap hvor **alle 61 URL'er siger de blev ændret i dag.**
+
+**Bevis, målt i denne kørsel, ikke argumenteret:**
+
+```
+$ GIT_DIR=/tmp/bbgit/gitdir      git log -1 --format=%cs -- README.md
+fatal: not a git repository: '/tmp/bbgit/gitdir'
+$ GIT_DIR=/tmp/bbgit/gitdir/.git git log -1 --format=%cs -- site/compare.md
+2026-09-28                          ← samme svar som repoet
+```
+
+**Hvorfor det betyder noget, og ikke bare "en dato er forkert."** Det er præcis
+det, `build-docs.mjs`' egen kommentar siger, den skrev for at undgå det: en
+checkout nulstiller hver mtime, så mtimes ville fortælle en crawler at hele
+sitet ændrede sig ved hvert deploy. Fallback'en gør det samme, bare dummere —
+den fortæller det *selv om kilden har den rigtige historik lige ved siden af*.
+Så det ene signal, der kan fortælle en crawler hvilke sider der faktisk flyttede
+sig, siger "alt er nyt" for alle 61 på hver eneste deploy. Google bruger
+`lastmod` til at vælge hvad den genindhenter; et signal der altid siger "i dag"
+gør det til ren støj.
+
+**Og det er Fase 3's største brud på sit eget krav.** Vi har brugt tre
+iterationer på titler, beskrivelser og 61 sider, og ingen af dem kunne måles —
+fordi opgave 7 (din Search Console-eksport) er blockeret. Det her er den første
+tekniske fejl jeg har fundet, der *forringer* de sider jeg har lavet, og den
+lå i rørledningen hele vejen.
+
+**Rettelsen er ét tegn: `GIT_DIR=/build/gitdir/.git`.** Resten af linjerne er
+uberørt, fordi de er korrekte — `.dockerignore` foran `.git*` er der, fordi en
+`COPY` uden ét match er en fejl, og det skal kunne overleve en kildeksport uden
+repository. Den fallback står, og den er nu den *eneste* vej ind til den.
+
+**Og vagten bygger layoutet frem for at læse Dockerfile'en.** Det er den
+fjerde familie i `tests/site-image.test.ts`, og den er den eneste af de fire
+der ikke kan findes ved at læse linjerne — fordi ingen af linjerne er
+forkerte. Testen laver en midlertidig mappe, kopierer `.git` derind som
+`COPY`'en gør, lægger `.dockerignore` ved siden af, og kører det samme
+`git log` som `lastmod()` kører. **Begge halve beviset røde mod den gamle kode:**
+
+- `GIT_DIR=/build/gitdir` (gammel) → *"git cannot read the history in the layout
+  site/Dockerfile builds"*.
+- `GIT_DIR=/build/gitdir/.git` (ny) → grøn, og svaret er præcis det `git` siger
+  i repoet.
+
+Destinationen og `WORKDIR` læses *af* Dockerfile'en, ikke skrevet ned i testen,
+så de to halve ikke kan låses fast til hinanden af en test der gentager begge.
+
+**Målt:** `npm run check` grøn — **947 tests** (fra 946, én ny), `check-dist`
+grøn på 208 filer, **ingen `dist/`-ændring** (denne rører kun `site/` og
+`tests/`, som ikke er i pakken), ingen budget flyttede sig, IIFE'erne 24 984 /
+21 416 mod 25 088 / 21 504, 52 docs-sider, 249 søgeposter, sitemap uændret på
+**61** `<loc>`.
+
+**MÅL: `<lastmod>` på `https://bugbottle.dev/sitemap.xml` — baseline: 61 af 61
+URL'er har `2026-09-29`, som er dagen for denne merges deploy.** Acceptér: efter
+næste batch-vindue skal der være **mindst tre forskellige** `<lastmod>`-værdier,
+og `/compare/` skal have `<lastmod>2026-09-28</lastmod>` (git:
+`site/compare.md`, 28/9). Det er et **deploy-måltal, ikke trafik**: Plausible
+siger 5 besøgende/28 dage, så ingen søgemaskine reagerer på en sitemap i løbet
+af 14 dage. Den reelle effekt er at den næste CTR-iteration (opgave 7, når du
+sender eksporten) har et sitemap der overhovedet kan fortælle, hvilke sider der
+ændrede sig.
+
+- [x] **55. Alle 61 `<lastmod>` i sitemapen læste dagens dato, fordi `GIT_DIR`
+  pegede på mappen og ikke på `.git` i den.** Datagrund: målt live 29/9 06:4x —
+  `61 × 2026-09-29` mod git's `2026-09-28` for tre af kilderne, mens den rene
+  build i repoet har de rigtige datoer. **Accept:** `GIT_DIR` peger på `.git`;
+  testen bygger layoutet og er rød mod den gamle værdi; fallback'en for en
+  kildeksport uden repository består. 29/9, `ceo/sitemap-lastmod-gitdir`. ✅
+
+  **VERIFICÉR DEPLOY: sitemapens `<lastmod>` (ingen ny URL) ceo/sitemap-lastmod-gitdir
+  2026-09-29 06:5x.** Accepter: `https://bugbottle.dev/sitemap.xml` skal have
+  **mindst tre forskellige** `<lastmod>`-værdier, og `https://bugbottle.dev/compare/`
+  skal have `<lastmod>2026-09-28</lastmod>` (git: `site/compare.md`, 28/9).
+  HTTP 200 beviser intet — den nuværende sitemap *er* gyldig og svarer 200, den
+  er bare dateret i dag. **Ingen ny URL:** sitemap'en skal fortsat tælle **61**
+  `<loc>`, `/docs/search.json` **249** poster, og `robots.txt` uændret.
 
 ## Opgave 53 — 26 af 61 sider brugte hele `<title>` på produktets navn (29/9 04:0x)
 
@@ -5127,6 +5254,17 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   iteration måler efter 12:30.
 
 ## Deploy-noter
+
+- `VERIFICÉR DEPLOY: sitemapens `<lastmod>` læser igen den commit der rørte
+  kilden (opgave 55, `ceo/sitemap-lastmod-gitdir`), 2026-09-29 06:5x.` Næste
+  batch-vindue er **07:30 2026-09-29**. **Accepter:
+  `https://bugbottle.dev/sitemap.xml` skal have mindst tre forskellige
+  `<lastmod>`-værdier, og `<loc>https://bugbottle.dev/compare/</loc>` skal
+  følges af `<lastmod>2026-09-28</lastmod>`.** HTTP 200 beviser intet her —
+  den nuværende sitemap er gyldig og svarer 200, den er bare dateret i dag, så
+  målingen er tallet og ikke svarekoden. **Ingen ny URL:** sitemap **61**
+  `<loc>`, `search.json` **249** poster, `robots.txt` uændret, `dist/` urørt
+  (IIFE'erne 24 984 / 21 416).
 
 - ✅ `VERIFICÉR DEPLOY: /support/'s Donating-afsnit nævner den tredje sted der
   beder om penge (opgave 40, `ceo/npm-funding-button`), `0b9d5a4`, merge

@@ -65,10 +65,30 @@ COPY site/panel-narrow.png ./site/
 # this one has to be allowed to match nothing: a source export has no
 # repository, and a git worktree has a `.git` file pointing at one it cannot
 # reach from in here. A wildcard needs at least one match to be legal, and
-# .dockerignore is the cheapest file that always exists. GIT_DIR then points
-# the script's `git log` at whatever arrived; when that is not a repository,
-# git fails, the script catches it and dates every page today.
-ENV GIT_DIR=/build/gitdir
+# .dockerignore is the cheapest file that always exists.
+#
+# GIT_DIR has to name the `.git` *inside* that directory, not the directory
+# itself, and the difference is the whole feature. The `COPY` below lands
+# `.git` in `/build/gitdir/.git`, so `/build/gitdir` is a directory holding
+# `.git` and `.dockerignore` — which is not a repository, and git answers
+# `fatal: not a git repository`. `lastmod()` in `build-docs.mjs` catches that,
+# falls back to today, and writes a valid sitemap in which **every** URL claims
+# to have changed on the day of the deploy. That is precisely the thing the
+# comment above this step exists to prevent, and it shipped: live dated all 61
+# URLs 2026-09-29 while the commits that produced them were from the 27th and
+# the 28th. A `lastmod` that always reads "now" tells a crawler the whole site
+# is new on every deploy, so the one signal that could tell it which pages
+# actually moved says nothing at all.
+# `tests/site-image.test.ts` builds this exact layout in a scratch directory
+# and runs `git log` against it, so the pointer and the `COPY` cannot drift
+# apart again without the suite going red.
+#
+# When what arrived is not a repository at all — a source export, or a worktree
+# whose `.git` file points at a path that does not exist in here — git still
+# fails, the script still catches it, and every page is dated today. That
+# fallback is the one honest answer available, and it is now the *only* path
+# that reaches it.
+ENV GIT_DIR=/build/gitdir/.git
 COPY .dockerignore .git* ./gitdir/
 RUN node scripts/build-docs.mjs
 

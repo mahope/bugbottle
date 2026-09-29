@@ -24,11 +24,24 @@
  * failed build but a rendered page without the intrinsic `width`/`height`
  * that keep the text under it from jumping. Same list, same cause, a third of
  * the symptoms, and the quietest of the three.
+ *
+ * The fourth is the one this file could not have caught by reading the
+ * Dockerfile, because the Dockerfile is *correct* and the two lines disagree
+ * with each other: `COPY .dockerignore .git* ./gitdir/` lands `.git` inside
+ * `/build/gitdir/`, while `ENV GIT_DIR=/build/gitdir` pointed git at the
+ * directory rather than at the `.git` within it. Both lines are plausible in
+ * isolation and neither is wrong on its own, so the sitemap's `<lastmod>`
+ * dates silently fell back to "today" on every deploy — all 61 URLs claiming
+ * to have changed on the day the image was built. The last test below builds
+ * the layout in a scratch directory and runs git against it, because the only
+ * way to catch this class is to do what the image does.
  */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,7 +50,6 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 function read(path: string): string {
   return readFileSync(join(root, path), "utf8").replace(/\r\n/g, "\n");
 }
-
 const dockerfile = read("site/Dockerfile");
 const buildDocs = read("scripts/build-docs.mjs");
 const readme = read("README.md");
@@ -195,4 +207,115 @@ test("every picture the docs build measures is copied into the image", () => {
       `serves the picture and the build still passes, so only a request for the ` +
       `page shows it.`,
   );
+});
+
+/**
+ * The value of the `ENV GIT_DIR` in the builder stage, as the image sees it.
+ */
+function gitDirEnv(): string {
+  return builderStageLines()
+    .map((line) => /^ENV\s+GIT_DIR=(\S+)\s*$/i.exec(line.trim())?.[1])
+    .find((value): value is string => value !== undefined) ?? "";
+}
+
+/**
+ * The `WORKDIR` of the builder stage, which is what every relative path in it
+ * — the `COPY` destinations, and the `ENV GIT_DIR` — is resolved against.
+ */
+function builderWorkdir(): string {
+  return builderStageLines()
+    .map((line) => /^WORKDIR\s+(\S+)\s*$/i.exec(line.trim())?.[1])
+    .find((value): value is string => value !== undefined) ?? "";
+}
+
+/**
+ * The path the builder stage copies the history to, which is the last token of
+ * the `COPY … .git*` line. Read from the Dockerfile rather than written down,
+ * so the two halves of the layout cannot be pinned to each other by a test
+ * that restates both. Normalised because Docker writes `./gitdir/` as the image
+ * path `/build/gitdir/`, and the two are the same directory.
+ */
+function gitCopyDestination(): string {
+  for (const line of builderStageLines()) {
+    const match = /^COPY\s+.*\.git\*\s+(\S+)\s*$/i.exec(line.trim());
+    if (match?.[1]) return match[1].replace(/^\.\//, "").replace(/\/+$/, "");
+  }
+  return "";
+}
+
+test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
+  /* Built rather than read, because this is the one bug in this file that no
+     amount of reading the Dockerfile can find: `COPY .dockerignore .git* ./gitdir/`
+     and `ENV GIT_DIR=/build/gitdir` are each individually reasonable, and only
+     their disagreement is wrong. The scratch directory reproduces the image's
+     layout — the history inside the directory the COPY writes to, the
+     `.dockerignore` beside it, and a working tree that has the file the sitemap
+     asks about — and then asks git the same question `lastmod()` asks.
+
+     With GIT_DIR naming the parent, git answers `fatal: not a git repository`
+     and `lastmod()` falls back to today. That is invisible: the build succeeds,
+     the sitemap is well-formed, and the dates are simply wrong. Live served
+     that from at least the deploy that introduced the pages, and the one
+     difference between a page that moved and a page that did not had been
+     erased for every URL at once. */
+  const dir = gitDirEnv();
+  const destination = gitCopyDestination();
+  assert.ok(dir, "site/Dockerfile has no `ENV GIT_DIR` in the builder stage");
+  assert.ok(destination, "site/Dockerfile never copies `.git*` into the builder stage");
+
+  const work = mkdtempSync(join(tmpdir(), "bugbottle-gitdir-"));
+  try {
+    // The working tree the image has at this point: the sources, checked out.
+    cpSync(join(root, "README.md"), join(work, "README.md"));
+    mkdirSync(join(work, "site"));
+    cpSync(join(root, "site/compare.md"), join(work, "site/compare.md"));
+    cpSync(join(root, "CHANGELOG.md"), join(work, "CHANGELOG.md"));
+
+    // The layout the COPY leaves behind, at the path it names. The Dockerfile
+    // writes in image paths, so the scratch root stands in for the WORKDIR and
+    // the same prefix is stripped off GIT_DIR below.
+    const root_ = builderWorkdir();
+    mkdirSync(join(work, destination), { recursive: true });
+    cpSync(join(root, ".git"), join(work, destination, ".git"), { recursive: true });
+    writeFileSync(join(work, destination, ".dockerignore"), "");
+
+    // GIT_DIR is absolute in the Dockerfile; rebase it onto the scratch root,
+    // which is where WORKDIR is in the image.
+    const env = { ...process.env, GIT_DIR: join(work, dir.replace(root_, "")) };
+    let out = "";
+    let failed = false;
+    try {
+      out = execFileSync("git", ["log", "-1", "--format=%cs", "--", "site/compare.md"], {
+        cwd: work,
+        encoding: "utf8",
+        env,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      failed = true;
+    }
+
+    const expected = execFileSync("git", ["log", "-1", "--format=%cs", "--", "site/compare.md"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+
+    assert.equal(
+      failed,
+      false,
+      `git cannot read the history in the layout site/Dockerfile builds: GIT_DIR is ` +
+        `${dir} but the COPY puts it at ${destination}/.git. Every <lastmod> then ` +
+        `falls back to today, so the sitemap claims the whole site changed on ` +
+        `every deploy.`,
+    );
+    assert.equal(
+      out,
+      expected,
+      `the builder stage dates pages from a different commit than the repository does, ` +
+        `so the sitemap on the site and the one built here would disagree.`,
+    );
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 });
