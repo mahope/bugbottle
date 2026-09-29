@@ -175,6 +175,16 @@ not closed and a branch is not merged with the docs lagging.
   stylesheet can reach one. `scripts/a11y-audit.mjs` and
   `scripts/a11y-site.mjs` read the computed durations back out in that state
   through `scripts/motionless.mjs`; a duration above zero fails the run.
+- **A byte cap is counted with `utf8Length`, never with `.length`.** A
+  JavaScript string measures in UTF-16 code units and the network measures in
+  UTF-8 bytes, so `.length` under-counts by up to three times for a report
+  written in Chinese, Japanese or emoji, and over-counts nothing at all. Every
+  `MAX_*_BYTES` in this library is about what goes over the wire: the replay cap
+  in `report-core`, and `KEEPALIVE_MAX_BYTES` in `send.ts`, which compared
+  `serialised.length` until 1.0.1 and so set `keepalive` on a 75 kB body — a
+  request `fetch` refuses outright rather than send without the flag, losing the
+  one report that path exists for. A fifth `maxBytes` must call the helper
+  rather than reach for `.length`.
 - **The contact field is off by default, everywhere.** `contact` on a report is
   personal data the application asked for, so nothing switches it on for
   anybody: not the panel, not the script tag, not an adapter. It is free text

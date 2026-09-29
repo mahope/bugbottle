@@ -8,6 +8,7 @@
 import { collectContext } from "./capture.js";
 import { getConsoleBuffer } from "./console-buffer.js";
 import { readBreadcrumbs, readNetwork, readPerf, readReplay, readStorage } from "./registry.js";
+import { utf8Length } from "./report-core.js";
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
 export function buildReport(input) {
     const report = {
@@ -131,7 +132,13 @@ export async function sendReport(endpoint, report, options = {}) {
         };
         if (options.credentials)
             init.credentials = options.credentials;
-        if (options.keepalive && serialised.length < KEEPALIVE_MAX_BYTES)
+        // The browser's allowance is in bytes, and a report written in anything but
+        // Latin-1 measures more of them than the string has characters: 55 000
+        // code units of Chinese is 165 kB, and `fetch` refuses a keepalive body
+        // that is over the limit outright rather than sending it without the flag.
+        // A report that is dropped for being "small" is the one case this option
+        // exists for, so the number is counted the way it is spent.
+        if (options.keepalive && utf8Length(serialised) < KEEPALIVE_MAX_BYTES)
             init.keepalive = true;
         const response = await doFetch(endpoint, init);
         const body = await response.json().catch(() => null);

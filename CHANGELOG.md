@@ -10,6 +10,15 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **`keepalive` was decided in characters, and the browser's limit is in bytes.**
+  `sendReport` compared `serialised.length` against `KEEPALIVE_MAX_BYTES`, so a
+  report written in anything but Latin-1 passed a check it failed: fifty console
+  lines of 500 Chinese characters are 25 000 code units and 75 000 bytes. The
+  flag went on, and `fetch` refuses an over-limit keepalive request outright
+  rather than sending it without the flag — so the report was lost on the one
+  path that exists to survive the page going away. The comparison now uses
+  `utf8Length`, the helper `report-core` already had for the replay cap, so a
+  body is measured the way it is spent.
 - **`maxEntries: 0` removed the bound instead of enforcing it.** `slice(-0)` is
   the whole array, so the two ring buffers that trimmed with it kept *every*
   entry: `initConsoleBuffer({ maxEntries: 0 })` — the plain way to say "record

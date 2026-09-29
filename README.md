@@ -4202,10 +4202,12 @@ Without a queue, a send can still survive the page closing under it:
 await sendReport("/api/feedback", report, { keepalive: true });
 ```
 
-`keepalive` is passed to `fetch` only when the serialised body is under 60 kB.
-The browser caps every keepalive body a page has in flight at 64 KiB together,
-and a larger one makes `fetch` reject rather than send — so this is for a
-report going out during unload, not for one with a screenshot attached. For
+`keepalive` is passed to `fetch` only when the serialised body is under 60 kB,
+counted in the bytes it goes out in rather than in characters — a report written
+in Chinese or full of emoji is three times longer on the wire than its `length`
+says. The browser caps every keepalive body a page has in flight at 64 KiB
+together, and a larger one makes `fetch` reject rather than send — so this is for
+a report going out during unload, not for one with a screenshot attached. For
 anything larger, the queue is the answer.
 
 Below the two integrations, `SendOptions` has the seam they are built on:

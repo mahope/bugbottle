@@ -1,7 +1,14 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { buildReport, sendReport, SendFailedError, SendTimeoutError } from "../src/send.ts";
+import {
+  buildReport,
+  sendReport,
+  SendFailedError,
+  SendTimeoutError,
+  KEEPALIVE_MAX_BYTES,
+} from "../src/send.ts";
 import { initConsoleBuffer, resetConsoleBuffer } from "../src/console-buffer.ts";
+import { MAX_CONSOLE_ENTRIES, utf8Length } from "../src/report-core.ts";
 
 afterEach(() => resetConsoleBuffer());
 
@@ -201,6 +208,52 @@ test("keepalive is asked for on a small body and skipped on a large one", async 
   });
   await sendReport("/api/feedback", withPicture, { fetch: large.fetch, keepalive: true });
   assert.equal(large.calls[0]?.init.keepalive, undefined, "too large to keep alive");
+});
+
+test("a body that is small in characters but over the byte allowance is not kept alive", async () => {
+  // The browser's allowance is in bytes, and a report written in anything but
+  // Latin-1 buys three of them per character. Fifty console lines of 500
+  // Chinese characters are 25 000 code units and 75 000 bytes: the old
+  // `.length` comparison called that small, `keepalive` went on, and `fetch`
+  // refuses an over-limit keepalive request outright rather than sending it
+  // without the flag — so the report was dropped on the one path that exists
+  // to survive the page going away.
+  const realError = console.error;
+  initConsoleBuffer();
+  try {
+    for (let i = 0; i < MAX_CONSOLE_ENTRIES; i++) console.error("保存失败".repeat(125));
+  } finally {
+    console.error = realError;
+  }
+
+  const { fetch, calls } = fakeFetch(200, { id: "r_cn" });
+  const report = buildReport({ type: "bug", message: "保存失败" });
+  await sendReport("/api/feedback", report, { fetch, keepalive: true });
+
+  const body = String(calls[0]?.init.body);
+  assert.ok(body.length < KEEPALIVE_MAX_BYTES, "small by the old measure, in characters");
+  assert.ok(utf8Length(body) > KEEPALIVE_MAX_BYTES, "over the allowance, in the bytes sent");
+  assert.equal(calls[0]?.init.keepalive, undefined, "over the browser's keepalive allowance");
+});
+
+test("a report under the byte allowance is kept alive whatever it is written in", async () => {
+  // The other half of the same boundary: counting bytes must not turn keepalive
+  // off for a report that fits. Twenty Chinese console lines are 30 000 bytes.
+  const realError = console.error;
+  initConsoleBuffer();
+  try {
+    for (let i = 0; i < 20; i++) console.error("保存失败".repeat(125));
+  } finally {
+    console.error = realError;
+  }
+
+  const { fetch, calls } = fakeFetch(200, { id: "r_cn_small" });
+  const report = buildReport({ type: "bug", message: "保存失败" });
+  await sendReport("/api/feedback", report, { fetch, keepalive: true });
+
+  const body = String(calls[0]?.init.body);
+  assert.ok(utf8Length(body) < KEEPALIVE_MAX_BYTES, "under the allowance in bytes");
+  assert.equal(calls[0]?.init.keepalive, true);
 });
 
 test("onError sees the report and the error, and the error still reaches the caller", async () => {

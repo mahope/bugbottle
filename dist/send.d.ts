@@ -5,7 +5,7 @@
  * `buildReport` with what the user typed and `sendReport` with the result; the
  * React hook does the same underneath.
  */
-import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
+import { type BugReport, type ElementRef, type ReportType } from "./report-core.ts";
 export type BuildReportInput = {
     type: ReportType;
     message: string;

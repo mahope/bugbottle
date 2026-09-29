@@ -9,7 +9,7 @@
 import { collectContext } from "./capture.ts";
 import { getConsoleBuffer } from "./console-buffer.ts";
 import { readBreadcrumbs, readNetwork, readPerf, readReplay, readStorage } from "./registry.ts";
-import type { BugReport, ElementRef, ReportType } from "./report-core.ts";
+import { utf8Length, type BugReport, type ElementRef, type ReportType } from "./report-core.ts";
 
 export type BuildReportInput = {
   type: ReportType;
@@ -296,7 +296,13 @@ export async function sendReport(
       signal: controller.signal,
     };
     if (options.credentials) init.credentials = options.credentials;
-    if (options.keepalive && serialised.length < KEEPALIVE_MAX_BYTES) init.keepalive = true;
+    // The browser's allowance is in bytes, and a report written in anything but
+    // Latin-1 measures more of them than the string has characters: 55 000
+    // code units of Chinese is 165 kB, and `fetch` refuses a keepalive body
+    // that is over the limit outright rather than sending it without the flag.
+    // A report that is dropped for being "small" is the one case this option
+    // exists for, so the number is counted the way it is spent.
+    if (options.keepalive && utf8Length(serialised) < KEEPALIVE_MAX_BYTES) init.keepalive = true;
 
     const response = await doFetch(endpoint, init);
     const body: unknown = await response.json().catch(() => null);

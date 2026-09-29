@@ -2,6 +2,9 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 51 — `keepalive` blev målt i tegn, og browserens grænse er i
+  bytes.** En rapport på kinesisk fik flaggen sat og blev afvist af `fetch`.
+  Se fundet nedenfor.
 - ✅ **Opgave 50 — `maxEntries: 0` fjernede loftet i stedet for at håndhæve
   det.** To af de fire ringbuffere gjorde det modsatte af hvad de skrev i deres
   egen signatur. Se fundet nedenfor.
@@ -12,6 +15,8 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ Opgave 51 lukket: en grænse i bytes måles i bytes. Én linje kode, to tests,
+  den ene bevisst rød mod den gamle kode.
 - ✅ Opgave 50 lukket: et loft på nul er et loft. Fire nye tests, alle
   bevisst røde mod den gamle kode.
 - ✅ Opgave 46 lukket: jsDelivr-hits pr. version er det eneste skelnende
@@ -182,15 +187,24 @@ ikke rapport-tabende.
    viste sig at være *halvdelen* af en regel de to andre ringbuffere allerede
    fulgte. Serverens tre `normalise*` har samme fejl og er bevidst ikke rørt —
    se "Fund 1 fra denne iteration".
-2. **`KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, ikke bytes.**
-   `send.ts:299`: `serialised.length < KEEPALIVE_MAX_BYTES` sammenligner
-   kodeunits mod en konstant, hvis egen kommentar siger bytes og
-   begrunderer med spec'ens 64 kB. ~55 000 kodeunits med ikke-Latin-1-tekst
-   er ~150 kB UTF-8: den består, `keepalive` sættes, og fetch afviser den
-   *helt* i stedet for at sende. Repoet har allerede `utf8Length` til
-   netop den skelnen.
+2. ~~**`KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, ikke bytes.**~~ **LUKKET
+   29/9 som opgave 51** — se afsnittet nedenfor. Ét fund mere, der lå i samme
+   læsning, står som punkt 3.
+3. **Serverens tre `normalise*` har samme `slice(-maxEntries)`-fejl som de fire
+   ringbuffere havde.** `normaliseConsole` (565), `normaliseBreadcrumbs` (645)
+   og `normaliseNetwork` (681) gør `out.slice(-maxEntries)` med den uløste
+   `options.maxEntries ?? MAX_*`. **Tre ting holder den tilbage fra at være
+   gratis, og de er målt, ikke antaget:** (1) følgen er lille — inputtet er
+   Serverens krop, som `DEFAULT_MAX_BODY_BYTES` på 4 MiB allerede binder, så
+   "ubegrænset" er fire megabyte og ikke en DoS; (2) `report-core` er den modul
+   hele kernen hænger på, så en ny hjælper der koster kernen bytes den lige har
+   vundet to gange i denne uge; (3) det er *modtager*-side adfærd, frosset af
+   `dist/report.schema.json` og `dist/openapi.json`, så begge skal regenereres og
+   `tests/schema.test.ts` læses igen. **En linje pr. sted, ingen ny export** —
+   tag den som en del af en anden opgave, der allerede rører report-core, ellers
+   er den dyrere end den er.
 
-- [ ] **51. `KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, så en rapport på
+- [x] **51. `KEEPALIVE_MAX_BYTES` måles i UTF-16-enheder, så en rapport på
   ikke-Latin-1 aldrig sendes.** Datagrund: fund 2 ovenfor, målt på koden.
   **Accept:** tjekken bruger `utf8Length` (eller `TextEncoder`) frem for
   `.length`, en test der beviser det med en rapport på kinesisk eller
@@ -199,6 +213,64 @@ ikke rapport-tabende.
   ændres; effekten er at en rapport fra en ikke-Latin-1-app ikke forsvinder
   stille. *(Bemærk til den der tager den: `utf8Length` ligger i `report-core`,
   som `send.ts` allerede importerer, så det er en linje og en test.)*
+  29/9, `ceo/keepalive-utf8`. ✅ Se fundet nedenfor.
+
+## Fund fra UTF-8-iterationen (29/9 02:2x) — en grænse i bytes målt i tegn
+
+**Opgaven var fund 2 fra timeout-iterationens "to fund", og den viste sig at
+vende den anden vej end acceptkriteriet havde formuleret det.** Kriteriet sagde
+"en payload over 64 kB **sendes** med `keepalive` frem for at blive afvist".
+Det er modsat, og det er værd at sige hvorfor: **en streng kan aldrig have flere
+bytes end den har kodeunits** — hvert tegn koster mindst én byte — så `.length`
+*under*-tæller altid og aldrig over. Den eneste fejlretning, der findes, er
+altså "flaggen sættes på en krop over grænsen", aldrig "flaggen slås fra på en
+krop under den". Rettelsen kan derfor kun slå keepalive *fra tidligere*, aldrig
+tænde den, hvor den ikke før lå.
+
+**Følgen var en rapport, der forsvandt stille.** 50 konsollinjer med 500
+kinesiske tegn er 25 000 kodeunits og **75 000 bytes**: den gamle tjekke sagde
+"lille", `keepalive` gik på, og browseren afviser et over-grænsen-keepalive-
+request *helt* i stedet for at sende det uden flaggen. Det er præcis den
+vej, `keepalive` findes for — en rapport der skal ud under unload — og den var
+den eneste, der mistede rapporten. Latin-1-applikationer så ingen forskel,
+hvilket er grunden til at det lå.
+
+**Bevis, at testen ikke er vakuum:** med rettelsen fjernet (`serialised.length`
+gendannet) er `tests/send.test.ts` **1 af 17** rød — den nye
+"a body that is small in characters but over the byte allowance is not kept
+alive" — og de 16 andre grønne, som de skal være. Den anden nye test er
+modsiden af samme grænse (20 kinesiske linjer = 30 000 bytes → keepalive
+stadig **på**), så en naiv løsning der altid slog flaggen fra ville blive rød
+på den.
+
+**Rettelsen** er `utf8Length(serialised) < KEEPALIVE_MAX_BYTES` — den hjælper,
+`report-core` allerede havde til replay-loftet, i det modul `send.ts` allerede
+importerer. **Ingen ny konstant, ingen ny export, ingen ny test-fil.** Den er
+også skrevet ned som en regel i `CLAUDE.md`s "Rules that are not obvious from
+the code", fordi det er den tredje gang i denne uge en grænse er blevet håndhæft
+i den forkerte enhed, og fordi en fjerde `maxBytes` er lige så let at lave om.
+
+**Kostnad målt før den blev skrevet ned** (repoets egen esbuild 0.28.2, samme
+opskrift som `ci.yml`; `gzip` som CI bruger den, så tallene er sammenlignelige
+med de sidste): kernen **1468 → 1468** (0 — `core.js` i CI importerer ikke
+`sendReport`, så hele rettelsen træ-shakes væk), `bugbottle/react` 5771 → 5792
+(+21, budget 6144), `bugbottle/ui` 11731 → **11749** (+18, budget 11776),
+form-core 4413 → 4428, `dist/bugbottle.js` 24 979 → **24 997** (+18, budget
+25 088), `dist/bugbottle.slim.js` 21 408 → **21 434** (+26, budget 21 504).
+**Ingen budget flyttet.** *Merkant:* det er én funktionsdefinition + ét kald;
+resten af de 18–26 bytes er esbuilds identifikator-renaming i hele grafen, som
+`CLAUDE.md` siger to gange. **`bugbottle/ui` har nu 27 bytes af luft** — mål
+før næste tilføjelse til panelen.
+
+Gaten grøn med **946 tests** (fra 944, to nye), `check-dist` grøn på 208
+filer efter `git add -f dist`, 52 docs-sider, 249 søgeposter, sitemap uændret
+(README-ændringen lå i et eksisterende afsnit, så ingen ny side).
+
+**VERIFICÉR DEPLOY: keepalive målt i bytes `ceo/keepalive-utf8` 2026-09-29 02:2x.**
+Accepter: `https://bugbottle.dev/docs/changelog/` har den nye sætning under
+*Unreleased → Fixed* — *"**`keepalive` was decided in characters, and the
+browser's limit is in bytes.**"* — **og `Ingen ny URL`**: sitemap'en skal
+fortsat tælle **61** `<loc>` og `/docs/search.json` **249** poster.
 
 
 ## Gate-definition (første gang, 2026-09-27)
