@@ -2,6 +2,8 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 54 — de 34 resterende sider havde en genereret titel.** Alle 52
+  sider har nu en håndskrevet titel i 30–60 tegn. Se fundet nedenfor.
 - ✅ **Opgave 53 — 26 af 61 sider brugte hele `<title>` på produktets navn.**
   `/docs/nextjs/` hed "Next.js — bugbottle docs". Se fundet nedenfor.
 - ✅ **Opgave 52 — `main` var rød, og det var en måling, ikke koden.**
@@ -19,6 +21,10 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ Opgave 54 lukket: alle 52 sider har nu en håndskrevet titel. `build:docs`
+  printer ikke længere "still generated" — `generatedTitles.length === 0`.
+  Gaten grøn: 946 tests, 52 docs-sider, 249 søgeposter, sitemap 61 `<loc>`,
+  IIFE'erne 24 984 / 21 416 mod budgetterne 25 088 / 21 504.
 - ✅ Opgave 53 lukket: 18 sider har nu en titel der siger hvad de *løser* i
   stedet for hvad de hedder. Før `/docs/nextjs/`: "Next.js — bugbottle docs"
   (24 tegn). Efter: "Next.js error reporting: error.tsx and global-error".
@@ -131,7 +137,7 @@ pakken), ingen budget flyttede sig, IIFE'erne 24 984 / 21 416 mod 25 088 /
   **Ingen ny URL:** sitemap'en skal fortsat tælle **61** `<loc>` og
   `/docs/search.json` **249** poster.
 
-- [ ] **54. De 34 slugs på den genererede titelfallback.** Datagrund: de er
+- [x] **54. De 34 slugs på den genererede titelfallback.** Datagrund: de er
   printet af `build:docs` efter opgave 53, og listen er ordnet: de elleve
   framework- og server-sider først (`the-form-react`, `the-form-vue`,
   `the-form-svelte`, `the-form-solid`, `catching-render-errors-react`,
@@ -145,6 +151,16 @@ pakken), ingen budget flyttede sig, IIFE'erne 24 984 / 21 416 mod 25 088 /
   `a-working-example`, `github-action`, `releasing`, `privacy-checklist`,
   `who-makes-it`, `licence`). **Accept:** `build:docs` skriver
   `0 still generated`, og ingen håndskrevet titel er under 30 tegn.
+  29/9, `ceo/remaining-titles`. ✅
+
+  **VERIFICÉR DEPLOY: alle 52 sidetitler (ingen ny URL) ceo/remaining-titles
+  2026-09-29.** Accepter: `https://bugbottle.dev/docs/the-form-react/` skal
+  have `<title>The report form in React: useBugReport</title>`,
+  `/docs/global-errors/` skal have `window.onerror and unhandledrejection events`,
+  `/docs/receiving-a-report/` skal have `Receive a report with handleReport`,
+  og `/docs/licence/` skal have `bugbottle is MIT licensed, free for commercial
+  use`. **Ingen ny URL:** sitemap'en skal fortsat tælle **61** `<loc>` og
+  `/docs/search.json` **249** poster.
 
 ## Opgave 52 — `main` var rød, og fejlen var i målingen (29/9 03:3x)
 
