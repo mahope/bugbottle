@@ -59,6 +59,20 @@ attribute needs a major version, and a new entry point needs a minor one.
   1.0.1 were both made by hand. A test now reads `package.json` and fails on
   the difference.
 
+### Changed
+
+- The `bugbottle/ui` budget is 12288 bytes gzipped (was 11776; measures 11 785
+  in CI). The keepalive fix above cost the panel 29 bytes — 11 756 → 11 785 —
+  and the number that exposed it is worth recording, because it is neither the
+  code nor the esbuild version: the same bytes in CI's `ubuntu-latest` gzip and
+  macOS's do not compress to the same size. `core` (3 238 bytes minified) agrees
+  to the byte, `out-ui.js` (31 699) is 26 bytes *smaller* on a Mac than in CI,
+  and `dist/bugbottle.js` (67 825) is 66 bytes *larger* — the gap grows with the
+  file and is not signed. So a bundle over about 10 kB minified is measured in
+  CI, and a local number is a guess in either direction. The measurement that
+  shipped the previous commit — "+18 on my machine, no budget moves" — was
+  enough to turn `main` red.
+
 
 ### Added
 

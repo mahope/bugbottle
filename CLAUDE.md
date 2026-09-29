@@ -219,8 +219,8 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 6144 bytes gzipped and `bugbottle/ui` under 11776 bytes (CI enforces
-both; about 5.6 kB and 11.5 kB with masking, the queued state, the triggers,
+stay under 6144 bytes gzipped and `bugbottle/ui` under 12288 bytes (CI enforces
+both; about 5.8 kB and 11.8 kB with masking, the queued state, the triggers,
 the accessibility pass, the 0.6 evidence, the contact field and the two recorder
 seams), and the bare core
 under 1536 bytes
@@ -330,12 +330,28 @@ of them a sentence because it is where the annotator says its keys to a screen
 reader. Measure before you write a budget down: #36 recorded 11971 and 20450
 for files that measured 12126 and 21042 with the pinned esbuild, and CI was red
 on main until the review after it corrected the number. #51 then took the panel
-from 11 086 to 11 342 bytes and the IIFE from 23 072 to 23 839, with the
-budgets at 11776 and 24576: the optional contact field is an input, its label,
-its hint and the required check (about 256 bytes) plus three locale strings,
-which the script tag carries in eight languages. It is off by default and its
-markup is static, so every panel pays those bytes; a second entry point for one
+from 11 086 to 11 342 bytes and the IIFE from 23 072 to 23 839, and set those
+two budgets to 11776 and 24576: the optional contact field is an input, its
+label, its hint and the required check (about 256 bytes) plus three locale
+strings, which the script tag carries in eight languages. It is off by default
+and its markup is static, so every panel pays those bytes; a second entry point
+for one
 input would cost more than it saved.
+
+**A gzipped size measured on a Mac is not the number CI enforces, and on a big
+bundle the two differ enough to turn a green gate red.** This has now cost two
+red runs (#36, and 29/9 when the keepalive fix took the panel from 11 756 to
+11 785 against a budget of 11 776 that a local run had measured as 11 749). The
+cause is the compressor, not the code: the same bytes in CI's `ubuntu-latest`
+gzip and macOS's do not come to the same number, and the gap **grows with the
+file and changes sign**. `core` (3 238 bytes minified) agrees to the byte;
+`out-ui.js` (31 699) is 11 759 here and 11 785 in CI — 26 bytes *smaller*
+locally; `dist/bugbottle.js` (67 825) is 24 997 here and 24 931 in CI — 66
+bytes *larger*. **The rule that follows:** a bundle over about 10 kB minified is
+measured in CI, a local number is a guess in either direction, and a budget
+written from one carries the headroom that hid the difference the first time.
+Compare the *minified* byte count, which is exact everywhere, to tell a real
+change from the compressor.
 
 #85 then cost the two script-tag builds 186 and 236 bytes — 24 238 → 24 424
 and 20 650 → 20 886 — for the queue's storage seam and its quota fallback,

@@ -264,8 +264,19 @@ jobs:
           # bytes are paid by every panel; a field nobody switches on is a
           # hidden input and three strings, which is the cheapest shape this
           # can take without a second entry point for one input.
-          if [ "$ui" -gt 11776 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 11776" >&2
+          # The keepalive fix (counting the body in bytes rather than
+          # characters) then cost 29 more, 11 756 -> 11 785, and took the
+          # budget to 12288. It is the one entry where a local measurement is
+          # not the number that decides: this file is 31 699 bytes minified,
+          # and macOS `gzip` reads it 26 bytes smaller than the GNU gzip this
+          # job runs (11 759 against 11 785), while `core` — 3 238 bytes
+          # minified — agrees to the byte. The gap grows with the file and is
+          # not signed: `dist/bugbottle.js` reads 66 bytes *larger* here than
+          # it does there. So a local figure is a guess in either direction on
+          # a bundle this size, and a budget written from one is what made the
+          # previous commit red. Measure this one in CI.
+          if [ "$ui" -gt 12288 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12288" >&2
             exit 1
           fi
           # The annotator on its own: a canvas, three tools, an undo stack and
