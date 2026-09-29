@@ -2,6 +2,9 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 57 — `main` var rød, og det var en test der læste et build-artefakt,
+  den ikke ejer.** `npm test` kører *før* `build:docs` i CI, og
+  `site/sitemap.xml` er gitignored. Se fundet nedenfor.
 - ✅ **Opgave 56 — opgave 55's rettelse var den fejl den skulle rette, målt i
   rigtig Docker.** `COPY .git* ./gitdir/` lægger `.git`s *indhold* i mappen,
   så `GIT_DIR=/build/gitdir` var rigtig hele vejen. Se fundet nedenfor.
@@ -26,6 +29,31 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ **Opgave 57 lukket: `main` var rød på grund af en test fra opgave 56, som
+  læste `site/sitemap.xml` — et genereret, gitignored artefakt.** `npm test`
+  kører før `build:docs` i CI (`.github/workflows/ci.yml` trin 23 mod 31), så
+  i en ren checkout findes filen ikke, og testen døde med `ENOENT`. Lokalt
+  passede den, fordi en tidligere `build:docs` havde lagt filen. Reproduceret
+  ved at flytte `site/sitemap.xml` væk: `# fail 1`, præcis som i CI. Rettelsen
+  er, at testen **bygger sit eget emne** i en fuld klone i stedet for at læse
+  et artefakt den ikke ejer — samme pointer som opgave 56's anden note
+  ("en test der bygger sit emne i stedet for at måle det"). Begge tests er så
+  **bevist røde mod hver sin mutation**: `lastmod()` der ignorerer git
+  (`if (false)`) gør den fulde test rød, og `isShallow()` der altid svarer
+  `false` gør shallow-testen rød. 949 tests grøn, IIFE'erne 24 984 / 21 416
+  uændrede, `check:dist` ren.
+- ⚠️ **Åben måling, og den kan ikke afgøres herfra: live sitemap har stadig 61 ×
+  `<lastmod>2026-09-29`, og det tal er tvetydigt.** Den gamle fejl (GIT_DIR
+  pegede på mappen → git svarede aldrig → fald til TODAY) og opgave 56's
+  rettelse (shallow-klonen kan ikke svare → bevidst fald til TODAY) giver
+  **byte-identisk output**. Så "alle 61 ens" er både det en rå fejl ser ud som
+  *og* det den rettede kode skriver i en shallow build. Det kan kun skelnes,
+  hvis vi ved om deploy-plattformen kloner dybt eller `--depth 1`; det står ikke
+  i repoet, og jeg rører ikke Dokploy. **Hvis builden er en FULD klone, er
+  opgave 56's fix ikke live** (korrekt kode ville give forskellige datoer pr.
+  side). **Hvis den er shallow, er den live og virker som tænkt.** Se
+  ❓ Til Mads. Bemærk at `/sitemap.xml` er nytte uden skade: Google bruger
+  `<lastmod>` som et *hint* og ignorerer det i praksis for canonicale sider.
 - ⚠️ **Opgave 55 var ikke lukket — dens rettelse var selv fejlen, fundet ved
   at verificere dens egen deploy-note.** Live daterede stadig alle 61 sider i
   dag *efter* at 07:30-vinduet havde kørt med rettelsen (bevist: sidens
@@ -73,6 +101,86 @@
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 57 — `main` var rød: en test læste et build-artefakt, den ikke ejer (29/9 08:2x)
+
+**Kontrakten siger: tjek CI én gang i starten af hver iteration. Det afslørede
+at `main` var rød, og årsagen var ikke koden — den var den nye test fra opgave
+56.**
+
+### Fundet
+
+`.github/workflows/ci.yml` kører trinene i denne rækkefølge:
+
+| Trin | Kør |
+|---|---|
+| 23 | `npm test` |
+| 29–31 | `npm run build:docs` |
+| 37 | `npm run check:dist` |
+
+Men `site/sitemap.xml` er **genereret og gitignored** (`.gitignore:12`, og
+`git ls-files site/sitemap.xml` svarer med nul filer). Så i en ren checkout —
+det er CI — når `npm test` kører, findes filen ikke, og opgave 56's anden test
+dør med `ENOENT: no such file or directory`.
+
+Reproduceret lokalt ved at flytte filen væk, hvilket er præcis CI's
+forudsætning:
+
+```
+mv site/sitemap.xml /tmp/ && node --test tests/site-image.test.ts
+# not ok 8 - a full history does date pages separately, so the shallow test above can fail
+#   error: "ENOENT: no such file or directory, open '.../site/sitemap.xml'"
+# pass 7 / fail 1
+```
+
+**Og det er præcis den fejl, opgave 56 selv skrev ned i sin egen note som en
+advarsel:** *en test der bygger sit emne i stedet for at måle det, er grøn mod
+sin egen antagelse*. Denne test gjorde det modsatte og **målte et artefakt fra en
+byggetrins hun ikke kontrollerede** — så hun var grøn på min maskine (jeg havde
+kørt `build:docs`) og rød i CI. Samme familie, modsat tegn.
+
+### Rettelsen
+
+`shallowSitemapLastmods()` hedder nu `builtSitemapLastmods(shallow: boolean)`,
+og **begge** tests bygger deres sitemap i en scratch-klone i stedet for at læse
+`site/sitemap.xml`:
+
+- `builtSitemapLastmods(true)` → `--depth 1`, spids-committen dateret tilbage
+  til 2019 (uændret adfærd, uændret test).
+- `builtSitemapLastmods(false)` → fuld historik, som det er den der skal have
+  *flere forskellige* datoer.
+
+Kloningen lægger arbejdstræet oveni (uændret) — så testen bygger den kode den
+skal dømme, ikke `main`.
+
+### Bevis, at begge tests stadig kan fejle — målt, ikke antaget
+
+En rettelse af en rød test, der bare gør den blind, er værre end den røde
+test. Derfor er begge mutationerne kørt:
+
+| Mutation i `scripts/build-docs.mjs` | Forventet rød | Målt |
+|---|---|---|
+| `if (!isShallow())` → `if (false)` (lastmod ignorerer git) | den fulde test | ✅ `not ok 8`, 7/1 |
+| `isShallow()` → `return false` (shallow-vagten lammet) | shallow-testen | ✅ `not ok 7`, 7/1 |
+
+Begge er røde mod hver sin fejl, og ingen af dem rører testkoden. Koden er
+gendannet bagefter (`git diff scripts/build-docs.mjs` tom).
+
+### Resultat
+
+`npm run check` grøn: **949 tests**, 52 docs-sider, 249 søgeposter, sitemap 61
+`<loc>`, IIFE'erne **24 984 / 21 416** mod budgetterne 25 088 / 21 504 (uændrede
+— det her rører ingen kode i dist), `check:dist` ren med 208 filer.
+
+**Ingen deploy-note fra denne opgave:** den ændrer ingen bygget fil, kun en
+test. BEMÆRK dog målingen under morgenrapporten om opgave 56.
+
+### ❓ Til Mads
+
+**Er deploy-buildet en `--depth 1` klone?** Det afgør, om opgave 56 virker
+live. Skal jeg slås på det, eller er det nok at antage shallow og lukke
+noten? Bevis: en dyb build ville give **flere forskellige** `<lastmod>`-værdier,
+fordi kilderne har forskellige commit-datoer; live har 61 ens.
 
 ## Opgave 56 — opgave 55's rettelse var den fejl den skulle rette (29/9 07:5x)
 

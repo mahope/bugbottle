@@ -338,30 +338,45 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
  */
 const SHALLOW_TIP_DATE = "2019-01-01";
 
-function shallowSitemapLastmods(): string[] {
-  const dir = mkdtempSync(join(tmpdir(), "bugbottle-shallow-"));
+/**
+ * The `<lastmod>` values of a sitemap this test builds, in a scratch clone of
+ * this repository holding the history asked for.
+ *
+ * `shallow` is the `--depth 1` history a deploy platform hands the image; a
+ * full clone is this repository's own history, which is what the two tests
+ * below compare. Both of them *build*, and neither reads `site/sitemap.xml`:
+ * that file is generated and gitignored, so it is absent in a clean checkout —
+ * and `npm test` runs before `npm run build:docs` in CI, which is how a test
+ * for a build artefact came to depend on a build step it does not own. It
+ * passed on a developer machine that had run `build:docs` at some point that
+ * day, and in CI it was `ENOENT`.
+ */
+function builtSitemapLastmods(shallow: boolean): string[] {
+  const dir = mkdtempSync(join(tmpdir(), shallow ? "bugbottle-shallow-" : "bugbottle-full-"));
   try {
     const repo = join(dir, "repo");
     // `--depth 1` is what a deploy platform cloning this repository hands the
     // image, and it is the case the GIT_DIR test above cannot see: the history
     // is present and readable, so nothing fails, and every answer is still
     // wrong.
-    execFileSync("git", ["clone", "-q", "--depth", "1", `file://${root}`, repo], {
-      stdio: "pipe",
-    });
+    const clone = ["clone", "-q", ...(shallow ? ["--depth", "1"] : []), `file://${root}`, repo];
+    execFileSync("git", clone, { stdio: "pipe" });
     // The one commit a shallow clone has is dated like a deploy, so the test
     // cannot tell "git answered with the tip" from "the build fell back to
     // today" by looking at the value — and a version of this test that left
     // the date alone passed against the code it was written to catch, because
     // the tip commit happened to be from today. Rewriting it to a fixed date
-    // two years back makes the two answers differ on any day this runs.
-    execFileSync(
-      "git",
-      ["-c", "user.email=ci@example.invalid", "-c", "user.name=ci", "commit", "-q", "--amend",
-       "--no-edit", "--reset-author"],
-      { cwd: repo, stdio: "pipe", env: { ...process.env, GIT_COMMITTER_DATE: `${SHALLOW_TIP_DATE}T00:00:00Z` } },
-    );
-    /* The clone is here for its history — a shallow one — and for nothing
+    // two years back makes the two answers differ on any day this runs. A full
+    // clone keeps the real dates, because distinct dates are the point of it.
+    if (shallow) {
+      execFileSync(
+        "git",
+        ["-c", "user.email=ci@example.invalid", "-c", "user.name=ci", "commit", "-q", "--amend",
+         "--no-edit", "--reset-author"],
+        { cwd: repo, stdio: "pipe", env: { ...process.env, GIT_COMMITTER_DATE: `${SHALLOW_TIP_DATE}T00:00:00Z` } },
+      );
+    }
+    /* The clone is here for its history — shallow or full — and for nothing
        else, so the working tree is laid over it. Without this the build would
        run the *committed* `build-docs.mjs` and the test would quietly measure
        `main` instead of the change in front of it, which is how a test for an
@@ -401,7 +416,7 @@ test("a shallow clone does not date every page with the deploy's own commit", ()
      and it must not be the tip's — the tip is the deploy, and dating the whole
      site with the deploy's date is the exact thing the element exists to
      prevent. */
-  const lastmods = shallowSitemapLastmods();
+  const lastmods = builtSitemapLastmods(true);
   assert.ok(lastmods.length >= 50, `the sitemap should carry one <lastmod> per URL, got ${lastmods.length}`);
 
   const distinct = new Set(lastmods);
@@ -437,10 +452,13 @@ test("a full history does date pages separately, so the shallow test above can f
      repository and always answered "today", the shallow test would be green
      and this one would be the only thing standing between that and a sitemap
      that says the site never changed. The full history here is this
-     repository's own, whose sources genuinely have different commit dates. */
-  const xml = readFileSync(join(root, "site", "sitemap.xml"), "utf8");
-  const lastmods = [...xml.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)].map((m) => m[1] as string);
-  assert.ok(lastmods.length > 0, "the built sitemap has no <lastmod> to compare");
+     repository's own, whose sources genuinely have different commit dates, and
+     the sitemap is built here rather than read: an earlier version of this
+     test read `site/sitemap.xml`, which is generated and gitignored, so it
+     answered from whatever a previous `build:docs` had left on the machine
+     and was `ENOENT` in CI, where `npm test` runs before `build:docs`. */
+  const lastmods = builtSitemapLastmods(false);
+  assert.ok(lastmods.length >= 50, `the sitemap should carry one <lastmod> per URL, got ${lastmods.length}`);
   assert.ok(
     new Set(lastmods).size > 1,
     "built from the full history, the sitemap should carry more than one date — if it " +
