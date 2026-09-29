@@ -10,6 +10,22 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **Twenty-six of the sixty-one pages spent their `<title>` on the product's
+  name.** The docs build composed every title as `<section> — bugbottle docs`,
+  which is fine for `/docs/licence/` and useless for the pages that answer a
+  search: `/docs/nextjs/` was titled *"Next.js — bugbottle docs"*, 24 characters
+  of which the only one a visitor types is the framework's. The word a
+  developer looking for an error page or a body limit never had in it was the
+  one word every visitor already knew. Eighteen titles are now written by hand
+  and name the task — *"Next.js error reporting: error.tsx and global-error"*,
+  *"Fastify: receiving a report past the 1 MB body limit"* — in the same
+  `scripts/page-descriptions.mjs` that already refuses a description Google
+  would clip. The build now fails on a hand-written title outside 30–60
+  characters and on two pages sharing one, and prints the slugs still on the
+  generated fallback so the rest of the list is a work list rather than a
+  memory. No URL changed, so nothing to migrate; `og:title` follows the title
+  as it always did.
+
 - **`keepalive` was decided in characters, and the browser's limit is in bytes.**
   `sendReport` compared `serialised.length` against `KEEPALIVE_MAX_BYTES`, so a
   report written in anything but Latin-1 passed a check it failed: fifty console

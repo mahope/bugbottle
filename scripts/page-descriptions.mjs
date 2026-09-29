@@ -39,6 +39,44 @@ export const SELF_REFERENTIAL = [
    phone, so this is the ceiling rather than a target. */
 export const MAX_DESCRIPTION_CHARS = 158;
 
+/* A <title> is the strongest thing on a page for a search engine, and a
+   results page shows roughly sixty characters of it. The titles this build
+   used to generate were `${page.title} — bugbottle docs`, which spends that
+   whole budget on the name of the product: "Next.js — bugbottle docs" is
+   twenty-four characters, and the only one of them a person types into a
+   search box is "Next.js". Whoever is looking for the other half — the
+   Next.js error page, the React 19 root handlers, the Express body limit —
+   was shown a title with no word they had typed in it.
+
+   So a title names the task and not the product, which is also what the
+   written descriptions next door already do. The bands below are the guard,
+   and they are the reason this is a map rather than a formula: a title cut
+   out of a description reads like a truncated description, and a page whose
+   title is a good title is the only case a formula gets right. */
+export const MIN_TITLE_CHARS = 30;
+export const MAX_TITLE_CHARS = 60;
+
+export const PAGE_TITLES = {
+  angular: "Angular error reporting: app.config.errorHandler",
+  astro: "Astro error reporting: hydration errors and islands",
+  express: "Express: receiving a report past the 100 kB json limit",
+  fastify: "Fastify: receiving a report past the 1 MB body limit",
+  hono: "Hono and Cloudflare Workers: receiving a bug report",
+  install: "Install bugbottle: npm, a script tag, or a CDN import",
+  nestjs: "NestJS: receiving a bug report on a 5 MB body limit",
+  nextjs: "Next.js error reporting: error.tsx and global-error",
+  nuxt: "Nuxt error reporting: vue:error, error.vue and fatal",
+  react: "React error reporting: createRootErrorHandlers in 19",
+  "react-router": "React Router and Remix: three error boundaries",
+  solid: "Solid error reporting: onError and ErrorBoundary",
+  svelte: "Svelte error reporting: svelte:boundary and SvelteKit",
+  sveltekit: "SvelteKit error reporting: handleError and load errors",
+  "tanstack-query": "TanStack Query: reporting what a refetch could not",
+  "tanstack-router": "TanStack Router: reporting a failed route load",
+  vue: "Vue error reporting: app.config.errorHandler and hooks",
+  wordpress: "The bugbottle WordPress plugin: panel and a route",
+};
+
 export const PAGE_DESCRIPTIONS = {
   "a-working-example":
     "A Node server and a plain HTML form with no build step: bugbottle/server receives the report and checks every field in it.",

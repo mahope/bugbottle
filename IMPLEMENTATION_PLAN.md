@@ -2,6 +2,8 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 53 — 26 af 61 sider brugte hele `<title>` på produktets navn.**
+  `/docs/nextjs/` hed "Next.js — bugbottle docs". Se fundet nedenfor.
 - ✅ **Opgave 52 — `main` var rød, og det var en måling, ikke koden.**
   `bugbottle/ui` nåede 11 785 i CI mod budgetten 11 776. Se fundet nedenfor.
 - ✅ **Opgave 51 — `keepalive` blev målt i tegn, og browserens grænse er i
@@ -17,6 +19,12 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ Opgave 53 lukket: 18 sider har nu en titel der siger hvad de *løser* i
+  stedet for hvad de hedder. Før `/docs/nextjs/`: "Next.js — bugbottle docs"
+  (24 tegn). Efter: "Next.js error reporting: error.tsx and global-error".
+  Bygget nægter en håndskrevet titel under 30 eller over 60 tegn, og to sider
+  må ikke have samme titel. 34 slugs står på den genererede fallback og er
+  printet af builden som arbejdsliste.
 - ✅ Opgave 52 lukket: `main` er grøn igen. Budgetten på panelet er 11 776 →
   12 288, og årsagen er målt: CI's og min maskines `gzip` læser de *samme*
   bytes forskelligt, og forskellen vokser med filen.
@@ -29,6 +37,114 @@
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 53 — 26 af 61 sider brugte hele `<title>` på produktets navn (29/9 04:0x)
+
+**Køen var tom** undtagen opgave 7 (din Search Console-eksport) og opgave 47
+(din navnebeslutning), så dette er en research-iteration — og den har leveret
+en rigtig ændring, ikke kun en plan.
+
+**Først tre målinger, fordi baseline-iterationen 28/9 fastslog at trafikken
+ikke kan styres før din eksport:**
+
+| Måling | Kilde | Værdi |
+|---|---|---|
+| Googlebot får `/`, `/docs/`, `/docs/react/` | målt her, curl med Googlebot-UA | **200, 22512/21519/17252 bytes — identisk med en browser** |
+| `robots.txt` live | målt her | `Allow: /` + sitemap, ingen `Disallow` |
+| `<loc>` i live-sitemap | målt her | **61** — samme tal som den rene build |
+
+**Så Cloudflare blokkerer ikke Googlebot, robots er ikke lukket, og deploys er
+hentet ind.** Det betyder at Fase 3's trafikproblem ikke er en fejl i
+opsætningen. Det er den anden halvdel af opgave 7's blokering — **indeksering og
+CTR** — og den del kan jeg måle uden din eksport.
+
+**Og målingen af den del fandt en fejl i 26 af 61 sider.** Jeg kørte en audit
+af den byggede HTML over alle 61 sider: title, description, canonical, `h1`.
+Alt andet var rent — nul manglende felter, nul dubletter, præcis ét `h1` pr.
+side. **Men 26 sider har en titel under 30 tegn**, og de er præcis de sider der
+besvarer en søgning:
+
+```
+/docs/nextjs/       "Next.js — bugbottle docs"        24 tegn
+/docs/vue/          "Vue — bugbottle docs"            20 tegn
+/docs/react/        "React — bugbottle docs"          22 tegn
+/docs/api/          "API — bugbottle docs"            20 tegn
+```
+
+**Hvorfor det er den dyre halvdel af fund 1 fra 28/9.** Opgave 46 målte med
+npm's egen søge-API, at bugbottle **ikke** er i top 250 for `bug-report`
+(82 818), `feedback-widget` (91 829), `error-context` (1 218 487),
+`user-feedback` (2 935 384) — men er 1. og 2. på sin egen beskrivelse. Konklusionen
+var "keywords er ikke værd at ændre, skriv en bedre `description`". **Den var
+halv rigtig.** Description-sætningerne er skrevet i hånden og er gode — det er
+de, jeg læste først, og de nævner præcis `error.tsx`, `bodyLimit`,
+`errorHandler`. **Men de blev kastet væk af titlen**, fordi builden genererede
+`${page.title} — bugbottle docs` og `page.title` er sektionens overskrift. Så
+den håndskrevne sætning lå i `<meta name="description">`, og den stærkeste
+relevansmarkør på siden sagde "bugbottle" 24 gange forskudt.
+
+**Rettelsen er 18 håndskrevne titler i `scripts/page-descriptions.mjs`** — det
+samme modul, der allerede nægter en description Google klipper, og samme
+`blurred`-mønster. Ikke en formel: en titel skåret ud af en description læses
+som en afkortet description.
+
+**Og bygget vogter den, fordi en vogt uden en rød prøve ikke er en vogt.** To
+beviser, begge kørt mod den ændrede kode:
+
+- `tanstack-router: "TanStack Router"` (15 tegn) → bygget **fejler** med
+  *"15 characters, outside 30-60"*.
+- `tanstack-query` sat til samme streng som `tanstack-router` → bygget
+  **fejler** med *"both are …"*.
+
+**De 34 slugs der står tilbage er ikke gemt, de er printet.** `build:docs`
+skriver nu `titles: 18 written and guarded, 34 still generated` med hele listen,
+så næste iteration har en målt arbejdsliste i stedet for en hukommelse. De er
+prioriteret i opgave 54.
+
+**Målt:** `npm run check` grøn — **946 tests**, `check-dist` grøn på 208 filer,
+**ingen kode- og ingen `dist/`-ændring** (den rører kun `site/`, som ikke er i
+pakken), ingen budget flyttede sig, IIFE'erne 24 984 / 21 416 mod 25 088 /
+21 504. 52 docs-sider fra README, 249 søgeposter, sitemap uændret på 61
+`<loc>` — titlen rører ingen URL.
+
+- [x] **53. 26 af 61 sider havde en titel under 30 tegn, genereret som
+  `<sektion> — bugbottle docs`, så de håndskrevne descriptions aldrig nåede
+  den stærkeste relevansmarkør.** Datagrund: audit af den byggede HTML over alle
+  61 sider målt i denne kørsel, plus opgave 46's fravær fra top 250 for
+  `error-context` og `bug-report`. **Accept:** de 18 mest søgte integrations-
+  og installationssider har håndskrevet titler i 30–60 tegn der nævner
+  opgaven og ikke produktet; `build:docs` fejler på en titel uden for båndet og
+  på to sider med samme titel, begge beviset røde; restlisten printes.
+  Mål: ingen trafikbaseline ændres (bugbottle.dev har 5 besøgende/28 d, så et
+  titelniveau kan ikke måles på 28 dage) — **den her baseline er
+  SERP-udsnit, ikke trafik**: hver af de 18 sider skal have sit nye title-tag i
+  et søgeresultat, og det verificeres ved at genkalde npm's søge-API om 14
+  dage. Effekten forventes først som **position og visninger**, ikke klik, fordi
+  vi ikke ved vores position endnu. 29/9, `ceo/page-titles`. ✅
+
+  **VERIFICÉR DEPLOY: 18 sidetitler (ingen ny URL) ceo/page-titles
+  2026-09-29 04:1x.** Accepter: `https://bugbottle.dev/docs/nextjs/` skal have
+  `<title>Next.js error reporting: error.tsx and global-error</title>` i
+  `<head>`, `/docs/vue/` skal have `Vue error reporting: app.config.errorHandler
+  and hooks`, `/docs/fastify/` skal have `Fastify: receiving a report past the
+  1 MB body limit`, og hver af de 18 skal have samme streng i `og:title`.
+  **Ingen ny URL:** sitemap'en skal fortsat tælle **61** `<loc>` og
+  `/docs/search.json` **249** poster.
+
+- [ ] **54. De 34 slugs på den genererede titelfallback.** Datagrund: de er
+  printet af `build:docs` efter opgave 53, og listen er ordnet: de elleve
+  framework- og server-sider først (`the-form-react`, `the-form-vue`,
+  `the-form-svelte`, `the-form-solid`, `catching-render-errors-react`,
+  `opening-it-without-a-button`, `the-form-anything-else`, `every-framework-one-table`,
+  `pointing-at-the-element`, `receiving-a-report`, `sending-it-somewhere`),
+  så de otte opskrifter (`global-errors`, `when-the-network-is-down`,
+  `what-happened-before`, `what-the-network-did`, `performance-and-storage`,
+  `replay-with-rrweb`, `screenshots`, `when-the-network-is-down`) og sidst de
+  ni tilbage (`index`, `one-script-tag`, `languages-and-branding`, `recipes`,
+  `the-payload`, `feeding-reports-to-an-agent`, `please-read-this-part`, `api`,
+  `a-working-example`, `github-action`, `releasing`, `privacy-checklist`,
+  `who-makes-it`, `licence`). **Accept:** `build:docs` skriver
+  `0 still generated`, og ingen håndskrevet titel er under 30 tegn.
 
 ## Opgave 52 — `main` var rød, og fejlen var i målingen (29/9 03:3x)
 

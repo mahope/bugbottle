@@ -49,7 +49,10 @@ import { protectAtIn } from "./protect-at.mjs";
 import { Marked } from "marked";
 import {
   MAX_DESCRIPTION_CHARS,
+  MAX_TITLE_CHARS,
+  MIN_TITLE_CHARS,
   PAGE_DESCRIPTIONS,
+  PAGE_TITLES,
   SELF_REFERENTIAL,
 } from "./page-descriptions.mjs";
 
@@ -693,6 +696,16 @@ function describe(body) {
 const blurred = [];
 const described = [];
 
+/* Every title the build emitted, and which of them were composed rather than
+   generated. The written ones are guarded — a title outside the band is
+   either wasted or clipped, and two pages with the same one is a site that
+   ranks one of them for the other's query. The generated ones are counted and
+   printed rather than refused, because the fallback is still a working title
+   and refusing the build over a page nobody has written one for yet would stop
+   the documentation from being built at all. The count is the work list. */
+const writtenTitles = [];
+const generatedTitles = [];
+
 function pageDescription(slug, body) {
   const written = PAGE_DESCRIPTIONS[slug];
   const text = written !== undefined ? written : describe(body);
@@ -986,8 +999,14 @@ function head(page) {
     page.canonical ??
     `${ORIGIN}/docs/${page.slug === INTRO.slug ? "install/" : `${page.slug}/`}`;
   const title =
+    PAGE_TITLES[page.slug] ??
     page.headTitle ??
     (page.slug === "index" ? "Documentation — bugbottle" : `${page.title} — bugbottle docs`);
+  if (PAGE_TITLES[page.slug] !== undefined) {
+    writtenTitles.push({ slug: page.slug, url, title });
+  } else if (page.slug) {
+    generatedTitles.push(page.slug);
+  }
   const lang = page.lang ?? "en";
   const alternates = (page.alternates ?? [{ hreflang: lang, href: url }])
     .map((alt) => `<link rel="alternate" hreflang="${alt.hreflang}" href="${alt.href}">`)
@@ -1766,6 +1785,38 @@ async function main() {
   if (blurred.length > 0) {
     badDescriptions.push(
       `${blurred.length} page(s) with no written description, so the first paragraph is quoted: ${blurred.join(", ")}`,
+    );
+  }
+
+  /* A title that is too short spends the smallest, strongest field on a word
+     nobody searches for, and one that is too long is cut off mid-word in the
+     results. Both are measured on the character count, which is what the band
+     is written in. */
+  const badTitles = [];
+  for (const { slug, title } of writtenTitles) {
+    if (title.length < MIN_TITLE_CHARS || title.length > MAX_TITLE_CHARS) {
+      badTitles.push(
+        `${slug} (${title.length} characters, outside ${MIN_TITLE_CHARS}-${MAX_TITLE_CHARS}: ${JSON.stringify(title)})`,
+      );
+    }
+  }
+  const byTitle = new Map();
+  for (const { slug, title } of writtenTitles) {
+    byTitle.set(title.toLowerCase(), [...(byTitle.get(title.toLowerCase()) ?? []), slug]);
+  }
+  for (const [title, slugs] of byTitle) {
+    if (slugs.length > 1) badTitles.push(`${slugs.join(" and ")} (both are ${JSON.stringify(title)})`);
+  }
+  if (badTitles.length > 0) {
+    throw new Error(
+      `Titles that will not survive a results page — fix them in ` +
+        `scripts/page-descriptions.mjs:\n  ${badTitles.join("\n  ")}`,
+    );
+  }
+  if (generatedTitles.length > 0) {
+    console.log(
+      `titles: ${writtenTitles.length} written and guarded, ${generatedTitles.length} still generated ` +
+        `as "<section> — bugbottle docs": ${generatedTitles.join(", ")}`,
     );
   }
   if (badDescriptions.length > 0) {
