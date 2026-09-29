@@ -2,6 +2,11 @@
 
 **STATUS: KØRER** (2026-09-29)
 
+- ✅ **Opgave 58 — `main` var stadig rød, og det var den samme klasse fejl for
+  tredje gang: testen låner CI's checkout som sit emne.** `actions/checkout`
+  giver `--depth 1`, og git fører *shallowhed* videre til et clone af et
+  shallow repo — så "fuld historie"-testen læste én commit og fejlede. Se
+  fundet nedenfor.
 - ✅ **Opgave 57 — `main` var rød, og det var en test der læste et build-artefakt,
   den ikke ejer.** `npm test` kører *før* `build:docs` i CI, og
   `site/sitemap.xml` er gitignored. Se fundet nedenfor.
@@ -29,6 +34,36 @@
 - 🔒 Opgave 47: blocked på Mads' beslutning om navneskif.
 
 **Morgenrapport 2026-09-29 (seneste):**
+- ✅ **Opgave 58 lukket: `main` var rød på tredje dagen i træk, og årsagen var
+  igen testen, ikke koden.** CI-kørslen `npm test` tjekker ud med
+  `actions/checkout@v7` **uden `fetch-depth: 0`** (`.github/workflows/ci.yml`
+  trin 16; den eneste linje der *har* den, er trin 470 i site-jobbet). Testen
+  `builtSitemapLastmods(false)` klonae **dette repo** for at få "fuld
+  historie" — og **git fører shallowhed videre til et clone af et shallow
+  repo**: et clone af et én-commit-repo har én commit, uanset hvilke flag den
+  får. Målt i ren shallow-klone: `--is-shallow-repository` → `true`,
+  `rev-list --count` → `1`. Så "fuld historie"-halvdelen læste én commit og
+  krævede, at en build over den gav flere end én dato. Den kan ikke, og ingen
+  ændring i `build-docs.mjs` kunne have gjort den grøn.
+  **Rettelsen er planens egen regel, anvendt for tredje gang i samme fil:** en
+  test *bygger* sit emne frem for at måle maskinens. Historien er nu skrevet
+  af testen selv (`repoWithKnownHistory`) på to kendte datoer, og "fuld
+  historie"-testen **asserter de to datoer eksplicit** frem for "flere end én",
+  så en build der svarer rigtigt på nogle sider og falder tilbage på resten
+  fejler i stedet for at bestå på en teknikalitet.
+  **Bevis, at vagterne virker, begge veje:** `isShallow()` der altid svarer
+  `false` gør shallow-testen rød (præcis den fejl den skal fange), og
+  `lastmod()` der altid svarer i dag gør fuld-historietesten rød. Og testen er
+  **grøn i en shallow-klone** — den betingelse der var rød.
+  949 tests grøn, IIFE'erne 24 984 / 21 416 uændrede, `check:dist` ren.
+- 📌 **Mønsteret er nu tre opgaver på to dage, og det er værd at skrive ned
+  som en regel: en test må ikke låne den checkout den kører i.** Opgave 57
+  læste et *genereret* artefakt, opgave 56 byggede et layout med `.git`s
+  indhold kopieret **ind** i en mappe, og nu denne: lånt **git-historien**.
+  Alle tre ligner hinanden — de er grønne på en maskine med en fuld histori
+  og røde i CI, fordi de måler omgivelserne frem for koden. Spørgsmålet der
+  fanger alle tre er det samme: *hvilken kode og hvilken histori kører den
+  her egentlig?*
 - ✅ **Opgave 57 lukket: `main` var rød på grund af en test fra opgave 56, som
   læste `site/sitemap.xml` — et genereret, gitignored artefakt.** `npm test`
   kører før `build:docs` i CI (`.github/workflows/ci.yml` trin 23 mod 31), så
@@ -101,6 +136,63 @@
 
 Dette er hele den delte state for oxloopet. Læs den først; skriv i den, så
 næste iteration ikke skal opdage det samme igen.
+
+## Opgave 58 — `main` var stadig rød, og det var den samme klasse fejl igen
+
+**Kontrakten siger: tjek CI én gang i starten af hver iteration. Det afslørede
+at `main` var rød for tredje dagen i træk, og at årsagen igen var en test og
+ikke koden.**
+
+**Målt, ikke resonneret.** CI-kørslen 36533369068: `# fail 1`, og den ene er
+
+```
+not ok 749 - a full history does date pages separately, so the shallow test above can fail
+  error: 'built from the full history, the sitemap should carry more than one date …'
+  location: 'tests/site-image.test.ts:449:1'
+```
+
+**Årsagen er én linje i `.github/workflows/ci.yml`, og den er målt to steder:**
+
+| Hvor | `fetch-depth` | Følge |
+|---|---|---|
+| `ci.yml` trin 16 — jobbet der kører `npm test` | **udfyldt = `--depth 1`** | testen får én commit |
+| `ci.yml` trin 470 — site-jobbet | `fetch-depth: 0` | har allerede rettelsen |
+
+Og git fører shallowhed videre. Målt i en ren shallow-klone af dette repo:
+
+```
+$ git clone --depth 1 file://$PWD  →  src
+$ git -C src rev-parse --is-shallow-repository   →  true
+$ git clone file://src  full-clone               # ingen --depth flag nogen steder
+$ git -C full-clone rev-parse --is-shallow-repository  →  true     # ← her
+$ git -C full-clone rev-list --count HEAD              →  1
+```
+
+Så `builtSitemapLastmods(false)` — kaldet *"a full history"* — læste **én
+commit** på CI og krævede, at en build over den gav mere end én dato. Den kan
+ikke. **Ingen ændring i `build-docs.mjs` kunne have gjort `main` grøn**, og
+det er derfor rettelsen ikke rørte den: `isShallow()` gør præcis det rigtige
+med et shallow repo, og det er netop derfor testen fejlede.
+
+**Rettelsen er den tredje anvendelse i denne fil af reglen "byg dit emne, mål
+det ikke":** `repoWithKnownHistory()` laver et repo med to commits på to
+dater skrevet ned i filen (`HISTORY_BASE_DATE`, `SHALLOW_TIP_DATE`), og begge
+tests klona *det* i stedet for `$PWD`. Fuld-historietesten **asserter de to
+datoer eksplicit** — ikke "flere end én" — fordi "flere end én" ville være
+grøn for en build, der svarer rigtigt på nogle sider og falder tilbage på
+resten.
+
+**Bevis, at begge vagter virker, hver mod sin egen gamle kode:**
+
+| Mutation | Bliver |
+|---|---|
+| `isShallow()` → altid `false` | shallow-testen **rød** ✅ (præcis fejlen fra opgave 55) |
+| `lastmod()` → altid i dag | fuld-historietesten **rød** ✅ |
+| Ingen mutation, i en **shallow-klone** | begge **grønne** ✅ (betingelsen der var rød) |
+
+`scripts/build-docs.mjs` er uændret — de to mutationer blev taget tilbage, og
+`git diff --stat` på filen er tom. Gaten: `npm run check` grøn, 949 tests,
+IIFE'erne 24 984 / 21 416 uændrede, `check:dist` ren (208 filer).
 
 ## Opgave 57 — `main` var rød: en test læste et build-artefakt, den ikke ejer (29/9 08:2x)
 
@@ -6149,3 +6241,4 @@ i planen, og det er derfor næste iteration *skal* starte med at spørge om den.
   den byggede HTML. **npm-siden afhænger IKKE af deployet** — README'en er den
   der i tarballet, så de syv links og navparagraphet kommer først på
   `npmjs.com/package/bugbottle` efter `npm publish`.
+- ~~**VERIFICÉR DEPLOY: sitemapens `lastmod` med egen historie, `ceo-eget-sitemap-historie` 29/9 09:5x.**~~ **Ingen deploy nødvendig for denne ændring** — den rører kun `tests/site-image.test.ts`, som ikke er en del af sitet. Den *bygger* sitemapen i en midlertidig klone. Live-sitet er uændret, og `VERIFICÉR` forventes derfor ikke at slå igennem. Det denne iteration faktisk retter er synligt i **CI**, ikke på bugbottle.dev: `main` skal blive grøn igen.
