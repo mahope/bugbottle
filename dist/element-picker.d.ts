@@ -22,7 +22,8 @@ type SelectorNode = {
 /**
  * A short CSS selector for the node. Stops at the first ancestor with an id or
  * a `data-testid`, or when the selector is unique in `root`, or after five
- * levels — enough to find the element again, short enough to read.
+ * levels, or before it passes 200 characters — enough to find the element
+ * again, short enough to read.
  */
 export declare function buildSelector(node: SelectorNode, root?: {
     querySelectorAll(s: string): ArrayLike<unknown>;

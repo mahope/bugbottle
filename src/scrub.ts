@@ -274,6 +274,8 @@ export function scrubReport<T>(report: T, options: ScrubOptions = {}): T {
         if (!isObject(element)) return element;
         const copy = { ...element };
         scrubField(copy, "text", p);
+        // A selector can carry an aria-label since 1.1 — "Delete jane@x.com".
+        scrubField(copy, "selector", p);
         if ("attributes" in copy) copy.attributes = scrubAttributes(copy.attributes, p);
         return copy;
       });
