@@ -62,6 +62,12 @@ export const it: Locale = {
     pickingAnnounce:
       "Modalità di selezione. Fai clic su un elemento della pagina per allegarlo, oppure premi Esc per interrompere.",
     pickingDone: "Modalità di selezione terminata.",
+    shotModeLabel: "Screenshot di",
+    shotPage: "Pagina intera",
+    shotArea: "Scegli un'area",
+    shotElement: "Scegli un elemento",
+    areaInstructions:
+      "Trascina per selezionare un'area. Invio prende la pagina visibile, Esc annulla.",
     attached: "Allegato",
     remove: "Rimuovi",
     removeElement: "Rimuovi {element}",
@@ -116,6 +122,12 @@ export const pl: Locale = {
     pickingAnnounce:
       "Tryb wskazywania. Kliknij element na stronie, aby go dołączyć, albo naciśnij Esc, aby przerwać.",
     pickingDone: "Tryb wskazywania zakończony.",
+    shotModeLabel: "Zrzut ekranu",
+    shotPage: "Cała strona",
+    shotArea: "Wybierz obszar",
+    shotElement: "Wybierz element",
+    areaInstructions:
+      "Przeciągnij, aby zaznaczyć obszar. Enter bierze widoczną stronę, Esc anuluje.",
     attached: "Dołączono",
     remove: "Usuń",
     removeElement: "Usuń {element}",
@@ -170,6 +182,11 @@ export const pt: Locale = {
     pickingAnnounce:
       "Modo de seleção. Clique num elemento da página para o anexar, ou prima Esc para parar.",
     pickingDone: "Modo de seleção terminado.",
+    shotModeLabel: "Captura de",
+    shotPage: "Página inteira",
+    shotArea: "Escolher área",
+    shotElement: "Escolher elemento",
+    areaInstructions: "Arraste para selecionar uma área. Enter usa a página visível, Esc cancela.",
     attached: "Anexado",
     remove: "Remover",
     removeElement: "Remover {element}",
@@ -224,6 +241,11 @@ export const fi: Locale = {
     pickingAnnounce:
       "Osoitustila. Napsauta sivun elementtiä liittääksesi sen, tai lopeta painamalla Esc.",
     pickingDone: "Osoitustila päättyi.",
+    shotModeLabel: "Kuvakaappaus",
+    shotPage: "Koko sivu",
+    shotArea: "Valitse alue",
+    shotElement: "Valitse elementti",
+    areaInstructions: "Valitse alue vetämällä. Enter ottaa näkyvän sivun, Esc peruuttaa.",
     attached: "Liitetty",
     remove: "Poista",
     removeElement: "Poista {element}",
@@ -278,6 +300,12 @@ export const uk: Locale = {
     pickingAnnounce:
       "Режим вказування. Клацніть будь-який елемент сторінки, щоб долучити його, або натисніть Esc, щоб зупинити.",
     pickingDone: "Режим вказування завершено.",
+    shotModeLabel: "Знімок екрана",
+    shotPage: "Уся сторінка",
+    shotArea: "Вибрати область",
+    shotElement: "Вибрати елемент",
+    areaInstructions:
+      "Перетягніть, щоб виділити область. Enter бере видиму сторінку, Esc скасовує.",
     attached: "Долучено",
     remove: "Вилучити",
     removeElement: "Вилучити {element}",

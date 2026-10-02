@@ -17,7 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
-import { type Breadcrumb, type ConsoleEntry, type ElementRef, type NetworkEntry, type PerfSnapshot, type ReplayCapture, type ReportContext, type StorageSnapshot, type ReportType } from "../report-core.ts";
+import { type Breadcrumb, type ConsoleEntry, type ElementRef, type NetworkEntry, type PerfSnapshot, type ReplayCapture, type ReportContext, type ScreenshotRegion, type StorageSnapshot, type ReportType } from "../report-core.ts";
 import { type MarkdownOptions } from "../markdown.ts";
 import { type ScrubOptions } from "../scrub.ts";
 import { type SendReportEmailOptions } from "../sinks/resend.ts";
@@ -76,6 +76,12 @@ export type ValidatedReport = {
      * nothing to say, and clipped like every other field: the browser sent it.
      */
     notes: string[];
+    /**
+     * The part of the page the screenshot shows, when the reporter chose an area
+     * or an element. Absent for a whole-page picture and for no picture, so a
+     * report from before 1.1 validates to exactly what it did.
+     */
+    screenshotRegion?: ScreenshotRegion;
     extra: Record<string, unknown>;
     /** ISO 8601 timestamp of when the server accepted it. */
     receivedAt: string;

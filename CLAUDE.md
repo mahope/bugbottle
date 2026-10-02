@@ -19,7 +19,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/stack.ts` | `parseStack(stack)` — one expression turning `error.stack` into at most ten `{ file, line, col, fn? }` frames, V8 and Firefox/Safari alike. Imported only by console-buffer, which keeps the parsing out of report-core; it does not make the core bundle smaller, since console-buffer is in it | report-core (types and limits) |
 | `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | mask, report-core |
 | `src/mask.ts` | `applyMask(root, options)` — hides field values and marked regions for the length of one render, returns the restore | nothing |
-| `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()` | report-core |
+| `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()`. The selector steps are an id, a `data-testid`, an `aria-label` (which ends the walk only once unique), then `nth-of-type`; an anchor over 64 characters is skipped as generated, and the whole selector stops before 200 | report-core |
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
 | `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |
 | `src/perf.ts` | `initPerf()` — the Web Vitals from buffered `PerformanceObserver` entries (LCP last candidate, CLS without recent input, INP as the worst interaction), the navigation milestones, long tasks, the JS heap where it exists, plus the storage snapshot: key names and value lengths, cookie names, values only for an opt-in allow-list. Own entry point. Never a cookie value, on any setting | registry, report-core |
@@ -35,12 +35,13 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/html-to-image.ts` | The one file that imports `html-to-image` | capture (types only) |
 | `src/locales.ts` | `Locale` type + en/da/sv/nb/de/nl/fr/es, `resolveLocale`, `sentLine` — the optional `messages.sentWithId` with its `{id}`, and the one place that knows what `{id}` means, which is how the panel and the four adapters say the same sentence without the panel importing the state machine. `enMessages` is separate so the hook does not drag every locale in. `resolveLocale` takes the map to look in as its third argument, so a merged map reaches the optional languages without the default one growing, and looks the tag up with `Object.hasOwn` because a `?lang=__proto__` off the URL would otherwise be answered with `Object.prototype` | nothing |
 | `src/locales-extra.ts` | it/pl/pt/fi/uk and `localesExtra`, in the same `Locale` shape. Own entry point, imported by nothing — a locale is data and data is carried whole, so the five would otherwise be in every bundle that shows a panel. `pt` is European Portuguese and `pt-BR` resolves to it through the region-dropping `resolveLocale` already does. Neither script-tag build carries it | locales (the types alone, so nothing at run time) |
-| `src/report-state.ts` | `createReportState(options)` — the form as a state machine with no framework in it: `getState`, `subscribe`, `actions`, `setOptions`, `destroy`, plus `statusText`. The four adapters are bindings over it | capture, element-picker, send, queue (types), locales, report-core |
+| `src/report-state.ts` | `createReportState(options)` — the form as a state machine with no framework in it: `getState`, `subscribe`, `actions`, `setOptions`, `destroy`, plus `statusText`. The four adapters are bindings over it. `attachScreenshot` takes a picture from `bugbottle/region` with its region and element, so the overlay is never imported here | capture, element-picker, send, queue (types), locales, report-core |
 | `src/react/` | `useBugReport` hook — `useSyncExternalStore` over report-state | report-state, report-core |
 | `src/vue/` | `useBugReport` composable — refs and computeds over report-state, `vue` an optional peer (>=3). Own entry point | report-state, report-core |
 | `src/svelte/` | `createBugReport` — a readable store (the contract implemented here, not imported) plus the actions, `svelte` an optional peer (>=4) and only for its `Readable` type. Own entry point | report-state, report-core |
 | `src/solid/` | `createBugReport` — one signal over the machine, everything else an accessor over it, plus the actions; `onCleanup` unsubscribes with the owner, `solid-js` an optional peer (>=1.8). Own entry point | report-state, report-core |
 | `src/annotate.ts` | `createAnnotator(canvas, dataUrl, options)` — rectangle, arrow and blur over the attached picture, undo, pointer and keyboard input, `toDataUrl()`. Own entry point. The blur pixelates by reading the region back out of the canvas, so the original pixels leave with it. No strings: the panel supplies the labels | nothing |
+| `src/region.ts` | `captureArea(render, options)`, `captureElement(render, options)`, `captureRegion(render, mode, options)` and `selectArea(options)` — a screenshot of an area the reporter drags or of the box around an element they click, plus the pure geometry (`normaliseDrag`, `computeCropBox`, `chooseRegionPixelRatio`). Own entry point, handed to the panel as `region` and to the form state through `attachScreenshot`, so neither imports it. The overlay is a host with a shadow root carrying `data-bugbottle` (never in a picture, never pickable): a named dialog that takes focus for the drag, a pass-through layer for the pick. The page is rendered through `captureScreenshot` at the device pixel ratio, lowered under `MAX_REGION_CANVAS_PIXELS` (Safari on iOS draws nothing on a canvas over 16 777 216 pixels), and **the crop scale is read off the rendered picture, never assumed** — a renderer that shrank its canvas still crops the right pixels. The full render is not held to the size limit; the crop is, at 1, 0.5 and 0.25 before `ScreenshotTooLargeError` | capture, element-picker, report-core |
 | `src/ui/` | `mountBugbottle` — optional shadow-DOM panel over the same core; themed via `--bb-*` vars. `open({ message })` seeds the text box for a caller that already knows why it is opening (a framework's error hook), clipped to `MAX_MESSAGE_LENGTH` and never over a draft; `openOnError`'s own prefill goes through the same line, so the two cannot drift | everything above |
 | `src/scrub.ts` | `scrubReport` + `BUILTIN_SCRUBBERS`. Imported by nothing in the core, so it is tree-shaken when unused | nothing |
 | `src/sign.ts` | `createSigner({ key, header? })` — the `sign` function `sendReport` takes, HMAC-SHA-256 over `<timestamp>.<body>` through WebCrypto, sent as `t=<ms>,v1=<hex>`. Plus `computeSignature` and `hmacHex`, which `src/server/handle.ts` verifies with, so both sides compute the digest the same way. Own entry point; imported by nothing in the core | nothing |
@@ -91,11 +92,11 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `scripts/check-dist.mjs` | The last step of `npm run check`: the committed `dist/` is both current **and complete**. The diff half is what `git diff --quiet -- dist` always answered; the untracked half is the one a diff cannot see, because `dist/` is in `.gitignore`, so a file the build produced lands untracked and only `git add -f` ever adds it. It came from `fastifyHandler`: `dist/server/fastify.js` was emitted and never added while the tracked `index.js` beside it has imported `./fastify.js` since, so a GitHub or jsDelivr install of `bugbottle/server` threw `ERR_MODULE_NOT_FOUND` on import — build green, tests green, diff clean, and `npm pack` packing a file that was on disk and not in the repository. The script runs `git ls-files` against a walk of `dist/` and prints the missing names with `git add -f` in the message, and prints one line and exits 0 outside a checkout, since a tarball has no committed dist to be out of step with | dist, git |
 | `dist/` | **Committed** (force-added; `.gitignore` still lists it) so `npm install github:…#vX.Y.Z` and jsDelivr work without npm. Rebuild and `git add -f dist` in **every push to main** — CI fails when the build differs from the committed dist (a mixed dist once shipped a link-time SyntaxError) **or when the build produced a file nothing added**, which is `scripts/check-dist.mjs` and the reason a `git diff` guard is not enough on its own | |
 
-Twenty entry points in `package.json#exports`: `.`, `./react`, `./vue`,
+Twenty-one entry points in `package.json#exports`: `.`, `./react`, `./vue`,
 `./svelte`, `./solid`, `./server`,
 `./html-to-image`, `./locales`, `./locales-extra`, `./ui`, `./breadcrumbs`,
 `./network`,
-`./perf`, `./annotate`, `./queue`, `./queue-idb`, `./triggers`, `./shake`,
+`./perf`, `./annotate`, `./region`, `./queue`, `./queue-idb`, `./triggers`, `./shake`,
 `./sign`,
 `./rrweb` — plus `./report.schema.json` and `./openapi.json`, which are data
 rather than code.
@@ -245,7 +246,7 @@ npm pack --dry-run  # confirm only dist/, README, LICENSE, package.json ship
 Bundle-size check when touching the client: pack, install the tarball in a
 scratch project **without** `html-to-image`, and bundle `bugbottle` and
 `bugbottle/react` with esbuild. Both must succeed; `bugbottle/react` must
-stay under 6144 bytes gzipped and `bugbottle/ui` under 12288 bytes (CI enforces
+stay under 6144 bytes gzipped and `bugbottle/ui` under 12800 bytes (CI enforces
 both; about 5.8 kB and 11.8 kB with masking, the queued state, the triggers,
 the accessibility pass, the 0.6 evidence, the contact field and the two recorder
 seams), and the bare core
@@ -469,6 +470,18 @@ hands the queue; the budgets stay at 1600, 25088 and 21504. Measure the core
 and `bugbottle/network` on Linux before writing either down: Git Bash's `gzip`
 reads both about 130 bytes higher than CI's on files this small, while every
 larger bundle agrees to the byte.
+
+1.1's area and element modes moved the panel and both script tags and no
+other budget. `bugbottle/ui` 11 765 → 12 325 (budget 12288 → 12800),
+`dist/bugbottle.js` 24 931 → 25 923 (25088 → 26624) and
+`dist/bugbottle.slim.js` 21 398 → 22 426 (21504 → 23040), measured with Git
+Bash's gzip, which reproduced CI's 24 931 for the full build to the byte: three
+buttons and their wiring, five strings in eight languages. `bugbottle/region`
+itself is handed in, so it is in neither script tag nor the panel, and is
+budgeted at 6144 (5 603 standalone, nearly all of it `captureScreenshot`, the
+mask and the picker). The form state took `attachScreenshot` rather than a
+`region` seam with its own status, because the seam cost each marginal adapter
+about 240 bytes and took all three over their 1536; the action and its race guard cost about 100.
 
 UI changes need a headless smoke test as well as unit tests: there is no DOM
 in `node:test`. Serve `dist/` from a scratch page, drive it with the global

@@ -14,7 +14,7 @@
  */
 import { captureScreenshot, ScreenshotTooLargeError, } from "./capture.js";
 import { pickElement as pickElementFromPage } from "./element-picker.js";
-import { MAX_ELEMENTS } from "./report-core.js";
+import { MAX_ELEMENTS, } from "./report-core.js";
 import { buildReport, sendReport, SendFailedError, } from "./send.js";
 import { enMessages, sentLine } from "./locales.js";
 const FALLBACK_MESSAGES = enMessages;
@@ -49,6 +49,7 @@ export function createReportState(options) {
         screenshot: null,
         includeScreenshot: canShoot() && armedFor(firstType()),
         canScreenshot: canShoot(),
+        screenshotRegion: null,
         elements: [],
         status: { kind: "idle" },
     };
@@ -59,16 +60,22 @@ export function createReportState(options) {
             listener();
     };
     let capturing = false;
+    // Bumped by every picture that lands, so a capture that finishes after
+    // `attachScreenshot` does not put the whole page back over the area.
+    let shots = 0;
     let picking = null;
     const capture = async () => {
         const renderer = opts.screenshot;
         if (!renderer || capturing)
             return;
         capturing = true;
+        const mine = ++shots;
         set({ status: { kind: "capturing" } });
         try {
             const dataUrl = await captureScreenshot(renderer, { mask: opts.mask });
-            set({ screenshot: dataUrl, status: { kind: "idle" } });
+            if (mine !== shots)
+                return set({ status: { kind: "idle" } });
+            set({ screenshot: dataUrl, screenshotRegion: null, status: { kind: "idle" } });
         }
         catch (err) {
             // A failed picture must never block the report, so this only turns the
@@ -109,9 +116,22 @@ export function createReportState(options) {
             if (checked && !state.screenshot)
                 void capture();
             if (!checked)
-                set({ screenshot: null });
+                set({ screenshot: null, screenshotRegion: null });
         },
         recapture: capture,
+        attachScreenshot(shot) {
+            if (!shot)
+                return;
+            shots++;
+            set({
+                screenshot: shot.dataUrl,
+                screenshotRegion: shot.region ?? null,
+                includeScreenshot: true,
+                elements: shot.element
+                    ? [...state.elements, shot.element].slice(-MAX_ELEMENTS)
+                    : state.elements,
+            });
+        },
         /**
          * Lets the reporter click the element the report is about. Resolves when
          * they have clicked or pressed Escape. Calling it again while picking
@@ -158,6 +178,7 @@ export function createReportState(options) {
                 message: "",
                 contact: "",
                 screenshot: null,
+                screenshotRegion: null,
                 elements: [],
                 includeScreenshot: canShoot() && armedFor(type),
                 status: { kind: "idle" },
@@ -176,6 +197,7 @@ export function createReportState(options) {
                 message: "",
                 contact: "",
                 screenshot: null,
+                screenshotRegion: null,
                 elements: [],
                 includeScreenshot: canShoot() && armedFor(state.type),
             });
@@ -188,6 +210,7 @@ export function createReportState(options) {
                     message: state.message,
                     contact: state.contact,
                     screenshotDataUrl: state.includeScreenshot ? state.screenshot : null,
+                    screenshotRegion: state.screenshotRegion,
                     includeConsole: (opts.consoleFor ?? bugsOnly)(state.type),
                     elements: state.elements,
                     extra: opts.extra,

@@ -63,6 +63,12 @@ export declare const MAX_CONTEXT_LENGTHS: {
 export declare const MAX_ELEMENTS = 10;
 /** Longest text kept for a pointed-at element. */
 export declare const MAX_ELEMENT_TEXT_LENGTH = 200;
+/**
+ * The largest coordinate or size a screenshot region may claim, in CSS
+ * pixels. A million is taller than any page a browser will lay out and small
+ * enough that a row cannot be handed `1e300` as a position.
+ */
+export declare const MAX_REGION_COORDINATE = 1000000;
 /** How many breadcrumbs a report may carry. Oldest are dropped first. */
 export declare const MAX_BREADCRUMBS = 30;
 /** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
@@ -177,6 +183,38 @@ export type ElementRef = {
     };
     /** id, name, role, type, href, aria-label, placeholder, title and data-* — never data-bugbottle*. */
     attributes: Record<string, string>;
+};
+/**
+ * How much of the page the screenshot shows. `page` is the whole page, as it
+ * always was; `area` is a rectangle the reporter dragged; `element` is the box
+ * around an element they clicked.
+ */
+export declare const SCREENSHOT_MODES: readonly ["page", "area", "element"];
+export type ScreenshotMode = (typeof SCREENSHOT_MODES)[number];
+/** A rectangle in CSS pixels. */
+export type RegionRect = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+/**
+ * Which part of the page the screenshot was cut from, when it was not the
+ * whole page. A report without one is a whole-page picture, or no picture.
+ */
+export type ScreenshotRegion = {
+    mode: "area" | "element";
+    /** Page coordinates in CSS pixels, so it still says where after a scroll. */
+    rect: RegionRect;
+    /** The same rectangle relative to the viewport at the moment it was chosen. */
+    viewport: RegionRect;
+    /**
+     * True when the picture is the whole page with this rectangle drawn on it,
+     * rather than the rectangle cut out.
+     */
+    annotated?: boolean;
+    /** For `element`: the picked element's selector, as it appears in `elements`. */
+    selector?: string;
 };
 export declare const BREADCRUMB_KINDS: readonly ["click", "navigation", "submit", "visibility"];
 export type BreadcrumbKind = (typeof BREADCRUMB_KINDS)[number];
@@ -346,6 +384,11 @@ export type BugReport = {
      */
     notes?: string[];
     screenshotDataUrl?: string;
+    /**
+     * The part of the page `screenshotDataUrl` shows, when the reporter chose an
+     * area or an element rather than the whole page.
+     */
+    screenshotRegion?: ScreenshotRegion;
 };
 export declare function isReportType(value: unknown): value is ReportType;
 /**
@@ -413,6 +456,14 @@ export declare function normaliseConsole(raw: unknown, options?: {
 export declare function normaliseElements(raw: unknown, options?: {
     maxElements?: number;
 }): ElementRef[];
+/**
+ * Validates the region a screenshot was cut from. An unknown mode, or a
+ * rectangle without a finite, positive size, is no region at all: the picture
+ * is still stored, it just is not described. Coordinates are rounded and held
+ * inside `MAX_REGION_COORDINATE`, the selector is clipped like an element's.
+ * Never throws.
+ */
+export declare function normaliseScreenshotRegion(raw: unknown): ScreenshotRegion | null;
 /**
  * Validates the breadcrumbs a report arrived with. Entries with an unknown
  * kind are dropped, strings are clipped, fields that are not strings are left

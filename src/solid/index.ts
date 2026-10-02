@@ -48,6 +48,8 @@ export function createBugReport(options: UseBugReportOptions) {
     canScreenshot: () => state().canScreenshot,
     screenshot: () => state().screenshot,
     includeScreenshot: () => state().includeScreenshot,
+    /** Which part of the page the screenshot shows, or null for the whole page. */
+    screenshotRegion: () => state().screenshotRegion,
     /** Elements the reporter has pointed at, in order. */
     elements: () => state().elements,
     status,

@@ -29,6 +29,11 @@ export declare function createBugReport(options: UseBugReportOptions): {
     setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
+    attachScreenshot: (shot: {
+        dataUrl: string;
+        region?: import("../report-core.ts").ScreenshotRegion;
+        element?: import("./index.ts").ElementRef;
+    } | null) => void;
     pickElement: () => Promise<import("./index.ts").ElementRef | null>;
     cancelPick: () => void;
     removeElement: (index: number) => void;

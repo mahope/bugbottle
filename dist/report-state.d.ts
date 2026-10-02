@@ -13,7 +13,7 @@
  * new ones over with `setOptions` without disturbing the state.
  */
 import { type CaptureOptions, type ScreenshotRenderer } from "./capture.ts";
-import { type ElementRef, type ReportType } from "./report-core.ts";
+import { type ElementRef, type ReportType, type ScreenshotRegion } from "./report-core.ts";
 import { type BuildReportInput, type SendOptions } from "./send.ts";
 import type { Queue } from "./queue.ts";
 import { type Messages } from "./locales.ts";
@@ -121,6 +121,11 @@ export type ReportState = {
     includeScreenshot: boolean;
     /** Whether a renderer was supplied, so the form can hide the checkbox. */
     canScreenshot: boolean;
+    /**
+     * Which part of the page `screenshot` shows, or null for the whole page.
+     * Set by `attachScreenshot`, sent with the report as `screenshotRegion`.
+     */
+    screenshotRegion: ScreenshotRegion | null;
     /** Elements the reporter has pointed at, in order. */
     elements: ElementRef[];
     status: BugReportStatus;
@@ -132,6 +137,18 @@ export type ReportActions = {
     setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
+    /**
+     * Puts a picture the form did not take itself on the report: what
+     * `captureArea`, `captureElement` or `captureRegion` from `bugbottle/region`
+     * resolved with. The region travels with it, and a picked element is
+     * attached like one from `pickElement`. `null` — a cancelled selection —
+     * changes nothing.
+     */
+    attachScreenshot: (shot: {
+        dataUrl: string;
+        region?: ScreenshotRegion;
+        element?: ElementRef;
+    } | null) => void;
     pickElement: () => Promise<ElementRef | null>;
     cancelPick: () => void;
     removeElement: (index: number) => void;

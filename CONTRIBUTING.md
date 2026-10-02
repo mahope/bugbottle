@@ -28,8 +28,8 @@ need Node 18.
 - The client entry points stayed small. Pack, install the tarball in a scratch
   project without `html-to-image`, and bundle `bugbottle/react` with esbuild.
   It should build, and the budgets CI enforces are: bare core 1.5 kB gzipped,
-  `bugbottle/react` 6 kB, `bugbottle/ui` 11.5 kB, `bugbottle/annotate` 2048
-  bytes, `bugbottle/breadcrumbs`
+  `bugbottle/react` 6 kB, `bugbottle/ui` 12800 bytes, `bugbottle/annotate` 2048
+  bytes, `bugbottle/region` 6144 bytes, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1536 bytes,
   `bugbottle/queue` 1600 bytes, `bugbottle/queue-idb` 1024 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/shake` 768 bytes,
@@ -39,8 +39,10 @@ need Node 18.
   what matters is that nothing imports it,
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
-  are small; the core they share is not), `dist/bugbottle.js` 25088 bytes and
-  `dist/bugbottle.slim.js` 21504 bytes. The
+  are small; the core they share is not), `dist/bugbottle.js` 26624 bytes and
+  `dist/bugbottle.slim.js` 23040 bytes (1.1's area and element modes took the
+  panel and both script tags up by about half a kilobyte and one kilobyte
+  respectively, for three buttons and five strings in eight languages). The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the

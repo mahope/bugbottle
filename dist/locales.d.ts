@@ -85,6 +85,13 @@ export type UiTexts = {
     pickingAnnounce: string;
     /** Announced when pick mode ends, whether an element was picked or not. */
     pickingDone: string;
+    /** Accessible name of the row of three buttons. Never shown. */
+    shotModeLabel?: string;
+    shotPage?: string;
+    shotArea?: string;
+    shotElement?: string;
+    /** Shown on the overlay while the reporter drags an area, and read out. */
+    areaInstructions?: string;
     attached: string;
     remove: string;
     /** Accessible name of one remove button. `{element}` is the element itself. */

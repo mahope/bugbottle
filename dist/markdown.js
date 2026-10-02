@@ -8,7 +8,7 @@
  * long). Every value goes through `normalise*` first, so this accepts the raw
  * body from the request as well as a validated report.
  */
-import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normaliseNotes, normalisePerf, normaliseReplay, normaliseStorage, } from "./report-core.js";
+import { isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normaliseNotes, normaliseScreenshotRegion, normalisePerf, normaliseReplay, normaliseStorage, } from "./report-core.js";
 const TYPE_LABEL = { bug: "Bug", idea: "Idea", other: "Feedback" };
 /**
  * How many frames of a stack are printed under a console entry. Ten are kept
@@ -192,6 +192,18 @@ export function toMarkdown(raw, options = {}) {
         facts.push(["Screenshot", options.screenshotUrl]);
     else if (typeof r.screenshotDataUrl === "string" && r.screenshotDataUrl) {
         facts.push(["Screenshot", "attached"]);
+    }
+    // Where on the page the picture was cut from, so a cropped screenshot can be
+    // placed again: the same page coordinates `elements` uses.
+    const region = normaliseScreenshotRegion(r.screenshotRegion);
+    if (region) {
+        const { x, y, width, height } = region.rect;
+        let where = `${region.mode}, ${width}×${height} at ${x}, ${y}`;
+        if (region.annotated)
+            where += " (outlined on the whole page)";
+        if (region.selector)
+            where += ` — \`${region.selector.replace(/`/g, "'")}\``;
+        facts.push(["Screenshot region", where]);
     }
     for (const [k, v] of Object.entries(options.facts ?? {})) {
         if (v !== undefined && v !== "")

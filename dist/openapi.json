@@ -119,6 +119,10 @@
             "pattern": "^data:image/png;base64,",
             "type": "string"
           },
+          "screenshotRegion": {
+            "$ref": "#/components/schemas/ScreenshotRegion",
+            "description": "The part of the page `screenshotDataUrl` shows, when the reporter chose an area or an element rather than the whole page."
+          },
           "storage": {
             "$ref": "#/components/schemas/StorageSnapshot",
             "description": "What was in the browser's stores, when `bugbottle/perf` was measuring."
@@ -372,6 +376,30 @@
         },
         "type": "object"
       },
+      "RegionRect": {
+        "description": "A rectangle in CSS pixels.",
+        "properties": {
+          "height": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "type": "object"
+      },
       "ReplayCapture": {
         "description": "A session replay: the events and how long they cover.\n\nThis is the heaviest and the most sensitive thing a report can carry — a recording of somebody using your application — so it is only ever here because the application called `attachRrweb` and handed its own rrweb `record` in.",
         "properties": {
@@ -474,6 +502,40 @@
           "other"
         ],
         "type": "string"
+      },
+      "ScreenshotRegion": {
+        "description": "Which part of the page the screenshot was cut from, when it was not the whole page. A report without one is a whole-page picture, or no picture.",
+        "properties": {
+          "annotated": {
+            "description": "True when the picture is the whole page with this rectangle drawn on it, rather than the rectangle cut out.",
+            "type": "boolean"
+          },
+          "mode": {
+            "enum": [
+              "area",
+              "element"
+            ],
+            "type": "string"
+          },
+          "rect": {
+            "$ref": "#/components/schemas/RegionRect",
+            "description": "Page coordinates in CSS pixels, so it still says where after a scroll."
+          },
+          "selector": {
+            "description": "For `element`: the picked element's selector, as it appears in `elements`.",
+            "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/RegionRect",
+            "description": "The same rectangle relative to the viewport at the moment it was chosen."
+          }
+        },
+        "required": [
+          "mode",
+          "rect",
+          "viewport"
+        ],
+        "type": "object"
       },
       "StackFrame": {
         "description": "One line of a parsed stack: where the code was, never what it said. Source text is deliberately absent — a frame points at a file and a position, and resolving that to a line of code is the reader's job, with their own maps.",

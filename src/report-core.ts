@@ -79,6 +79,13 @@ export const MAX_ELEMENTS = 10;
 /** Longest text kept for a pointed-at element. */
 export const MAX_ELEMENT_TEXT_LENGTH = 200;
 
+/**
+ * The largest coordinate or size a screenshot region may claim, in CSS
+ * pixels. A million is taller than any page a browser will lay out and small
+ * enough that a row cannot be handed `1e300` as a position.
+ */
+export const MAX_REGION_COORDINATE = 1_000_000;
+
 /** How many breadcrumbs a report may carry. Oldest are dropped first. */
 export const MAX_BREADCRUMBS = 30;
 
@@ -211,6 +218,36 @@ export type ElementRef = {
   rect: { x: number; y: number; width: number; height: number };
   /** id, name, role, type, href, aria-label, placeholder, title and data-* — never data-bugbottle*. */
   attributes: Record<string, string>;
+};
+
+/**
+ * How much of the page the screenshot shows. `page` is the whole page, as it
+ * always was; `area` is a rectangle the reporter dragged; `element` is the box
+ * around an element they clicked.
+ */
+export const SCREENSHOT_MODES = ["page", "area", "element"] as const;
+export type ScreenshotMode = (typeof SCREENSHOT_MODES)[number];
+
+/** A rectangle in CSS pixels. */
+export type RegionRect = { x: number; y: number; width: number; height: number };
+
+/**
+ * Which part of the page the screenshot was cut from, when it was not the
+ * whole page. A report without one is a whole-page picture, or no picture.
+ */
+export type ScreenshotRegion = {
+  mode: "area" | "element";
+  /** Page coordinates in CSS pixels, so it still says where after a scroll. */
+  rect: RegionRect;
+  /** The same rectangle relative to the viewport at the moment it was chosen. */
+  viewport: RegionRect;
+  /**
+   * True when the picture is the whole page with this rectangle drawn on it,
+   * rather than the rectangle cut out.
+   */
+  annotated?: boolean;
+  /** For `element`: the picked element's selector, as it appears in `elements`. */
+  selector?: string;
 };
 
 export const BREADCRUMB_KINDS = ["click", "navigation", "submit", "visibility"] as const;
@@ -383,6 +420,11 @@ export type BugReport = {
    */
   notes?: string[];
   screenshotDataUrl?: string;
+  /**
+   * The part of the page `screenshotDataUrl` shows, when the reporter chose an
+   * area or an element rather than the whole page.
+   */
+  screenshotRegion?: ScreenshotRegion;
 };
 
 export function isReportType(value: unknown): value is ReportType {
@@ -672,6 +714,49 @@ export function normaliseElements(
     });
   }
   return out;
+}
+
+function normaliseRect(raw: unknown): RegionRect | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  const num = (v: unknown, min: number) =>
+    typeof v === "number" && Number.isFinite(v)
+      ? Math.min(MAX_REGION_COORDINATE, Math.max(min, Math.round(v)))
+      : null;
+  const x = num(o.x, -MAX_REGION_COORDINATE);
+  const y = num(o.y, -MAX_REGION_COORDINATE);
+  const width = num(o.width, 0);
+  const height = num(o.height, 0);
+  if (x === null || y === null || !width || !height) return null;
+  return { x, y, width, height };
+}
+
+/**
+ * Validates the region a screenshot was cut from. An unknown mode, or a
+ * rectangle without a finite, positive size, is no region at all: the picture
+ * is still stored, it just is not described. Coordinates are rounded and held
+ * inside `MAX_REGION_COORDINATE`, the selector is clipped like an element's.
+ * Never throws.
+ */
+export function normaliseScreenshotRegion(raw: unknown): ScreenshotRegion | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.mode !== "area" && o.mode !== "element") return null;
+  const rect = normaliseRect(o.rect);
+  if (!rect) return null;
+  const region: ScreenshotRegion = {
+    mode: o.mode,
+    rect,
+    // A viewport rectangle that did not survive is the page one: the two only
+    // differ by the scroll, and a reader would rather have a position than none.
+    viewport: normaliseRect(o.viewport) ?? rect,
+  };
+  if (o.annotated === true) region.annotated = true;
+  if (typeof o.selector === "string") {
+    const selector = stripNullBytes(o.selector).slice(0, 500);
+    if (selector) region.selector = selector;
+  }
+  return region;
 }
 
 /**

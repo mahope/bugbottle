@@ -192,13 +192,13 @@ half of the same check.
 
 The whole public surface, generated from the build by
 `node scripts/api-table.mjs` and regenerated whenever an export changes.
-20 entry points; a name under more than one of them is the same symbol
+21 entry points; a name under more than one of them is the same symbol
 re-exported, not a copy. From 1.0 this table is the contract: removing a row
 needs a major version, and adding an entry point needs a minor one.
 
 ### `bugbottle`
 
-82 exports.
+87 exports.
 
 | Name | Kind | Source |
 |---|---|---|
@@ -246,6 +246,7 @@ needs a major version, and adding an entry point needs a minor one.
 | `MAX_NOTE_LENGTH` | const | `src/report-core.ts` |
 | `MAX_NOTES` | const | `src/report-core.ts` |
 | `MAX_PERF_MS` | const | `src/report-core.ts` |
+| `MAX_REGION_COORDINATE` | const | `src/report-core.ts` |
 | `MAX_REPLAY_BYTES` | const | `src/report-core.ts` |
 | `MAX_REPLAY_EVENTS` | const | `src/report-core.ts` |
 | `MAX_SCREENSHOT_BYTES` | const | `src/report-core.ts` |
@@ -261,12 +262,16 @@ needs a major version, and adding an entry point needs a minor one.
 | `PerfSnapshot` | type | `src/report-core.ts` |
 | `pickElement` | function | `src/element-picker.ts` |
 | `PickOptions` | type | `src/element-picker.ts` |
+| `RegionRect` | type | `src/report-core.ts` |
 | `ReplayCapture` | type | `src/report-core.ts` |
 | `ReplayEvent` | type | `src/report-core.ts` |
 | `REPORT_TYPES` | const | `src/report-core.ts` |
 | `ReportContext` | type | `src/report-core.ts` |
 | `ReportType` | type | `src/report-core.ts` |
 | `resetConsoleBuffer` | function | `src/console-buffer.ts` |
+| `SCREENSHOT_MODES` | const | `src/report-core.ts` |
+| `ScreenshotMode` | type | `src/report-core.ts` |
+| `ScreenshotRegion` | type | `src/report-core.ts` |
 | `ScreenshotRenderer` | type | `src/capture.ts` |
 | `ScreenshotTooLargeError` | class | `src/capture.ts` |
 | `Scrubber` | type | `src/scrub.ts` |
@@ -351,7 +356,7 @@ needs a major version, and adding an entry point needs a minor one.
 
 ### `bugbottle/server`
 
-233 exports.
+239 exports.
 
 | Name | Kind | Source |
 |---|---|---|
@@ -468,6 +473,7 @@ needs a major version, and adding an entry point needs a minor one.
 | `MAX_PERF_MS` | const | `src/report-core.ts` |
 | `MAX_RATE_LIMIT_BUCKETS` | const | `src/server/handle.ts` |
 | `MAX_RATE_LIMIT_KEY_LENGTH` | const | `src/server/handle.ts` |
+| `MAX_REGION_COORDINATE` | const | `src/report-core.ts` |
 | `MAX_REPLAY_BYTES` | const | `src/report-core.ts` |
 | `MAX_REPLAY_EVENTS` | const | `src/report-core.ts` |
 | `MAX_SCREENSHOT_BYTES` | const | `src/report-core.ts` |
@@ -512,11 +518,13 @@ needs a major version, and adding an entry point needs a minor one.
 | `normaliseNotes` | function | `src/report-core.ts` |
 | `normalisePerf` | function | `src/report-core.ts` |
 | `normaliseReplay` | function | `src/report-core.ts` |
+| `normaliseScreenshotRegion` | function | `src/report-core.ts` |
 | `normaliseStorage` | function | `src/report-core.ts` |
 | `parseSentryDsn` | function | `src/sinks/sentry.ts` |
 | `PerfSnapshot` | type | `src/report-core.ts` |
 | `RateLimitOptions` | type | `src/server/handle.ts` |
 | `RateLimitStore` | type | `src/server/handle.ts` |
+| `RegionRect` | type | `src/report-core.ts` |
 | `ReplayCapture` | type | `src/report-core.ts` |
 | `ReplayEvent` | type | `src/report-core.ts` |
 | `ReplayStore` | type | `src/server/handle.ts` |
@@ -528,6 +536,9 @@ needs a major version, and adding an entry point needs a minor one.
 | `resetDedupe` | function | `src/server/handle.ts` |
 | `resetRateLimits` | function | `src/server/handle.ts` |
 | `resetSignatures` | function | `src/server/handle.ts` |
+| `SCREENSHOT_MODES` | const | `src/report-core.ts` |
+| `ScreenshotMode` | type | `src/report-core.ts` |
+| `ScreenshotRegion` | type | `src/report-core.ts` |
 | `Scrubber` | type | `src/scrub.ts` |
 | `ScrubberName` | type | `src/scrub.ts` |
 | `ScrubOptions` | type | `src/scrub.ts` |
@@ -607,6 +618,29 @@ needs a major version, and adding an entry point needs a minor one.
 | `Annotator` | type | `src/annotate.ts` |
 | `AnnotatorOptions` | type | `src/annotate.ts` |
 | `createAnnotator` | function | `src/annotate.ts` |
+
+### `bugbottle/region`
+
+16 exports.
+
+| Name | Kind | Source |
+|---|---|---|
+| `AreaSelection` | type | `src/region.ts` |
+| `captureArea` | function | `src/region.ts` |
+| `captureElement` | function | `src/region.ts` |
+| `captureRegion` | function | `src/region.ts` |
+| `chooseRegionPixelRatio` | function | `src/region.ts` |
+| `computeCropBox` | function | `src/region.ts` |
+| `DEFAULT_ELEMENT_PADDING` | const | `src/region.ts` |
+| `DEFAULT_MIN_AREA_SIZE` | const | `src/region.ts` |
+| `MAX_REGION_CANVAS_PIXELS` | const | `src/region.ts` |
+| `normaliseDrag` | function | `src/region.ts` |
+| `PictureGeometry` | type | `src/region.ts` |
+| `Point` | type | `src/region.ts` |
+| `RegionCapture` | type | `src/region.ts` |
+| `RegionCaptureOptions` | type | `src/region.ts` |
+| `selectArea` | function | `src/region.ts` |
+| `SelectAreaOptions` | type | `src/region.ts` |
 
 ### `bugbottle/breadcrumbs`
 

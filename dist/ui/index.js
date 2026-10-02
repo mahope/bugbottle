@@ -95,7 +95,7 @@ button,textarea,input{font:inherit;color:inherit}
   border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.2);font-weight:600;
 }
 .trigger:focus-visible,.send:focus-visible,.close:focus-visible,.type:focus-visible,.pick:focus-visible,
-textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible,.tool:focus-visible,
+textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible,.tool:focus-visible,.mode:focus-visible,
 .act:focus-visible,canvas:focus-visible{outline:2px solid var(--bb-accent-text);outline-offset:2px}
 .logo{display:inline-flex;width:18px;height:18px}
 .logo img,.logo svg{width:100%;height:100%;object-fit:contain}
@@ -128,9 +128,9 @@ textarea{min-height:88px;resize:vertical}
 .preview{display:block;max-width:100%;max-height:120px;border:1px solid var(--bb-border);border-radius:6px;margin:6px 0}
 .edit,.act{border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;padding:6px 10px}
 .edit{margin:0 0 6px}
-.tools{display:flex;gap:6px;margin:0 0 6px}
-.tool{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;min-width:24px}
-.tool[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
+.tools,.modes{display:flex;gap:6px;margin:0 0 6px}
+.mode,.tool{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;min-width:24px}
+.mode[aria-pressed="true"],.tool[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
 canvas{display:block;width:100%;height:auto;border:1px solid var(--bb-border);border-radius:6px;touch-action:none;cursor:crosshair}
 .acts{display:flex;gap:6px;margin-top:6px}
 .act{flex:1}
@@ -154,7 +154,7 @@ li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [hidden]{display:none!important}
 @media (forced-colors:active){
 .trigger,.send{border:1px solid ButtonText}
-.type[aria-checked="true"],.tool[aria-checked="true"],.pick[aria-pressed="true"]{background:Highlight;color:HighlightText;border-color:Highlight;forced-color-adjust:none}
+.type[aria-checked="true"],.mode[aria-pressed="true"],.tool[aria-checked="true"],.pick[aria-pressed="true"]{background:Highlight;color:HighlightText;border-color:Highlight;forced-color-adjust:none}
 *:focus-visible{outline-color:Highlight!important}
 .send:disabled,.act:disabled{color:GrayText;border-color:GrayText;opacity:1}
 canvas,.preview{forced-color-adjust:none;border-color:CanvasText}
@@ -239,6 +239,8 @@ export function mountBugbottle(options) {
     // The annotator is a function the application hands in, so leaving it out
     // keeps the canvas editor out of the bundle entirely.
     const makeAnnotator = typeof options.annotate === "function" ? options.annotate : null;
+    // The same for the area and element modes: handed in, or not in the bundle.
+    const regionTool = typeof options.region === "function" ? { on: options.region } : options.region || null;
     const theme = options.theme ?? {};
     const container = options.container ?? document.body;
     let locale = options.locale ?? en;
@@ -247,12 +249,17 @@ export function mountBugbottle(options) {
     // ---- state
     let type = options.initialType ?? types[0] ?? "bug";
     let screenshot = null;
+    // Which part of the page `screenshot` shows; null is the whole page.
+    let shotRegion = null;
     // Live only while the editor is open; the marked picture is folded back into
     // `screenshot` when it closes, so the rest of the panel never knows about it.
     let annotator = null;
     let tool = "rect";
     let elements = [];
     let pickController = null;
+    // True while a mode button's picture is being taken, so a second click
+    // cannot land a slower whole-page render over a faster area.
+    let shooting = false;
     let sending = false;
     let isOpen = false;
     // Whatever had focus when the panel opened, so closing it puts the reporter
@@ -310,6 +317,10 @@ export function mountBugbottle(options) {
     const shotText = el("span");
     const shotRow = el("label", { class: "check" }, shotBox, shotText);
     const shotNote = el("p", { class: "note", id: "bb-shot-note" });
+    // A group rather than a radiogroup: each button does something at once —
+    // takes a picture, opens an overlay — and pressed says which one the
+    // current picture came from.
+    const modesRow = el("div", { class: "modes", role: "group", hidden: "" });
     const preview = el("img", { class: "preview", alt: "", hidden: "" });
     const editBtn = el("button", { class: "edit", type: "button", hidden: "" });
     const toolsRow = el("div", { class: "tools", role: "radiogroup" });
@@ -325,7 +336,7 @@ export function mountBugbottle(options) {
     const list = el("ul", { hidden: "" });
     const status = el("p", { class: "status", role: "status", "aria-live": "polite" });
     const sendBtn = el("button", { class: "send", type: "button" });
-    const form = el("div", { class: "form" }, intro, typesRow, messageLabel, textarea, contactLabel, contactInput, contactNote, shotRow, shotNote, preview, editBtn, editor, pickBtn, list, status, sendBtn);
+    const form = el("div", { class: "form" }, intro, typesRow, messageLabel, textarea, contactLabel, contactInput, contactNote, shotRow, shotNote, modesRow, preview, editBtn, editor, pickBtn, list, status, sendBtn);
     // `role="status"` on the sentence rather than the container, because the
     // container also holds the close button and a live region that announces a
     // control is noise. It is its own live region because `status` lives inside
@@ -350,6 +361,17 @@ export function mountBugbottle(options) {
     }
     if (options.elementPicker === false)
         pickBtn.hidden = true;
+    const MODES = ["page", "area", "element"];
+    const modeButtons = new Map();
+    if (options.screenshot && regionTool) {
+        modesRow.hidden = false;
+        for (const m of MODES) {
+            const b = el("button", { class: "mode", type: "button", "aria-pressed": "false" });
+            b.addEventListener("click", () => void shootRegion(m));
+            modeButtons.set(m, b);
+            modesRow.append(b);
+        }
+    }
     // Nothing about the contact field is rendered unless it was asked for: no
     // label, no input, no note, and nothing in the focus order.
     const wantsContact = options.contact === true || options.contact === "required";
@@ -420,6 +442,12 @@ export function mountBugbottle(options) {
         };
         for (const [t, b] of toolButtons)
             b.textContent = toolText[t];
+        modesRow.setAttribute("aria-label", text("shotModeLabel"));
+        const modeText = {
+            page: text("shotPage"), area: text("shotArea"), element: text("shotElement"),
+        };
+        for (const [m, b] of modeButtons)
+            b.textContent = modeText[m];
         undoBtn.textContent = ui.undo;
         doneBtn.textContent = ui.done;
         pickBtn.textContent = pickController ? ui.picking : ui.pickElement;
@@ -427,6 +455,16 @@ export function mountBugbottle(options) {
         thanksText.textContent = ui.thanks;
         thanksClose.textContent = ui.close;
         renderElements();
+    }
+    /** One of the optional strings, in English when the locale predates it. */
+    function text(key) {
+        return ui[key] ?? en.ui[key] ?? "";
+    }
+    /** Marks the button of the mode the current picture was taken in. */
+    function showMode() {
+        const mode = shotRegion?.mode ?? "page";
+        for (const [m, b] of modeButtons)
+            b.setAttribute("aria-pressed", String(!!screenshot && m === mode));
     }
     function applyIntro() {
         const text = openedByError ? ui.openedByError : ui.intro;
@@ -509,20 +547,89 @@ export function mountBugbottle(options) {
         if (!render || screenshot)
             return;
         try {
-            screenshot = await captureScreenshot(render, { mask: options.mask });
-            preview.src = screenshot;
-            preview.hidden = false;
-            editBtn.hidden = !makeAnnotator;
+            showShot(await captureScreenshot(render, { mask: options.mask }), null);
         }
         catch (err) {
-            shotBox.checked = false;
-            setStatus(err instanceof ScreenshotTooLargeError ? msg.screenshotTooLarge : msg.screenshotFailed, "error");
-            options.onError?.(err);
+            shotFailed(err);
+        }
+    }
+    function showShot(dataUrl, region) {
+        screenshot = dataUrl;
+        shotRegion = region;
+        preview.src = dataUrl;
+        preview.hidden = false;
+        editBtn.hidden = !makeAnnotator;
+        showMode();
+    }
+    function shotFailed(err) {
+        // Unticked only when there is no picture left; a failed re-shot leaves
+        // the one on screen, and the box should say it is still going.
+        shotBox.checked = !!screenshot;
+        setStatus(err instanceof ScreenshotTooLargeError ? msg.screenshotTooLarge : msg.screenshotFailed, "error");
+        options.onError?.(err);
+    }
+    /**
+     * Takes the picture again in one of the three modes. The area and element
+     * modes put the panel away while the reporter works on the page, exactly as
+     * the element picker does, and the overlay itself says what to do; a cancel
+     * leaves the picture that was there.
+     */
+    async function shootRegion(mode) {
+        const render = options.screenshot;
+        if (!render || !regionTool || pickController || shooting)
+            return;
+        // Marks already drawn are kept, as closing the panel keeps them: a
+        // cancelled selection leaves the picture exactly as it was.
+        closeEditor(true);
+        shotBox.checked = true;
+        setStatus("");
+        if (mode === "page") {
+            shooting = true;
+            clearScreenshot();
+            await capture();
+            shooting = false;
+            modeButtons.get(mode)?.focus();
+            return;
+        }
+        const controller = new AbortController();
+        pickController = controller;
+        // Picking an element for the picture is the picker the panel already has,
+        // with a picture taken at the end, so it says the same two sentences.
+        const instructions = mode === "area" ? text("areaInstructions") : ui.picking;
+        live.textContent = mode === "area" ? instructions : ui.pickingAnnounce;
+        panel.hidden = true;
+        try {
+            const shot = await regionTool.on(render, mode, {
+                mask: options.mask,
+                ...regionTool,
+                instructions,
+                signal: controller.signal,
+            });
+            if (shot) {
+                showShot(shot.dataUrl, shot.region ?? null);
+                if (shot.element) {
+                    elements = [...elements, shot.element].slice(-MAX_ELEMENTS);
+                    renderElements();
+                }
+            }
+        }
+        catch (err) {
+            shotFailed(err);
+        }
+        finally {
+            pickController = null;
+            live.textContent = "";
+            if (isOpen) {
+                panel.hidden = false;
+                modeButtons.get(mode)?.focus();
+            }
         }
     }
     function clearScreenshot() {
         closeEditor(false);
         screenshot = null;
+        shotRegion = null;
+        showMode();
         preview.hidden = true;
         preview.removeAttribute("src");
         editBtn.hidden = true;
@@ -606,6 +713,7 @@ export function mountBugbottle(options) {
                 // one out of the body entirely.
                 contact: wantsContact ? contactInput.value : "",
                 screenshotDataUrl: shotBox.checked ? screenshot : null,
+                screenshotRegion: shotRegion,
                 includeConsole: consoleFor(type),
                 elements,
                 extra: options.extra,

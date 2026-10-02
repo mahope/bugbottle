@@ -9,7 +9,13 @@
 import { collectContext } from "./capture.ts";
 import { getConsoleBuffer } from "./console-buffer.ts";
 import { readBreadcrumbs, readNetwork, readPerf, readReplay, readStorage } from "./registry.ts";
-import { utf8Length, type BugReport, type ElementRef, type ReportType } from "./report-core.ts";
+import {
+  utf8Length,
+  type BugReport,
+  type ElementRef,
+  type ReportType,
+  type ScreenshotRegion,
+} from "./report-core.ts";
 
 export type BuildReportInput = {
   type: ReportType;
@@ -23,6 +29,12 @@ export type BuildReportInput = {
   contact?: string | null;
   /** A PNG data URL from `captureScreenshot`, or nothing. */
   screenshotDataUrl?: string | null;
+  /**
+   * Which part of the page that picture shows, from `captureArea` or
+   * `captureElement` in `bugbottle/region`. Sent only beside a picture: a
+   * region with no screenshot describes nothing.
+   */
+  screenshotRegion?: ScreenshotRegion | null;
   /** Attach the recorded console errors. Default true. */
   includeConsole?: boolean;
   /**
@@ -106,7 +118,10 @@ export function buildReport(input: BuildReportInput): BugReport & Record<string,
     const replay = readReplay();
     if (replay) report.replay = replay;
   }
-  if (input.screenshotDataUrl) report.screenshotDataUrl = input.screenshotDataUrl;
+  if (input.screenshotDataUrl) {
+    report.screenshotDataUrl = input.screenshotDataUrl;
+    if (input.screenshotRegion) report.screenshotRegion = input.screenshotRegion;
+  }
   const body = { ...input.extra, ...report };
   return input.scrub ? input.scrub(body) : body;
 }
