@@ -16,6 +16,11 @@ export declare function useBugReport(options: UseBugReportOptions): {
     destroy: () => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
+    attachScreenshot: (shot: {
+        dataUrl: string;
+        region?: import("../report-core.ts").ScreenshotRegion;
+        element?: import("./index.ts").ElementRef;
+    } | null) => void;
     pickElement: () => Promise<import("./index.ts").ElementRef | null>;
     cancelPick: () => void;
     removeElement: (index: number) => void;
@@ -34,6 +39,8 @@ export declare function useBugReport(options: UseBugReportOptions): {
     canScreenshot: import("vue").ComputedRef<boolean>;
     screenshot: import("vue").ComputedRef<string | null>;
     includeScreenshot: import("vue").ComputedRef<boolean>;
+    /** Which part of the page the screenshot shows, or null for the whole page. */
+    screenshotRegion: import("vue").ComputedRef<import("../report-core.ts").ScreenshotRegion | null>;
     /** Elements the reporter has pointed at, in order. */
     elements: import("vue").ComputedRef<import("./index.ts").ElementRef[]>;
     status: import("vue").ComputedRef<BugReportStatus>;

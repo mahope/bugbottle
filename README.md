@@ -4283,6 +4283,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `annotate` | `createAnnotator` from `bugbottle/annotate` renders "Edit picture"; omitted or `false`, nothing leads to an editor and none of it is bundled. |
 | `contact` | `true` adds an optional field asking how to reach the reporter; `"required"` refuses to send without it. Off by default. What they type travels as `contact` on the report. |
 | `elementPicker` | `false` leaves the picker out. Default true. |
+| `region` | `captureRegion` from `bugbottle/region` adds Whole page / Select area / Pick element under the screenshot box; `{ on: captureRegion, annotate: true }` outlines the choice on the whole page instead of cutting it out. Omitted or `false`, none of it is rendered or bundled. Needs `screenshot`. See [Choosing what the picture shows](#choosing-what-the-picture-shows). |
 | `locale`, `texts`, `messages` | The language, and per-string overrides of it. |
 | `theme`, `brand` | Colours, radius, position; the name and logo in the header. |
 | `types`, `initialType` | Which report types to offer, and which starts selected. |
@@ -5642,9 +5643,15 @@ is swallowed, so picking a button does not also press it.
 ```
 
 The selector prefers an `id` or a `data-testid` on the element or an ancestor,
-then falls back to `tag:nth-of-type` steps, at most five deep. It is meant to
-be read by a person or an agent, and to land on the right file — not to be a
-stable locator for a test suite.
+then an `aria-label` (which ends the walk only once it is unique, since every
+row's "Delete" button shares one), then falls back to `tag:nth-of-type` steps,
+at most five deep and never past 200 characters. An id, test id or label longer
+than 64 characters is skipped as generated. It is meant to be read by a person
+or an agent, and to land on the right file — not to be a stable locator for a
+test suite.
+
+To attach a *picture* of the element as well, see
+[Choosing what the picture shows](#choosing-what-the-picture-shows).
 
 ## What happened before
 
@@ -6022,6 +6029,126 @@ desktop behind it. That is a deliberate limit rather than a missing feature.
 
 What the reporter typed is hidden before the picture is taken; see
 [Masking](#masking).
+
+### Choosing what the picture shows
+
+"The total is wrong" is quicker to triage with a picture of the total than with
+a picture of the whole checkout — and a picture of the total is also a picture
+of less of everything else on the screen. `bugbottle/region` lets the reporter
+choose:
+
+- **Whole page** — `captureScreenshot`, as always.
+- **Select area** — a dimmed overlay covers the page and the reporter drags a
+  rectangle with a mouse, a pen or a finger. Enter takes the visible part of the
+  page, which is the keyboard's way through; Escape cancels. A drag smaller than
+  8 CSS pixels a side is a stray click and is ignored.
+- **Pick element** — the element under the pointer is outlined, and a click (or
+  Enter on a focused control) takes a picture of its box with 8 pixels of the
+  page around it. The element's description — selector, tag, text, rectangle —
+  comes with it, the same `ElementRef` [`pickElement`](#pointing-at-the-element)
+  resolves with.
+
+```ts
+import { htmlToImage } from "bugbottle/html-to-image";
+import { captureArea, captureElement } from "bugbottle/region";
+import { buildReport, sendReport } from "bugbottle";
+
+const shot = await captureArea(htmlToImage); // null when the reporter pressed Escape
+if (shot) {
+  await sendReport(endpoint, buildReport({
+    type: "bug",
+    message,
+    screenshotDataUrl: shot.dataUrl,
+    screenshotRegion: shot.region,
+  }));
+}
+```
+
+The page is rendered the usual way — from the DOM, masked — and the rectangle
+is cut out of it on a canvas. The render is at the device's pixel ratio, so a
+crop on a 2x screen is as sharp as what the reporter saw, lowered when the
+whole page at that ratio would pass the 16 megapixels Safari on iOS allows a
+canvas. The scale is read back off the rendered picture rather than assumed, so
+a renderer that had to settle for less still crops the right pixels. A crop
+that is still over the size limit is halved, then quartered, before it gives up
+with `ScreenshotTooLargeError`, exactly as a whole page does.
+
+`annotate: true` draws the rectangle on a picture of the whole page instead of
+cutting it out — the reader sees where on the page it was, at the cost of the
+page being in the picture:
+
+```ts
+const shot = await captureElement(htmlToImage, { annotate: true });
+```
+
+Every function takes a `signal`, and resolves with null when it is aborted, as
+it does on Escape. The overlay carries `data-bugbottle`, so it is never in a
+picture; it is a dialog named by its instruction, it takes focus while it is up
+and gives it back afterwards, its outline is a white line on a dark one so it
+shows on any page, forced colours redraw it with the system palette, and
+nothing on it moves, so there is nothing for `prefers-reduced-motion` to turn
+off. `instructions` replaces the English line on it — the panel passes the
+reporter's language.
+
+What arrives on the report is a `screenshotRegion` beside the picture:
+
+```jsonc
+"screenshotRegion": {
+  "mode": "element",                                      // or "area"
+  "rect": { "x": 912, "y": 1640, "width": 134, "height": 52 },  // page CSS pixels
+  "viewport": { "x": 912, "y": 240, "width": 134, "height": 52 },
+  "selector": "form#checkout > button:nth-of-type(2)",   // element mode only
+  "annotated": true                                       // only with annotate
+}
+```
+
+It is only ever sent beside a picture, and the server drops it whenever the
+picture is dropped (`screenshot: "drop"`, or a picture that fails its PNG
+check). A whole-page picture has none, so a report from before 1.1 looks
+exactly as it did.
+
+**The panel** takes the function as `region`, the same seam as `annotate`:
+three buttons — Whole page, Select area, Pick element — appear under the
+screenshot box, the panel steps aside while the reporter works on the page, and
+the pressed button says which one the attached picture came from.
+
+```ts
+import { mountBugbottle } from "bugbottle/ui";
+import { htmlToImage } from "bugbottle/html-to-image";
+import { captureRegion } from "bugbottle/region";
+
+mountBugbottle({ endpoint, screenshot: htmlToImage, region: captureRegion });
+// or outline the choice on the whole page:
+mountBugbottle({ endpoint, screenshot: htmlToImage, region: { on: captureRegion, annotate: true } });
+```
+
+**The form adapters** stay headless: call `captureArea` or `captureElement`
+from your own button, hide your form while it runs, and hand the result to
+`attachScreenshot`, which puts the picture, the region and a picked element on
+the form state (`screenshotRegion` is on it beside `screenshot`). A cancelled
+selection is `null` and changes nothing.
+
+```tsx
+const form = useBugReport({ endpoint, screenshot: htmlToImage });
+<button onClick={async () => form.attachScreenshot(await captureArea(htmlToImage))}>
+  Select area
+</button>
+```
+
+The script-tag builds do not carry `bugbottle/region`: they ship no renderer,
+so a page using them is already passing one to `mount` from its own code, and
+can import the module from jsDelivr the same way
+(`https://cdn.jsdelivr.net/npm/bugbottle@1/dist/region.js` is plain ESM).
+
+Two browser limits are worth knowing. Safari renders `html-to-image`'s SVG
+pictures less faithfully than Chromium and Firefox — web fonts and images can
+be missing from the first render — and a crop inherits whatever the render
+got wrong. And `position: fixed` content is drawn where it sits relative to the
+top of the page rather than where it was on screen after a scroll — that is how
+`html-to-image` lays it out — so an area selected over a sticky header further
+down the page may not show the header, and a fixed or sticky element picked
+after a scroll may be cut from the wrong place. `annotate: true` has the same
+limit; on such pages, the whole page is the safer mode.
 
 ### Marking the picture
 
@@ -7998,6 +8125,15 @@ post type with an admin list, and emails them if you want. One activation. See
 **`bugbottle/annotate`** — `createAnnotator`, and the `Annotator`,
 `AnnotatorOptions` and `AnnotateTool` types. See "Marking the picture".
 
+**`bugbottle/region`** (1.1) — `captureArea`, `captureElement`,
+`captureRegion` (the three modes behind one function, the shape the panel takes
+it in), `selectArea` (the overlay alone, resolving with the rectangle), the
+geometry under them — `normaliseDrag`, `computeCropBox`,
+`chooseRegionPixelRatio` — with `DEFAULT_MIN_AREA_SIZE`,
+`DEFAULT_ELEMENT_PADDING` and `MAX_REGION_CANVAS_PIXELS`, and the
+`RegionCaptureOptions`, `RegionCapture`, `SelectAreaOptions`, `AreaSelection`,
+`PictureGeometry` and `Point` types. See "Choosing what the picture shows".
+
 **`bugbottle/breadcrumbs`** — `initBreadcrumbs`, `getBreadcrumbs`,
 `resetBreadcrumbs`, `isBreadcrumbsActive`, and the `BreadcrumbsOptions` type.
 
@@ -8058,8 +8194,9 @@ Optional peer `solid-js` >= 1.8.
 Requires `html-to-image`.
 
 **`bugbottle/ui`** — `mountBugbottle`, and the `MountOptions` (whose
-`annotate` takes `createAnnotator` itself, whose `shake` takes `onShake`, and
-whose `network` and `perf` take `initNetwork` and `initPerf`),
+`annotate` takes `createAnnotator` itself, whose `region` takes
+`captureRegion`, whose `shake` takes `onShake`, and whose `network` and `perf`
+take `initNetwork` and `initPerf`),
 `Theme`, `Brand` and `BugbottleWidget` types.
 
 **`bugbottle/locales`** — `en`, `da`, `sv`, `nb`, `de`, `nl`, `fr`, `es`,

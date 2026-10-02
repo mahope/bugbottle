@@ -115,6 +115,21 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Changed
 
+- **`buildSelector` prefers an `aria-label` after an id and a test id**, and
+  caps what it writes: never past 200 characters, and an id, test id or label
+  over 64 characters is skipped as generated. A label ends the walk only once it
+  is unique, because every row's "Delete" shares one.
+- Budgets for the panel and its two script-tag builds, measured with Git Bash's
+  gzip, which agrees with CI's on files this size: `bugbottle/ui` 12288 → 12800
+  (measures 12 325; 11 765 before), `dist/bugbottle.js` 25088 → 26624
+  (25 923; 24 931 before), `dist/bugbottle.slim.js` 21504 → 23040 (22 426;
+  21 398 before). The rise is the three buttons, their wiring and five strings,
+  which the script tags carry in eight languages; neither script tag carries
+  `bugbottle/region` itself. `bugbottle/region` is budgeted at 6144 and
+  measures 5 603 standalone, nearly all of it the capture, the mask and the
+  picker that any picture pays for. The hook moved 5 790 → 5 947 and the three
+  marginal adapters about 100 bytes each, inside their budgets.
+
 - The `bugbottle/ui` budget is 12288 bytes gzipped (was 11776; measures 11 785
   in CI). The keepalive fix above cost the panel 29 bytes — 11 756 → 11 785 —
   and the number that exposed it is worth recording, because it is neither the
@@ -129,6 +144,42 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 
 ### Added
+
+- **A screenshot of an area or an element, not only of the whole page:
+  `bugbottle/region`, a new entry point — so the next release is 1.1.0.**
+  `captureArea(render)` covers the page with a dimmed overlay and cuts out the
+  rectangle the reporter drags (mouse, pen or finger; Enter takes the visible
+  page, Escape cancels, a drag under 8 pixels a side is ignored).
+  `captureElement(render)` outlines the element under the pointer and cuts out
+  its box with 8 pixels of page around it, resolving with the element's
+  `ElementRef` as well. `captureRegion(render, mode)` is the two of them and
+  the whole page behind one function, which is the shape the panel takes;
+  `selectArea()` is the overlay alone. The page is rendered at the device's
+  pixel ratio, lowered to stay under the 16-megapixel canvas Safari on iOS
+  allows, and the crop scale is read back off the rendered picture, so a
+  renderer that settled for less still crops the right pixels. `annotate: true`
+  outlines the rectangle on the whole page instead of cutting it out. The pure
+  geometry is exported and tested: `normaliseDrag`, `computeCropBox`,
+  `chooseRegionPixelRatio`.
+- **`screenshotRegion` on the report**: `{ mode, rect, viewport, selector?,
+  annotated? }`, page and viewport rectangles in CSS pixels, sent only beside a
+  picture. Optional, so a 1.0 report and a 1.0 server are untouched;
+  `normaliseScreenshotRegion` and `MAX_REGION_COORDINATE` on `bugbottle/server`
+  validate it, `handleReport` drops it whenever the picture is dropped,
+  `toMarkdown` prints it as one fact, and `report.schema.json` and
+  `openapi.json` carry it. `buildReport` takes it as `screenshotRegion`.
+- **The panel's `region` option**: hand in `captureRegion` and three buttons —
+  Whole page, Select area, Pick element — appear under the screenshot box, the
+  panel steps aside while the reporter works on the page, and the pressed
+  button says which mode the attached picture came from. Five new optional
+  `UiTexts` strings (`shotModeLabel`, `shotPage`, `shotArea`, `shotElement`,
+  `areaInstructions`) in all thirteen languages; a locale written before them
+  falls back to English. Picking an element for the picture reuses the
+  picker's own `picking` and `pickingAnnounce` sentences.
+- **`attachScreenshot(shot)` on the form state**, so the React, Vue, Svelte and
+  Solid adapters take a picture from `captureArea`/`captureElement` without
+  carrying the overlay; `screenshotRegion` sits beside `screenshot` in the
+  state.
 
 - **`/docs/solid/`: the last shipped adapter had no page of its own.**
   `bugbottle/solid` has been an entry point since 0.6 and was documented as a

@@ -83,6 +83,18 @@ export type UiTexts = {
   pickingAnnounce: string;
   /** Announced when pick mode ends, whether an element was picked or not. */
   pickingDone: string;
+  /*
+   * The screenshot's three modes, offered when the panel is handed
+   * `region`. Optional so a locale written before 1.1 still type-checks; the
+   * panel falls back to English for any that are missing.
+   */
+  /** Accessible name of the row of three buttons. Never shown. */
+  shotModeLabel?: string;
+  shotPage?: string;
+  shotArea?: string;
+  shotElement?: string;
+  /** Shown on the overlay while the reporter drags an area, and read out. */
+  areaInstructions?: string;
   attached: string;
   remove: string;
   /** Accessible name of one remove button. `{element}` is the element itself. */
@@ -195,6 +207,11 @@ export const en: Locale = {
     pickingAnnounce:
       "Pointing mode. Click any element on the page to attach it, or press Escape to stop.",
     pickingDone: "Pointing mode ended.",
+    shotModeLabel: "Screenshot of",
+    shotPage: "Whole page",
+    shotArea: "Select area",
+    shotElement: "Pick element",
+    areaInstructions: "Drag to select an area. Enter takes the visible page, Esc cancels.",
     attached: "Attached",
     remove: "Remove",
     removeElement: "Remove {element}",
@@ -249,6 +266,12 @@ export const da: Locale = {
     pickingAnnounce:
       "Pegetilstand. Klik på et element på siden for at vedhæfte det, eller tryk på Esc for at stoppe.",
     pickingDone: "Pegetilstand er slut.",
+    shotModeLabel: "Skærmbillede af",
+    shotPage: "Hele siden",
+    shotArea: "Vælg område",
+    shotElement: "Vælg element",
+    areaInstructions:
+      "Træk for at markere et område. Enter tager den synlige side, Esc annullerer.",
     attached: "Vedhæftet",
     remove: "Fjern",
     removeElement: "Fjern {element}",
@@ -303,6 +326,11 @@ export const sv: Locale = {
     pickingAnnounce:
       "Pekläge. Klicka på ett element på sidan för att bifoga det, eller tryck på Esc för att avbryta.",
     pickingDone: "Pekläget är avslutat.",
+    shotModeLabel: "Skärmbild av",
+    shotPage: "Hela sidan",
+    shotArea: "Välj område",
+    shotElement: "Välj element",
+    areaInstructions: "Dra för att markera ett område. Enter tar den synliga sidan, Esc avbryter.",
     attached: "Bifogat",
     remove: "Ta bort",
     removeElement: "Ta bort {element}",
@@ -357,6 +385,11 @@ export const nb: Locale = {
     pickingAnnounce:
       "Pekemodus. Klikk på et element på siden for å legge det ved, eller trykk Esc for å avbryte.",
     pickingDone: "Pekemodus er avsluttet.",
+    shotModeLabel: "Skjermbilde av",
+    shotPage: "Hele siden",
+    shotArea: "Velg område",
+    shotElement: "Velg element",
+    areaInstructions: "Dra for å markere et område. Enter tar den synlige siden, Esc avbryter.",
     attached: "Vedlagt",
     remove: "Fjern",
     removeElement: "Fjern {element}",
@@ -411,6 +444,12 @@ export const de: Locale = {
     pickingAnnounce:
       "Zeigemodus. Klicken Sie auf ein Element der Seite, um es anzuhängen, oder drücken Sie Esc zum Abbrechen.",
     pickingDone: "Zeigemodus beendet.",
+    shotModeLabel: "Screenshot von",
+    shotPage: "Ganze Seite",
+    shotArea: "Bereich wählen",
+    shotElement: "Element wählen",
+    areaInstructions:
+      "Ziehen Sie, um einen Bereich zu markieren. Enter nimmt die sichtbare Seite, Esc bricht ab.",
     attached: "Angehängt",
     remove: "Entfernen",
     removeElement: "{element} entfernen",
@@ -466,6 +505,12 @@ export const nl: Locale = {
     pickingAnnounce:
       "Aanwijsmodus. Klik op een element op de pagina om het bij te voegen, of druk op Esc om te stoppen.",
     pickingDone: "Aanwijsmodus beëindigd.",
+    shotModeLabel: "Screenshot van",
+    shotPage: "Hele pagina",
+    shotArea: "Gebied kiezen",
+    shotElement: "Element kiezen",
+    areaInstructions:
+      "Sleep om een gebied te selecteren. Enter neemt de zichtbare pagina, Esc annuleert.",
     attached: "Bijgevoegd",
     remove: "Verwijderen",
     removeElement: "{element} verwijderen",
@@ -520,6 +565,12 @@ export const fr: Locale = {
     pickingAnnounce:
       "Mode désignation. Cliquez sur un élément de la page pour le joindre, ou appuyez sur Échap pour arrêter.",
     pickingDone: "Mode désignation terminé.",
+    shotModeLabel: "Capture de",
+    shotPage: "Page entière",
+    shotArea: "Choisir une zone",
+    shotElement: "Choisir un élément",
+    areaInstructions:
+      "Faites glisser pour sélectionner une zone. Entrée prend la page visible, Échap annule.",
     attached: "Joint",
     remove: "Retirer",
     removeElement: "Retirer {element}",
@@ -575,6 +626,12 @@ export const es: Locale = {
     pickingAnnounce:
       "Modo de señalar. Haz clic en un elemento de la página para adjuntarlo, o pulsa Esc para cancelar.",
     pickingDone: "Modo de señalar finalizado.",
+    shotModeLabel: "Captura de",
+    shotPage: "Página entera",
+    shotArea: "Elegir zona",
+    shotElement: "Elegir elemento",
+    areaInstructions:
+      "Arrastra para seleccionar una zona. Intro toma la página visible, Esc cancela.",
     attached: "Adjunto",
     remove: "Quitar",
     removeElement: "Quitar {element}",

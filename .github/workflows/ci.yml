@@ -102,8 +102,14 @@ jobs:
           # fifty bytes of headroom is not headroom, and this file has been
           # within a hundred of its budget twice; the seam itself is described
           # beside the `bugbottle/queue` budget below.
-          if [ "$iife" -gt 25088 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 25088" >&2
+          # 1.1's area and element modes then cost it 992 bytes (24 931 ->
+          # 25 923) without carrying `bugbottle/region` at all: the panel's three
+          # buttons and their wiring, and five strings in eight languages. The
+          # module itself stays out, because this build ships no renderer and a
+          # page that passes one can import the module from jsDelivr too. The
+          # budget goes to 26624.
+          if [ "$iife" -gt 26624 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 26624" >&2
             exit 1
           fi
       - name: The slim script-tag bundle stays under its budget
@@ -128,8 +134,11 @@ jobs:
           # slightly more than the full build pays for the same code, because
           # there is less around it to share a dictionary with — so the budget
           # goes to 21504.
-          if [ "$slim" -gt 21504 ]; then
-            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 21504" >&2
+          # The same panel change cost this build 1028 bytes (21 398 -> 22 426),
+          # since it carries the same panel and the same eight languages; the
+          # budget goes to 23040.
+          if [ "$slim" -gt 23040 ]; then
+            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23040" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -147,6 +156,7 @@ jobs:
           echo 'import { normaliseConsole } from "bugbottle/server"; export { normaliseConsole };' > server.js
           echo 'import { mountBugbottle } from "bugbottle/ui"; export { mountBugbottle };' > ui.js
           echo 'import { createAnnotator } from "bugbottle/annotate"; export { createAnnotator };' > annotate.js
+          echo 'import { captureRegion } from "bugbottle/region"; export { captureRegion };' > region.js
           echo 'import { initBreadcrumbs } from "bugbottle/breadcrumbs"; initBreadcrumbs();' > breadcrumbs.js
           echo 'import { initNetwork } from "bugbottle/network"; initNetwork();' > network.js
           echo 'import { initPerf } from "bugbottle/perf"; initPerf();' > perf.js
@@ -170,6 +180,7 @@ jobs:
           npx esbuild server.js --bundle --minify --format=esm --platform=node --outfile=out-server.js
           npx esbuild ui.js --bundle --minify --format=esm --outfile=out-ui.js
           npx esbuild annotate.js --bundle --minify --format=esm --outfile=out-annotate.js
+          npx esbuild region.js --bundle --minify --format=esm --outfile=out-region.js
           npx esbuild breadcrumbs.js --bundle --minify --format=esm --outfile=out-breadcrumbs.js
           npx esbuild network.js --bundle --minify --format=esm --outfile=out-network.js
           npx esbuild perf.js --bundle --minify --format=esm --outfile=out-perf.js
@@ -185,7 +196,7 @@ jobs:
           # What the budgets above guard is that none of it reaches a bundle
           # that did not ask for it, which is why nothing imports this entry.
           npx esbuild locales-extra.js --bundle --minify --format=esm --outfile=out-locales-extra.js
-          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-breadcrumbs out-network out-perf out-queue out-queue-idb out-triggers out-shake out-sign out-rrweb out-locales-extra; do
+          for f in out-core out-react out-vue out-svelte out-solid out-form-core out-server out-ui out-annotate out-region out-breadcrumbs out-network out-perf out-queue out-queue-idb out-triggers out-shake out-sign out-rrweb out-locales-extra; do
             echo "$f: $(gzip -c $f.js | wc -c) bytes gzipped"
           done
           core=$(gzip -c out-core.js | wc -c)
@@ -275,8 +286,22 @@ jobs:
           # it does there. So a local figure is a guess in either direction on
           # a bundle this size, and a budget written from one is what made the
           # previous commit red. Measure this one in CI.
-          if [ "$ui" -gt 12288 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12288" >&2
+          # 1.1's `region` option then cost 560 bytes (11 765 -> 12 325 with
+          # Git Bash's gzip, which agrees with this job's on the IIFEs): three
+          # buttons, the overlay's handover and five English strings. The
+          # overlay is handed in like the annotator and is not in this number.
+          # The budget goes to 12800.
+          if [ "$ui" -gt 12800 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12800" >&2
+            exit 1
+          fi
+          # The area and element modes on their own entry. Most of this number
+          # is not the module: it is `captureScreenshot`, the mask and the
+          # element picker, which any application that takes a picture already
+          # carries. 5 603 bytes gzipped standalone when it landed.
+          region=$(gzip -c out-region.js | wc -c)
+          if [ "$region" -gt 6144 ]; then
+            echo "bugbottle/region is $region bytes gzipped; the budget is 6144" >&2
             exit 1
           fi
           # The annotator on its own: a canvas, three tools, an undo stack and

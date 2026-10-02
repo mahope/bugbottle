@@ -24,6 +24,11 @@ export declare function useBugReport(options: UseBugReportOptions): {
     setContact: (next: string) => void;
     toggleScreenshot: (checked: boolean) => void;
     recapture: () => Promise<void>;
+    attachScreenshot: (shot: {
+        dataUrl: string;
+        region?: import("../report-core.ts").ScreenshotRegion;
+        element?: import("./index.ts").ElementRef;
+    } | null) => void;
     pickElement: () => Promise<import("./index.ts").ElementRef | null>;
     cancelPick: () => void;
     removeElement: (index: number) => void;
@@ -36,6 +41,7 @@ export declare function useBugReport(options: UseBugReportOptions): {
     screenshot: string | null;
     includeScreenshot: boolean;
     canScreenshot: boolean;
+    screenshotRegion: import("../report-core.ts").ScreenshotRegion | null;
     elements: import("./index.ts").ElementRef[];
     status: BugReportStatus;
     types: readonly ["bug", "idea", "other"];

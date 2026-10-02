@@ -20,6 +20,7 @@ import type { initPerf, PerfOptions } from "../perf.ts";
 import { type ReportType } from "../report-core.ts";
 import type { Queue } from "../queue.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
+import type { captureRegion, RegionCaptureOptions } from "../region.ts";
 import type { onShake, ShakeOptions } from "../shake.ts";
 export type Theme = {
     /** Accent: trigger button, primary action, focus ring. */
@@ -100,6 +101,17 @@ export type MountOptions = {
      * pass in, so a bundler can drop what nobody asked for.
      */
     annotate?: typeof createAnnotator | false;
+    /**
+     * Offer three buttons under the screenshot box — whole page, select an area,
+     * pick an element — so the picture can show only the part of the page the
+     * report is about. Hand in `captureRegion` from `bugbottle/region`;
+     * `{ on: captureRegion, annotate: true }` outlines the choice on the whole
+     * page instead of cutting it out. Leave it out and the panel never mentions
+     * it and never carries the overlay. Needs `screenshot`.
+     */
+    region?: typeof captureRegion | ({
+        on: typeof captureRegion;
+    } & RegionCaptureOptions) | false;
     /**
      * `false` renders no floating button — call `open()` from your own control.
      * An element or selector makes that element the trigger instead.

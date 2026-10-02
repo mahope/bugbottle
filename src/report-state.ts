@@ -20,7 +20,12 @@ import {
   type ScreenshotRenderer,
 } from "./capture.ts";
 import { pickElement as pickElementFromPage } from "./element-picker.ts";
-import { MAX_ELEMENTS, type ElementRef, type ReportType } from "./report-core.ts";
+import {
+  MAX_ELEMENTS,
+  type ElementRef,
+  type ReportType,
+  type ScreenshotRegion,
+} from "./report-core.ts";
 import {
   buildReport,
   sendReport,
@@ -132,6 +137,11 @@ export type ReportState = {
   includeScreenshot: boolean;
   /** Whether a renderer was supplied, so the form can hide the checkbox. */
   canScreenshot: boolean;
+  /**
+   * Which part of the page `screenshot` shows, or null for the whole page.
+   * Set by `attachScreenshot`, sent with the report as `screenshotRegion`.
+   */
+  screenshotRegion: ScreenshotRegion | null;
   /** Elements the reporter has pointed at, in order. */
   elements: ElementRef[];
   status: BugReportStatus;
@@ -144,6 +154,16 @@ export type ReportActions = {
   setContact: (next: string) => void;
   toggleScreenshot: (checked: boolean) => void;
   recapture: () => Promise<void>;
+  /**
+   * Puts a picture the form did not take itself on the report: what
+   * `captureArea`, `captureElement` or `captureRegion` from `bugbottle/region`
+   * resolved with. The region travels with it, and a picked element is
+   * attached like one from `pickElement`. `null` — a cancelled selection —
+   * changes nothing.
+   */
+  attachScreenshot: (
+    shot: { dataUrl: string; region?: ScreenshotRegion; element?: ElementRef } | null,
+  ) => void;
   pickElement: () => Promise<ElementRef | null>;
   cancelPick: () => void;
   removeElement: (index: number) => void;
@@ -196,6 +216,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     screenshot: null,
     includeScreenshot: canShoot() && armedFor(firstType()),
     canScreenshot: canShoot(),
+    screenshotRegion: null,
     elements: [],
     status: { kind: "idle" },
   };
@@ -207,16 +228,21 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
   };
 
   let capturing = false;
+  // Bumped by every picture that lands, so a capture that finishes after
+  // `attachScreenshot` does not put the whole page back over the area.
+  let shots = 0;
   let picking: AbortController | null = null;
 
   const capture = async () => {
     const renderer = opts.screenshot;
     if (!renderer || capturing) return;
     capturing = true;
+    const mine = ++shots;
     set({ status: { kind: "capturing" } });
     try {
       const dataUrl = await captureScreenshot(renderer, { mask: opts.mask });
-      set({ screenshot: dataUrl, status: { kind: "idle" } });
+      if (mine !== shots) return set({ status: { kind: "idle" } });
+      set({ screenshot: dataUrl, screenshotRegion: null, status: { kind: "idle" } });
     } catch (err) {
       // A failed picture must never block the report, so this only turns the
       // attachment off and says why.
@@ -256,10 +282,23 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       if (!canShoot()) return;
       set({ includeScreenshot: checked });
       if (checked && !state.screenshot) void capture();
-      if (!checked) set({ screenshot: null });
+      if (!checked) set({ screenshot: null, screenshotRegion: null });
     },
 
     recapture: capture,
+
+    attachScreenshot(shot) {
+      if (!shot) return;
+      shots++;
+      set({
+        screenshot: shot.dataUrl,
+        screenshotRegion: shot.region ?? null,
+        includeScreenshot: true,
+        elements: shot.element
+          ? [...state.elements, shot.element].slice(-MAX_ELEMENTS)
+          : state.elements,
+      });
+    },
 
     /**
      * Lets the reporter click the element the report is about. Resolves when
@@ -308,6 +347,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
         message: "",
         contact: "",
         screenshot: null,
+        screenshotRegion: null,
         elements: [],
         includeScreenshot: canShoot() && armedFor(type),
         status: { kind: "idle" },
@@ -328,6 +368,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           message: "",
           contact: "",
           screenshot: null,
+          screenshotRegion: null,
           elements: [],
           includeScreenshot: canShoot() && armedFor(state.type),
         });
@@ -340,6 +381,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           message: state.message,
           contact: state.contact,
           screenshotDataUrl: state.includeScreenshot ? state.screenshot : null,
+          screenshotRegion: state.screenshotRegion,
           includeConsole: (opts.consoleFor ?? bugsOnly)(state.type),
           elements: state.elements,
           extra: opts.extra,

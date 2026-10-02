@@ -39,6 +39,7 @@ const WORDS = [
   "Eighteen",
   "Nineteen",
   "Twenty",
+  "Twenty-one",
 ];
 
 /**
@@ -56,6 +57,7 @@ const SUBPATHS = [
   "./server",
   "./html-to-image",
   "./annotate",
+  "./region",
   "./breadcrumbs",
   "./network",
   "./perf",
@@ -73,7 +75,7 @@ const SUBPATHS = [
   "./package.json",
 ];
 
-test("the exports map is exactly the twenty-three subpaths 1.0 promises", () => {
+test("the exports map is exactly the twenty-four subpaths 1.1 promises", () => {
   assert.deepEqual(
     entries.map(([name]) => name),
     SUBPATHS,

@@ -51,6 +51,8 @@ export function useBugReport(options: UseBugReportOptions) {
     canScreenshot: computed(() => state.value.canScreenshot),
     screenshot: computed(() => state.value.screenshot),
     includeScreenshot: computed(() => state.value.includeScreenshot),
+    /** Which part of the page the screenshot shows, or null for the whole page. */
+    screenshotRegion: computed(() => state.value.screenshotRegion),
     /** Elements the reporter has pointed at, in order. */
     elements: computed(() => state.value.elements),
     status,

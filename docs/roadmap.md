@@ -6,14 +6,14 @@ Short version. The reasoning is in `research-features.md` and
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1.5 kB gzipped, `bugbottle/react` under 6 kB, `bugbottle/ui`
-under 11.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/breadcrumbs` under
+under 12.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/region` under 6 kB, `bugbottle/breadcrumbs` under
 1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1600 bytes,
 `bugbottle/queue-idb` under 1024 bytes,
 `bugbottle/perf` under 1.5 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
 over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` under
 768 bytes, `bugbottle/rrweb` under 1024 bytes, the script-tag build under
-25088 bytes and its slim twin under 21504. The core budget was 1 kB until 0.6, when stack
+26624 bytes and its slim twin under 23040. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
@@ -440,6 +440,18 @@ with a `301` to the same path on the canonical host. A second `server` block in
 does not flap, and carrying the same security headers as the block that serves.
 The canonical links, the Open Graph URLs and the sitemap already named
 bugbottle.dev; this is the last address that did not.
+
+**Unreleased (1.1)** — a screenshot of an area or an element rather than the
+whole page: `bugbottle/region` with `captureArea`, `captureElement`,
+`captureRegion` and `selectArea`, a dimmed overlay for the drag (pointer and
+touch, Enter for the visible page, Escape to cancel) and a high-contrast
+outline for the pick, the crop taken at the device's pixel ratio and read back
+off the rendered picture, or the rectangle outlined on the whole page with
+`annotate: true`. The report gains an optional `screenshotRegion`, validated,
+dropped with its picture and printed by `toMarkdown`; the panel takes
+`region: captureRegion` and offers Whole page / Select area / Pick element; the
+form state takes the result through `attachScreenshot`. `buildSelector` now
+prefers an `aria-label` after an id and a test id, and stops at 200 characters.
 
 ## 0.5 — evidence and delivery
 
