@@ -5,7 +5,7 @@
  * `buildReport` with what the user typed and `sendReport` with the result; the
  * React hook does the same underneath.
  */
-import { type BugReport, type ElementRef, type ReportType } from "./report-core.ts";
+import { type BugReport, type ElementRef, type ReportType, type ScreenshotRegion } from "./report-core.ts";
 export type BuildReportInput = {
     type: ReportType;
     message: string;
@@ -18,6 +18,12 @@ export type BuildReportInput = {
     contact?: string | null;
     /** A PNG data URL from `captureScreenshot`, or nothing. */
     screenshotDataUrl?: string | null;
+    /**
+     * Which part of the page that picture shows, from `captureArea` or
+     * `captureElement` in `bugbottle/region`. Sent only beside a picture: a
+     * region with no screenshot describes nothing.
+     */
+    screenshotRegion?: ScreenshotRegion | null;
     /** Attach the recorded console errors. Default true. */
     includeConsole?: boolean;
     /**

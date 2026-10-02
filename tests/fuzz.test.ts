@@ -55,7 +55,9 @@ import {
   normaliseNetwork,
   normalisePerf,
   normaliseReplay,
+  normaliseScreenshotRegion,
   normaliseStorage,
+  MAX_REGION_COORDINATE,
   utf8Length,
 } from "../src/report-core.ts";
 import { scrubReport } from "../src/scrub.ts";
@@ -366,6 +368,15 @@ function report(random: Random): Record<string, unknown> {
       configurable: true,
     });
   }
+  // Drawn last, so every field above still sees the sequence of numbers it saw
+  // before the region existed and the recorded seeds still reproduce.
+  out.screenshotRegion = field(random, () => ({
+    mode: pick(random, ["area", "element", "page", "screen"]),
+    rect: { x: scalar(random), y: scalar(random), width: scalar(random), height: scalar(random) },
+    viewport: value(random, 2),
+    annotated: scalar(random),
+    selector: `s${NUL}`.repeat(int(random, 600)),
+  }));
   return out;
 }
 
@@ -471,6 +482,20 @@ function assertLimits(payload: Record<string, unknown>): void {
     }
   }
   assertNoNulDeep(elements, "normaliseElements");
+
+  const region = normaliseScreenshotRegion(payload.screenshotRegion);
+  if (region) {
+    assert.ok(region.mode === "area" || region.mode === "element", "region mode is not a mode");
+    for (const rect of [region.rect, region.viewport]) {
+      for (const side of Object.values(rect)) {
+        assert.ok(Number.isInteger(side), "region side is not a whole number");
+        assert.ok(Math.abs(side) <= MAX_REGION_COORDINATE, "region side over its limit");
+      }
+      assert.ok(rect.width > 0 && rect.height > 0, "region has no size");
+    }
+    assert.ok((region.selector ?? "").length <= 500, "region selector over its limit");
+  }
+  assertNoNulDeep(region, "normaliseScreenshotRegion");
 
   const crumbs = normaliseBreadcrumbs(payload.breadcrumbs);
   assert.ok(crumbs.length <= MAX_BREADCRUMBS, "too many breadcrumbs");

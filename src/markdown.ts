@@ -19,6 +19,7 @@ import {
   normaliseMessage,
   normaliseNetwork,
   normaliseNotes,
+  normaliseScreenshotRegion,
   normalisePerf,
   normaliseReplay,
   normaliseStorage,
@@ -213,6 +214,16 @@ export function toMarkdown(raw: unknown, options: MarkdownOptions = {}): string 
   if (options.screenshotUrl) facts.push(["Screenshot", options.screenshotUrl]);
   else if (typeof r.screenshotDataUrl === "string" && r.screenshotDataUrl) {
     facts.push(["Screenshot", "attached"]);
+  }
+  // Where on the page the picture was cut from, so a cropped screenshot can be
+  // placed again: the same page coordinates `elements` uses.
+  const region = normaliseScreenshotRegion(r.screenshotRegion);
+  if (region) {
+    const { x, y, width, height } = region.rect;
+    let where = `${region.mode}, ${width}×${height} at ${x}, ${y}`;
+    if (region.annotated) where += " (outlined on the whole page)";
+    if (region.selector) where += ` — \`${region.selector.replace(/`/g, "'")}\``;
+    facts.push(["Screenshot region", where]);
   }
   for (const [k, v] of Object.entries(options.facts ?? {})) {
     if (v !== undefined && v !== "") facts.push([k, String(v)]);

@@ -6680,7 +6680,10 @@ Bun, Deno, or anything else built on the web `Request`. For Express, read
 The helpers never trust the browser. `normaliseMessage` and `normaliseContext`
 trim, clip and strip null bytes (which Postgres refuses). `normaliseConsole`
 drops anything that is not a well-formed entry and keeps the most recent 50;
-`normaliseElements` does the same for pointed-at elements, keeping at most 10.
+`normaliseElements` does the same for pointed-at elements, keeping at most 10,
+and `normaliseScreenshotRegion` keeps a region only with a known mode and a
+rectangle of finite, positive size, rounded and held inside
+`MAX_REGION_COORDINATE`.
 `decodeScreenshotDataUrl` checks the declared type, the real PNG signature in
 the decoded bytes, and a size ceiling — so a JPEG wearing a PNG label, a login
 page returned as HTML, or a 40 MB payload never reaches your storage.
@@ -7695,6 +7698,7 @@ control.
 | `console` | Only while `initConsoleBuffer()` is recording — the script tag starts it for you | **Yes** — an error message carries whatever was interpolated into it. `console.log` and `console.debug` are never recorded, which is where stray values usually end up | Do not call `initConsoleBuffer()`; `includeConsole: false` leaves it out of one report | Your endpoint, then your `store` and your sinks |
 | `elements` | No — until the reporter points at one | **Yes** — the selector, the element's visible text and its `data-*` attributes | `elementPicker: false` on the panel; nothing attaches an element on its own | Your endpoint, then your `store` and your sinks |
 | `screenshotDataUrl` | No — until you hand in a renderer. With one it is armed for bug reports, and the reporter can clear the checkbox | **Yes**, more than anything else here except a replay: it is whatever was on screen. Field values are [masked](#masking) first | No renderer; `screenshotFor`; the reporter's own checkbox; `handleReport({ screenshot: "drop" })` on the server | Your endpoint; `fileStore` decodes it beside the JSON as `<id>.png`. Read ["Please read this part"](#please-read-this-part) before you store it anywhere |
+| `screenshotRegion` | No — only when the reporter chose an area or an element rather than the whole page, which needs `region` handed in | No — a mode, two rectangles in pixels and, for an element, its selector. The picture it describes is the personal part, and a cropped one shows less of the page than a whole one | Leave `region` out; it never travels without a picture, and `handleReport` drops it when the picture is dropped | Your endpoint, then your `store`; `toMarkdown` prints it as one fact |
 | `breadcrumbs` | Only while `initBreadcrumbs()` is recording — the script tag starts it | **Yes** — a click carries the element's text, a navigation carries the path | Do not call `initBreadcrumbs()`; `includeBreadcrumbs: false` for one report | Your endpoint, then your `store` and your sinks |
 | `network` | No — `initNetwork()`, or `data-network` on the script tag | **Yes** — method, URL, status and duration. Never a request body and never a header, but a URL can carry an id or a token; `scrubUrl` runs over it | Leave it off; `includeNetwork: false` for one report | Your endpoint, then your `store` and your sinks |
 | `perf` | No — `initPerf()`, or `data-perf` | No — LCP, INP, CLS, TTFB and two load timings, all of them numbers | Leave it off; `includePerf: false` for one report | Your endpoint, then your `store` and your sinks |
@@ -7899,7 +7903,11 @@ What arrives at your endpoint, with `extra` fields merged in at the top level:
   "notes": [                           // the library's own words about the report,
     "Screenshot dropped: it did not fit in the offline queue."   // max 5, 200 chars
   ],
-  "screenshotDataUrl": "data:image/png;base64,…"   // only when attached
+  "screenshotDataUrl": "data:image/png;base64,…",  // only when attached
+  "screenshotRegion": {                // only for an area or an element, beside a picture
+    "mode": "area", "rect": { "x": 0, "y": 1640, "width": 640, "height": 220 },
+    "viewport": { "x": 0, "y": 240, "width": 640, "height": 220 }
+  }
 }
 ```
 
@@ -7947,7 +7955,8 @@ the `MaskOptions` of its `mask` option, whose defaults are
 `ScreenshotTooLargeError`, `SendFailedError`, `SendTimeoutError`,
 `REPORT_TYPES`, `isReportType`, and the shared types and limits — including the
 `StackFrame` type, `MAX_STACK_FRAMES`, `MAX_STACK_STRING_LENGTH`,
-`MAX_CONTACT_LENGTH`, `MAX_TIMESTAMP_LENGTH` and `MAX_CONTEXT_LENGTHS`.
+`MAX_CONTACT_LENGTH`, `MAX_TIMESTAMP_LENGTH`, `MAX_CONTEXT_LENGTHS`, and
+(1.1) `SCREENSHOT_MODES` and `MAX_REGION_COORDINATE`.
 
 The validators and `toMarkdown` are **not** here: they are what a receiving
 server does with a report that has arrived, so since 1.0 they live on
@@ -7958,7 +7967,8 @@ would otherwise be a type with no values behind it.
 The option and payload types come with them: `BugReport`, `ReportContext`,
 `ReportType`, `ConsoleEntry`, `ConsoleLevel`, `ElementRef`, `Breadcrumb`,
 `BreadcrumbKind`, `NetworkEntry`, `PerfSnapshot`, `StorageSnapshot`,
-`StorageKeyRef`, `ReplayCapture`, `ReplayEvent`, `BuildReportInput`,
+`StorageKeyRef`, `ReplayCapture`, `ReplayEvent`, `ScreenshotRegion`,
+`ScreenshotMode`, `RegionRect`, `BuildReportInput`,
 `SendOptions`, `SendResult`, `CaptureOptions`, `ConsoleBufferOptions`,
 `PickOptions`, `ScrubOptions`, `Scrubber`, `ScrubberName`, `FingerprintInput`,
 and the two defaults `DEFAULT_SEND_TIMEOUT_MS` (15 s) and `DEFAULT_REPLACEMENT`
@@ -8073,7 +8083,8 @@ with `DEFAULT_MAX_REPORTS` and the `FileStore`, `FileStoreOptions`,
 `looksLikeEmail`,
 `normaliseContext`, `normaliseConsole`, `normaliseElements`,
 `normaliseBreadcrumbs`, `normaliseNetwork`, `normalisePerf`,
-`normaliseStorage`, `normaliseReplay`, `normaliseNotes`, `isReportType`, `toMarkdown`,
+`normaliseStorage`, `normaliseReplay`, `normaliseNotes`, `normaliseScreenshotRegion`
+(1.1), `isReportType`, `toMarkdown`,
 `scrubReport`, `scrubUrl`,
 `sendReportEmail`, `sendReportWebhook`, `createGithubIssue`,
 `createLinearIssue`, `smtpSink`, `sendReportSmtp`, `buildMessage`,

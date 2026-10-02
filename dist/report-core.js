@@ -62,6 +62,12 @@ export const MAX_CONTEXT_LENGTHS = {
 export const MAX_ELEMENTS = 10;
 /** Longest text kept for a pointed-at element. */
 export const MAX_ELEMENT_TEXT_LENGTH = 200;
+/**
+ * The largest coordinate or size a screenshot region may claim, in CSS
+ * pixels. A million is taller than any page a browser will lay out and small
+ * enough that a row cannot be handed `1e300` as a position.
+ */
+export const MAX_REGION_COORDINATE = 1_000_000;
 /** How many breadcrumbs a report may carry. Oldest are dropped first. */
 export const MAX_BREADCRUMBS = 30;
 /** Longest text kept for a clicked element. Short on purpose: a label, not a paragraph. */
@@ -115,6 +121,12 @@ export function utf8Length(text) {
 export const MAX_REPLAY_EVENTS = 20_000;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+/**
+ * How much of the page the screenshot shows. `page` is the whole page, as it
+ * always was; `area` is a rectangle the reporter dragged; `element` is the box
+ * around an element they clicked.
+ */
+export const SCREENSHOT_MODES = ["page", "area", "element"];
 export const BREADCRUMB_KINDS = ["click", "navigation", "submit", "visibility"];
 export function isReportType(value) {
     return typeof value === "string" && REPORT_TYPES.includes(value);
@@ -405,6 +417,53 @@ export function normaliseElements(raw, options = {}) {
         });
     }
     return out;
+}
+function normaliseRect(raw) {
+    if (typeof raw !== "object" || raw === null)
+        return null;
+    const o = raw;
+    const num = (v, min) => typeof v === "number" && Number.isFinite(v)
+        ? Math.min(MAX_REGION_COORDINATE, Math.max(min, Math.round(v)))
+        : null;
+    const x = num(o.x, -MAX_REGION_COORDINATE);
+    const y = num(o.y, -MAX_REGION_COORDINATE);
+    const width = num(o.width, 0);
+    const height = num(o.height, 0);
+    if (x === null || y === null || !width || !height)
+        return null;
+    return { x, y, width, height };
+}
+/**
+ * Validates the region a screenshot was cut from. An unknown mode, or a
+ * rectangle without a finite, positive size, is no region at all: the picture
+ * is still stored, it just is not described. Coordinates are rounded and held
+ * inside `MAX_REGION_COORDINATE`, the selector is clipped like an element's.
+ * Never throws.
+ */
+export function normaliseScreenshotRegion(raw) {
+    if (typeof raw !== "object" || raw === null)
+        return null;
+    const o = raw;
+    if (o.mode !== "area" && o.mode !== "element")
+        return null;
+    const rect = normaliseRect(o.rect);
+    if (!rect)
+        return null;
+    const region = {
+        mode: o.mode,
+        rect,
+        // A viewport rectangle that did not survive is the page one: the two only
+        // differ by the scroll, and a reader would rather have a position than none.
+        viewport: normaliseRect(o.viewport) ?? rect,
+    };
+    if (o.annotated === true)
+        region.annotated = true;
+    if (typeof o.selector === "string") {
+        const selector = stripNullBytes(o.selector).slice(0, 500);
+        if (selector)
+            region.selector = selector;
+    }
+    return region;
 }
 /**
  * Validates the breadcrumbs a report arrived with. Entries with an unknown

@@ -226,6 +226,11 @@ export function scrubReport(report, options = {}) {
         if (Array.isArray(out.breadcrumbs)) {
             out.breadcrumbs = out.breadcrumbs.map((entry) => scrubBreadcrumb(entry, p));
         }
+        if (isObject(out.screenshotRegion)) {
+            const region = { ...out.screenshotRegion };
+            scrubField(region, "selector", p);
+            out.screenshotRegion = region;
+        }
         // The allow-listed storage values and the cookie names. The values are
         // there because somebody named the key, which says the key is interesting,
         // not that everything inside it is safe: a feature-flag blob can still

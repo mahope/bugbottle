@@ -31,6 +31,7 @@ import {
   normaliseNotes,
   normalisePerf,
   normaliseReplay,
+  normaliseScreenshotRegion,
   normaliseStorage,
   InvalidScreenshotError,
   type Breadcrumb,
@@ -40,6 +41,7 @@ import {
   type PerfSnapshot,
   type ReplayCapture,
   type ReportContext,
+  type ScreenshotRegion,
   type StorageSnapshot,
   type ReportType,
 } from "../report-core.ts";
@@ -88,6 +90,7 @@ const KNOWN_KEYS = new Set([
   "replay",
   "notes",
   "screenshotDataUrl",
+  "screenshotRegion",
 ]);
 
 /**
@@ -128,6 +131,12 @@ export type ValidatedReport = {
    * nothing to say, and clipped like every other field: the browser sent it.
    */
   notes: string[];
+  /**
+   * The part of the page the screenshot shows, when the reporter chose an area
+   * or an element. Absent for a whole-page picture and for no picture, so a
+   * report from before 1.1 validates to exactly what it did.
+   */
+  screenshotRegion?: ScreenshotRegion;
   extra: Record<string, unknown>;
   /** ISO 8601 timestamp of when the server accepted it. */
   receivedAt: string;
@@ -1064,6 +1073,7 @@ export function validateReport(payload: unknown): ValidatedReport | null {
   const message = normaliseMessage(body.message);
   if (!message) return null;
   const contact = normaliseContact(body.contact);
+  const screenshotRegion = normaliseScreenshotRegion(body.screenshotRegion);
   return {
     type: isReportType(body.type) ? body.type : "other",
     message,
@@ -1079,6 +1089,7 @@ export function validateReport(payload: unknown): ValidatedReport | null {
     storage: normaliseStorage(body.storage),
     replay: normaliseReplay(body.replay),
     notes: normaliseNotes(body.notes),
+    ...(screenshotRegion ? { screenshotRegion } : {}),
     extra: collectExtra(body),
     receivedAt: new Date().toISOString(),
   };
@@ -1311,6 +1322,10 @@ export async function handleReport(
         if (!(err instanceof InvalidScreenshotError)) throw err;
       }
     }
+    // The region describes a picture. Dropped, refused or never sent, there is
+    // no picture left for it to describe, and a sink would print a crop of
+    // nothing.
+    if (!bytes) delete report.screenshotRegion;
     if (bytes && typeof mode === "function") {
       try {
         screenshotUrl = await mode(bytes, report);
@@ -1319,6 +1334,7 @@ export async function handleReport(
         // message is still stored and still delivered, only without a picture.
         options.onError?.(err);
       }
+      if (!screenshotUrl) delete report.screenshotRegion;
     }
     // A stored picture travels on as its URL: handing the bytes to a sink as
     // well would attach the same image twice, once inline and once by link.

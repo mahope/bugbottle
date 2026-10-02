@@ -17,7 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
-import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normaliseNotes, normalisePerf, normaliseReplay, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
+import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normaliseNotes, normalisePerf, normaliseReplay, normaliseScreenshotRegion, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
 import { fingerprint } from "../fingerprint.js";
 import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 import { toMarkdown } from "../markdown.js";
@@ -55,6 +55,7 @@ const KNOWN_KEYS = new Set([
     "replay",
     "notes",
     "screenshotDataUrl",
+    "screenshotRegion",
 ]);
 /** The key given to a caller whose address nothing could establish. */
 const UNKNOWN_ADDRESS = "unknown";
@@ -575,6 +576,7 @@ export function validateReport(payload) {
     if (!message)
         return null;
     const contact = normaliseContact(body.contact);
+    const screenshotRegion = normaliseScreenshotRegion(body.screenshotRegion);
     return {
         type: isReportType(body.type) ? body.type : "other",
         message,
@@ -590,6 +592,7 @@ export function validateReport(payload) {
         storage: normaliseStorage(body.storage),
         replay: normaliseReplay(body.replay),
         notes: normaliseNotes(body.notes),
+        ...(screenshotRegion ? { screenshotRegion } : {}),
         extra: collectExtra(body),
         receivedAt: new Date().toISOString(),
     };
@@ -805,6 +808,11 @@ export async function handleReport(request, options = {}) {
                     throw err;
             }
         }
+        // The region describes a picture. Dropped, refused or never sent, there is
+        // no picture left for it to describe, and a sink would print a crop of
+        // nothing.
+        if (!bytes)
+            delete report.screenshotRegion;
         if (bytes && typeof mode === "function") {
             try {
                 screenshotUrl = await mode(bytes, report);
@@ -814,6 +822,8 @@ export async function handleReport(request, options = {}) {
                 // message is still stored and still delivered, only without a picture.
                 options.onError?.(err);
             }
+            if (!screenshotUrl)
+                delete report.screenshotRegion;
         }
         // A stored picture travels on as its URL: handing the bytes to a sink as
         // well would attach the same image twice, once inline and once by link.

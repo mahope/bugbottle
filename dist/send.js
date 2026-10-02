@@ -8,7 +8,7 @@
 import { collectContext } from "./capture.js";
 import { getConsoleBuffer } from "./console-buffer.js";
 import { readBreadcrumbs, readNetwork, readPerf, readReplay, readStorage } from "./registry.js";
-import { utf8Length } from "./report-core.js";
+import { utf8Length, } from "./report-core.js";
 /** Assembles the JSON body: message, type, page context, console, screenshot. */
 export function buildReport(input) {
     const report = {
@@ -46,8 +46,11 @@ export function buildReport(input) {
         if (replay)
             report.replay = replay;
     }
-    if (input.screenshotDataUrl)
+    if (input.screenshotDataUrl) {
         report.screenshotDataUrl = input.screenshotDataUrl;
+        if (input.screenshotRegion)
+            report.screenshotRegion = input.screenshotRegion;
+    }
     const body = { ...input.extra, ...report };
     return input.scrub ? input.scrub(body) : body;
 }
