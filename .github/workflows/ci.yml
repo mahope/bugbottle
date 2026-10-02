@@ -462,7 +462,10 @@ jobs:
           # much of the core, so the difference is the adapter and the state
           # machine underneath it — 1315 bytes for Vue and 1186 for Svelte when
           # they landed, and 1270 for Solid, against the same 1536-byte
-          # budget the other small entries get.
+          # budget the other small entries get. Region capture then gave every
+          # adapter `attachScreenshot` and `screenshotRegion` in its state — 1572
+          # bytes for Vue, 1409 for Svelte, 1499 for Solid — so the adapters now
+          # share a 1792-byte budget.
           formcore=$(gzip -c out-form-core.js | wc -c)
           vue=$(( $(gzip -c out-vue.js | wc -c) - formcore ))
           svelte=$(( $(gzip -c out-svelte.js | wc -c) - formcore ))
@@ -470,16 +473,16 @@ jobs:
           echo "bugbottle/vue adds $vue bytes gzipped over the shared core"
           echo "bugbottle/svelte adds $svelte bytes gzipped over the shared core"
           echo "bugbottle/solid adds $solid bytes gzipped over the shared core"
-          if [ "$vue" -gt 1536 ]; then
-            echo "bugbottle/vue adds $vue bytes gzipped; the budget is 1536" >&2
+          if [ "$vue" -gt 1792 ]; then
+            echo "bugbottle/vue adds $vue bytes gzipped; the budget is 1792" >&2
             exit 1
           fi
-          if [ "$svelte" -gt 1536 ]; then
-            echo "bugbottle/svelte adds $svelte bytes gzipped; the budget is 1536" >&2
+          if [ "$svelte" -gt 1792 ]; then
+            echo "bugbottle/svelte adds $svelte bytes gzipped; the budget is 1792" >&2
             exit 1
           fi
-          if [ "$solid" -gt 1536 ]; then
-            echo "bugbottle/solid adds $solid bytes gzipped; the budget is 1536" >&2
+          if [ "$solid" -gt 1792 ]; then
+            echo "bugbottle/solid adds $solid bytes gzipped; the budget is 1792" >&2
             exit 1
           fi
 
