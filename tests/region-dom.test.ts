@@ -589,7 +589,7 @@ test("two quick clicks on Whole page leave the page's fields as they were", asyn
   field.type = "password";
   field.value = "hunter2";
   document.body.append(field);
-  // Every render waits for its own gate, so the two overlap and either may end first.
+  // Every render waits for its own gate, so the second click is queued behind the first.
   const gates: (() => void)[] = [];
   const seen: string[] = [];
   const render = async (_root: HTMLElement, _opts: { pixelRatio: number }) => {
@@ -612,12 +612,13 @@ test("two quick clicks on Whole page leave the page's fields as they were", asyn
   await tick();
   page.click();
   await tick();
-  assert.equal(gates.length, 2, "the second click is not ignored");
-  assert.deepEqual(seen, ["•••••••", "•••••••"]);
+  assert.equal(gates.length, 1, "the second render waits for the first");
   gates[0]!();
   await tick();
   await tick();
-  assert.equal(field.value, "•••••••", "still masked under the second render");
+  assert.equal(gates.length, 2, "the second click is not ignored");
+  assert.deepEqual(seen, ["•••••••", "•••••••"]);
+  assert.equal(field.value, "•••••••", "masked again under the second render");
   gates[1]!();
   await tick();
   await tick();
@@ -690,6 +691,8 @@ test("a whole-page capture that finishes late does not replace an attached area"
   const store = createReportState({ endpoint: ENDPOINT, screenshot: slow });
   void store.actions.recapture();
   store.actions.attachScreenshot(fakeShot);
+  // The render starts once the capture queue reaches it.
+  await tick();
   finish("data:image/png;base64,W1x1");
   await tick();
   assert.equal(store.getState().screenshot, fakeShot.dataUrl);
@@ -704,6 +707,8 @@ test("a whole-page capture that fails late does not take an attached area off th
   const store = createReportState({ endpoint: ENDPOINT, screenshot: slow });
   void store.actions.recapture();
   store.actions.attachScreenshot(fakeShot);
+  // The render starts once the capture queue reaches it.
+  await tick();
   fail(new Error("the renderer gave up"));
   await tick();
   await tick();

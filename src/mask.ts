@@ -109,48 +109,25 @@ function queryAll(root: HTMLElement, selector: string): Element[] {
   return found;
 }
 
-/**
- * Everything masked on the page right now, shared by every `applyMask` that
- * has not yet been restored. Two captures can overlap — two clicks on "Whole
- * page", a form adapter and the panel on one page — and a second pass that
- * read the page for itself would save the first one's bullets as the
- * originals, and write them back last. So there is one ledger: a node is
- * masked and its original saved once, by whichever pass reaches it first, and
- * the page is put back only when the last pass in force is restored. A pass
- * with options of its own still masks what it adds, into the same ledger.
- */
-type Ledger = {
-  undo: (() => void)[];
-  values: WeakSet<Element>;
-  texts: WeakSet<Text>;
-  covers: WeakSet<Element>;
-};
-
-let ledger: Ledger | null = null;
-let depth = 0;
-
 /** Replaces every non-space character of every text node under `el`. */
-function bulletText(el: Node, ledger: Ledger): void {
+function bulletText(el: Node, undo: (() => void)[]): void {
   for (const child of Array.from(el.childNodes)) {
     if (child.nodeType === 3) {
       const text = child as Text;
-      if (ledger.texts.has(text)) continue;
       const original = text.data;
       if (!original.trim()) continue;
       text.data = original.replace(/\S/g, BULLET);
-      ledger.texts.add(text);
-      ledger.undo.push(() => {
+      undo.push(() => {
         text.data = original;
       });
     } else if (child.nodeType === 1) {
-      bulletText(child, ledger);
+      bulletText(child, undo);
     }
   }
 }
 
 /** Same number of characters, so the field keeps its width and its wrapping. */
-function bulletValue(el: HTMLInputElement | HTMLTextAreaElement, ledger: Ledger): void {
-  if (ledger.values.has(el)) return;
+function bulletValue(el: HTMLInputElement | HTMLTextAreaElement, undo: (() => void)[]): void {
   const value = el.value;
   const placeholder = el.placeholder;
   if (!value && !placeholder) return;
@@ -159,8 +136,7 @@ function bulletValue(el: HTMLInputElement | HTMLTextAreaElement, ledger: Ledger)
   // an empty field showing "you@example.com" says which field it is, and that
   // is exactly what the masked picture is meant not to say.
   if (placeholder) el.placeholder = "";
-  ledger.values.add(el);
-  ledger.undo.push(() => {
+  undo.push(() => {
     el.value = value;
     el.placeholder = placeholder;
   });
@@ -233,11 +209,7 @@ function coverReplaced(el: HTMLElement, overlay: HTMLElement, fill: string): (()
  * page scrolls between the measurement and the render. A replaced element has
  * no children to cover with, so it takes the other route.
  */
-function cover(el: HTMLElement, colour: string | undefined, ledger: Ledger): void {
-  // Covered already: its position and overflow are ours now, not the page's.
-  if (ledger.covers.has(el)) return;
-  ledger.covers.add(el);
-  const undo = ledger.undo;
+function cover(el: HTMLElement, colour: string | undefined, undo: (() => void)[]): void {
   const view = el.ownerDocument.defaultView;
   const computed = view?.getComputedStyle(el);
   const fill = colour || computed?.getPropertyValue("--bb-mask").trim() || DEFAULT_MASK_COLOUR;
@@ -272,30 +244,15 @@ function cover(el: HTMLElement, colour: string | undefined, ledger: Ledger): voi
  * reporter cannot type in.
  */
 export function applyMask(root: HTMLElement, options: MaskOptions = {}): () => void {
-  // The ledger is built as the passes run rather than at the end, so a pass
-  // that throws half way through has already recorded everything it changed
-  // and the restore below puts all of it back. A partial mask left on the page
-  // is the one outcome worse than no picture.
-  const mine = (ledger ??= {
-    undo: [],
-    values: new WeakSet(),
-    texts: new WeakSet(),
-    covers: new WeakSet(),
-  });
-  depth += 1;
+  // `undo` is built as the passes run rather than at the end, so a pass that
+  // throws half way through has already recorded everything it changed and the
+  // restore below puts all of it back. A partial mask left on the page is the
+  // one outcome worse than no picture.
+  const undo: (() => void)[] = [];
   const selector = options.selector ?? DEFAULT_MASK_SELECTOR;
   const block = options.block ?? DEFAULT_BLOCK_SELECTOR;
 
-  let restored = false;
   const restore = () => {
-    // Once per pass, or a second call would put the page back under a pass
-    // that is still rendering.
-    if (restored) return;
-    restored = true;
-    depth -= 1;
-    if (depth > 0) return;
-    ledger = null;
-    const undo = mine.undo;
     // Backwards, so an element masked by two passes is unwound in the order it
     // was wound. Each restore is on its own: one that throws must not strand
     // the rest of the page in bullets.
@@ -315,15 +272,15 @@ export function applyMask(root: HTMLElement, options: MaskOptions = {}): () => v
       // realm is still an input, and the check has to say so.
       for (const el of queryAll(root, INPUT_SELECTOR)) {
         const field = el as HTMLInputElement;
-        if (el.tagName === "TEXTAREA") bulletValue(field, mine);
+        if (el.tagName === "TEXTAREA") bulletValue(field, undo);
         else if (el.tagName === "INPUT") {
-          if (!UNTYPED.test(field.type)) bulletValue(field, mine);
-        } else if (el.getAttribute("contenteditable") !== "false") bulletText(el, mine);
+          if (!UNTYPED.test(field.type)) bulletValue(field, undo);
+        } else if (el.getAttribute("contenteditable") !== "false") bulletText(el, undo);
       }
     }
-    if (selector) for (const el of queryAll(root, selector)) bulletText(el, mine);
+    if (selector) for (const el of queryAll(root, selector)) bulletText(el, undo);
     if (block) {
-      for (const el of queryAll(root, block)) cover(el as HTMLElement, options.colour, mine);
+      for (const el of queryAll(root, block)) cover(el as HTMLElement, options.colour, undo);
     }
   } catch (err) {
     // Masking is the one part of a capture that must not fail open: an

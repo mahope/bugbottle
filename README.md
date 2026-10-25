@@ -4033,7 +4033,10 @@ would be larger than a server would accept, and starts at half scale when it
 would — rendering is expensive, so a page that was never going to fit should
 not be rendered twice. It still retries at half scale if the estimate was
 wrong, and throws `ScreenshotTooLargeError` if that is too big as well. Treat
-either as "send without the picture". Pass `pixelRatio` to skip the estimate
+either as "send without the picture". Captures never overlap: a second call
+waits until the first has put the page back, then masks the page as it is by
+then, and a render that has not answered in 30 seconds fails with the page
+restored. Pass `pixelRatio` to skip the estimate
 and force a scale, `bytesPerPixelEstimate` to tune it for pages that compress
 unusually well or badly, and `onCapture` to see what each capture cost:
 

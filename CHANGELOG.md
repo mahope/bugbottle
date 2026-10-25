@@ -60,18 +60,22 @@ attribute needs a major version, and a new entry point needs a minor one.
   capture that failed after `attachScreenshot` turned the attachment off and
   so took the newer area off the report. It now settles quietly as well.
 
-- **Two pictures taken at once could leave the page's fields as bullets.**
-  Each capture masked the page for itself, so the second one read the first
-  one's bullets as the originals; when the first finished first it put the
-  real values back under the second render, and the second then wrote the
-  bullets back over them for good. A password field or a `data-bugbottle-mask`
-  text was left showing `•••` until the page was reloaded. With the row's
-  "Whole page" no longer locked while it renders, two quick clicks were enough;
-  before that it took a form adapter's capture overlapping an
-  `attachScreenshot` region, or two panels on one page. Masking now keeps one
-  ledger for every capture in force: a field is masked and its value saved
-  once, and the page is put back only when the last capture is done, whatever
-  order they finish in. No click is ignored to get there.
+- **Two pictures taken at once could leave the page's fields as bullets, or
+  show a private value in the second picture.** Each capture masked the page
+  for itself, so the second one read the first one's bullets as the
+  originals; when the first finished first it put the real values back under
+  the second render, and the second then wrote the bullets back over them for
+  good. A password field or a `data-bugbottle-mask` text was left showing
+  `•••` until the page was reloaded. With the row's "Whole page" no longer
+  locked while it renders, two quick clicks were enough; before that it took a
+  form adapter's capture overlapping an `attachScreenshot` region, or two
+  panels on one page. Sharing what was masked between the two instead let a
+  field typed into during the first render reach the second picture
+  unmasked. Captures now never overlap: each one waits until the one before it
+  has put the page back, then masks the page as it is at that moment. No click
+  is ignored, a render that throws does not hold up the next one, and a render
+  that has not answered after 30 seconds fails and restores the page rather
+  than keeping it masked.
 
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in

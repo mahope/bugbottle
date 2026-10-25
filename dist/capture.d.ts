@@ -104,6 +104,10 @@ export declare const DEFAULT_BYTES_PER_PIXEL_ESTIMATE = 0.5;
  * up front from the capture area — cheap to read, and roughly what decides the
  * size — and the retry is kept only as the safety net for when that guess is
  * wrong.
+ *
+ * Calls never overlap: a second call waits until the first has rendered and
+ * put the page back, and a render that has not answered in 30 seconds fails
+ * with the page restored.
  */
 export declare function captureScreenshot(render: ScreenshotRenderer, options?: CaptureOptions): Promise<string>;
 /**
