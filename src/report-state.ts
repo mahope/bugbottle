@@ -228,8 +228,9 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
   };
 
   let capturing = false;
-  // Bumped by every picture that lands, so a capture that finishes after
-  // `attachScreenshot` does not put the whole page back over the area.
+  // Bumped by every picture that lands, so a capture that finishes or fails
+  // after `attachScreenshot` does not put the whole page back over the area,
+  // or turn it off.
   let shots = 0;
   let picking: AbortController | null = null;
 
@@ -244,6 +245,9 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       if (mine !== shots) return set({ status: { kind: "idle" } });
       set({ screenshot: dataUrl, screenshotRegion: null, status: { kind: "idle" } });
     } catch (err) {
+      // A picture that was overtaken has failed nobody, and turning the
+      // attachment off here would take the newer one off the report.
+      if (mine !== shots) return set({ status: { kind: "idle" } });
       // A failed picture must never block the report, so this only turns the
       // attachment off and says why.
       const tooLarge = err instanceof ScreenshotTooLargeError;

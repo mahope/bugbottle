@@ -382,7 +382,7 @@ test("a bundled locale reaches the reporter", async () => {
   form.setMessage("Knappen gemmer ikke");
   await form.submit();
   // The Danish sentence with the reference the server answered with.
-  assert.equal(form.statusMessage(), `${da.messages.sent}. Rapport nummer: rep_7`);
+  assert.equal(form.statusMessage(), `${da.messages.sent} Dit nummer: rep_7`);
   fetchStub.restore();
   unmount();
 });

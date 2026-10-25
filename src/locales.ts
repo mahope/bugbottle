@@ -84,12 +84,14 @@ export type UiTexts = {
   /** Announced when pick mode ends, whether an element was picked or not. */
   pickingDone: string;
   /*
-   * The screenshot's three modes, offered when the panel is handed
-   * `region`. Optional so a locale written before 1.1 still type-checks; the
-   * panel falls back to English for any that are missing.
+   * The screenshot's three modes and "no picture", offered when the panel is
+   * handed `region`. Optional so a locale written before 1.1 still
+   * type-checks; the panel falls back to English for any that are missing.
    */
-  /** Accessible name of the row of three buttons. Never shown. */
+  /** Accessible name of the row of four buttons. Never shown. */
   shotModeLabel?: string;
+  /** The first of them: no picture. Pressed until one is chosen. */
+  shotNone?: string;
   shotPage?: string;
   shotArea?: string;
   shotElement?: string;
@@ -208,9 +210,10 @@ export const en: Locale = {
       "Pointing mode. Click any element on the page to attach it, or press Escape to stop.",
     pickingDone: "Pointing mode ended.",
     shotModeLabel: "Screenshot of",
+    shotNone: "None",
     shotPage: "Whole page",
-    shotArea: "Select area",
-    shotElement: "Pick element",
+    shotArea: "Area",
+    shotElement: "Element",
     areaInstructions: "Drag to select an area. Enter takes the visible page, Esc cancels.",
     attached: "Attached",
     remove: "Remove",
@@ -232,12 +235,12 @@ export const da: Locale = {
   code: "da",
   messages: {
     empty: "Skriv en besked først",
-    screenshotTooLarge: "Billedet er for stort — sender uden det",
-    screenshotFailed: "Billedet kunne ikke tages — du kan stadig sende uden",
+    screenshotTooLarge: "Billedet er for stort. Rapporten sendes uden det.",
+    screenshotFailed: "Billedet kunne ikke tages. Du kan stadig sende uden.",
     sendFailed: "Rapporten kunne ikke sendes",
-    sent: "Tak — rapporten er på vej",
-    sentWithId: "Tak — rapporten er på vej. Rapport nummer: {id}",
-    queued: "Gemt — den bliver sendt, når du er online igen",
+    sent: "Tak. Rapporten er sendt.",
+    sentWithId: "Tak. Rapporten er sendt. Dit nummer: {id}",
+    queued: "Gemt. Den bliver sendt, når du er online igen.",
   },
   ui: {
     trigger: "Feedback",
@@ -262,14 +265,15 @@ export const da: Locale = {
     undo: "Fortryd",
     done: "Færdig",
     pickElement: "Peg på elementet",
-    picking: "Klik på det, der skal vedhæftes — Esc for at stoppe",
+    picking: "Klik på det, der skal vedhæftes. Esc stopper.",
     pickingAnnounce:
       "Pegetilstand. Klik på et element på siden for at vedhæfte det, eller tryk på Esc for at stoppe.",
     pickingDone: "Pegetilstand er slut.",
     shotModeLabel: "Skærmbillede af",
+    shotNone: "Intet",
     shotPage: "Hele siden",
-    shotArea: "Vælg område",
-    shotElement: "Vælg element",
+    shotArea: "Område",
+    shotElement: "Element",
     areaInstructions:
       "Træk for at markere et område. Enter tager den synlige side, Esc annullerer.",
     attached: "Vedhæftet",
@@ -327,9 +331,10 @@ export const sv: Locale = {
       "Pekläge. Klicka på ett element på sidan för att bifoga det, eller tryck på Esc för att avbryta.",
     pickingDone: "Pekläget är avslutat.",
     shotModeLabel: "Skärmbild av",
+    shotNone: "Ingen",
     shotPage: "Hela sidan",
-    shotArea: "Välj område",
-    shotElement: "Välj element",
+    shotArea: "Område",
+    shotElement: "Element",
     areaInstructions: "Dra för att markera ett område. Enter tar den synliga sidan, Esc avbryter.",
     attached: "Bifogat",
     remove: "Ta bort",
@@ -386,9 +391,10 @@ export const nb: Locale = {
       "Pekemodus. Klikk på et element på siden for å legge det ved, eller trykk Esc for å avbryte.",
     pickingDone: "Pekemodus er avsluttet.",
     shotModeLabel: "Skjermbilde av",
+    shotNone: "Ingen",
     shotPage: "Hele siden",
-    shotArea: "Velg område",
-    shotElement: "Velg element",
+    shotArea: "Område",
+    shotElement: "Element",
     areaInstructions: "Dra for å markere et område. Enter tar den synlige siden, Esc avbryter.",
     attached: "Vedlagt",
     remove: "Fjern",
@@ -445,9 +451,10 @@ export const de: Locale = {
       "Zeigemodus. Klicken Sie auf ein Element der Seite, um es anzuhängen, oder drücken Sie Esc zum Abbrechen.",
     pickingDone: "Zeigemodus beendet.",
     shotModeLabel: "Screenshot von",
+    shotNone: "Keins",
     shotPage: "Ganze Seite",
-    shotArea: "Bereich wählen",
-    shotElement: "Element wählen",
+    shotArea: "Bereich",
+    shotElement: "Element",
     areaInstructions:
       "Ziehen Sie, um einen Bereich zu markieren. Enter nimmt die sichtbare Seite, Esc bricht ab.",
     attached: "Angehängt",
@@ -506,9 +513,10 @@ export const nl: Locale = {
       "Aanwijsmodus. Klik op een element op de pagina om het bij te voegen, of druk op Esc om te stoppen.",
     pickingDone: "Aanwijsmodus beëindigd.",
     shotModeLabel: "Screenshot van",
+    shotNone: "Geen",
     shotPage: "Hele pagina",
-    shotArea: "Gebied kiezen",
-    shotElement: "Element kiezen",
+    shotArea: "Gebied",
+    shotElement: "Element",
     areaInstructions:
       "Sleep om een gebied te selecteren. Enter neemt de zichtbare pagina, Esc annuleert.",
     attached: "Bijgevoegd",
@@ -566,9 +574,10 @@ export const fr: Locale = {
       "Mode désignation. Cliquez sur un élément de la page pour le joindre, ou appuyez sur Échap pour arrêter.",
     pickingDone: "Mode désignation terminé.",
     shotModeLabel: "Capture de",
+    shotNone: "Aucune",
     shotPage: "Page entière",
-    shotArea: "Choisir une zone",
-    shotElement: "Choisir un élément",
+    shotArea: "Zone",
+    shotElement: "Élément",
     areaInstructions:
       "Faites glisser pour sélectionner une zone. Entrée prend la page visible, Échap annule.",
     attached: "Joint",
@@ -627,9 +636,10 @@ export const es: Locale = {
       "Modo de señalar. Haz clic en un elemento de la página para adjuntarlo, o pulsa Esc para cancelar.",
     pickingDone: "Modo de señalar finalizado.",
     shotModeLabel: "Captura de",
+    shotNone: "Ninguna",
     shotPage: "Página entera",
-    shotArea: "Elegir zona",
-    shotElement: "Elegir elemento",
+    shotArea: "Zona",
+    shotElement: "Elemento",
     areaInstructions:
       "Arrastra para seleccionar una zona. Intro toma la página visible, Esc cancela.",
     attached: "Adjunto",

@@ -53,8 +53,34 @@ function estimateDataUrlLength(root, bytesPerPixel) {
  * up front from the capture area — cheap to read, and roughly what decides the
  * size — and the retry is kept only as the safety net for when that guess is
  * wrong.
+ *
+ * Calls never overlap: a second call waits until the first has rendered and
+ * put the page back, and a render that has not answered in 30 seconds fails
+ * with the page restored.
  */
-export async function captureScreenshot(render, options = {}) {
+export function captureScreenshot(render, options = {}) {
+    const run = queue.then(() => shoot(render, options));
+    queue = run.catch(() => { });
+    return run;
+}
+/**
+ * The capture before this one, masked, rendered and restored in that order.
+ *
+ * Captures never overlap. Two clicks on "Whole page", a form adapter and an
+ * `attachScreenshot` region, or two panels on one page each mask the page for
+ * the length of their own render; overlapping, the second read the first
+ * one's bullets as the originals and wrote them back last, or the first put
+ * the real values back under the second render. So each capture waits until
+ * the one before it is restored, and then masks the page as it is now — a
+ * field typed into while the other rendered is masked with what it holds.
+ * The chain is kept going whatever a capture ends in, and `RENDER_TIMEOUT_MS`
+ * stops a renderer that never answers from holding it, and the page's
+ * bullets, for good.
+ */
+let queue = Promise.resolve();
+/** Longest one capture may render for before it fails and puts the page back. */
+const RENDER_TIMEOUT_MS = 30_000;
+async function shoot(render, options) {
     if (typeof document === "undefined") {
         throw new Error("captureScreenshot requires a browser environment");
     }
@@ -82,6 +108,12 @@ export async function captureScreenshot(render, options = {}) {
     let attempts = 1;
     let dataUrl;
     let restore;
+    let timer;
+    // A render still running when the time is up is left to finish on its own;
+    // what it returns is never used, and the page is restored under it.
+    const timeout = new Promise((_, fail) => {
+        timer = setTimeout(() => fail(new Error("Screenshot timed out")), RENDER_TIMEOUT_MS);
+    });
     try {
         // Masking is applied once and covers the retry too: the second render is
         // the same picture at a different scale, and unmasking between the two
@@ -89,14 +121,15 @@ export async function captureScreenshot(render, options = {}) {
         // inside the `try` so that a mask pass which throws part way through is
         // covered by the same `finally` as a renderer that throws.
         restore = options.mask === false ? undefined : applyMask(root, options.mask ?? {});
-        dataUrl = await render(root, { filter, pixelRatio });
+        dataUrl = await Promise.race([render(root, { filter, pixelRatio }), timeout]);
         if (dataUrl.length > maxLength && pixelRatio > REDUCED_PIXEL_RATIO) {
             pixelRatio = REDUCED_PIXEL_RATIO;
             attempts += 1;
-            dataUrl = await render(root, { filter, pixelRatio });
+            dataUrl = await Promise.race([render(root, { filter, pixelRatio }), timeout]);
         }
     }
     finally {
+        clearTimeout(timer);
         // A renderer that throws leaves the page masked otherwise, and a form full
         // of bullets is worse than a missing screenshot.
         restore?.();

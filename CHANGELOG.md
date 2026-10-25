@@ -10,6 +10,76 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **On a phone the panel could grow past the top of the screen.** It is a
+  fixed box anchored at the bottom, and with the picture editor open it is
+  taller than a 844-pixel viewport, so its title and close button ended up
+  above the screen where neither a finger nor a scroll could reach them. The
+  panel is now capped at the viewport less both offsets and the trigger's 64
+  pixels (`100dvh`, with `100vh` first for an older browser) and scrolls inside
+  itself past that.
+
+- **Typing while the screenshot was taken lost the text.** Masking reached
+  into every open shadow root on the page — the panel's own included — and its
+  restore wrote back the value it had read before the render. In the panel,
+  choosing "Bug" ticks the screenshot box and starts a render, and a reporter
+  who started typing straight away had their sentence replaced by the empty
+  box it was a second earlier; found by the first host to swap its own bubble
+  for the panel. Masking now skips everything under `[data-bugbottle]`: the
+  panel, a custom trigger and the region overlay are dropped from every
+  picture anyway, so there was never anything of theirs to hide.
+
+- **A host `onSent` that threw sent the report down the failure path.** The
+  callback ran inside the `try` around the send, so an exception from it was
+  caught as a failed delivery — and with a `queue`, a report the server had
+  already stored was queued and delivered a second time. The callback's own
+  exception is now caught on its own and handed to `onError`, so it is not
+  silent either; the report still counts as delivered.
+
+- **`onSent` was handed the report from before `beforeSend`.** The panel
+  posted the copy `beforeSend` returned and then gave `onSent` the one it had
+  built, so a hook that redacted the message or added a field was undone in
+  whatever the host did next with the report. `onSent` now receives exactly the
+  body the server was sent.
+
+- **With `theme.offsetX` above 16px the panel ran off the far side of a
+  phone.** Its width always left 32 pixels free while the host stood `offsetX`
+  from the edge, so with `48px` on a screen narrower than 392 pixels the last
+  16 pixels of the panel were cut off. The width now leaves the offset free on
+  both sides, `calc(100vw - 2 * var(--bb-offset-x, 16px))`, as the height
+  already did with `offsetY`.
+
+- **"None" in the picture row could lose to a picture still being taken.**
+  While a whole-page render from the row was under way the button was ignored
+  and the picture was attached anyway; a render started on its own — opening
+  on a bug — that finished after "None" and then "Area" replaced the area with
+  the whole page; and one that failed after "None" still said so and called
+  `onError`. The panel now numbers the pictures it asks for, as the form state
+  already did, and only the latest may attach or report a failure: "None", an
+  attached area and a sent form all outrank a render still in flight. The
+  form state the adapters share had the last of the three: a whole-page
+  capture that failed after `attachScreenshot` turned the attachment off and
+  so took the newer area off the report. It now settles quietly as well.
+
+- **Two pictures taken at once could leave the page's fields as bullets, or
+  show a private value in the second picture.** Each capture masked the page
+  for itself, so the second one read the first one's bullets as the
+  originals; when the first finished first it put the real values back under
+  the second render, and the second then wrote the bullets back over them for
+  good. A password field or a `data-bugbottle-mask` text was left showing
+  `•••` until the page was reloaded. With the row's "Whole page" no longer
+  locked while it renders, two quick clicks were enough; before that it took a
+  form adapter's capture overlapping an `attachScreenshot` region, or two
+  panels on one page. Sharing what was masked between the two instead let a
+  field typed into during the first render reach the second picture
+  unmasked. Captures now never overlap: each one waits until the one before it
+  has put the page back, then masks the page as it is at that moment. No click
+  is ignored, a render that throws does not hold up the next one, and a render
+  that has not answered after 30 seconds fails and restores the page rather
+  than keeping it masked. An area or element capture measures the page, and
+  chooses its scale, when its render starts rather than when it joined the
+  wait, so a page that grew, narrowed or scrolled in between is still cut out
+  where the reporter chose.
+
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
   `report-core` went through `stripNullBytes` and a length clip; `ts` was
@@ -115,6 +185,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Changed
 
+- **The Danish locale says its sentences without a dash.** Every line
+  that joined two clauses with "—" now uses a full stop, and the
+  confirmation reads "Tak. Rapporten er sendt. Dit nummer: {id}" rather than
+  "Tak — rapporten er på vej. Rapport nummer: {id}". Only `da` changed.
+
 - **`buildSelector` prefers an `aria-label` after an id and a test id**, and
   caps what it writes: never past 200 characters, and an id, test id or label
   over 64 characters is skipped as generated. A label ends the walk only once it
@@ -145,6 +220,22 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **Four small seams for putting the panel inside an application's own
+  layout**, all optional, found by the first host that replaced its own
+  feedback bubble with the panel. `theme.offsetX` and `theme.offsetY` (the
+  custom properties `--bb-offset-x` and `--bb-offset-y`, 16px when unset) move
+  the panel off the corner, so it can sit above another floating button, and a
+  media query in the host's stylesheet can move it at a breakpoint. The trigger
+  and the dialog carry `part="trigger"` and `part="panel"`, so
+  `[data-bugbottle="ui"]::part(trigger) { display: none }` under a breakpoint
+  hides the floating button where the application's own menu calls `open()`
+  instead. `extra` takes a function as well as an object, called once per
+  report when Send is pressed, for a value that changes while the panel is
+  mounted. `onSent(id, report)` now also receives the report exactly as it was
+  sent, so a toast or a second tool can be handed the same words without
+  keeping a copy of the form. Nothing changes for a caller that passes none of
+  them: the inline position is `var(--bb-offset-x, 16px)` where it was `16px`.
+
 - **A screenshot of an area or an element, not only of the whole page:
   `bugbottle/region`, a new entry point — so the next release is 1.1.0.**
   `captureArea(render)` covers the page with a dimmed overlay and cuts out the
@@ -168,14 +259,29 @@ attribute needs a major version, and a new entry point needs a minor one.
   validate it, `handleReport` drops it whenever the picture is dropped,
   `toMarkdown` prints it as one fact, and `report.schema.json` and
   `openapi.json` carry it. `buildReport` takes it as `screenshotRegion`.
-- **The panel's `region` option**: hand in `captureRegion` and three buttons —
-  Whole page, Select area, Pick element — appear under the screenshot box, the
-  panel steps aside while the reporter works on the page, and the pressed
-  button says which mode the attached picture came from. Five new optional
-  `UiTexts` strings (`shotModeLabel`, `shotPage`, `shotArea`, `shotElement`,
-  `areaInstructions`) in all thirteen languages; a locale written before them
-  falls back to English. Picking an element for the picture reuses the
-  picker's own `picking` and `pickingAnnounce` sentences.
+- **The panel's `region` option**: hand in `captureRegion` and one row of four
+  buttons — None, Whole page, Area, Element — replaces the screenshot box, so
+  the picture is chosen in one place rather than two. None is pressed until
+  another is (or until `screenshotFor` attaches a picture to the chosen type),
+  and `screenshotNote` is shown only while there is a picture. Area and
+  Element step the panel aside while the reporter works on the page, the
+  pressed button says which mode the attached picture came from, and Element
+  also attaches the element, so the separate "Point at the element" button is
+  not rendered beside the row — even with `elementPicker` on, which is its
+  default — and `elementPicker: false` leaves the Element mode out of the row
+  instead, since it is the switch that keeps elements off the report. Without `region` the box and the button are
+  exactly as in 1.0. Six new optional `UiTexts` strings (`shotModeLabel`,
+  `shotNone`, `shotPage`, `shotArea`, `shotElement`, `areaInstructions`) in
+  all thirteen languages, short enough for the row to fit a 360-pixel phone;
+  a locale written before them falls back to English. Picking an element for
+  the picture reuses the picker's own `picking` and `pickingAnnounce`
+  sentences.
+- **`formatReportId` on the panel**: how the confirmation writes the id the
+  server answered with, e.g. `(id) => id.slice(0, 8)` for a uuid the
+  application's own lists show shortened. Default: the id as it came, so
+  nothing changes for a panel that does not pass it. `onSent` still receives
+  the full id, and a formatter that throws shows the full id rather than
+  turning a delivered report into a failed one.
 - **`attachScreenshot(shot)` on the form state**, so the React, Vue, Svelte and
   Solid adapters take a picture from `captureArea`/`captureElement` without
   carrying the overlay; `screenshotRegion` sits beside `screenshot` in the

@@ -69,6 +69,44 @@ test("the confirmation names the report the server stored", async () => {
   widget.destroy();
 });
 
+test("formatReportId writes the reference shorter, and onSent keeps the whole id", async () => {
+  const uuid = "731cf28b-5b0e-4c3a-9f1d-2a6b7c8d9e0f";
+  const seen: (string | undefined)[] = [];
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    locale: da,
+    fetch: accepts(uuid),
+    formatReportId: (id) => id.slice(0, 8),
+    onSent: (id) => seen.push(id),
+  });
+  const root = await fileReport(widget, "Gem-knappen gør ingenting");
+  assert.equal(
+    root.querySelector<HTMLElement>(".thanks p")!.textContent,
+    "Tak. Rapporten er sendt. Dit nummer: 731cf28b",
+  );
+  assert.deepEqual(seen, [uuid]);
+  widget.destroy();
+});
+
+test("a formatReportId that throws shows the whole id and still counts as sent", async () => {
+  const errors: unknown[] = [];
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch: accepts("B-4711"),
+    formatReportId: () => {
+      throw new Error("host bug");
+    },
+    onError: (e) => errors.push(e),
+  });
+  const root = await fileReport(widget, "The save button does nothing");
+  assert.equal(
+    root.querySelector<HTMLElement>(".thanks p")!.textContent,
+    en.messages.sentWithId!.replace("{id}", "B-4711"),
+  );
+  assert.deepEqual(errors, []);
+  widget.destroy();
+});
+
 test("an endpoint that names no report is thanked without a reference", async () => {
   // The honest default: the report arrived, and the server had nothing to
   // call it by. A confirmation that is otherwise the same sentence is the

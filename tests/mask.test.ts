@@ -312,3 +312,170 @@ test("a mask pass that throws still puts back what it had already changed", asyn
   );
   assert.equal(field().value, "hunter2", "the input the first pass had already bulleted");
 });
+
+test("bugbottle's own panel is never masked: it is never in the picture", async () => {
+  const root = page(`<div data-bugbottle="ui"></div><input value="page">`);
+  const host = document.querySelector("[data-bugbottle]") as HTMLElement;
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `<textarea placeholder="What happened?">The save button</textarea>`;
+  const panelField = shadow.querySelector("textarea") as HTMLTextAreaElement;
+  let seenPanel = "";
+  let seenPage = "";
+  await capture(root, () => {
+    seenPanel = panelField.value;
+    seenPage = field().value;
+  });
+  assert.equal(seenPanel, "The save button");
+  assert.equal(panelField.placeholder, "What happened?");
+  assert.equal(seenPage, "••••", "the page's own fields are still masked");
+});
+
+
+/** A renderer that waits for `release` before it answers, so a second capture is queued behind it. */
+function heldRender(): {
+  render: () => Promise<string>;
+  started: Promise<void>;
+  release: () => void;
+  ran: () => boolean;
+} {
+  let release!: () => void;
+  let start!: () => void;
+  let ran = false;
+  const started = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    render: async () => {
+      ran = true;
+      start();
+      await gate;
+      return "data:image/png;base64,AAAA";
+    },
+    started,
+    release,
+    ran: () => ran,
+  };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("a second capture waits until the first has put the page back", async () => {
+  const root = page(
+    `<input type="password" value="hunter2"><p data-bugbottle-mask>Ada</p><div data-bugbottle-block>chart</div>`,
+  );
+  const marked = document.querySelector("p") as HTMLElement;
+  const blocked = document.querySelector("div") as HTMLElement;
+  const a = heldRender();
+  const b = heldRender();
+  let secondSaw = "";
+  const opts = { root, maxDataUrlLength: 1_000_000 };
+  const one = captureScreenshot(a.render, opts);
+  const two = captureScreenshot(async () => {
+    const shot = b.render();
+    secondSaw = `${field().value}|${marked.textContent}`;
+    return shot;
+  }, opts);
+  await a.started;
+  // Released before it is reached: the second still runs only after the first.
+  b.release();
+  await settle();
+  assert.equal(b.ran(), false, "the second has not started while the first renders");
+  a.release();
+  await one;
+  await two;
+  assert.equal(secondSaw, "•••••••|•••", "the second picture is masked as well");
+  assert.equal(field().value, "hunter2");
+  assert.equal(marked.textContent, "Ada");
+  assert.equal(blocked.querySelectorAll("[data-bugbottle-mask-overlay]").length, 0);
+  assert.equal(blocked.style.position, "");
+});
+
+test("a field changed while the first capture renders is masked in the second", async () => {
+  // The page writes a new value into a field the first capture has bulleted,
+  // and swaps a marked text for a new one. Both are private, and the second
+  // picture must not show either.
+  const root = page(`<input type="password" value="hunter2"><p data-bugbottle-mask>Ada</p>`);
+  const marked = document.querySelector("p") as HTMLElement;
+  const a = heldRender();
+  let secondSaw = "";
+  const opts = { root, maxDataUrlLength: 1_000_000 };
+  const one = captureScreenshot(a.render, opts);
+  await a.started;
+  field().value = "s3cr3t!";
+  marked.textContent = "Grace Hopper";
+  const two = captureScreenshot(async () => {
+    secondSaw = `${field().value}|${marked.textContent}`;
+    return "data:image/png;base64,AAAA";
+  }, opts);
+  a.release();
+  await one;
+  await two;
+  assert.doesNotMatch(secondSaw, /[^•|\s]/, `the second picture saw ${secondSaw}`);
+  assert.match(secondSaw, /^•+\|•+ •+$/);
+  assert.equal(marked.textContent, "Grace Hopper");
+});
+
+test("three queued captures with different options each mask for themselves and end on the originals", async () => {
+  const root = page(`<input value="hunter2"><p class="secret">Ada</p>`);
+  const marked = document.querySelector("p") as HTMLElement;
+  const held = [heldRender(), heldRender(), heldRender()];
+  const seen: string[] = [];
+  const opts = { root, maxDataUrlLength: 1_000_000 };
+  const shot = (h: ReturnType<typeof heldRender>) => async () => {
+    const out = h.render();
+    seen.push(`${field().value}|${marked.textContent}`);
+    return out;
+  };
+  const runs = [
+    captureScreenshot(shot(held[0]!), opts),
+    captureScreenshot(shot(held[1]!), { ...opts, mask: { selector: ".secret" } }),
+    captureScreenshot(shot(held[2]!), opts),
+  ];
+  // Released out of order: the queue still runs them first to last.
+  for (const i of [1, 2, 0]) held[i]!.release();
+  await Promise.all(runs);
+  assert.deepEqual(seen, ["•••••••|Ada", "•••••••|•••", "•••••••|Ada"]);
+  assert.equal(field().value, "hunter2");
+  assert.equal(marked.textContent, "Ada");
+});
+
+test("a render that throws does not hold up the next capture", async () => {
+  const root = page(`<input value="hunter2">`);
+  const opts = { root, maxDataUrlLength: 1_000_000 };
+  const one = captureScreenshot(async () => {
+    throw new Error("renderer broke");
+  }, opts);
+  let secondSaw = "";
+  const two = captureScreenshot(async () => {
+    secondSaw = field().value;
+    return "data:image/png;base64,AAAA";
+  }, opts);
+  await assert.rejects(one, /renderer broke/);
+  assert.equal(await two, "data:image/png;base64,AAAA");
+  assert.equal(secondSaw, "•••••••");
+  assert.equal(field().value, "hunter2");
+});
+
+test("a render that never answers times out, puts the page back and lets the next one run", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const root = page(`<input value="hunter2">`);
+  const opts = { root, maxDataUrlLength: 1_000_000 };
+  const hung = new Promise<string>(() => {});
+  const one = captureScreenshot(() => hung, opts);
+  let secondSaw = "";
+  const two = captureScreenshot(async () => {
+    secondSaw = field().value;
+    return "data:image/png;base64,AAAA";
+  }, opts);
+  // Let the first capture reach its render, which starts the clock.
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(field().value, "•••••••", "masked while the hung render runs");
+  t.mock.timers.tick(30_000);
+  await assert.rejects(one, /timed out/);
+  assert.equal(await two, "data:image/png;base64,AAAA");
+  assert.equal(secondSaw, "•••••••");
+  assert.equal(field().value, "hunter2");
+});

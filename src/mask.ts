@@ -73,6 +73,10 @@ function collect(host: ParentNode, selector: string, out: Element[]): void {
     return;
   }
   for (const el of children) {
+    // The panel, its trigger and the region overlay are dropped from every
+    // picture, so there is nothing of theirs to hide — and bulleting the
+    // panel's own text box mid-sentence is how a reporter lost what they typed.
+    if (el.closest("[data-bugbottle]")) continue;
     try {
       if (el.matches(selector)) out.push(el);
     } catch {

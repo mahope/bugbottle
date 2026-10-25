@@ -436,14 +436,32 @@ async function shoot(
   const root = options.root ?? document.body;
   const maxLength = options.maxDataUrlLength ?? MAX_SCREENSHOT_DATA_URL_LENGTH;
   const padding = options.padding ?? (mode === "element" ? DEFAULT_ELEMENT_PADDING : 0);
-  const box = rootBox(root);
+  // The root is measured when the renderer is called, not here: a capture
+  // waits its turn behind any other, and a page that grows, narrows or
+  // scrolls in the meantime would have its new picture divided by its old
+  // size. A crop's scale is chosen from the same measurement. The selection
+  // stays as it was chosen; it is in page coordinates, so a scroll does not
+  // move what it points at.
+  let box!: RegionRect;
+  const measured: ScreenshotRenderer = (node, opts) => {
+    box = rootBox(root);
+    return render(
+      node,
+      options.annotate
+        ? opts
+        : {
+            ...opts,
+            pixelRatio: chooseRegionPixelRatio(box.width, box.height, window.devicePixelRatio || 1),
+          },
+    );
+  };
   const region: ScreenshotRegion = { mode, rect: selection.rect, viewport: selection.viewport };
   if (selector) region.selector = selector;
   const base = { mask: options.mask, exclude: options.exclude, root };
 
   if (options.annotate) {
     // The whole page under the usual size rules, then a frame drawn on it.
-    const source = await captureScreenshot(render, { ...base, maxDataUrlLength: maxLength });
+    const source = await captureScreenshot(measured, { ...base, maxDataUrlLength: maxLength });
     const img = await loadImage(source);
     const at = computeCropBox(
       selection.rect,
@@ -471,12 +489,10 @@ async function shoot(
     throw new ScreenshotTooLargeError();
   }
 
-  const pixelRatio = chooseRegionPixelRatio(box.width, box.height, window.devicePixelRatio || 1);
   // The full render is a means, not the result, so it is not held to the
   // report's size limit — the crop is, below.
-  const source = await captureScreenshot(render, {
+  const source = await captureScreenshot(measured, {
     ...base,
-    pixelRatio,
     maxDataUrlLength: Number.MAX_SAFE_INTEGER,
   });
   const img = await loadImage(source);

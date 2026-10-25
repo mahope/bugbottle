@@ -17,7 +17,7 @@ import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
 import type { initNetwork, NetworkOptions } from "../network.ts";
 import type { initPerf, PerfOptions } from "../perf.ts";
-import { type ReportType } from "../report-core.ts";
+import { type BugReport, type ReportType } from "../report-core.ts";
 import type { Queue } from "../queue.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
 import type { captureRegion, RegionCaptureOptions } from "../region.ts";
@@ -38,6 +38,15 @@ export type Theme = {
     font?: string;
     shadow?: string;
     zIndex?: number;
+    /**
+     * Distance from the left or right edge of the viewport, as a CSS length.
+     * Default `"16px"`. Like the colours it is a custom property on the host
+     * (`--bb-offset-x`), so a media query in the application's own stylesheet
+     * can move the button at a breakpoint.
+     */
+    offsetX?: string;
+    /** Distance from the top or bottom edge, as a CSS length. Default `"16px"` (`--bb-offset-y`). */
+    offsetY?: string;
     position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
     /** `"auto"` follows `prefers-color-scheme`. Default `"auto"`. */
     scheme?: "light" | "dark" | "auto";
@@ -90,7 +99,11 @@ export type MountOptions = {
      * whatever the input says.
      */
     contact?: false | true | "required";
-    /** Offer the element picker. Default true. */
+    /**
+     * Offer the element picker. Default true. With `region` the row's element
+     * mode stands in for it, so the picker's own button is not rendered even
+     * when this is true, and `false` leaves the element mode out of the row.
+     */
     elementPicker?: boolean;
     /**
      * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
@@ -102,12 +115,15 @@ export type MountOptions = {
      */
     annotate?: typeof createAnnotator | false;
     /**
-     * Offer three buttons under the screenshot box — whole page, select an area,
-     * pick an element — so the picture can show only the part of the page the
-     * report is about. Hand in `captureRegion` from `bugbottle/region`;
+     * Replace the screenshot box with one row of four buttons — no picture,
+     * whole page, select an area, pick an element — so the picture can show
+     * only the part of the page the report is about. Picking an element here
+     * also attaches it, so the separate "Point at the element" button is not
+     * rendered, whatever `elementPicker` says; `elementPicker: false` leaves the
+     * element mode out instead. Hand in `captureRegion` from `bugbottle/region`;
      * `{ on: captureRegion, annotate: true }` outlines the choice on the whole
-     * page instead of cutting it out. Leave it out and the panel never mentions
-     * it and never carries the overlay. Needs `screenshot`.
+     * page instead of cutting it out. Leave it out and the panel keeps the box
+     * and never carries the overlay. Needs `screenshot`.
      */
     region?: typeof captureRegion | ({
         on: typeof captureRegion;
@@ -167,8 +183,12 @@ export type MountOptions = {
     };
     /** Where to mount. Default `document.body`. */
     container?: HTMLElement;
-    /** Extra fields merged into every report — app version, tenant id. */
-    extra?: Record<string, unknown>;
+    /**
+     * Extra fields merged into every report — app version, tenant id. A function
+     * is called once per report, when Send is pressed, for a value that changes
+     * while the panel is mounted: the signed-in account, a running timer.
+     */
+    extra?: Record<string, unknown> | (() => Record<string, unknown> | undefined);
     headers?: SendOptions["headers"];
     credentials?: SendOptions["credentials"];
     timeoutMs?: SendOptions["timeoutMs"];
@@ -208,7 +228,18 @@ export type MountOptions = {
      * `data-sign-key`.
      */
     queue?: Queue;
-    onSent?: (id: string | undefined) => void;
+    /**
+     * Called after the server accepted a report, with the id it answered with
+     * and the report exactly as it was sent — for a toast, or for handing the
+     * same words to another tool.
+     */
+    onSent?: (id: string | undefined, report: BugReport & Record<string, unknown>) => void;
+    /**
+     * How the id the server answered with is written in the confirmation, e.g.
+     * `(id) => id.slice(0, 8)` for a uuid that the application's own lists show
+     * shortened. Default: the id as it came. `onSent` still gets the full id.
+     */
+    formatReportId?: (id: string) => string;
     onError?: (error: unknown) => void;
 };
 export type BugbottleWidget = {

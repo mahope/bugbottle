@@ -62,6 +62,15 @@ export type Theme = {
   font?: string;
   shadow?: string;
   zIndex?: number;
+  /**
+   * Distance from the left or right edge of the viewport, as a CSS length.
+   * Default `"16px"`. Like the colours it is a custom property on the host
+   * (`--bb-offset-x`), so a media query in the application's own stylesheet
+   * can move the button at a breakpoint.
+   */
+  offsetX?: string;
+  /** Distance from the top or bottom edge, as a CSS length. Default `"16px"` (`--bb-offset-y`). */
+  offsetY?: string;
   position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
   /** `"auto"` follows `prefers-color-scheme`. Default `"auto"`. */
   scheme?: "light" | "dark" | "auto";
@@ -115,7 +124,11 @@ export type MountOptions = {
    * whatever the input says.
    */
   contact?: false | true | "required";
-  /** Offer the element picker. Default true. */
+  /**
+   * Offer the element picker. Default true. With `region` the row's element
+   * mode stands in for it, so the picker's own button is not rendered even
+   * when this is true, and `false` leaves the element mode out of the row.
+   */
   elementPicker?: boolean;
   /**
    * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
@@ -127,12 +140,15 @@ export type MountOptions = {
    */
   annotate?: typeof createAnnotator | false;
   /**
-   * Offer three buttons under the screenshot box — whole page, select an area,
-   * pick an element — so the picture can show only the part of the page the
-   * report is about. Hand in `captureRegion` from `bugbottle/region`;
+   * Replace the screenshot box with one row of four buttons — no picture,
+   * whole page, select an area, pick an element — so the picture can show
+   * only the part of the page the report is about. Picking an element here
+   * also attaches it, so the separate "Point at the element" button is not
+   * rendered, whatever `elementPicker` says; `elementPicker: false` leaves the
+   * element mode out instead. Hand in `captureRegion` from `bugbottle/region`;
    * `{ on: captureRegion, annotate: true }` outlines the choice on the whole
-   * page instead of cutting it out. Leave it out and the panel never mentions
-   * it and never carries the overlay. Needs `screenshot`.
+   * page instead of cutting it out. Leave it out and the panel keeps the box
+   * and never carries the overlay. Needs `screenshot`.
    */
   region?: typeof captureRegion | ({ on: typeof captureRegion } & RegionCaptureOptions) | false;
   /**
@@ -182,8 +198,12 @@ export type MountOptions = {
   openOnError?: boolean | { prefill?: boolean };
   /** Where to mount. Default `document.body`. */
   container?: HTMLElement;
-  /** Extra fields merged into every report — app version, tenant id. */
-  extra?: Record<string, unknown>;
+  /**
+   * Extra fields merged into every report — app version, tenant id. A function
+   * is called once per report, when Send is pressed, for a value that changes
+   * while the panel is mounted: the signed-in account, a running timer.
+   */
+  extra?: Record<string, unknown> | (() => Record<string, unknown> | undefined);
   headers?: SendOptions["headers"];
   credentials?: SendOptions["credentials"];
   timeoutMs?: SendOptions["timeoutMs"];
@@ -223,7 +243,18 @@ export type MountOptions = {
    * `data-sign-key`.
    */
   queue?: Queue;
-  onSent?: (id: string | undefined) => void;
+  /**
+   * Called after the server accepted a report, with the id it answered with
+   * and the report exactly as it was sent — for a toast, or for handing the
+   * same words to another tool.
+   */
+  onSent?: (id: string | undefined, report: BugReport & Record<string, unknown>) => void;
+  /**
+   * How the id the server answered with is written in the confirmation, e.g.
+   * `(id) => id.slice(0, 8)` for a uuid that the application's own lists show
+   * shortened. Default: the id as it came. `onSent` still gets the full id.
+   */
+  formatReportId?: (id: string) => string;
   onError?: (error: unknown) => void;
 };
 
@@ -250,11 +281,14 @@ export type BugbottleWidget = {
   setLocale(locale: Locale): void;
 };
 
+/** What the row of picture buttons can choose: no picture, or one of the modes. */
+type ShotChoice = "none" | ScreenshotMode;
+
 const POSITIONS: Record<NonNullable<Theme["position"]>, string> = {
-  "bottom-right": "right:16px;bottom:16px;",
-  "bottom-left": "left:16px;bottom:16px;",
-  "top-right": "right:16px;top:16px;",
-  "top-left": "left:16px;top:16px;",
+  "bottom-right": "right:var(--bb-offset-x,16px);bottom:var(--bb-offset-y,16px);",
+  "bottom-left": "left:var(--bb-offset-x,16px);bottom:var(--bb-offset-y,16px);",
+  "top-right": "right:var(--bb-offset-x,16px);top:var(--bb-offset-y,16px);",
+  "top-left": "left:var(--bb-offset-x,16px);top:var(--bb-offset-y,16px);",
 };
 
 /*
@@ -292,6 +326,12 @@ const POSITIONS: Record<NonNullable<Theme["position"]>, string> = {
  * costs the reporter's palette nothing, because every colour in that rule is a
  * system colour and still resolves to their theme. `scripts/a11y-audit.mjs`
  * photographs this; it is not a thing axe can see.
+ *
+ * The panel's height is capped at the viewport, less both offsets and the
+ * 64px the trigger and its gap take, and it scrolls inside itself past that:
+ * on a phone the picture editor makes the panel taller than the screen, and a
+ * fixed box that overflows upwards puts its own title and close button where
+ * nobody can reach them. `100vh` comes first for a browser without `dvh`.
  *
  * The block is last in the sheet on purpose: every rule in it has the same
  * weight as the one it replaces, so order is the only thing that makes it win.
@@ -333,9 +373,11 @@ textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible
 .logo{display:inline-flex;width:18px;height:18px}
 .logo img,.logo svg{width:100%;height:100%;object-fit:contain}
 .panel{
-  width:min(360px,calc(100vw - 32px));background:var(--bb-bg);color:var(--bb-text);
+  width:min(360px,calc(100vw - 2 * var(--bb-offset-x,16px)));background:var(--bb-bg);color:var(--bb-text);
   border:1px solid var(--bb-border);border-radius:var(--bb-radius);box-shadow:var(--bb-shadow);
   padding:16px;margin-bottom:12px;
+  max-height:calc(100vh - 2 * var(--bb-offset-y,16px) - 64px);
+  max-height:calc(100dvh - 2 * var(--bb-offset-y,16px) - 64px);overflow-y:auto;overscroll-behavior:contain;
 }
 :host([data-pos^="top"]) .panel{margin-bottom:0;margin-top:12px}
 :host([data-pos^="bottom"]) .wrap{display:flex;flex-direction:column;align-items:flex-end}
@@ -361,8 +403,10 @@ textarea{min-height:88px;resize:vertical}
 .preview{display:block;max-width:100%;max-height:120px;border:1px solid var(--bb-border);border-radius:6px;margin:6px 0}
 .edit,.act{border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;padding:6px 10px}
 .edit{margin:0 0 6px}
-.tools,.modes{display:flex;gap:6px;margin:0 0 6px}
+.tools{display:flex;gap:6px;margin:0 0 6px}
+.modes{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 6px}
 .mode,.tool{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;min-width:24px}
+.mode{flex:1 1 auto;padding:6px 4px;font-size:13px;white-space:nowrap}
 .mode[aria-pressed="true"],.tool[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
 canvas{display:block;width:100%;height:auto;border:1px solid var(--bb-border);border-radius:6px;touch-action:none;cursor:crosshair}
 .acts{display:flex;gap:6px;margin-top:6px}
@@ -504,9 +548,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   let tool: AnnotateTool = "rect";
   let elements: ElementRef[] = [];
   let pickController: AbortController | null = null;
-  // True while a mode button's picture is being taken, so a second click
-  // cannot land a slower whole-page render over a faster area.
-  let shooting = false;
+  // Counts the pictures asked for. A whole-page render keeps the number it
+  // started with and may attach its picture, or report its failure, only while
+  // that is still the latest: "None", a later area and a sent form all outrank
+  // a render that is still in flight, and none of them has to wait for it.
+  let shotRequest = 0;
   let sending = false;
   let isOpen = false;
   // Whatever had focus when the panel opened, so closing it puts the reporter
@@ -529,6 +575,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     ["primary", "--bb-primary"], ["onPrimary", "--bb-on-primary"], ["background", "--bb-bg"],
     ["text", "--bb-text"], ["muted", "--bb-muted"], ["border", "--bb-border"], ["radius", "--bb-radius"],
     ["font", "--bb-font"], ["shadow", "--bb-shadow"], ["zIndex", "--bb-z"],
+    ["offsetX", "--bb-offset-x"], ["offsetY", "--bb-offset-y"],
   ];
   for (const [key, name] of vars) {
     const value = theme[key];
@@ -538,8 +585,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   root.append(el("style", {}, CSS));
 
   // ---- elements
+  // `part` lets the application's own stylesheet reach the two boxes it may
+  // want to place or hide, e.g. `[data-bugbottle="ui"]::part(trigger)` under a
+  // breakpoint where its own menu opens the panel instead.
   const trigger = el("button", {
-    class: "trigger", type: "button", "aria-expanded": "false", "aria-haspopup": "dialog",
+    class: "trigger", type: "button", "aria-expanded": "false", "aria-haspopup": "dialog", part: "trigger",
   });
   const title = el("h2", { id: "bb-title" });
   const closeBtn = el("button", { class: "close", type: "button" }, "×");
@@ -566,8 +616,8 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   const shotRow = el("label", { class: "check" }, shotBox, shotText);
   const shotNote = el("p", { class: "note", id: "bb-shot-note" });
   // A group rather than a radiogroup: each button does something at once —
-  // takes a picture, opens an overlay — and pressed says which one the
-  // current picture came from.
+  // drops the picture, takes one, opens an overlay — and pressed says which
+  // one the current picture came from, or that there is none.
   const modesRow = el("div", { class: "modes", role: "group", hidden: "" });
   const preview = el("img", { class: "preview", alt: "", hidden: "" });
   const editBtn = el("button", { class: "edit", type: "button", hidden: "" });
@@ -600,7 +650,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   // `aria-modal` is true because focus really is trapped while the panel is
   // open: Tab cycles inside the shadow root and Escape is the way out.
   const panel = el("div", {
-    class: "panel", role: "dialog", "aria-modal": "true", "aria-labelledby": "bb-title", hidden: "",
+    class: "panel", role: "dialog", "aria-modal": "true", "aria-labelledby": "bb-title", hidden: "", part: "panel",
   }, header, form, thanks);
   // Lives outside the panel because the panel is hidden while picking, and a
   // hidden live region announces nothing.
@@ -613,13 +663,27 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     shotNote.hidden = true;
   }
   if (options.elementPicker === false) pickBtn.hidden = true;
-  const MODES: readonly ScreenshotMode[] = ["page", "area", "element"];
-  const modeButtons = new Map<ScreenshotMode, HTMLButtonElement>();
-  if (options.screenshot && regionTool) {
+  // With the modes the row is the one place the picture is chosen: the box
+  // would be a second way of saying "whole page", and the element mode is the
+  // picker with a picture taken at the end, so neither is rendered beside it.
+  // `elementPicker: false` is the switch that keeps elements off the report,
+  // and the element mode attaches one, so it goes with the picker.
+  const MODES: readonly ShotChoice[] =
+    options.elementPicker === false ? ["none", "page", "area"] : ["none", "page", "area", "element"];
+  const modeButtons = new Map<ShotChoice, HTMLButtonElement>();
+  const hasModes = !!options.screenshot && !!regionTool;
+  if (hasModes) {
     modesRow.hidden = false;
+    shotRow.hidden = true;
+    pickBtn.hidden = true;
+    modesRow.setAttribute("aria-describedby", shotNote.id);
+    // Under the row it describes, and not indented to line up with a box
+    // that is not there.
+    modesRow.after(shotNote);
+    shotNote.classList.add("hint");
     for (const m of MODES) {
       const b = el("button", { class: "mode", type: "button", "aria-pressed": "false" });
-      b.addEventListener("click", () => void shootRegion(m));
+      b.addEventListener("click", () => (m === "none" ? dropShot() : void shootRegion(m)));
       modeButtons.set(m, b);
       modesRow.append(b);
     }
@@ -689,7 +753,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     contactNote.textContent = ui.contactHint;
     shotText.textContent = ui.screenshot;
     shotNote.textContent = ui.screenshotNote;
-    shotNote.hidden = !options.screenshot || !ui.screenshotNote;
+    showMode();
     editBtn.textContent = ui.annotate;
     toolsRow.setAttribute("aria-label", ui.toolLabel);
     canvas.setAttribute("aria-label", ui.annotateArea);
@@ -698,8 +762,8 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     };
     for (const [t, b] of toolButtons) b.textContent = toolText[t];
     modesRow.setAttribute("aria-label", text("shotModeLabel"));
-    const modeText: Record<ScreenshotMode, string> = {
-      page: text("shotPage"), area: text("shotArea"), element: text("shotElement"),
+    const modeText: Record<ShotChoice, string> = {
+      none: text("shotNone"), page: text("shotPage"), area: text("shotArea"), element: text("shotElement"),
     };
     for (const [m, b] of modeButtons) b.textContent = modeText[m];
     undoBtn.textContent = ui.undo;
@@ -713,15 +777,21 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
 
   /** One of the optional strings, in English when the locale predates it. */
   function text(
-    key: "shotModeLabel" | "shotPage" | "shotArea" | "shotElement" | "areaInstructions",
+    key: "shotModeLabel" | "shotNone" | "shotPage" | "shotArea" | "shotElement" | "areaInstructions",
   ): string {
     return ui[key] ?? en.ui[key] ?? "";
   }
 
-  /** Marks the button of the mode the current picture was taken in. */
+  /**
+   * Marks the button of the mode the current picture was taken in, or "no
+   * picture". With the modes, the note about what the picture shows is only
+   * there while there is a picture for it to describe.
+   */
   function showMode() {
-    const mode = shotRegion?.mode ?? "page";
-    for (const [m, b] of modeButtons) b.setAttribute("aria-pressed", String(!!screenshot && m === mode));
+    const chosen: ShotChoice = shotBox.checked ? (shotRegion?.mode ?? "page") : "none";
+    for (const [m, b] of modeButtons) b.setAttribute("aria-pressed", String(m === chosen));
+    shotNote.hidden =
+      !options.screenshot || !ui.screenshotNote || (hasModes && !shotBox.checked);
   }
 
   function applyIntro() {
@@ -740,6 +810,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     checkOne(typeButtons, next);
     if (options.screenshot && screenshotFor(next) && !shotBox.checked) {
       shotBox.checked = true;
+      showMode();
       void capture();
     }
   }
@@ -802,14 +873,20 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     }
   }
 
-  async function capture() {
+  /** Resolves true when the render it started is still the picture asked for. */
+  async function capture(): Promise<boolean> {
     const render = options.screenshot;
-    if (!render || screenshot) return;
+    if (!render || screenshot) return false;
+    const request = ++shotRequest;
     try {
-      showShot(await captureScreenshot(render, { mask: options.mask }), null);
+      const shot = await captureScreenshot(render, { mask: options.mask });
+      // "No picture" pressed while it was being taken wins over the picture.
+      if (request === shotRequest && shotBox.checked) showShot(shot, null);
     } catch (err) {
-      shotFailed(err);
+      // A picture nobody wants any more has not failed anybody.
+      if (request === shotRequest) shotFailed(err);
     }
+    return request === shotRequest;
   }
 
   function showShot(dataUrl: string, region: ScreenshotRegion | null) {
@@ -825,6 +902,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     // Unticked only when there is no picture left; a failed re-shot leaves
     // the one on screen, and the box should say it is still going.
     shotBox.checked = !!screenshot;
+    showMode();
     setStatus(err instanceof ScreenshotTooLargeError ? msg.screenshotTooLarge : msg.screenshotFailed, "error");
     options.onError?.(err);
   }
@@ -837,18 +915,16 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
    */
   async function shootRegion(mode: ScreenshotMode) {
     const render = options.screenshot;
-    if (!render || !regionTool || pickController || shooting) return;
+    if (!render || !regionTool || pickController) return;
     // Marks already drawn are kept, as closing the panel keeps them: a
     // cancelled selection leaves the picture exactly as it was.
     closeEditor(true);
-    shotBox.checked = true;
     setStatus("");
     if (mode === "page") {
-      shooting = true;
       clearScreenshot();
-      await capture();
-      shooting = false;
-      modeButtons.get(mode)?.focus();
+      shotBox.checked = true;
+      showMode();
+      if (await capture()) modeButtons.get(mode)?.focus();
       return;
     }
     const controller = new AbortController();
@@ -866,6 +942,10 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         signal: controller.signal,
       });
       if (shot) {
+        // The newest picture now, so a whole-page render still under way
+        // cannot land over it.
+        shotRequest++;
+        shotBox.checked = true;
         showShot(shot.dataUrl, shot.region ?? null);
         if (shot.element) {
           elements = [...elements, shot.element].slice(-MAX_ELEMENTS);
@@ -884,7 +964,16 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     }
   }
 
+  /** "No picture": what the box's untick is when the modes replace it. */
+  function dropShot() {
+    if (pickController) return;
+    shotBox.checked = false;
+    clearScreenshot();
+    setStatus("");
+  }
+
   function clearScreenshot() {
+    shotRequest++;
     closeEditor(false);
     screenshot = null;
     shotRegion = null;
@@ -965,6 +1054,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     setStatus("");
     // Assembled outside the try so the failure path can queue this very body.
     let report: (BugReport & Record<string, unknown>) | null = null;
+    // What the server received, which is `beforeSend`'s copy when it made one.
+    let sent: (BugReport & Record<string, unknown>) | null = null;
+    const { beforeSend } = options;
     try {
       report = buildReport({
         type,
@@ -976,7 +1068,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         screenshotRegion: shotRegion,
         includeConsole: consoleFor(type),
         elements,
-        extra: options.extra,
+        extra: typeof options.extra === "function" ? options.extra() : options.extra,
         scrub: options.scrub,
       });
       const { id } = await sendReport(options.endpoint, report, {
@@ -985,18 +1077,35 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         timeoutMs: options.timeoutMs,
         fetch: options.fetch,
         parseError: options.parseError,
-        beforeSend: options.beforeSend,
+        beforeSend: beforeSend
+          ? async (r) => {
+              sent = await beforeSend(r);
+              return sent;
+            }
+          : undefined,
         sign: options.sign,
       });
       resetForm();
       // The reference the server answered with, in the reporter's own
       // language, so the confirmation is something they can quote. An
       // endpoint that answers no id gets the plain sentence.
-      thanksText.textContent = id ? sentLine(msg, id) : ui.thanks;
+      const shown = shortId(id);
+      thanksText.textContent = shown ? sentLine(msg, shown) : ui.thanks;
       form.hidden = true;
       thanks.hidden = false;
       thanksClose.focus();
-      options.onSent?.(id);
+      try {
+        options.onSent?.(id, sent ?? report);
+      } catch (err) {
+        // The report has arrived. A host callback that throws must not send
+        // it down the failure path below, which would queue it a second time,
+        // but the host still hears about its own exception.
+        try {
+          options.onError?.(err);
+        } catch {
+          // Nor may an onError that throws in turn.
+        }
+      }
     } catch (err) {
       const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
       if (options.queue && report && !rejected) {
@@ -1022,6 +1131,21 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     }
   }
 
+  /**
+   * The id as the confirmation writes it. Like `onSent`, a host formatter that
+   * throws must not turn a delivered report into a failed one, so the full id
+   * is shown instead.
+   */
+  function shortId(id: string | undefined): string | undefined {
+    if (!id || !options.formatReportId) return id;
+    try {
+      const out = options.formatReportId(id);
+      return typeof out === "string" ? out : id;
+    } catch {
+      return id;
+    }
+  }
+
   function resetForm() {
     textarea.value = "";
     contactInput.value = "";
@@ -1031,6 +1155,7 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     setStatus("");
     setType(options.initialType ?? types[0] ?? "bug");
     shotBox.checked = !!options.screenshot && screenshotFor(type);
+    showMode();
   }
 
   /**

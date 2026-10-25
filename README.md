@@ -4033,7 +4033,10 @@ would be larger than a server would accept, and starts at half scale when it
 would — rendering is expensive, so a page that was never going to fit should
 not be rendered twice. It still retries at half scale if the estimate was
 wrong, and throws `ScreenshotTooLargeError` if that is too big as well. Treat
-either as "send without the picture". Pass `pixelRatio` to skip the estimate
+either as "send without the picture". Captures never overlap: a second call
+waits until the first has put the page back, then masks the page as it is by
+then, and a render that has not answered in 30 seconds fails with the page
+restored. Pass `pixelRatio` to skip the estimate
 and force a scale, `bytesPerPixelEstimate` to tune it for pages that compress
 unusually well or badly, and `onCapture` to see what each capture cost:
 
@@ -4282,8 +4285,8 @@ it out and the canvas editor is not in your bundle at all. See
 | `screenshot` | A `ScreenshotRenderer`. Without it the screenshot row is not rendered. |
 | `annotate` | `createAnnotator` from `bugbottle/annotate` renders "Edit picture"; omitted or `false`, nothing leads to an editor and none of it is bundled. |
 | `contact` | `true` adds an optional field asking how to reach the reporter; `"required"` refuses to send without it. Off by default. What they type travels as `contact` on the report. |
-| `elementPicker` | `false` leaves the picker out. Default true. |
-| `region` | `captureRegion` from `bugbottle/region` adds Whole page / Select area / Pick element under the screenshot box; `{ on: captureRegion, annotate: true }` outlines the choice on the whole page instead of cutting it out. Omitted or `false`, none of it is rendered or bundled. Needs `screenshot`. See [Choosing what the picture shows](#choosing-what-the-picture-shows). |
+| `elementPicker` | `false` leaves the picker out. Default true. With `region` the row's Element mode stands in for the picker, so its own button is not rendered even when this is true, and `false` leaves the Element mode out of the row. |
+| `region` | `captureRegion` from `bugbottle/region` replaces the screenshot box with one row, None / Whole page / Area / Element, and the separate element picker with its Element mode; `{ on: captureRegion, annotate: true }` outlines the choice on the whole page instead of cutting it out. Omitted or `false`, none of it is rendered or bundled. Needs `screenshot`. See [Choosing what the picture shows](#choosing-what-the-picture-shows). |
 | `locale`, `texts`, `messages` | The language, and per-string overrides of it. |
 | `theme`, `brand` | Colours, radius, position; the name and logo in the header. |
 | `types`, `initialType` | Which report types to offer, and which starts selected. |
@@ -4296,8 +4299,9 @@ it out and the canvas editor is not in your bundle at all. See
 | `perf` | Record the Web Vitals and the storage snapshot while the panel is mounted. Off by default; hand in `initPerf` from `bugbottle/perf`, or `{ on: initPerf, vitals, storage, allowValues, maxKeys }`. The same switch as `data-perf`. See [Performance and storage](#performance-and-storage). |
 | `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
 | `queue`, `scrub`, `sign`, `beforeSend` | The same seams the plain functions take. |
-| `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. |
-| `container`, `onSent`, `onError` | Where to mount, and what to do afterwards. |
+| `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. `extra` may also be a function, called once per report when Send is pressed, for a value that changes while the panel is mounted. |
+| `container`, `onSent`, `onError` | Where to mount, and what to do afterwards. `onSent(id, report)` receives the id the server answered with and the report as it was sent. |
+| `formatReportId` | How the confirmation writes the id the server answered with, e.g. `(id) => id.slice(0, 8)` when your own lists show a uuid shortened. Default: the id as it came. `onSent` still receives the full id, and a formatter that throws shows the full id rather than failing the send. |
 
 **Accessibility.** The panel is meant to be switched on without an
 accessibility regression, so it behaves like a dialog rather than a floating
@@ -5550,7 +5554,7 @@ so the hook and the panel say the same thing in the same language.
 import { sentLine } from "bugbottle/locales";
 
 sentLine(da.messages, "B-4711");
-// → "Tak — rapporten er på vej. Rapport nummer: B-4711"
+// → "Tak. Rapporten er sendt. Dit nummer: B-4711"
 ```
 
 ### Five more languages, imported on purpose
@@ -5599,11 +5603,30 @@ The whole list, and nothing else:
 | `--bb-font` | `font` | The font stack the panel is set in |
 | `--bb-shadow` | `shadow` | The shadow under the panel |
 | `--bb-z` | `zIndex` | Where the panel sits against the application |
+| `--bb-offset-x` | `offsetX` | Distance from the left or right edge, as a CSS length; `16px` when unset |
+| `--bb-offset-y` | `offsetY` | Distance from the top or bottom edge, as a CSS length; `16px` when unset |
 | — | `position` | Which corner it lives in: `"bottom-right"` (the default), `"bottom-left"`, `"top-right"` or `"top-left"` |
 | — | `scheme` | `"light"`, `"dark"` or `"auto"` — `"auto"` follows the reader's system setting |
 
 The last two are not custom properties: they are the `data-pos` and
 `data-scheme` attributes on the host, which the panel's own stylesheet reads.
+
+Both offsets must be lengths (`28px`, `6rem`, a `calc()`), not `auto`: the
+panel's maximum height is worked out from them.
+
+The floating button and the dialog are also exposed as the shadow parts
+`trigger` and `panel`, for the one thing a custom property cannot do. An
+application whose own menu opens the panel on a phone hides the button there
+and moves it above its own floating action on a desktop, with `open()` working
+at every width:
+
+```css
+[data-bugbottle="ui"] { --bb-offset-x: 28px; --bb-offset-y: 96px; }
+@media (max-width: 1023.98px) {
+  [data-bugbottle="ui"] { --bb-offset-y: 16px; }
+  [data-bugbottle="ui"]::part(trigger) { display: none; }
+}
+```
 
 None of these survive Windows High Contrast, and they are not meant to. Under
 `forced-colors: active` the browser throws every colour away and substitutes
@@ -6108,9 +6131,15 @@ check). A whole-page picture has none, so a report from before 1.1 looks
 exactly as it did.
 
 **The panel** takes the function as `region`, the same seam as `annotate`:
-three buttons — Whole page, Select area, Pick element — appear under the
-screenshot box, the panel steps aside while the reporter works on the page, and
-the pressed button says which one the attached picture came from.
+one row of four buttons — None, Whole page, Area, Element — takes the place of
+the screenshot box, so there is one way to choose the picture rather than two.
+None is pressed until something else is (or until the report type is one
+`screenshotFor` attaches a picture to), and the line about what the picture
+shows appears only once there is one. Area and Element step the panel aside
+while the reporter works on the page, the pressed button says which one the
+attached picture came from, and Element also attaches the element, so the
+separate "Point at the element" button is not rendered beside the row. Without
+`region` the panel keeps the box and the button exactly as in 1.0.
 
 ```ts
 import { mountBugbottle } from "bugbottle/ui";

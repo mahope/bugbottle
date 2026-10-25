@@ -30,6 +30,13 @@ test("no string is empty except intro, which may be", () => {
   }
 });
 
+test("the Danish strings use a full stop or a colon, never a dash", () => {
+  for (const path of keys(da)) {
+    const value = path.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown>)[k], da);
+    assert.ok(typeof value !== "string" || !/[\u2013\u2014]/.test(value), `da: ${path} has no dash`);
+  }
+});
+
 test("a language tag resolves to the bundled locale or falls back", () => {
   assert.equal(resolveLocale("da-DK"), da);
   assert.equal(resolveLocale("DA"), da);
