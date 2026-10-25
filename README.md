@@ -4282,7 +4282,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `screenshot` | A `ScreenshotRenderer`. Without it the screenshot row is not rendered. |
 | `annotate` | `createAnnotator` from `bugbottle/annotate` renders "Edit picture"; omitted or `false`, nothing leads to an editor and none of it is bundled. |
 | `contact` | `true` adds an optional field asking how to reach the reporter; `"required"` refuses to send without it. Off by default. What they type travels as `contact` on the report. |
-| `elementPicker` | `false` leaves the picker out. Default true. |
+| `elementPicker` | `false` leaves the picker out. Default true. With `region` the row's Element mode stands in for the picker, so its own button is not rendered even when this is true, and `false` leaves the Element mode out of the row. |
 | `region` | `captureRegion` from `bugbottle/region` replaces the screenshot box with one row, None / Whole page / Area / Element, and the separate element picker with its Element mode; `{ on: captureRegion, annotate: true }` outlines the choice on the whole page instead of cutting it out. Omitted or `false`, none of it is rendered or bundled. Needs `screenshot`. See [Choosing what the picture shows](#choosing-what-the-picture-shows). |
 | `locale`, `texts`, `messages` | The language, and per-string overrides of it. |
 | `theme`, `brand` | Colours, radius, position; the name and logo in the header. |

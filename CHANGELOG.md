@@ -247,7 +247,9 @@ attribute needs a major version, and a new entry point needs a minor one.
   Element step the panel aside while the reporter works on the page, the
   pressed button says which mode the attached picture came from, and Element
   also attaches the element, so the separate "Point at the element" button is
-  not rendered beside the row. Without `region` the box and the button are
+  not rendered beside the row — even with `elementPicker` on, which is its
+  default — and `elementPicker: false` leaves the Element mode out of the row
+  instead, since it is the switch that keeps elements off the report. Without `region` the box and the button are
   exactly as in 1.0. Six new optional `UiTexts` strings (`shotModeLabel`,
   `shotNone`, `shotPage`, `shotArea`, `shotElement`, `areaInstructions`) in
   all thirteen languages, short enough for the row to fit a 360-pixel phone;

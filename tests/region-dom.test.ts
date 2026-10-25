@@ -584,6 +584,23 @@ test("a picture that fails after None was chosen is not reported as a failure", 
   widget.destroy();
 });
 
+test("elementPicker: false leaves the Element mode out of the row as well", () => {
+  // The privacy table names elementPicker: false as the switch that keeps
+  // elements off the report, and the Element mode attaches one.
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    screenshot: renderer,
+    region: async () => null,
+    elementPicker: false,
+    locale: da,
+  });
+  const root = widget.host.shadowRoot!;
+  const labels = [...root.querySelectorAll(".modes button")].map((b) => b.textContent);
+  assert.deepEqual(labels, [da.ui.shotNone, da.ui.shotPage, da.ui.shotArea]);
+  assert.equal(root.querySelector<HTMLElement>(".pick")!.hidden, true);
+  widget.destroy();
+});
+
 test("without region the box, its note and the picker are as they were", () => {
   const widget = mountBugbottle({ endpoint: ENDPOINT, screenshot: renderer, types: ["other"] });
   const root = widget.host.shadowRoot!;

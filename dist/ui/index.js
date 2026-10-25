@@ -380,7 +380,9 @@ export function mountBugbottle(options) {
     // With the modes the row is the one place the picture is chosen: the box
     // would be a second way of saying "whole page", and the element mode is the
     // picker with a picture taken at the end, so neither is rendered beside it.
-    const MODES = ["none", "page", "area", "element"];
+    // `elementPicker: false` is the switch that keeps elements off the report,
+    // and the element mode attaches one, so it goes with the picker.
+    const MODES = options.elementPicker === false ? ["none", "page", "area"] : ["none", "page", "area", "element"];
     const modeButtons = new Map();
     const hasModes = !!options.screenshot && !!regionTool;
     if (hasModes) {

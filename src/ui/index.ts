@@ -124,7 +124,11 @@ export type MountOptions = {
    * whatever the input says.
    */
   contact?: false | true | "required";
-  /** Offer the element picker. Default true. */
+  /**
+   * Offer the element picker. Default true. With `region` the row's element
+   * mode stands in for it, so the picker's own button is not rendered even
+   * when this is true, and `false` leaves the element mode out of the row.
+   */
   elementPicker?: boolean;
   /**
    * Offer "Edit picture" once a screenshot has been taken: a rectangle, an
@@ -140,7 +144,8 @@ export type MountOptions = {
    * whole page, select an area, pick an element — so the picture can show
    * only the part of the page the report is about. Picking an element here
    * also attaches it, so the separate "Point at the element" button is not
-   * rendered. Hand in `captureRegion` from `bugbottle/region`;
+   * rendered, whatever `elementPicker` says; `elementPicker: false` leaves the
+   * element mode out instead. Hand in `captureRegion` from `bugbottle/region`;
    * `{ on: captureRegion, annotate: true }` outlines the choice on the whole
    * page instead of cutting it out. Leave it out and the panel keeps the box
    * and never carries the overlay. Needs `screenshot`.
@@ -661,7 +666,10 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   // With the modes the row is the one place the picture is chosen: the box
   // would be a second way of saying "whole page", and the element mode is the
   // picker with a picture taken at the end, so neither is rendered beside it.
-  const MODES: readonly ShotChoice[] = ["none", "page", "area", "element"];
+  // `elementPicker: false` is the switch that keeps elements off the report,
+  // and the element mode attaches one, so it goes with the picker.
+  const MODES: readonly ShotChoice[] =
+    options.elementPicker === false ? ["none", "page", "area"] : ["none", "page", "area", "element"];
   const modeButtons = new Map<ShotChoice, HTMLButtonElement>();
   const hasModes = !!options.screenshot && !!regionTool;
   if (hasModes) {
