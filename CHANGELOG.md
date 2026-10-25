@@ -60,6 +60,19 @@ attribute needs a major version, and a new entry point needs a minor one.
   capture that failed after `attachScreenshot` turned the attachment off and
   so took the newer area off the report. It now settles quietly as well.
 
+- **Two pictures taken at once could leave the page's fields as bullets.**
+  Each capture masked the page for itself, so the second one read the first
+  one's bullets as the originals; when the first finished first it put the
+  real values back under the second render, and the second then wrote the
+  bullets back over them for good. A password field or a `data-bugbottle-mask`
+  text was left showing `•••` until the page was reloaded. With the row's
+  "Whole page" no longer locked while it renders, two quick clicks were enough;
+  before that it took a form adapter's capture overlapping an
+  `attachScreenshot` region, or two panels on one page. Masking now keeps one
+  ledger for every capture in force: a field is masked and its value saved
+  once, and the page is put back only when the last capture is done, whatever
+  order they finish in. No click is ignored to get there.
+
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
   `report-core` went through `stripNullBytes` and a length clip; `ts` was

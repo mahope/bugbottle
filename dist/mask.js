@@ -85,26 +85,33 @@ function queryAll(root, selector) {
     collect(root, selector, found);
     return found;
 }
+let ledger = null;
+let depth = 0;
 /** Replaces every non-space character of every text node under `el`. */
-function bulletText(el, undo) {
+function bulletText(el, ledger) {
     for (const child of Array.from(el.childNodes)) {
         if (child.nodeType === 3) {
             const text = child;
+            if (ledger.texts.has(text))
+                continue;
             const original = text.data;
             if (!original.trim())
                 continue;
             text.data = original.replace(/\S/g, BULLET);
-            undo.push(() => {
+            ledger.texts.add(text);
+            ledger.undo.push(() => {
                 text.data = original;
             });
         }
         else if (child.nodeType === 1) {
-            bulletText(child, undo);
+            bulletText(child, ledger);
         }
     }
 }
 /** Same number of characters, so the field keeps its width and its wrapping. */
-function bulletValue(el, undo) {
+function bulletValue(el, ledger) {
+    if (ledger.values.has(el))
+        return;
     const value = el.value;
     const placeholder = el.placeholder;
     if (!value && !placeholder)
@@ -116,7 +123,8 @@ function bulletValue(el, undo) {
     // is exactly what the masked picture is meant not to say.
     if (placeholder)
         el.placeholder = "";
-    undo.push(() => {
+    ledger.values.add(el);
+    ledger.undo.push(() => {
         el.value = value;
         el.placeholder = placeholder;
     });
@@ -180,7 +188,12 @@ function coverReplaced(el, overlay, fill) {
  * page scrolls between the measurement and the render. A replaced element has
  * no children to cover with, so it takes the other route.
  */
-function cover(el, colour, undo) {
+function cover(el, colour, ledger) {
+    // Covered already: its position and overflow are ours now, not the page's.
+    if (ledger.covers.has(el))
+        return;
+    ledger.covers.add(el);
+    const undo = ledger.undo;
     const view = el.ownerDocument.defaultView;
     const computed = view?.getComputedStyle(el);
     const fill = colour || computed?.getPropertyValue("--bb-mask").trim() || DEFAULT_MASK_COLOUR;
@@ -214,14 +227,31 @@ function cover(el, colour, undo) {
  * reporter cannot type in.
  */
 export function applyMask(root, options = {}) {
-    // `undo` is built as the passes run rather than at the end, so a pass that
-    // throws half way through has already recorded everything it changed and the
-    // restore below puts all of it back. A partial mask left on the page is the
-    // one outcome worse than no picture.
-    const undo = [];
+    // The ledger is built as the passes run rather than at the end, so a pass
+    // that throws half way through has already recorded everything it changed
+    // and the restore below puts all of it back. A partial mask left on the page
+    // is the one outcome worse than no picture.
+    const mine = (ledger ??= {
+        undo: [],
+        values: new WeakSet(),
+        texts: new WeakSet(),
+        covers: new WeakSet(),
+    });
+    depth += 1;
     const selector = options.selector ?? DEFAULT_MASK_SELECTOR;
     const block = options.block ?? DEFAULT_BLOCK_SELECTOR;
+    let restored = false;
     const restore = () => {
+        // Once per pass, or a second call would put the page back under a pass
+        // that is still rendering.
+        if (restored)
+            return;
+        restored = true;
+        depth -= 1;
+        if (depth > 0)
+            return;
+        ledger = null;
+        const undo = mine.undo;
         // Backwards, so an element masked by two passes is unwound in the order it
         // was wound. Each restore is on its own: one that throws must not strand
         // the rest of the page in bullets.
@@ -242,21 +272,21 @@ export function applyMask(root, options = {}) {
             for (const el of queryAll(root, INPUT_SELECTOR)) {
                 const field = el;
                 if (el.tagName === "TEXTAREA")
-                    bulletValue(field, undo);
+                    bulletValue(field, mine);
                 else if (el.tagName === "INPUT") {
                     if (!UNTYPED.test(field.type))
-                        bulletValue(field, undo);
+                        bulletValue(field, mine);
                 }
                 else if (el.getAttribute("contenteditable") !== "false")
-                    bulletText(el, undo);
+                    bulletText(el, mine);
             }
         }
         if (selector)
             for (const el of queryAll(root, selector))
-                bulletText(el, undo);
+                bulletText(el, mine);
         if (block) {
             for (const el of queryAll(root, block))
-                cover(el, options.colour, undo);
+                cover(el, options.colour, mine);
         }
     }
     catch (err) {

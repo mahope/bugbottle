@@ -584,6 +584,49 @@ test("a picture that fails after None was chosen is not reported as a failure", 
   widget.destroy();
 });
 
+test("two quick clicks on Whole page leave the page's fields as they were", async () => {
+  const field = document.createElement("input");
+  field.type = "password";
+  field.value = "hunter2";
+  document.body.append(field);
+  // Every render waits for its own gate, so the two overlap and either may end first.
+  const gates: (() => void)[] = [];
+  const seen: string[] = [];
+  const render = async (_root: HTMLElement, _opts: { pixelRatio: number }) => {
+    seen.push(field.value);
+    const n = gates.length;
+    await new Promise<void>((resolve) => gates.push(resolve));
+    return `data:image/png;base64,SHOT${n}`;
+  };
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    screenshot: render,
+    region: async () => null,
+    types: ["other"],
+  });
+  widget.open();
+  await tick();
+  const root = widget.host.shadowRoot!;
+  const page = root.querySelectorAll<HTMLButtonElement>(".modes button")[1]!;
+  page.click();
+  await tick();
+  page.click();
+  await tick();
+  assert.equal(gates.length, 2, "the second click is not ignored");
+  assert.deepEqual(seen, ["•••••••", "•••••••"]);
+  gates[0]!();
+  await tick();
+  await tick();
+  assert.equal(field.value, "•••••••", "still masked under the second render");
+  gates[1]!();
+  await tick();
+  await tick();
+  assert.equal(field.value, "hunter2");
+  assert.equal(root.querySelector<HTMLImageElement>(".preview")!.src, "data:image/png;base64,SHOT1");
+  widget.destroy();
+  field.remove();
+});
+
 test("elementPicker: false leaves the Element mode out of the row as well", () => {
   // The privacy table names elementPicker: false as the switch that keeps
   // elements off the report, and the Element mode attaches one.

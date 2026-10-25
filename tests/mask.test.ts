@@ -329,3 +329,85 @@ test("bugbottle's own panel is never masked: it is never in the picture", async 
   assert.equal(panelField.placeholder, "What happened?");
   assert.equal(seenPage, "••••", "the page's own fields are still masked");
 });
+
+/** A renderer that waits for `release` before it answers, so two can overlap. */
+function heldRender(): { render: () => Promise<string>; started: Promise<void>; release: () => void } {
+  let release!: () => void;
+  let start!: () => void;
+  const started = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    render: async () => {
+      start();
+      await gate;
+      return "data:image/png;base64,AAAA";
+    },
+    started,
+    release,
+  };
+}
+
+for (const order of ["first", "second"] as const) {
+  test(`overlapping captures leave the originals when the ${order} finishes first`, async () => {
+    const root = page(
+      `<input type="password" value="hunter2"><p data-bugbottle-mask>Ada</p><div data-bugbottle-block>chart</div>`,
+    );
+    const marked = document.querySelector("p") as HTMLElement;
+    const blocked = document.querySelector("div") as HTMLElement;
+    const a = heldRender();
+    const b = heldRender();
+    let secondSaw = "";
+    const opts = { root, maxDataUrlLength: 1_000_000 };
+    const one = captureScreenshot(a.render, opts);
+    await a.started;
+    const two = captureScreenshot(async () => {
+      const shot = b.render();
+      secondSaw = field().value;
+      return shot;
+    }, opts);
+    await b.started;
+    assert.equal(secondSaw, "•••••••", "the second picture is masked as well");
+    if (order === "first") {
+      a.release();
+      await one;
+      assert.equal(field().value, "•••••••", "still masked while the second is rendering");
+      b.release();
+      await two;
+    } else {
+      b.release();
+      await two;
+      assert.equal(field().value, "•••••••", "still masked while the first is rendering");
+      a.release();
+      await one;
+    }
+    assert.equal(field().value, "hunter2");
+    assert.equal(marked.textContent, "Ada");
+    assert.equal(blocked.querySelectorAll("[data-bugbottle-mask-overlay]").length, 0);
+    assert.equal(blocked.style.position, "");
+  });
+}
+
+test("three overlapping captures with different options all end on the originals", async () => {
+  const root = page(`<input value="hunter2"><p class="secret">Ada</p>`);
+  const marked = document.querySelector("p") as HTMLElement;
+  const [a, b, c] = [heldRender(), heldRender(), heldRender()];
+  const held = [a, b, c];
+  const opts = { root, maxDataUrlLength: 1_000_000 };
+  const runs = [
+    captureScreenshot(a.render, opts),
+    captureScreenshot(b.render, { ...opts, mask: { selector: ".secret" } }),
+    captureScreenshot(c.render, opts),
+  ];
+  await Promise.all(held.map((h) => h.started));
+  assert.equal(marked.textContent, "•••", "the second capture's own selector still masks");
+  for (const i of [1, 0, 2]) {
+    held[i]?.release();
+    await runs[i];
+  }
+  assert.equal(field().value, "hunter2");
+  assert.equal(marked.textContent, "Ada");
+});
