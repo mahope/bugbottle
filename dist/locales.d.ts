@@ -85,8 +85,10 @@ export type UiTexts = {
     pickingAnnounce: string;
     /** Announced when pick mode ends, whether an element was picked or not. */
     pickingDone: string;
-    /** Accessible name of the row of three buttons. Never shown. */
+    /** Accessible name of the row of four buttons. Never shown. */
     shotModeLabel?: string;
+    /** The first of them: no picture. Pressed until one is chosen. */
+    shotNone?: string;
     shotPage?: string;
     shotArea?: string;
     shotElement?: string;

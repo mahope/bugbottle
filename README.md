@@ -4283,7 +4283,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `annotate` | `createAnnotator` from `bugbottle/annotate` renders "Edit picture"; omitted or `false`, nothing leads to an editor and none of it is bundled. |
 | `contact` | `true` adds an optional field asking how to reach the reporter; `"required"` refuses to send without it. Off by default. What they type travels as `contact` on the report. |
 | `elementPicker` | `false` leaves the picker out. Default true. |
-| `region` | `captureRegion` from `bugbottle/region` adds Whole page / Select area / Pick element under the screenshot box; `{ on: captureRegion, annotate: true }` outlines the choice on the whole page instead of cutting it out. Omitted or `false`, none of it is rendered or bundled. Needs `screenshot`. See [Choosing what the picture shows](#choosing-what-the-picture-shows). |
+| `region` | `captureRegion` from `bugbottle/region` replaces the screenshot box with one row, None / Whole page / Area / Element, and the separate element picker with its Element mode; `{ on: captureRegion, annotate: true }` outlines the choice on the whole page instead of cutting it out. Omitted or `false`, none of it is rendered or bundled. Needs `screenshot`. See [Choosing what the picture shows](#choosing-what-the-picture-shows). |
 | `locale`, `texts`, `messages` | The language, and per-string overrides of it. |
 | `theme`, `brand` | Colours, radius, position; the name and logo in the header. |
 | `types`, `initialType` | Which report types to offer, and which starts selected. |
@@ -4298,6 +4298,7 @@ it out and the canvas editor is not in your bundle at all. See
 | `queue`, `scrub`, `sign`, `beforeSend` | The same seams the plain functions take. |
 | `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. `extra` may also be a function, called once per report when Send is pressed, for a value that changes while the panel is mounted. |
 | `container`, `onSent`, `onError` | Where to mount, and what to do afterwards. `onSent(id, report)` receives the id the server answered with and the report as it was sent. |
+| `formatReportId` | How the confirmation writes the id the server answered with, e.g. `(id) => id.slice(0, 8)` when your own lists show a uuid shortened. Default: the id as it came. `onSent` still receives the full id, and a formatter that throws shows the full id rather than failing the send. |
 
 **Accessibility.** The panel is meant to be switched on without an
 accessibility regression, so it behaves like a dialog rather than a floating
@@ -5550,7 +5551,7 @@ so the hook and the panel say the same thing in the same language.
 import { sentLine } from "bugbottle/locales";
 
 sentLine(da.messages, "B-4711");
-// → "Tak — rapporten er på vej. Rapport nummer: B-4711"
+// → "Tak. Rapporten er sendt. Dit nummer: B-4711"
 ```
 
 ### Five more languages, imported on purpose
@@ -6127,9 +6128,15 @@ check). A whole-page picture has none, so a report from before 1.1 looks
 exactly as it did.
 
 **The panel** takes the function as `region`, the same seam as `annotate`:
-three buttons — Whole page, Select area, Pick element — appear under the
-screenshot box, the panel steps aside while the reporter works on the page, and
-the pressed button says which one the attached picture came from.
+one row of four buttons — None, Whole page, Area, Element — takes the place of
+the screenshot box, so there is one way to choose the picture rather than two.
+None is pressed until something else is (or until the report type is one
+`screenshotFor` attaches a picture to), and the line about what the picture
+shows appears only once there is one. Area and Element step the panel aside
+while the reporter works on the page, the pressed button says which one the
+attached picture came from, and Element also attaches the element, so the
+separate "Point at the element" button is not rendered beside the row. Without
+`region` the panel keeps the box and the button exactly as in 1.0.
 
 ```ts
 import { mountBugbottle } from "bugbottle/ui";

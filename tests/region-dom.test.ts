@@ -322,7 +322,7 @@ test("without region the panel offers no modes at all", () => {
   widget.destroy();
 });
 
-test("the three modes are a labelled group in the reporter's language", () => {
+test("the four choices are a labelled group in the reporter's language", () => {
   const widget = mountBugbottle({
     endpoint: ENDPOINT,
     screenshot: renderer,
@@ -334,11 +334,12 @@ test("the three modes are a labelled group in the reporter's language", () => {
   assert.equal(row.getAttribute("role"), "group");
   assert.equal(row.getAttribute("aria-label"), da.ui.shotModeLabel);
   const labels = [...row.querySelectorAll("button")].map((b) => b.textContent);
-  assert.deepEqual(labels, [da.ui.shotPage, da.ui.shotArea, da.ui.shotElement]);
+  assert.deepEqual(labels, [da.ui.shotNone, da.ui.shotPage, da.ui.shotArea, da.ui.shotElement]);
   // A locale written before the modes existed falls back to English.
-  const { shotModeLabel: _a, shotPage: _b, shotArea: _c, shotElement: _d, ...old } = da.ui;
+  const { shotModeLabel: _a, shotNone: _n, shotPage: _b, shotArea: _c, shotElement: _d, ...old } = da.ui;
   widget.setLocale({ ...da, ui: old });
   assert.equal(row.getAttribute("aria-label"), en.ui.shotModeLabel);
+  assert.equal(row.querySelector("button")!.textContent, en.ui.shotNone);
   widget.destroy();
 });
 
@@ -361,7 +362,7 @@ test("picking an element for the picture hides the panel, then sends the region 
   const root = widget.host.shadowRoot!;
   const panel = root.querySelector<HTMLElement>(".panel")!;
   const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
-  buttons[2]!.click();
+  buttons[3]!.click();
   assert.equal(panel.hidden, true, "the panel is out of the way while picking");
   assert.deepEqual(asked, [{ mode: "element", instructions: da.ui.picking }]);
 
@@ -369,9 +370,10 @@ test("picking an element for the picture hides the panel, then sends the region 
   await tick();
   await tick();
   assert.equal(panel.hidden, false);
-  assert.equal(root.activeElement, buttons[2], "focus returns to the button");
-  assert.equal(buttons[2]!.getAttribute("aria-pressed"), "true");
+  assert.equal(root.activeElement, buttons[3], "focus returns to the button");
+  assert.equal(buttons[3]!.getAttribute("aria-pressed"), "true");
   assert.equal(buttons[0]!.getAttribute("aria-pressed"), "false");
+  assert.equal(buttons[1]!.getAttribute("aria-pressed"), "false");
   assert.equal(root.querySelector<HTMLImageElement>(".preview")!.src, fakeShot.dataUrl);
 
   root.querySelector("textarea")!.value = "The save button does nothing";
@@ -401,12 +403,88 @@ test("a cancelled selection leaves the picture that was there", async () => {
   const root = widget.host.shadowRoot!;
   const before = root.querySelector<HTMLImageElement>(".preview")!.src;
   const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
-  assert.equal(buttons[0]!.getAttribute("aria-pressed"), "true", "the whole page, as it opened");
-  buttons[1]!.click();
+  assert.equal(buttons[1]!.getAttribute("aria-pressed"), "true", "the whole page, as it opened");
+  buttons[2]!.click();
   await tick();
   assert.equal(calls, 1);
   assert.equal(root.querySelector<HTMLImageElement>(".preview")!.src, before);
-  assert.equal(buttons[0]!.getAttribute("aria-pressed"), "true");
+  assert.equal(buttons[1]!.getAttribute("aria-pressed"), "true");
+  widget.destroy();
+});
+
+test("with the modes there is one way to choose the picture, and no picture is the start", async () => {
+  const { bodies, fetch } = recordingFetch();
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch,
+    screenshot: renderer,
+    region: async () => null,
+    types: ["other", "bug"],
+  });
+  const root = widget.host.shadowRoot!;
+  const box = root.querySelector<HTMLElement>(".check")!;
+  const note = root.querySelector<HTMLElement>("#bb-shot-note")!;
+  const pickBtn = root.querySelector<HTMLElement>(".pick")!;
+  const row = root.querySelector<HTMLElement>(".modes")!;
+  assert.equal(box.hidden, true, "the box is not a second way to say it");
+  assert.equal(pickBtn.hidden, true, "the Element mode is the picker");
+  assert.equal(row.getAttribute("aria-describedby"), note.id);
+  widget.open();
+  await tick();
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
+  const pressed = () => buttons.map((b) => b.getAttribute("aria-pressed"));
+  assert.deepEqual(pressed(), ["true", "false", "false", "false"], "no picture until one is chosen");
+  assert.equal(note.hidden, true, "nothing to describe yet");
+
+  buttons[1]!.click();
+  await tick();
+  await tick();
+  assert.deepEqual(pressed(), ["false", "true", "false", "false"]);
+  assert.equal(note.hidden, false);
+  assert.equal(root.querySelector<HTMLImageElement>(".preview")!.hidden, false);
+
+  buttons[0]!.click();
+  assert.deepEqual(pressed(), ["true", "false", "false", "false"]);
+  assert.equal(note.hidden, true);
+  assert.equal(root.querySelector<HTMLImageElement>(".preview")!.hidden, true);
+
+  root.querySelector("textarea")!.value = "No picture, please";
+  root.querySelector<HTMLButtonElement>(".send")!.click();
+  await tick();
+  await tick();
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0]!.screenshotDataUrl, undefined);
+  widget.destroy();
+});
+
+test("a cancelled area with no picture before leaves no picture chosen", async () => {
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    screenshot: renderer,
+    region: async () => null,
+    types: ["other"],
+  });
+  widget.open();
+  await tick();
+  const root = widget.host.shadowRoot!;
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
+  buttons[2]!.click();
+  await tick();
+  await tick();
+  assert.deepEqual(
+    buttons.map((b) => b.getAttribute("aria-pressed")),
+    ["true", "false", "false", "false"],
+  );
+  assert.equal(root.querySelector<HTMLElement>("#bb-shot-note")!.hidden, true);
+  widget.destroy();
+});
+
+test("without region the box, its note and the picker are as they were", () => {
+  const widget = mountBugbottle({ endpoint: ENDPOINT, screenshot: renderer, types: ["other"] });
+  const root = widget.host.shadowRoot!;
+  assert.equal(root.querySelector<HTMLElement>(".check")!.hidden, false);
+  assert.equal(root.querySelector<HTMLElement>("#bb-shot-note")!.hidden, false);
+  assert.equal(root.querySelector<HTMLElement>(".pick")!.hidden, false);
   widget.destroy();
 });
 

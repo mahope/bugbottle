@@ -136,8 +136,10 @@ textarea{min-height:88px;resize:vertical}
 .preview{display:block;max-width:100%;max-height:120px;border:1px solid var(--bb-border);border-radius:6px;margin:6px 0}
 .edit,.act{border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;padding:6px 10px}
 .edit{margin:0 0 6px}
-.tools,.modes{display:flex;gap:6px;margin:0 0 6px}
+.tools{display:flex;gap:6px;margin:0 0 6px}
+.modes{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 6px}
 .mode,.tool{flex:1;padding:6px 8px;border:1px solid var(--bb-border);background:none;border-radius:calc(var(--bb-radius) - 4px);cursor:pointer;min-height:24px;min-width:24px}
+.mode{flex:1 1 auto;padding:6px 4px;font-size:13px;white-space:nowrap}
 .mode[aria-pressed="true"],.tool[aria-checked="true"]{border-color:var(--bb-accent-text);color:var(--bb-accent-text);font-weight:600}
 canvas{display:block;width:100%;height:auto;border:1px solid var(--bb-border);border-radius:6px;touch-action:none;cursor:crosshair}
 .acts{display:flex;gap:6px;margin-top:6px}
@@ -330,8 +332,8 @@ export function mountBugbottle(options) {
     const shotRow = el("label", { class: "check" }, shotBox, shotText);
     const shotNote = el("p", { class: "note", id: "bb-shot-note" });
     // A group rather than a radiogroup: each button does something at once —
-    // takes a picture, opens an overlay — and pressed says which one the
-    // current picture came from.
+    // drops the picture, takes one, opens an overlay — and pressed says which
+    // one the current picture came from, or that there is none.
     const modesRow = el("div", { class: "modes", role: "group", hidden: "" });
     const preview = el("img", { class: "preview", alt: "", hidden: "" });
     const editBtn = el("button", { class: "edit", type: "button", hidden: "" });
@@ -373,13 +375,20 @@ export function mountBugbottle(options) {
     }
     if (options.elementPicker === false)
         pickBtn.hidden = true;
-    const MODES = ["page", "area", "element"];
+    // With the modes the row is the one place the picture is chosen: the box
+    // would be a second way of saying "whole page", and the element mode is the
+    // picker with a picture taken at the end, so neither is rendered beside it.
+    const MODES = ["none", "page", "area", "element"];
     const modeButtons = new Map();
-    if (options.screenshot && regionTool) {
+    const hasModes = !!options.screenshot && !!regionTool;
+    if (hasModes) {
         modesRow.hidden = false;
+        shotRow.hidden = true;
+        pickBtn.hidden = true;
+        modesRow.setAttribute("aria-describedby", shotNote.id);
         for (const m of MODES) {
             const b = el("button", { class: "mode", type: "button", "aria-pressed": "false" });
-            b.addEventListener("click", () => void shootRegion(m));
+            b.addEventListener("click", () => (m === "none" ? dropShot() : void shootRegion(m)));
             modeButtons.set(m, b);
             modesRow.append(b);
         }
@@ -445,7 +454,7 @@ export function mountBugbottle(options) {
         contactNote.textContent = ui.contactHint;
         shotText.textContent = ui.screenshot;
         shotNote.textContent = ui.screenshotNote;
-        shotNote.hidden = !options.screenshot || !ui.screenshotNote;
+        showMode();
         editBtn.textContent = ui.annotate;
         toolsRow.setAttribute("aria-label", ui.toolLabel);
         canvas.setAttribute("aria-label", ui.annotateArea);
@@ -456,7 +465,7 @@ export function mountBugbottle(options) {
             b.textContent = toolText[t];
         modesRow.setAttribute("aria-label", text("shotModeLabel"));
         const modeText = {
-            page: text("shotPage"), area: text("shotArea"), element: text("shotElement"),
+            none: text("shotNone"), page: text("shotPage"), area: text("shotArea"), element: text("shotElement"),
         };
         for (const [m, b] of modeButtons)
             b.textContent = modeText[m];
@@ -472,11 +481,17 @@ export function mountBugbottle(options) {
     function text(key) {
         return ui[key] ?? en.ui[key] ?? "";
     }
-    /** Marks the button of the mode the current picture was taken in. */
+    /**
+     * Marks the button of the mode the current picture was taken in, or "no
+     * picture". With the modes, the note about what the picture shows is only
+     * there while there is a picture for it to describe.
+     */
     function showMode() {
-        const mode = shotRegion?.mode ?? "page";
+        const chosen = shotBox.checked ? (shotRegion?.mode ?? "page") : "none";
         for (const [m, b] of modeButtons)
-            b.setAttribute("aria-pressed", String(!!screenshot && m === mode));
+            b.setAttribute("aria-pressed", String(m === chosen));
+        shotNote.hidden =
+            !options.screenshot || !ui.screenshotNote || (hasModes && !shotBox.checked);
     }
     function applyIntro() {
         const text = openedByError ? ui.openedByError : ui.intro;
@@ -492,6 +507,7 @@ export function mountBugbottle(options) {
         checkOne(typeButtons, next);
         if (options.screenshot && screenshotFor(next) && !shotBox.checked) {
             shotBox.checked = true;
+            showMode();
             void capture();
         }
     }
@@ -559,7 +575,10 @@ export function mountBugbottle(options) {
         if (!render || screenshot)
             return;
         try {
-            showShot(await captureScreenshot(render, { mask: options.mask }), null);
+            const shot = await captureScreenshot(render, { mask: options.mask });
+            // "No picture" pressed while it was being taken wins over the picture.
+            if (shotBox.checked)
+                showShot(shot, null);
         }
         catch (err) {
             shotFailed(err);
@@ -577,6 +596,7 @@ export function mountBugbottle(options) {
         // Unticked only when there is no picture left; a failed re-shot leaves
         // the one on screen, and the box should say it is still going.
         shotBox.checked = !!screenshot;
+        showMode();
         setStatus(err instanceof ScreenshotTooLargeError ? msg.screenshotTooLarge : msg.screenshotFailed, "error");
         options.onError?.(err);
     }
@@ -593,11 +613,12 @@ export function mountBugbottle(options) {
         // Marks already drawn are kept, as closing the panel keeps them: a
         // cancelled selection leaves the picture exactly as it was.
         closeEditor(true);
-        shotBox.checked = true;
         setStatus("");
         if (mode === "page") {
             shooting = true;
             clearScreenshot();
+            shotBox.checked = true;
+            showMode();
             await capture();
             shooting = false;
             modeButtons.get(mode)?.focus();
@@ -618,6 +639,7 @@ export function mountBugbottle(options) {
                 signal: controller.signal,
             });
             if (shot) {
+                shotBox.checked = true;
                 showShot(shot.dataUrl, shot.region ?? null);
                 if (shot.element) {
                     elements = [...elements, shot.element].slice(-MAX_ELEMENTS);
@@ -636,6 +658,14 @@ export function mountBugbottle(options) {
                 modeButtons.get(mode)?.focus();
             }
         }
+    }
+    /** "No picture": what the box's untick is when the modes replace it. */
+    function dropShot() {
+        if (pickController || shooting)
+            return;
+        shotBox.checked = false;
+        clearScreenshot();
+        setStatus("");
     }
     function clearScreenshot() {
         closeEditor(false);
@@ -744,7 +774,8 @@ export function mountBugbottle(options) {
             // The reference the server answered with, in the reporter's own
             // language, so the confirmation is something they can quote. An
             // endpoint that answers no id gets the plain sentence.
-            thanksText.textContent = id ? sentLine(msg, id) : ui.thanks;
+            const shown = shortId(id);
+            thanksText.textContent = shown ? sentLine(msg, shown) : ui.thanks;
             form.hidden = true;
             thanks.hidden = false;
             thanksClose.focus();
@@ -779,6 +810,22 @@ export function mountBugbottle(options) {
             sendBtn.textContent = ui.send;
         }
     }
+    /**
+     * The id as the confirmation writes it. Like `onSent`, a host formatter that
+     * throws must not turn a delivered report into a failed one, so the full id
+     * is shown instead.
+     */
+    function shortId(id) {
+        if (!id || !options.formatReportId)
+            return id;
+        try {
+            const out = options.formatReportId(id);
+            return typeof out === "string" ? out : id;
+        }
+        catch {
+            return id;
+        }
+    }
     function resetForm() {
         textarea.value = "";
         contactInput.value = "";
@@ -788,6 +835,7 @@ export function mountBugbottle(options) {
         setStatus("");
         setType(options.initialType ?? types[0] ?? "bug");
         shotBox.checked = !!options.screenshot && screenshotFor(type);
+        showMode();
     }
     /**
      * The controls inside the panel that can take focus, in document order.

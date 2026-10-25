@@ -139,6 +139,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Changed
 
+- **The Danish locale says its sentences without a dash.** Every line
+  that joined two clauses with "—" now uses a full stop, and the
+  confirmation reads "Tak. Rapporten er sendt. Dit nummer: {id}" rather than
+  "Tak — rapporten er på vej. Rapport nummer: {id}". Only `da` changed.
+
 - **`buildSelector` prefers an `aria-label` after an id and a test id**, and
   caps what it writes: never past 200 characters, and an id, test id or label
   over 64 characters is skipped as generated. A label ends the walk only once it
@@ -208,14 +213,27 @@ attribute needs a major version, and a new entry point needs a minor one.
   validate it, `handleReport` drops it whenever the picture is dropped,
   `toMarkdown` prints it as one fact, and `report.schema.json` and
   `openapi.json` carry it. `buildReport` takes it as `screenshotRegion`.
-- **The panel's `region` option**: hand in `captureRegion` and three buttons —
-  Whole page, Select area, Pick element — appear under the screenshot box, the
-  panel steps aside while the reporter works on the page, and the pressed
-  button says which mode the attached picture came from. Five new optional
-  `UiTexts` strings (`shotModeLabel`, `shotPage`, `shotArea`, `shotElement`,
-  `areaInstructions`) in all thirteen languages; a locale written before them
-  falls back to English. Picking an element for the picture reuses the
-  picker's own `picking` and `pickingAnnounce` sentences.
+- **The panel's `region` option**: hand in `captureRegion` and one row of four
+  buttons — None, Whole page, Area, Element — replaces the screenshot box, so
+  the picture is chosen in one place rather than two. None is pressed until
+  another is (or until `screenshotFor` attaches a picture to the chosen type),
+  and `screenshotNote` is shown only while there is a picture. Area and
+  Element step the panel aside while the reporter works on the page, the
+  pressed button says which mode the attached picture came from, and Element
+  also attaches the element, so the separate "Point at the element" button is
+  not rendered beside the row. Without `region` the box and the button are
+  exactly as in 1.0. Six new optional `UiTexts` strings (`shotModeLabel`,
+  `shotNone`, `shotPage`, `shotArea`, `shotElement`, `areaInstructions`) in
+  all thirteen languages, short enough for the row to fit a 360-pixel phone;
+  a locale written before them falls back to English. Picking an element for
+  the picture reuses the picker's own `picking` and `pickingAnnounce`
+  sentences.
+- **`formatReportId` on the panel**: how the confirmation writes the id the
+  server answered with, e.g. `(id) => id.slice(0, 8)` for a uuid the
+  application's own lists show shortened. Default: the id as it came, so
+  nothing changes for a panel that does not pass it. `onSent` still receives
+  the full id, and a formatter that throws shows the full id rather than
+  turning a delivered report into a failed one.
 - **`attachScreenshot(shot)` on the form state**, so the React, Vue, Svelte and
   Solid adapters take a picture from `captureArea`/`captureElement` without
   carrying the overlay; `screenshotRegion` sits beside `screenshot` in the

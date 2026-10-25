@@ -111,12 +111,14 @@ export type MountOptions = {
      */
     annotate?: typeof createAnnotator | false;
     /**
-     * Offer three buttons under the screenshot box — whole page, select an area,
-     * pick an element — so the picture can show only the part of the page the
-     * report is about. Hand in `captureRegion` from `bugbottle/region`;
+     * Replace the screenshot box with one row of four buttons — no picture,
+     * whole page, select an area, pick an element — so the picture can show
+     * only the part of the page the report is about. Picking an element here
+     * also attaches it, so the separate "Point at the element" button is not
+     * rendered. Hand in `captureRegion` from `bugbottle/region`;
      * `{ on: captureRegion, annotate: true }` outlines the choice on the whole
-     * page instead of cutting it out. Leave it out and the panel never mentions
-     * it and never carries the overlay. Needs `screenshot`.
+     * page instead of cutting it out. Leave it out and the panel keeps the box
+     * and never carries the overlay. Needs `screenshot`.
      */
     region?: typeof captureRegion | ({
         on: typeof captureRegion;
@@ -227,6 +229,12 @@ export type MountOptions = {
      * same words to another tool.
      */
     onSent?: (id: string | undefined, report: BugReport & Record<string, unknown>) => void;
+    /**
+     * How the id the server answered with is written in the confirmation, e.g.
+     * `(id) => id.slice(0, 8)` for a uuid that the application's own lists show
+     * shortened. Default: the id as it came. `onSent` still gets the full id.
+     */
+    formatReportId?: (id: string) => string;
     onError?: (error: unknown) => void;
 };
 export type BugbottleWidget = {
