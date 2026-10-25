@@ -1039,6 +1039,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     setStatus("");
     // Assembled outside the try so the failure path can queue this very body.
     let report: (BugReport & Record<string, unknown>) | null = null;
+    // What the server received, which is `beforeSend`'s copy when it made one.
+    let sent: (BugReport & Record<string, unknown>) | null = null;
+    const { beforeSend } = options;
     try {
       report = buildReport({
         type,
@@ -1059,7 +1062,12 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         timeoutMs: options.timeoutMs,
         fetch: options.fetch,
         parseError: options.parseError,
-        beforeSend: options.beforeSend,
+        beforeSend: beforeSend
+          ? async (r) => {
+              sent = await beforeSend(r);
+              return sent;
+            }
+          : undefined,
         sign: options.sign,
       });
       resetForm();
@@ -1072,10 +1080,16 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       thanks.hidden = false;
       thanksClose.focus();
       try {
-        options.onSent?.(id, report);
-      } catch {
+        options.onSent?.(id, sent ?? report);
+      } catch (err) {
         // The report has arrived. A host callback that throws must not send
-        // it down the failure path below, which would queue it a second time.
+        // it down the failure path below, which would queue it a second time,
+        // but the host still hears about its own exception.
+        try {
+          options.onError?.(err);
+        } catch {
+          // Nor may an onError that throws in turn.
+        }
       }
     } catch (err) {
       const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;

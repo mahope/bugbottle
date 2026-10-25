@@ -126,6 +126,23 @@ test("onSent receives the id and the report exactly as it was sent", async () =>
   widget.destroy();
 });
 
+test("onSent receives the copy beforeSend returned, which is what the server got", async () => {
+  const { bodies, fetch } = recording("B-5");
+  const seen: Record<string, unknown>[] = [];
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch,
+    beforeSend: (report) => ({ ...report, message: "[redacted]", tenant: "t-1" }),
+    onSent: (_id, report) => seen.push(report),
+  });
+  await fileReport(widget, "My password is hunter2");
+  assert.equal(bodies.length, 1);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0]!.message, "[redacted]");
+  assert.deepEqual(seen[0], bodies[0]);
+  widget.destroy();
+});
+
 test("the panel never grows past the viewport: it scrolls inside itself", () => {
   // On a phone the picture editor makes the panel taller than the screen; a
   // fixed box overflowing upwards hid its own title and close button.
@@ -159,7 +176,9 @@ test("an onSent that throws neither fails nor queues a delivered report", async 
   await fileReport(widget, "Save does nothing");
   assert.equal(bodies.length, 1);
   assert.equal(queued.length, 0, "a stored report is not queued again");
-  assert.equal(errors.length, 0);
+  // Not silent either: the host hears about its own callback through onError.
+  assert.equal(errors.length, 1);
+  assert.equal((errors[0] as Error).message, "the host's toast library fell over");
   assert.equal(widget.host.shadowRoot!.querySelector<HTMLElement>(".thanks")!.hidden, false);
   widget.destroy();
 });

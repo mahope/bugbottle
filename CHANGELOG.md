@@ -32,7 +32,14 @@ attribute needs a major version, and a new entry point needs a minor one.
   callback ran inside the `try` around the send, so an exception from it was
   caught as a failed delivery — and with a `queue`, a report the server had
   already stored was queued and delivered a second time. The callback's own
-  exception is now caught on its own.
+  exception is now caught on its own and handed to `onError`, so it is not
+  silent either; the report still counts as delivered.
+
+- **`onSent` was handed the report from before `beforeSend`.** The panel
+  posted the copy `beforeSend` returned and then gave `onSent` the one it had
+  built, so a hook that redacted the message or added a field was undone in
+  whatever the host did next with the report. `onSent` now receives exactly the
+  body the server was sent.
 
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
