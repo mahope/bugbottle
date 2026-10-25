@@ -543,9 +543,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
   let tool: AnnotateTool = "rect";
   let elements: ElementRef[] = [];
   let pickController: AbortController | null = null;
-  // True while a mode button's picture is being taken, so a second click
-  // cannot land a slower whole-page render over a faster area.
-  let shooting = false;
+  // Counts the pictures asked for. A whole-page render keeps the number it
+  // started with and may attach its picture, or report its failure, only while
+  // that is still the latest: "None", a later area and a sent form all outrank
+  // a render that is still in flight, and none of them has to wait for it.
+  let shotRequest = 0;
   let sending = false;
   let isOpen = false;
   // Whatever had focus when the panel opened, so closing it puts the reporter
@@ -863,16 +865,20 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     }
   }
 
-  async function capture() {
+  /** Resolves true when the render it started is still the picture asked for. */
+  async function capture(): Promise<boolean> {
     const render = options.screenshot;
-    if (!render || screenshot) return;
+    if (!render || screenshot) return false;
+    const request = ++shotRequest;
     try {
       const shot = await captureScreenshot(render, { mask: options.mask });
       // "No picture" pressed while it was being taken wins over the picture.
-      if (shotBox.checked) showShot(shot, null);
+      if (request === shotRequest && shotBox.checked) showShot(shot, null);
     } catch (err) {
-      shotFailed(err);
+      // A picture nobody wants any more has not failed anybody.
+      if (request === shotRequest) shotFailed(err);
     }
+    return request === shotRequest;
   }
 
   function showShot(dataUrl: string, region: ScreenshotRegion | null) {
@@ -901,19 +907,16 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
    */
   async function shootRegion(mode: ScreenshotMode) {
     const render = options.screenshot;
-    if (!render || !regionTool || pickController || shooting) return;
+    if (!render || !regionTool || pickController) return;
     // Marks already drawn are kept, as closing the panel keeps them: a
     // cancelled selection leaves the picture exactly as it was.
     closeEditor(true);
     setStatus("");
     if (mode === "page") {
-      shooting = true;
       clearScreenshot();
       shotBox.checked = true;
       showMode();
-      await capture();
-      shooting = false;
-      modeButtons.get(mode)?.focus();
+      if (await capture()) modeButtons.get(mode)?.focus();
       return;
     }
     const controller = new AbortController();
@@ -931,6 +934,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         signal: controller.signal,
       });
       if (shot) {
+        // The newest picture now, so a whole-page render still under way
+        // cannot land over it.
+        shotRequest++;
         shotBox.checked = true;
         showShot(shot.dataUrl, shot.region ?? null);
         if (shot.element) {
@@ -952,13 +958,14 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
 
   /** "No picture": what the box's untick is when the modes replace it. */
   function dropShot() {
-    if (pickController || shooting) return;
+    if (pickController) return;
     shotBox.checked = false;
     clearScreenshot();
     setStatus("");
   }
 
   function clearScreenshot() {
+    shotRequest++;
     closeEditor(false);
     screenshot = null;
     shotRegion = null;

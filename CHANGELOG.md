@@ -48,6 +48,18 @@ attribute needs a major version, and a new entry point needs a minor one.
   both sides, `calc(100vw - 2 * var(--bb-offset-x, 16px))`, as the height
   already did with `offsetY`.
 
+- **"None" in the picture row could lose to a picture still being taken.**
+  While a whole-page render from the row was under way the button was ignored
+  and the picture was attached anyway; a render started on its own — opening
+  on a bug — that finished after "None" and then "Area" replaced the area with
+  the whole page; and one that failed after "None" still said so and called
+  `onError`. The panel now numbers the pictures it asks for, as the form state
+  already did, and only the latest may attach or report a failure: "None", an
+  attached area and a sent form all outrank a render still in flight. The
+  form state the adapters share had the last of the three: a whole-page
+  capture that failed after `attachScreenshot` turned the attachment off and
+  so took the newer area off the report. It now settles quietly as well.
+
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
   `report-core` went through `stripNullBytes` and a length clip; `ts` was

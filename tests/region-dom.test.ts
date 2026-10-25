@@ -480,6 +480,110 @@ test("a cancelled area with no picture before leaves no picture chosen", async (
   widget.destroy();
 });
 
+/** A renderer that waits for `open()` before it answers, the way a slow page renders. */
+function gatedRenderer(fail = false) {
+  let open: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  const render = async (_root: HTMLElement, _opts: { pixelRatio: number }) => {
+    await gate;
+    if (fail) throw new Error("the renderer gave up");
+    return "data:image/png;base64,W1000x3000";
+  };
+  return { render, open: () => open() };
+}
+
+test("None wins over a whole-page picture that is still being taken", async () => {
+  const { bodies, fetch } = recordingFetch();
+  const slow = gatedRenderer();
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch,
+    screenshot: slow.render,
+    region: async () => null,
+    types: ["other"],
+  });
+  widget.open();
+  await tick();
+  const root = widget.host.shadowRoot!;
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
+  buttons[1]!.click();
+  await tick();
+  buttons[0]!.click();
+  slow.open();
+  await tick();
+  await tick();
+  assert.deepEqual(
+    buttons.map((b) => b.getAttribute("aria-pressed")),
+    ["true", "false", "false", "false"],
+  );
+  assert.equal(root.querySelector<HTMLImageElement>(".preview")!.hidden, true);
+  root.querySelector("textarea")!.value = "No picture, please";
+  root.querySelector<HTMLButtonElement>(".send")!.click();
+  await tick();
+  await tick();
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0]!.screenshotDataUrl, undefined);
+  widget.destroy();
+});
+
+test("a whole-page picture that finishes late in the panel does not replace an attached area", async () => {
+  const { bodies, fetch } = recordingFetch();
+  const slow = gatedRenderer();
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch,
+    screenshot: slow.render,
+    region: async () => fakeShot,
+    types: ["bug"],
+  });
+  // A bug ticks the picture, so opening starts a whole-page render.
+  widget.open();
+  await tick();
+  const root = widget.host.shadowRoot!;
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
+  buttons[0]!.click();
+  buttons[2]!.click();
+  await tick();
+  await tick();
+  assert.equal(root.querySelector<HTMLImageElement>(".preview")!.src, fakeShot.dataUrl);
+  slow.open();
+  await tick();
+  await tick();
+  assert.equal(root.querySelector<HTMLImageElement>(".preview")!.src, fakeShot.dataUrl);
+  root.querySelector("textarea")!.value = "The save button does nothing";
+  root.querySelector<HTMLButtonElement>(".send")!.click();
+  await tick();
+  await tick();
+  assert.equal(bodies[0]!.screenshotDataUrl, fakeShot.dataUrl);
+  assert.deepEqual(bodies[0]!.screenshotRegion, fakeShot.region);
+  widget.destroy();
+});
+
+test("a picture that fails after None was chosen is not reported as a failure", async () => {
+  const slow = gatedRenderer(true);
+  const errors: unknown[] = [];
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    screenshot: slow.render,
+    region: async () => null,
+    types: ["bug"],
+    onError: (err) => errors.push(err),
+  });
+  widget.open();
+  await tick();
+  const root = widget.host.shadowRoot!;
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
+  buttons[0]!.click();
+  slow.open();
+  await tick();
+  await tick();
+  await tick();
+  assert.deepEqual(errors, []);
+  assert.equal(root.querySelector<HTMLElement>(".status")!.textContent, "");
+  assert.equal(buttons[0]!.getAttribute("aria-pressed"), "true");
+  widget.destroy();
+});
+
 test("without region the box, its note and the picker are as they were", () => {
   const widget = mountBugbottle({ endpoint: ENDPOINT, screenshot: renderer, types: ["other"] });
   const root = widget.host.shadowRoot!;
@@ -530,5 +634,20 @@ test("a whole-page capture that finishes late does not replace an attached area"
   await tick();
   assert.equal(store.getState().screenshot, fakeShot.dataUrl);
   assert.deepEqual(store.getState().screenshotRegion, fakeShot.region);
+  assert.equal(store.getState().status.kind, "idle");
+});
+
+test("a whole-page capture that fails late does not take an attached area off the report", async () => {
+  let fail: (err: Error) => void = () => {};
+  const slow = (_root: HTMLElement, _opts: { pixelRatio: number }) =>
+    new Promise<string>((_resolve, reject) => (fail = reject));
+  const store = createReportState({ endpoint: ENDPOINT, screenshot: slow });
+  void store.actions.recapture();
+  store.actions.attachScreenshot(fakeShot);
+  fail(new Error("the renderer gave up"));
+  await tick();
+  await tick();
+  assert.equal(store.getState().includeScreenshot, true);
+  assert.equal(store.getState().screenshot, fakeShot.dataUrl);
   assert.equal(store.getState().status.kind, "idle");
 });
