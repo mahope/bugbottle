@@ -8,6 +8,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+## 1.1.0 — 2026-10-25
+
 ### Fixed
 
 - **On a phone the panel could grow past the top of the screen.** It is a

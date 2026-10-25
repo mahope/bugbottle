@@ -1,6 +1,6 @@
 {
   "name": "bugbottle",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Self-hosted Sentry alternative for in-app bug reporting and user feedback: console errors, page context and an optional screenshot. Your UI, your endpoint.",
   "keywords": [
     "bug-report",
