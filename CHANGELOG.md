@@ -10,6 +10,14 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **On a phone the panel could grow past the top of the screen.** It is a
+  fixed box anchored at the bottom, and with the picture editor open it is
+  taller than a 844-pixel viewport, so its title and close button ended up
+  above the screen where neither a finger nor a scroll could reach them. The
+  panel is now capped at the viewport less both offsets and the trigger's 64
+  pixels (`100dvh`, with `100vh` first for an older browser) and scrolls inside
+  itself past that.
+
 - **Typing while the screenshot was taken lost the text.** Masking reached
   into every open shadow root on the page — the panel's own included — and its
   restore wrote back the value it had read before the render. In the panel,

@@ -125,3 +125,14 @@ test("onSent receives the id and the report exactly as it was sent", async () =>
   assert.deepEqual(report, bodies[0]);
   widget.destroy();
 });
+
+test("the panel never grows past the viewport: it scrolls inside itself", () => {
+  // On a phone the picture editor makes the panel taller than the screen; a
+  // fixed box overflowing upwards hid its own title and close button.
+  const widget = mountBugbottle({ endpoint: ENDPOINT });
+  const css = widget.host.shadowRoot!.querySelector("style")!.textContent!;
+  const panelRule = /\.panel\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  assert.match(panelRule, /max-height:calc\(100dvh - 2 \* var\(--bb-offset-y,16px\) - 64px\)/);
+  assert.match(panelRule, /overflow-y:auto/);
+  widget.destroy();
+});

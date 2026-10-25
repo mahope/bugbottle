@@ -33,6 +33,8 @@ textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible
   width:min(360px,calc(100vw - 32px));background:var(--bb-bg);color:var(--bb-text);
   border:1px solid var(--bb-border);border-radius:var(--bb-radius);box-shadow:var(--bb-shadow);
   padding:16px;margin-bottom:12px;
+  max-height:calc(100vh - 2 * var(--bb-offset-y,16px) - 64px);
+  max-height:calc(100dvh - 2 * var(--bb-offset-y,16px) - 64px);overflow-y:auto;overscroll-behavior:contain;
 }
 :host([data-pos^="top"]) .panel{margin-bottom:0;margin-top:12px}
 :host([data-pos^="bottom"]) .wrap{display:flex;flex-direction:column;align-items:flex-end}

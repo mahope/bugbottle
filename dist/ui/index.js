@@ -60,6 +60,12 @@ const POSITIONS = {
  * system colour and still resolves to their theme. `scripts/a11y-audit.mjs`
  * photographs this; it is not a thing axe can see.
  *
+ * The panel's height is capped at the viewport, less both offsets and the
+ * 64px the trigger and its gap take, and it scrolls inside itself past that:
+ * on a phone the picture editor makes the panel taller than the screen, and a
+ * fixed box that overflows upwards puts its own title and close button where
+ * nobody can reach them. `100vh` comes first for a browser without `dvh`.
+ *
  * The block is last in the sheet on purpose: every rule in it has the same
  * weight as the one it replaces, so order is the only thing that makes it win.
  *
@@ -103,6 +109,8 @@ textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible
   width:min(360px,calc(100vw - 32px));background:var(--bb-bg);color:var(--bb-text);
   border:1px solid var(--bb-border);border-radius:var(--bb-radius);box-shadow:var(--bb-shadow);
   padding:16px;margin-bottom:12px;
+  max-height:calc(100vh - 2 * var(--bb-offset-y,16px) - 64px);
+  max-height:calc(100dvh - 2 * var(--bb-offset-y,16px) - 64px);overflow-y:auto;overscroll-behavior:contain;
 }
 :host([data-pos^="top"]) .panel{margin-bottom:0;margin-top:12px}
 :host([data-pos^="bottom"]) .wrap{display:flex;flex-direction:column;align-items:flex-end}
