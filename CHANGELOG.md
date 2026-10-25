@@ -41,6 +41,13 @@ attribute needs a major version, and a new entry point needs a minor one.
   whatever the host did next with the report. `onSent` now receives exactly the
   body the server was sent.
 
+- **With `theme.offsetX` above 16px the panel ran off the far side of a
+  phone.** Its width always left 32 pixels free while the host stood `offsetX`
+  from the edge, so with `48px` on a screen narrower than 392 pixels the last
+  16 pixels of the panel were cut off. The width now leaves the offset free on
+  both sides, `calc(100vw - 2 * var(--bb-offset-x, 16px))`, as the height
+  already did with `offsetY`.
+
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
   `report-core` went through `stripNullBytes` and a length clip; `ts` was

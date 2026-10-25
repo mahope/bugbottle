@@ -106,7 +106,7 @@ textarea:focus-visible,input:focus-visible,.rm:focus-visible,.edit:focus-visible
 .logo{display:inline-flex;width:18px;height:18px}
 .logo img,.logo svg{width:100%;height:100%;object-fit:contain}
 .panel{
-  width:min(360px,calc(100vw - 32px));background:var(--bb-bg);color:var(--bb-text);
+  width:min(360px,calc(100vw - 2 * var(--bb-offset-x,16px)));background:var(--bb-bg);color:var(--bb-text);
   border:1px solid var(--bb-border);border-radius:var(--bb-radius);box-shadow:var(--bb-shadow);
   padding:16px;margin-bottom:12px;
   max-height:calc(100vh - 2 * var(--bb-offset-y,16px) - 64px);

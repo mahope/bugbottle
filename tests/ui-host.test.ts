@@ -143,6 +143,16 @@ test("onSent receives the copy beforeSend returned, which is what the server got
   widget.destroy();
 });
 
+test("the panel is as narrow as the horizontal offset needs on both sides", () => {
+  // The host stands offsetX from the edge, so a width that always kept 32px
+  // free pushed a 48px-offset panel 16px off the far side of a phone.
+  const widget = mountBugbottle({ endpoint: ENDPOINT, theme: { offsetX: "48px" } });
+  const css = widget.host.shadowRoot!.querySelector("style")!.textContent!;
+  const panelRule = /\.panel\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  assert.match(panelRule, /width:min\(360px,calc\(100vw - 2 \* var\(--bb-offset-x,16px\)\)\)/);
+  widget.destroy();
+});
+
 test("the panel never grows past the viewport: it scrolls inside itself", () => {
   // On a phone the picture editor makes the panel taller than the screen; a
   // fixed box overflowing upwards hid its own title and close button.
