@@ -10,6 +10,17 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- **Typing while the screenshot was taken lost the text.** Masking reached
+  into every open shadow root on the page — the panel's own included — and its
+  restore wrote back the value it had read before the render. In the panel,
+  choosing "Bug" ticks the screenshot box and starts a render, and a reporter
+  who started typing straight away had their sentence replaced by the empty
+  box it was a second earlier; found by the first host to swap its own bubble
+  for the panel. Masking now skips everything under `[data-bugbottle]` — the
+  panel, a custom trigger and the region overlay are dropped from every
+  picture anyway — and a restore puts back only its own bullets, so a field
+  or an editable text changed during the render keeps what was typed.
+
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
   `report-core` went through `stripNullBytes` and a length clip; `ts` was

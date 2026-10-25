@@ -18,7 +18,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `src/console-buffer.ts` | `console.error/warn` + `window` error patching, ring buffer, stack frames on the uncaught ones | report-core, stack |
 | `src/stack.ts` | `parseStack(stack)` — one expression turning `error.stack` into at most ten `{ file, line, col, fn? }` frames, V8 and Firefox/Safari alike. Imported only by console-buffer, which keeps the parsing out of report-core; it does not make the core bundle smaller, since console-buffer is in it | report-core (types and limits) |
 | `src/capture.ts` | `captureScreenshot(renderer)`, `collectContext()` | mask, report-core |
-| `src/mask.ts` | `applyMask(root, options)` — hides field values and marked regions for the length of one render, returns the restore | nothing |
+| `src/mask.ts` | `applyMask(root, options)` — hides field values and marked regions for the length of one render, returns the restore. Never touches anything under `[data-bugbottle]` (never in a picture), and a restore only puts back its own bullets, so what was typed during the render is kept | nothing |
 | `src/element-picker.ts` | `pickElement()`, `describeElement()`, `buildSelector()`. The selector steps are an id, a `data-testid`, an `aria-label` (which ends the walk only once unique), then `nth-of-type`; an anchor over 64 characters is skipped as generated, and the whole selector stops before 200 | report-core |
 | `src/breadcrumbs.ts` | `initBreadcrumbs()` — clicks, navigation, submits, visibility. Own entry point | element-picker, registry, report-core |
 | `src/network.ts` | `initNetwork()` — the failed and slow requests, `fetch` and `XMLHttpRequest` patched. Own entry point. Never bodies, never headers | registry, report-core, scrub |

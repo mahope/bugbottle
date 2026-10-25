@@ -73,6 +73,10 @@ function collect(host: ParentNode, selector: string, out: Element[]): void {
     return;
   }
   for (const el of children) {
+    // The panel, its trigger and the region overlay are dropped from every
+    // picture, so there is nothing of theirs to hide — and bulleting the
+    // panel's own text box mid-sentence is how a reporter lost what they typed.
+    if (el.closest("[data-bugbottle]")) continue;
     try {
       if (el.matches(selector)) out.push(el);
     } catch {
@@ -112,9 +116,11 @@ function bulletText(el: Node, undo: (() => void)[]): void {
       const text = child as Text;
       const original = text.data;
       if (!original.trim()) continue;
-      text.data = original.replace(/\S/g, BULLET);
+      const masked = original.replace(/\S/g, BULLET);
+      text.data = masked;
       undo.push(() => {
-        text.data = original;
+        // The same rule as a field's value: text edited during the render stays.
+        if (text.data === masked) text.data = original;
       });
     } else if (child.nodeType === 1) {
       bulletText(child, undo);
@@ -127,13 +133,16 @@ function bulletValue(el: HTMLInputElement | HTMLTextAreaElement, undo: (() => vo
   const value = el.value;
   const placeholder = el.placeholder;
   if (!value && !placeholder) return;
-  if (value) el.value = BULLET.repeat(value.length);
+  const masked = BULLET.repeat(value.length);
+  if (value) el.value = masked;
   // A placeholder is written by the application rather than the reporter, but
   // an empty field showing "you@example.com" says which field it is, and that
   // is exactly what the masked picture is meant not to say.
   if (placeholder) el.placeholder = "";
   undo.push(() => {
-    el.value = value;
+    // Only our bullets are put back: a value that changed while the picture
+    // was being taken was typed by the reporter, and is theirs to keep.
+    if (value && el.value === masked) el.value = value;
     el.placeholder = placeholder;
   });
 }
