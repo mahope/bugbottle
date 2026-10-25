@@ -4296,8 +4296,8 @@ it out and the canvas editor is not in your bundle at all. See
 | `perf` | Record the Web Vitals and the storage snapshot while the panel is mounted. Off by default; hand in `initPerf` from `bugbottle/perf`, or `{ on: initPerf, vitals, storage, allowValues, maxKeys }`. The same switch as `data-perf`. See [Performance and storage](#performance-and-storage). |
 | `openOnError` | Open the panel on an uncaught error; `{ prefill: true }` also fills the box. |
 | `queue`, `scrub`, `sign`, `beforeSend` | The same seams the plain functions take. |
-| `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. |
-| `container`, `onSent`, `onError` | Where to mount, and what to do afterwards. |
+| `extra`, `headers`, `credentials`, `timeoutMs`, `fetch`, `parseError` | Passed through to `buildReport` and `sendReport`. `extra` may also be a function, called once per report when Send is pressed, for a value that changes while the panel is mounted. |
+| `container`, `onSent`, `onError` | Where to mount, and what to do afterwards. `onSent(id, report)` receives the id the server answered with and the report as it was sent. |
 
 **Accessibility.** The panel is meant to be switched on without an
 accessibility regression, so it behaves like a dialog rather than a floating
@@ -5599,11 +5599,27 @@ The whole list, and nothing else:
 | `--bb-font` | `font` | The font stack the panel is set in |
 | `--bb-shadow` | `shadow` | The shadow under the panel |
 | `--bb-z` | `zIndex` | Where the panel sits against the application |
+| `--bb-offset-x` | `offsetX` | Distance from the left or right edge, as a CSS length; `16px` when unset |
+| `--bb-offset-y` | `offsetY` | Distance from the top or bottom edge, as a CSS length; `16px` when unset |
 | — | `position` | Which corner it lives in: `"bottom-right"` (the default), `"bottom-left"`, `"top-right"` or `"top-left"` |
 | — | `scheme` | `"light"`, `"dark"` or `"auto"` — `"auto"` follows the reader's system setting |
 
 The last two are not custom properties: they are the `data-pos` and
 `data-scheme` attributes on the host, which the panel's own stylesheet reads.
+
+The floating button and the dialog are also exposed as the shadow parts
+`trigger` and `panel`, for the one thing a custom property cannot do. An
+application whose own menu opens the panel on a phone hides the button there
+and moves it above its own floating action on a desktop, with `open()` working
+at every width:
+
+```css
+[data-bugbottle="ui"] { --bb-offset-x: 28px; --bb-offset-y: 96px; }
+@media (max-width: 1023.98px) {
+  [data-bugbottle="ui"] { --bb-offset-y: 16px; }
+  [data-bugbottle="ui"]::part(trigger) { display: none; }
+}
+```
 
 None of these survive Windows High Contrast, and they are not meant to. Under
 `forced-colors: active` the browser throws every colour away and substitutes

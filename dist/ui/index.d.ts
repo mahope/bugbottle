@@ -17,7 +17,7 @@ import { type CaptureOptions, type ScreenshotRenderer } from "../capture.ts";
 import { type Locale, type Messages, type UiTexts } from "../locales.ts";
 import type { initNetwork, NetworkOptions } from "../network.ts";
 import type { initPerf, PerfOptions } from "../perf.ts";
-import { type ReportType } from "../report-core.ts";
+import { type BugReport, type ReportType } from "../report-core.ts";
 import type { Queue } from "../queue.ts";
 import { type BuildReportInput, type SendOptions } from "../send.ts";
 import type { captureRegion, RegionCaptureOptions } from "../region.ts";
@@ -38,6 +38,15 @@ export type Theme = {
     font?: string;
     shadow?: string;
     zIndex?: number;
+    /**
+     * Distance from the left or right edge of the viewport, as a CSS length.
+     * Default `"16px"`. Like the colours it is a custom property on the host
+     * (`--bb-offset-x`), so a media query in the application's own stylesheet
+     * can move the button at a breakpoint.
+     */
+    offsetX?: string;
+    /** Distance from the top or bottom edge, as a CSS length. Default `"16px"` (`--bb-offset-y`). */
+    offsetY?: string;
     position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
     /** `"auto"` follows `prefers-color-scheme`. Default `"auto"`. */
     scheme?: "light" | "dark" | "auto";
@@ -167,8 +176,12 @@ export type MountOptions = {
     };
     /** Where to mount. Default `document.body`. */
     container?: HTMLElement;
-    /** Extra fields merged into every report — app version, tenant id. */
-    extra?: Record<string, unknown>;
+    /**
+     * Extra fields merged into every report — app version, tenant id. A function
+     * is called once per report, when Send is pressed, for a value that changes
+     * while the panel is mounted: the signed-in account, a running timer.
+     */
+    extra?: Record<string, unknown> | (() => Record<string, unknown> | undefined);
     headers?: SendOptions["headers"];
     credentials?: SendOptions["credentials"];
     timeoutMs?: SendOptions["timeoutMs"];
@@ -208,7 +221,12 @@ export type MountOptions = {
      * `data-sign-key`.
      */
     queue?: Queue;
-    onSent?: (id: string | undefined) => void;
+    /**
+     * Called after the server accepted a report, with the id it answered with
+     * and the report exactly as it was sent — for a toast, or for handing the
+     * same words to another tool.
+     */
+    onSent?: (id: string | undefined, report: BugReport & Record<string, unknown>) => void;
     onError?: (error: unknown) => void;
 };
 export type BugbottleWidget = {

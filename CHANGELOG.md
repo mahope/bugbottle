@@ -145,6 +145,22 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- **Four small seams for putting the panel inside an application's own
+  layout**, all optional, found by the first host that replaced its own
+  feedback bubble with the panel. `theme.offsetX` and `theme.offsetY` (the
+  custom properties `--bb-offset-x` and `--bb-offset-y`, 16px when unset) move
+  the panel off the corner, so it can sit above another floating button, and a
+  media query in the host's stylesheet can move it at a breakpoint. The trigger
+  and the dialog carry `part="trigger"` and `part="panel"`, so
+  `[data-bugbottle="ui"]::part(trigger) { display: none }` under a breakpoint
+  hides the floating button where the application's own menu calls `open()`
+  instead. `extra` takes a function as well as an object, called once per
+  report when Send is pressed, for a value that changes while the panel is
+  mounted. `onSent(id, report)` now also receives the report exactly as it was
+  sent, so a toast or a second tool can be handed the same words without
+  keeping a copy of the form. Nothing changes for a caller that passes none of
+  them: the inline position is `var(--bb-offset-x, 16px)` where it was `16px`.
+
 - **A screenshot of an area or an element, not only of the whole page:
   `bugbottle/region`, a new entry point — so the next release is 1.1.0.**
   `captureArea(render)` covers the page with a dimmed overlay and cuts out the

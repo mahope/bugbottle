@@ -19,10 +19,10 @@ import { MAX_ELEMENTS, MAX_MESSAGE_LENGTH, REPORT_TYPES, } from "../report-core.
 import { buildReport, sendReport, SendFailedError, } from "../send.js";
 import { DEFAULT_SHORTCUT, onShortcut, onUncaughtError } from "../triggers.js";
 const POSITIONS = {
-    "bottom-right": "right:16px;bottom:16px;",
-    "bottom-left": "left:16px;bottom:16px;",
-    "top-right": "right:16px;top:16px;",
-    "top-left": "left:16px;top:16px;",
+    "bottom-right": "right:var(--bb-offset-x,16px);bottom:var(--bb-offset-y,16px);",
+    "bottom-left": "left:var(--bb-offset-x,16px);bottom:var(--bb-offset-y,16px);",
+    "top-right": "right:var(--bb-offset-x,16px);top:var(--bb-offset-y,16px);",
+    "top-left": "left:var(--bb-offset-x,16px);top:var(--bb-offset-y,16px);",
 };
 /*
  * The stylesheet ships as bytes, so it carries no comments of its own. Two
@@ -281,6 +281,7 @@ export function mountBugbottle(options) {
         ["primary", "--bb-primary"], ["onPrimary", "--bb-on-primary"], ["background", "--bb-bg"],
         ["text", "--bb-text"], ["muted", "--bb-muted"], ["border", "--bb-border"], ["radius", "--bb-radius"],
         ["font", "--bb-font"], ["shadow", "--bb-shadow"], ["zIndex", "--bb-z"],
+        ["offsetX", "--bb-offset-x"], ["offsetY", "--bb-offset-y"],
     ];
     for (const [key, name] of vars) {
         const value = theme[key];
@@ -290,8 +291,11 @@ export function mountBugbottle(options) {
     const root = host.attachShadow({ mode: "open" });
     root.append(el("style", {}, CSS));
     // ---- elements
+    // `part` lets the application's own stylesheet reach the two boxes it may
+    // want to place or hide, e.g. `[data-bugbottle="ui"]::part(trigger)` under a
+    // breakpoint where its own menu opens the panel instead.
     const trigger = el("button", {
-        class: "trigger", type: "button", "aria-expanded": "false", "aria-haspopup": "dialog",
+        class: "trigger", type: "button", "aria-expanded": "false", "aria-haspopup": "dialog", part: "trigger",
     });
     const title = el("h2", { id: "bb-title" });
     const closeBtn = el("button", { class: "close", type: "button" }, "×");
@@ -348,7 +352,7 @@ export function mountBugbottle(options) {
     // `aria-modal` is true because focus really is trapped while the panel is
     // open: Tab cycles inside the shadow root and Escape is the way out.
     const panel = el("div", {
-        class: "panel", role: "dialog", "aria-modal": "true", "aria-labelledby": "bb-title", hidden: "",
+        class: "panel", role: "dialog", "aria-modal": "true", "aria-labelledby": "bb-title", hidden: "", part: "panel",
     }, header, form, thanks);
     // Lives outside the panel because the panel is hidden while picking, and a
     // hidden live region announces nothing.
@@ -716,7 +720,7 @@ export function mountBugbottle(options) {
                 screenshotRegion: shotRegion,
                 includeConsole: consoleFor(type),
                 elements,
-                extra: options.extra,
+                extra: typeof options.extra === "function" ? options.extra() : options.extra,
                 scrub: options.scrub,
             });
             const { id } = await sendReport(options.endpoint, report, {
@@ -736,7 +740,7 @@ export function mountBugbottle(options) {
             form.hidden = true;
             thanks.hidden = false;
             thanksClose.focus();
-            options.onSent?.(id);
+            options.onSent?.(id, report);
         }
         catch (err) {
             const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
