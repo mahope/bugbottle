@@ -5607,6 +5607,9 @@ The whole list, and nothing else:
 The last two are not custom properties: they are the `data-pos` and
 `data-scheme` attributes on the host, which the panel's own stylesheet reads.
 
+Both offsets must be lengths (`28px`, `6rem`, a `calc()`), not `auto`: the
+panel's maximum height is worked out from them.
+
 The floating button and the dialog are also exposed as the shadow parts
 `trigger` and `panel`, for the one thing a custom property cannot do. An
 application whose own menu opens the panel on a phone hides the button there

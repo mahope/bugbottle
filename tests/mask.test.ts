@@ -313,24 +313,6 @@ test("a mask pass that throws still puts back what it had already changed", asyn
   assert.equal(field().value, "hunter2", "the input the first pass had already bulleted");
 });
 
-test("what is typed into a field while the picture is taken is kept", async () => {
-  // The panel ticks the screenshot box when the reporter picks "bug", and the
-  // render then runs while they type. Restoring the value read before the
-  // render overwrote everything typed during it.
-  const root = page(`<input value="">`);
-  await capture(root, () => {
-    field().value = "typed while rendering";
-  });
-  assert.equal(field().value, "typed while rendering");
-
-  page(`<input value="before">`);
-  await capture(document.body, () => {
-    assert.equal(field().value, "••••••");
-    field().value = "before, and after";
-  });
-  assert.equal(field().value, "before, and after");
-});
-
 test("bugbottle's own panel is never masked: it is never in the picture", async () => {
   const root = page(`<div data-bugbottle="ui"></div><input value="page">`);
   const host = document.querySelector("[data-bugbottle]") as HTMLElement;

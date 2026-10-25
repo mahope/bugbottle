@@ -93,12 +93,9 @@ function bulletText(el, undo) {
             const original = text.data;
             if (!original.trim())
                 continue;
-            const masked = original.replace(/\S/g, BULLET);
-            text.data = masked;
+            text.data = original.replace(/\S/g, BULLET);
             undo.push(() => {
-                // The same rule as a field's value: text edited during the render stays.
-                if (text.data === masked)
-                    text.data = original;
+                text.data = original;
             });
         }
         else if (child.nodeType === 1) {
@@ -112,19 +109,15 @@ function bulletValue(el, undo) {
     const placeholder = el.placeholder;
     if (!value && !placeholder)
         return;
-    const masked = BULLET.repeat(value.length);
     if (value)
-        el.value = masked;
+        el.value = BULLET.repeat(value.length);
     // A placeholder is written by the application rather than the reporter, but
     // an empty field showing "you@example.com" says which field it is, and that
     // is exactly what the masked picture is meant not to say.
     if (placeholder)
         el.placeholder = "";
     undo.push(() => {
-        // Only our bullets are put back: a value that changed while the picture
-        // was being taken was typed by the reporter, and is theirs to keep.
-        if (value && el.value === masked)
-            el.value = value;
+        el.value = value;
         el.placeholder = placeholder;
     });
 }

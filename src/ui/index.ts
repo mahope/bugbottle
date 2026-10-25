@@ -1026,7 +1026,12 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
       form.hidden = true;
       thanks.hidden = false;
       thanksClose.focus();
-      options.onSent?.(id, report);
+      try {
+        options.onSent?.(id, report);
+      } catch {
+        // The report has arrived. A host callback that throws must not send
+        // it down the failure path below, which would queue it a second time.
+      }
     } catch (err) {
       const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
       if (options.queue && report && !rejected) {

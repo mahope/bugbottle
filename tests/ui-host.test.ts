@@ -136,3 +136,30 @@ test("the panel never grows past the viewport: it scrolls inside itself", () => 
   assert.match(panelRule, /overflow-y:auto/);
   widget.destroy();
 });
+
+test("an onSent that throws neither fails nor queues a delivered report", async () => {
+  const { bodies, fetch } = recording("B-4");
+  const queued: unknown[] = [];
+  const errors: unknown[] = [];
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    fetch,
+    queue: {
+      enqueue: (r) => queued.push(r),
+      flush: async () => 0,
+      size: () => 0,
+      clear: () => {},
+      destroy: () => {},
+    },
+    onSent: () => {
+      throw new Error("the host's toast library fell over");
+    },
+    onError: (err) => errors.push(err),
+  });
+  await fileReport(widget, "Save does nothing");
+  assert.equal(bodies.length, 1);
+  assert.equal(queued.length, 0, "a stored report is not queued again");
+  assert.equal(errors.length, 0);
+  assert.equal(widget.host.shadowRoot!.querySelector<HTMLElement>(".thanks")!.hidden, false);
+  widget.destroy();
+});

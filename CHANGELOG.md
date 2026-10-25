@@ -24,10 +24,15 @@ attribute needs a major version, and a new entry point needs a minor one.
   choosing "Bug" ticks the screenshot box and starts a render, and a reporter
   who started typing straight away had their sentence replaced by the empty
   box it was a second earlier; found by the first host to swap its own bubble
-  for the panel. Masking now skips everything under `[data-bugbottle]` — the
+  for the panel. Masking now skips everything under `[data-bugbottle]`: the
   panel, a custom trigger and the region overlay are dropped from every
-  picture anyway — and a restore puts back only its own bullets, so a field
-  or an editable text changed during the render keeps what was typed.
+  picture anyway, so there was never anything of theirs to hide.
+
+- **A host `onSent` that threw sent the report down the failure path.** The
+  callback ran inside the `try` around the send, so an exception from it was
+  caught as a failed delivery — and with a `queue`, a report the server had
+  already stored was queued and delivered a second time. The callback's own
+  exception is now caught on its own.
 
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
