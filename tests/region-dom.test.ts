@@ -77,6 +77,7 @@ canvasProto.toDataURL = function (this: { width: number; height: number }) {
 const { selectArea, captureArea, captureElement } = await import("../src/region.ts");
 const { mountBugbottle } = await import("../src/ui/index.ts");
 const { createReportState } = await import("../src/report-state.ts");
+const { captureScreenshot } = await import("../src/capture.ts");
 
 /** A renderer that renders nothing and returns a picture of the body's size at the ratio asked. */
 let rendered: number[] = [];
@@ -240,6 +241,56 @@ test("annotate draws the rectangle on the whole page instead of cutting it out",
   assert.equal(shot?.dataUrl, "data:image/png;base64,W1000x3000", "the whole page");
   const strokes = calls.filter(([name]) => name === "strokeRect");
   assert.equal(strokes.length, 2, "a dark stroke under a light one");
+  assert.deepEqual(strokes[1]!.slice(1), [10, 20, 100, 50]);
+});
+
+test("an area waiting behind another capture is cut out of the page as it is rendered", async () => {
+  Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+  let release!: () => void;
+  const first = captureScreenshot(
+    () => new Promise<string>((resolve) => (release = () => resolve("data:image/png;base64,W1x1"))),
+  );
+  // A renderer that pictures the root at the size it has when it is called.
+  const sized = async (root: HTMLElement, opts: { pixelRatio: number }) => {
+    const r = root.getBoundingClientRect();
+    rendered.push(opts.pixelRatio);
+    return `data:image/png;base64,W${r.width * opts.pixelRatio}x${r.height * opts.pixelRatio}`;
+  };
+  const pending = captureArea(sized);
+  const layer = overlay()!;
+  pointer(layer, "pointerdown", 100, 50);
+  pointer(layer, "pointerup", 400, 200);
+  await tick();
+  // While it waits, the page narrows, grows taller and scrolls.
+  setScroll(0, 500);
+  setRect(document.body, { left: 0, top: -500, width: 800, height: 4000 });
+  release();
+  await first;
+  const shot = await pending;
+  assert.deepEqual(rendered, [2]);
+  assert.deepEqual(calls[0]!.slice(2), [200, 100, 600, 300, 0, 0, 600, 300]);
+  assert.deepEqual(shot?.region?.rect, { x: 100, y: 50, width: 300, height: 150 });
+});
+
+test("an annotated area waiting behind another capture is framed where it is rendered", async () => {
+  let release!: () => void;
+  const first = captureScreenshot(
+    () => new Promise<string>((resolve) => (release = () => resolve("data:image/png;base64,W1x1"))),
+  );
+  const sized = async (root: HTMLElement, opts: { pixelRatio: number }) => {
+    const r = root.getBoundingClientRect();
+    return `data:image/png;base64,W${r.width * opts.pixelRatio}x${r.height * opts.pixelRatio}`;
+  };
+  const pending = captureArea(sized, { annotate: true });
+  const layer = overlay()!;
+  pointer(layer, "pointerdown", 10, 20);
+  pointer(layer, "pointerup", 110, 70);
+  await tick();
+  setRect(document.body, { left: 0, top: 0, width: 500, height: 6000 });
+  release();
+  await first;
+  await pending;
+  const strokes = calls.filter(([name]) => name === "strokeRect");
   assert.deepEqual(strokes[1]!.slice(1), [10, 20, 100, 50]);
 });
 

@@ -75,7 +75,10 @@ attribute needs a major version, and a new entry point needs a minor one.
   has put the page back, then masks the page as it is at that moment. No click
   is ignored, a render that throws does not hold up the next one, and a render
   that has not answered after 30 seconds fails and restores the page rather
-  than keeping it masked.
+  than keeping it masked. An area or element capture measures the page, and
+  chooses its scale, when its render starts rather than when it joined the
+  wait, so a page that grew, narrowed or scrolled in between is still cut out
+  where the reporter chose.
 
 - **The timestamp on a console entry, a breadcrumb and a request was the one
   string in the validators that skipped both rules.** Every other string in
