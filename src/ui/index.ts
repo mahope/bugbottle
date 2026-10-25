@@ -667,6 +667,10 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     shotRow.hidden = true;
     pickBtn.hidden = true;
     modesRow.setAttribute("aria-describedby", shotNote.id);
+    // Under the row it describes, and not indented to line up with a box
+    // that is not there.
+    modesRow.after(shotNote);
+    shotNote.classList.add("hint");
     for (const m of MODES) {
       const b = el("button", { class: "mode", type: "button", "aria-pressed": "false" });
       b.addEventListener("click", () => (m === "none" ? dropShot() : void shootRegion(m)));

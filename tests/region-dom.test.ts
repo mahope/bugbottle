@@ -429,6 +429,7 @@ test("with the modes there is one way to choose the picture, and no picture is t
   assert.equal(box.hidden, true, "the box is not a second way to say it");
   assert.equal(pickBtn.hidden, true, "the Element mode is the picker");
   assert.equal(row.getAttribute("aria-describedby"), note.id);
+  assert.equal(row.nextElementSibling, note, "the note sits under the row");
   widget.open();
   await tick();
   const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
