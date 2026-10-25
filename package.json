@@ -175,7 +175,7 @@
     "marked": "18.0.14",
     "react": "^19.3.0",
     "react-dom": "19.3.0",
-    "solid-js": "1.9.15",
+    "solid-js": "1.9.17",
     "svelte": "5.57.1",
     "ts-json-schema-generator": "2.9.0",
     "typescript": "^5.7.0",
