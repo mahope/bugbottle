@@ -8,6 +8,13 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Fixed
+
+- Preserve asynchronous `beforeSend` transformations when framework adapters
+  and the panel queue failed reports. Storage and retries use the approved payload without
+  running the hook twice; cancellation, hook errors and hook timeouts never
+  queue the original report (#114).
+
 ## 1.1.0 — 2026-10-25
 
 ### Fixed

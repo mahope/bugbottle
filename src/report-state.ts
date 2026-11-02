@@ -94,6 +94,8 @@ export type UseBugReportOptions = {
   scrub?: BuildReportInput["scrub"];
   /**
    * Last look at the report. Return it, a changed copy, or `null` to drop it.
+   * Awaited once per submission before sending or queueing; queue retries
+   * reuse the approved payload without running the hook again.
    * A dropped report still shows the reporter the ordinary thank-you: they
    * wrote it in good faith, and telling them it was discarded helps nobody.
    */
@@ -391,12 +393,19 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           extra: opts.extra,
           scrub: opts.scrub,
         });
+        const beforeSend = opts.beforeSend;
         const { id } = await sendReport(opts.endpoint, report, {
           headers: opts.headers,
           credentials: opts.credentials,
           timeoutMs: opts.timeoutMs,
           parseError: opts.parseError,
-          beforeSend: opts.beforeSend,
+          beforeSend: beforeSend && (async (payload) => {
+            // Until the hook approves a payload, nothing is safe to queue.
+            report = null;
+            const decided = await beforeSend(payload);
+            report = decided;
+            return decided;
+          }),
           sign: opts.sign,
         });
         set({ status: { kind: "sent", id } });

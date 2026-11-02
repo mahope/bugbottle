@@ -787,7 +787,9 @@ export function mountBugbottle(options) {
                 parseError: options.parseError,
                 beforeSend: beforeSend
                     ? async (r) => {
+                        report = null;
                         sent = await beforeSend(r);
+                        report = sent;
                         return sent;
                     }
                     : undefined,

@@ -79,6 +79,8 @@ export type UseBugReportOptions = {
     scrub?: BuildReportInput["scrub"];
     /**
      * Last look at the report. Return it, a changed copy, or `null` to drop it.
+     * Awaited once per submission before sending or queueing; queue retries
+     * reuse the approved payload without running the hook again.
      * A dropped report still shows the reporter the ordinary thank-you: they
      * wrote it in good faith, and telling them it was discarded helps nobody.
      */

@@ -4068,6 +4068,11 @@ online". `form.status.kind` is `"queued"` rather than `"error"`, and
 `statusMessage` is the `queued` string of the locale. `mountBugbottle` takes
 the same `queue` option and shows its ordinary thank-you panel with that line.
 
+When `beforeSend` returns a changed report, that final payload is what the
+framework adapters and panel queue and persist. Retries send the stored payload
+without running `beforeSend` again. A cancelled report is neither sent nor queued;
+if the hook throws or times out, the form shows an error and queues nothing.
+
 The queue drains when it is created, when the browser fires `online`, and when
 the tab becomes visible again. A failed attempt backs off exponentially, from
 one second to five minutes. A 5xx or a network error keeps the report; a 4xx
@@ -7805,6 +7810,10 @@ The last look at a report before it leaves the browser. Return it, return a
 changed copy, or return `null` to drop it — nothing is requested, and
 `sendReport` resolves `{ dropped: true, body: null, response: null }`. The name
 and the contract are Sentry's.
+
+The hook may be asynchronous. It runs once per submission, within the send
+timeout, before the request and any offline storage. Queue retries do not run
+it again, so a transformation does not need to be idempotent.
 
 ```ts
 useBugReport({

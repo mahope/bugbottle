@@ -1079,7 +1079,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
         parseError: options.parseError,
         beforeSend: beforeSend
           ? async (r) => {
+              report = null;
               sent = await beforeSend(r);
+              report = sent;
               return sent;
             }
           : undefined,
