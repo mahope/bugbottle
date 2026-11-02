@@ -73,9 +73,11 @@ for (const f of [
 edit("src/sinks/sentry.ts", (t) =>
   t.replace(/export const SENTRY_CLIENT_VERSION = "[^"]+";/, `export const SENTRY_CLIENT_VERSION = "${version}";`));
 
+// check:dist compares the rebuild with the index, including new ignored files.
+sh("npm run build");
+sh("git add -f dist");
 sh("npm run check");
 sh("git add -A");
-sh("git add -f dist");
 sh(`git commit -q -m "Release ${version}"`);
 sh(`git tag v${version}`);
 sh(`git push origin main v${version}`);

@@ -8,6 +8,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Fixed
+
+- Build and stage `dist/` before the release checks, so `check:dist` can
+  validate the new version against the index before committing and tagging.
+
 ## 1.1.0 — 2026-10-25
 
 ### Fixed
