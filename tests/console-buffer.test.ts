@@ -5,6 +5,7 @@ import {
   getConsoleBuffer,
   resetConsoleBuffer,
 } from "../src/console-buffer.ts";
+import { buildReport } from "../src/send.ts";
 import { MAX_CONSOLE_ENTRIES } from "../src/report-core.ts";
 
 afterEach(() => resetConsoleBuffer());
@@ -106,8 +107,11 @@ test("the returned buffer is a copy", () => {
     console.error("first");
   });
   const snapshot = getConsoleBuffer();
+  snapshot[0]!.message = "redacted";
   snapshot.push({ ts: "", level: "error", message: "injected" });
   assert.equal(getConsoleBuffer().length, 1, "callers cannot mutate the buffer");
+  assert.equal(getConsoleBuffer()[0]?.message, "first");
+  assert.equal(buildReport({ type: "bug", message: "snapshot" }).console[0]?.message, "first");
 });
 
 test("uncaught errors are recorded once, even after a reset and re-init", () => {
@@ -167,6 +171,14 @@ test("an uncaught error carries the frames from its error object", () => {
     assert.equal(entry?.stack?.length, 2, "the header line is not a frame");
     assert.equal(entry?.stack?.[0]?.fn, "saveOrder");
     assert.equal(entry?.stack?.[0]?.line, 12);
+    const original = structuredClone(entry);
+    assert.ok(entry?.stack?.[0]);
+    entry.stack[0].file = "redacted.js";
+    entry.stack[0].line = 99;
+    entry.stack[0].fn = "redacted";
+    entry.stack.pop();
+    assert.deepEqual(getConsoleBuffer()[0], original);
+    assert.deepEqual(buildReport({ type: "bug", message: "snapshot" }).console[0], original);
   } finally {
     delete (globalThis as { window?: unknown }).window;
   }

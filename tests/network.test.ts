@@ -369,7 +369,14 @@ test("buildReport attaches the recorded requests while the recorder is active", 
     initNetwork();
     answer({ status: 500 });
     await fetch("/api/orders");
+    const original = structuredClone(getNetwork());
+    const snapshot = getNetwork();
+    snapshot[0]!.url = "/redacted";
+    snapshot[0]!.status = 200;
+    snapshot.pop();
+    assert.deepEqual(getNetwork(), original);
     const report = buildReport({ type: "bug", message: "Saving does nothing" });
+    assert.deepEqual(report.network, original);
     assert.equal(report.network?.length, 1);
     assert.equal(report.network?.[0]?.status, 500);
     const without = buildReport({ type: "bug", message: "x", includeNetwork: false });

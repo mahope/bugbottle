@@ -313,7 +313,15 @@ test("buildReport attaches breadcrumbs while recording, and nothing when not", (
     doc.dispatch("click", { target: element("button", { id: "save", text: "Save" }) });
     history.pushState({}, "", "/orders/2");
 
+    const original = structuredClone(getBreadcrumbs());
+    const snapshot = getBreadcrumbs();
+    snapshot[0]!.target = "redacted";
+    snapshot[1]!.to = "/redacted";
+    snapshot.reverse();
+    snapshot.pop();
+    assert.deepEqual(getBreadcrumbs(), original);
     const report = buildReport({ type: "bug", message: "the save button does nothing" });
+    assert.deepEqual(report.breadcrumbs, original);
     assert.equal(report.breadcrumbs?.length, 2);
     assert.equal(report.breadcrumbs?.[0]?.target, "button#save");
     assert.equal(report.breadcrumbs?.[1]?.to, "/orders/2");
