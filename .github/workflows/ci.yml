@@ -498,7 +498,7 @@ jobs:
   browser:
     name: Browser audits
     runs-on: ubuntu-latest
-    # The three browser scripts drive Chrome through puppeteer, and a Chrome
+    # The browser scripts drive Chrome through puppeteer, and a Chrome
     # that never answers is a job that never ends: GitHub's own ceiling is six
     # hours, which is a wedged runner holding a queue all afternoon rather than
     # a red tick in ten minutes. A green run takes about three.
@@ -538,6 +538,9 @@ jobs:
       # The pixels rather than the accessibility tree: a blur that did not
       # destroy what it covered fails here.
       - run: npm run smoke:annotate
+      - name: IndexedDB persistence and concurrent queue delivery
+        timeout-minutes: 2
+        run: npm run smoke:queue-idb
       # Only on failure: a green run's reports say nothing that the log did not.
       - name: The axe reports, for reading a failure
         if: failure()

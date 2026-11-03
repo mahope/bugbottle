@@ -86,10 +86,17 @@ async function run() {
     return page;
   }
   async function stored(page, messages) {
-    await page.waitForFunction(async expected => {
-      const rows = await window.readQueue();
-      return JSON.stringify(rows.map(row => row.body.message).sort()) === JSON.stringify(expected);
-    }, {}, [...messages].sort());
+    try {
+      await page.waitForFunction(async expected => {
+        const rows = await window.readQueue();
+        return JSON.stringify(rows.map(row => row.body.message).sort()) === JSON.stringify(expected);
+      }, {}, [...messages].sort());
+    } catch (error) {
+      diagnostics.push({ expectedMessages: messages, stored: await page.evaluate(async () =>
+        (await readQueue()).map(row => ({ id: row.id, message: row.body.message, screenshotBytes: row.body.screenshot?.length ?? 0 }))),
+      });
+      throw error;
+    }
     return page.evaluate(() => window.readQueue());
   }
 
@@ -143,13 +150,17 @@ async function cleanup() {
     const page = await context.newPage();
     page.setDefaultNavigationTimeout(10_000);
     await page.goto(`http://127.0.0.1:${server.address().port}/cleanup`);
-    await page.evaluate(name => new Promise((resolve, reject) => {
-      const request = indexedDB.deleteDatabase(name);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(new Error('database cleanup blocked'));
-    }), databaseName);
+    await page.evaluate(async name => {
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error('database cleanup blocked'));
+      });
+      if ((await indexedDB.databases()).some(db => db.name === name)) throw new Error('database still exists after cleanup');
+    }, databaseName);
     await context.close();
+    console.log("PASS: pages closed and isolated database deleted");
   }
 }
 

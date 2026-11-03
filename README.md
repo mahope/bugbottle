@@ -4210,6 +4210,14 @@ the next tab picks the report up 30 seconds later. `createIdbStorage()` closes
 that window: reading the queue and writing the claim happen inside one
 IndexedDB transaction, and the browser orders those across tabs.
 
+`npm run build && npm run smoke:queue-idb` exercises this in real Chrome on
+localhost using the existing `puppeteer-core` harness. It checks that a report
+and its PNG survive closing and reopening a page, that two pages enqueue
+without losing reports, and that concurrent successful flushes deliver each
+report once. Each run uses a unique database and cleans up its pages, database
+and server even on failure. CI runs it in the browser job with a two-minute
+step timeout; failures print the phase, delivered messages and browser errors.
+
 Without a queue, a send can still survive the page closing under it:
 
 ```ts
