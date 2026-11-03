@@ -31,8 +31,9 @@ export type Scrubber = {
   /** Returns the text for one match. Returning the match keeps it. */
   replace?: (match: string, groups: (string | undefined)[], replacement: string) => string;
   /**
-   * Only applied to fields that hold a URL — `context.url` and an `href`
-   * attribute. A message that happens to say `key=value` is prose, not a
+   * Only applied to fields that hold a URL — `context.url`, an `href`
+   * attribute, breadcrumb `from`/`to`, and console stack frame `file`.
+   * A message that happens to say `key=value` is prose, not a
    * credential, and redacting it would be worse than leaving it.
    */
   urlsOnly?: boolean;
@@ -211,25 +212,31 @@ const STRUCTURAL_ATTRIBUTES = new Set(["id", "role", "type"]);
 function scrubAttributes(attributes: unknown, p: Plan): unknown {
   if (!isObject(attributes)) return attributes;
   const out: Record<string, unknown> = { ...attributes };
-  for (const [key, value] of Object.entries(out)) {
-    if (typeof value !== "string" || STRUCTURAL_ATTRIBUTES.has(key)) continue;
+  for (const key of Object.keys(out)) {
+    if (STRUCTURAL_ATTRIBUTES.has(key)) continue;
     // Everything but the three structural names is scrubbed. `describeElement`
     // also records aria-label, title, name and placeholder, and those are prose
     // written for a human: they name people, quote addresses and echo whatever
     // the field is asking for. Only href is treated as a URL, because only href
     // carries a query string.
-    out[key] = scrubString(value, p, key === "href");
+    scrubField(out, key, p, key === "href");
   }
   return out;
 }
 
-/** Every string property of a breadcrumb-like object, one level deep. */
-function scrubBreadcrumb(entry: unknown, p: Plan): unknown {
-  if (typeof entry === "string") return scrubString(entry, p, false);
+/** Every breadcrumb string, or selected fields of console entries, frames and elements. */
+function scrubEntry(entry: unknown, p: Plan, fields?: string[]): unknown {
+  if (!fields && typeof entry === "string") return scrubString(entry, p, false);
   if (!isObject(entry)) return entry;
   const out: Record<string, unknown> = { ...entry };
-  for (const [key, value] of Object.entries(out)) {
-    if (typeof value === "string") out[key] = scrubString(value, p, false);
+  for (const key of fields ?? Object.keys(out)) {
+    scrubField(out, key, p, fields ? key === "file" : key === "from" || key === "to");
+  }
+  if (fields?.includes("message") && Array.isArray(out.stack)) {
+    out.stack = out.stack.map((frame) => scrubEntry(frame, p, ["file", "fn"]));
+  }
+  if (fields?.includes("text") && "attributes" in out) {
+    out.attributes = scrubAttributes(out.attributes, p);
   }
   return out;
 }
@@ -261,28 +268,15 @@ export function scrubReport<T>(report: T, options: ScrubOptions = {}): T {
     }
 
     if (Array.isArray(out.console)) {
-      out.console = out.console.map((entry) => {
-        if (!isObject(entry)) return entry;
-        const copy = { ...entry };
-        scrubField(copy, "message", p);
-        return copy;
-      });
+      out.console = out.console.map((entry) => scrubEntry(entry, p, ["message"]));
     }
 
     if (Array.isArray(out.elements)) {
-      out.elements = out.elements.map((element) => {
-        if (!isObject(element)) return element;
-        const copy = { ...element };
-        scrubField(copy, "text", p);
-        // A selector can carry an aria-label since 1.1 — "Delete jane@x.com".
-        scrubField(copy, "selector", p);
-        if ("attributes" in copy) copy.attributes = scrubAttributes(copy.attributes, p);
-        return copy;
-      });
+      out.elements = out.elements.map((element) => scrubEntry(element, p, ["text", "selector"]));
     }
 
     if (Array.isArray(out.breadcrumbs)) {
-      out.breadcrumbs = out.breadcrumbs.map((entry) => scrubBreadcrumb(entry, p));
+      out.breadcrumbs = out.breadcrumbs.map((entry) => scrubEntry(entry, p));
     }
 
     if (isObject(out.screenshotRegion)) {

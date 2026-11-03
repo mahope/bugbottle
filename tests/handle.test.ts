@@ -52,6 +52,31 @@ test("a valid report is stored and answered with 201 and the id", async () => {
   assert.ok(!Number.isNaN(Date.parse(stored?.receivedAt ?? "")));
 });
 
+test("scrubbed navigation and stack URLs reach the receiver store and sinks", async () => {
+  const url = "/app.js?page=2&next=/login?token=synthetic-171&auth=synthetic-172";
+  const clean = "/app.js?page=2&next=/login?token=[redacted]&auth=[redacted]";
+  let stored: ValidatedReport | undefined;
+  let delivered: ValidatedReport | undefined;
+  const response = await handleReport(post({
+    ...body,
+    breadcrumbs: [{ ts: body.console[0]!.ts, kind: "navigation", from: url, to: url }],
+    console: [{ ...body.console[0], stack: [{ file: url, line: 42, col: 7, fn: "save" }] }],
+  }), {
+    scrub: true,
+    store: (report) => { stored = report; return { id: "rep_171" }; },
+    sinks: [async (report) => { delivered = report; }],
+  });
+  assert.equal(response.status, 201);
+  assert.ok(stored);
+  assert.equal(stored.breadcrumbs[0]?.kind, "navigation");
+  assert.deepEqual(stored.breadcrumbs[0], {
+    ts: body.console[0]!.ts, kind: "navigation", from: clean, to: clean,
+  });
+  assert.deepEqual(stored.console[0]?.stack, [{ file: clean, line: 42, col: 7, fn: "save" }]);
+  assert.doesNotMatch(JSON.stringify(stored), /synthetic-17[12]/);
+  assert.deepEqual(delivered, stored);
+});
+
 test("without a store there is nothing to identify, so the answer is 202", async () => {
   const response = await handleReport(post(body), {});
   assert.equal(response.status, 202);
