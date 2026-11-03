@@ -248,8 +248,10 @@ jobs:
           # The contact field (#51) and the replay registry read (#55) then took it
           # to 5647, fifteen bytes over 5632, so the budget is 6144: the hook
           # carries every core default, and two of them landed in one release.
-          if [ "$react" -gt 6144 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 6144" >&2
+          # Draft ownership (#133) and submission coalescing (#132) together
+          # measure 6181 bytes; retain both guards with a 6272-byte ceiling.
+          if [ "$react" -gt 6272 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 6272" >&2
             exit 1
           fi
           # 8.0 kB of this is the panel as it shipped in 0.5; the kilobyte on

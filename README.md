@@ -371,6 +371,16 @@ writable ref (`v-model="contact"`), in Svelte `$form.contact` with
 `form.setContact(…)`, in Solid the accessor `contact()`. It is personal data
 once you ask for it: see [Please read this part](#please-read-this-part).
 
+`reset()` starts a new draft. It detaches an active submission rather than
+aborting it: the original approved payload still reaches the endpoint or,
+on a retryable failure, the queue supplied when it was submitted. Its promise
+still resolves with the delivery/queue result, but late completion cannot clear
+the new message, contact or attachments, change its status, or call `onSent`.
+`destroy()` also detaches pending submissions and aborts an active element pick.
+This contract applies to all four form adapters, including Svelte's
+`form.reset()` and `form.destroy()`. Neither action cancels delivery already
+in progress.
+
 Other options: `initialType`, `screenshotFor` and `consoleFor` (which report
 types get a picture and the console; bugs only by default), `extra` (fields
 merged into the body — an app version, a tenant id), `headers` and
