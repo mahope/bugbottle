@@ -52,7 +52,7 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   or Solid adapter, 5.7 kB; the optional ready-made panel, 11.6 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
-  1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 1.5 kB;
+  1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 2.1 kB;
   shake-to-report 0.6 kB;
   the everything script tag, 24.6 kB, and the slim one 21.0 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
@@ -4164,7 +4164,7 @@ without reopening throws on every transaction afterwards and is memory-only for
 good.
 
 It is a separate entry point because the default must not pay for it:
-`bugbottle/queue` is about 1.5 kB and this is another 650 bytes, only for those
+`bugbottle/queue` is about 2.1 kB and this is another 650 bytes, only for those
 who ask for it. A browser with no IndexedDB at all makes the queue memory-only,
 and the reports are still sent.
 

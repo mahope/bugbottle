@@ -199,7 +199,7 @@ function retryAfterMs(value: string | null): number | undefined {
     if (year > currentYear + 50) year -= 100;
     text = `${rfc850[1]!.slice(0, 3)}, ${rfc850[2]} ${rfc850[3]} ${year} ${rfc850[5]} GMT`;
   } else if (asctime) {
-    text = `${asctime[1]}, ${asctime[3]!.trim().padStart(2, "0")} ${asctime[2]} ${asctime[5]} ${asctime[4]} GMT`;
+    text = `${asctime[1]}, ${asctime[3]!.replace(" ", "0")} ${asctime[2]} ${asctime[5]} ${asctime[4]} GMT`;
   }
   const delay = /^\d+$/.test(text)
     ? Number(text) * 1_000

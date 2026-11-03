@@ -374,9 +374,11 @@ jobs:
           # spelling of "stop waiting for an answer that is not coming".
           queue=$(gzip -c out-queue.js | wc -c)
           # #116 adds bounded Retry-After seconds/date parsing and the 429
-          # exemption: 1697 -> 1822 with esbuild 0.28.2 (gzip without filenames).
-          if [ "$queue" -gt 1856 ]; then
-            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1856" >&2
+          # exemption. Strict RFC 850 and asctime support takes this to 2052
+          # bytes with this job's esbuild 0.24.0 and gzip (including filename).
+          # The 2112-byte budget leaves 2.9% headroom for the complete parser.
+          if [ "$queue" -gt 2112 ]; then
+            echo "bugbottle/queue is $queue bytes gzipped; the budget is 2112" >&2
             exit 1
           fi
           # The IndexedDB storage is its own entry so that the default pays

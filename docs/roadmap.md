@@ -7,7 +7,7 @@ Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1.5 kB gzipped, `bugbottle/react` under 6 kB, `bugbottle/ui`
 under 12.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/region` under 6 kB, `bugbottle/breadcrumbs` under
-1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 1856 bytes,
+1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 2112 bytes,
 `bugbottle/queue-idb` under 1024 bytes,
 `bugbottle/perf` under 1.5 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
