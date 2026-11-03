@@ -37,7 +37,10 @@ let initialised = false;
 let observers = [];
 let allowValues = [];
 let maxKeys = MAX_STORAGE_KEYS;
-let snapshotStorage = true;
+/** Reject absent, non-numeric and unbounded values without coercion. */
+function nonNegative(value) {
+    return Number.isFinite(value) && value >= 0;
+}
 /**
  * Subscribes to one entry type, or does nothing at all when the browser has
  * never heard of it. `buffered` asks for the entries that happened before this
@@ -47,13 +50,9 @@ let snapshotStorage = true;
  * others.
  */
 function observe(type, handler) {
-    const Observer = globalThis.PerformanceObserver;
-    if (typeof Observer !== "function")
-        return;
     try {
-        const observer = new Observer((list) => {
-            for (const entry of list.getEntries())
-                handler(entry);
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach(handler);
         });
         observer.observe({ type, buffered: true });
         observers.push(observer);
@@ -78,18 +77,12 @@ export function initPerf(options = {}) {
     if (initialised)
         return resetPerf;
     initialised = true;
-    lcp = 0;
-    cls = 0;
-    inp = undefined;
-    fid = 0;
-    longTaskCount = 0;
-    longTaskMs = 0;
     allowValues = Array.isArray(options.allowValues) ? options.allowValues : [];
+    // Clamp to the small key limit before truncating to an integer.
     maxKeys =
-        typeof options.maxKeys === "number" && Number.isFinite(options.maxKeys) && options.maxKeys >= 0
-            ? Math.min(Math.floor(options.maxKeys), MAX_STORAGE_KEYS)
+        nonNegative(options.maxKeys)
+            ? Math.min(options.maxKeys, MAX_STORAGE_KEYS) | 0
             : MAX_STORAGE_KEYS;
-    snapshotStorage = options.storage !== false;
     if (options.vitals !== false) {
         // The last candidate wins: the browser reports a larger element as it
         // finds one, and the final report is the one that counts.
@@ -111,20 +104,15 @@ export function initPerf(options = {}) {
         // over-reports rather than hides. `first-input` is observed too, so a
         // browser without usable event timing still contributes its input delay.
         // Keep it separate so event timing wins regardless of callback order.
-        observe("event", (entry) => {
-            const duration = entry.duration;
-            if (typeof duration === "number" && Number.isFinite(duration) && duration >= 0) {
+        observe("event", ({ duration }) => {
+            if (nonNegative(duration)) {
                 inp = Math.max(inp ?? 0, duration);
             }
         });
-        observe("first-input", (entry) => {
-            const { startTime, processingStart } = entry;
-            if (typeof startTime !== "number" || !Number.isFinite(startTime) || startTime < 0 ||
-                typeof processingStart !== "number" || !Number.isFinite(processingStart))
-                return;
-            const delay = processingStart - startTime;
-            if (Number.isFinite(delay) && delay >= 0)
-                fid = delay;
+        observe("first-input", ({ startTime, processingStart }) => {
+            if (nonNegative(startTime) && nonNegative(processingStart) && processingStart >= startTime) {
+                fid = processingStart - startTime;
+            }
         });
         observe("longtask", (entry) => {
             longTaskCount += 1;
@@ -132,7 +120,7 @@ export function initPerf(options = {}) {
         });
         registerPerfSource(getPerf);
     }
-    if (snapshotStorage)
+    if (options.storage !== false)
         registerStorageSource(getStorageSnapshot);
     return resetPerf;
 }
@@ -166,7 +154,7 @@ export function getPerf() {
         set("domContentLoaded", num("domContentLoadedEventEnd"));
         set("load", num("loadEventEnd"));
     }
-    if (longTaskCount > 0) {
+    if (longTaskCount) {
         out.longTasks = { count: longTaskCount, totalMs: Math.round(longTaskMs) };
     }
     // Chromium only, and non-standard, which is why it is read defensively and
@@ -174,7 +162,7 @@ export function getPerf() {
     const memory = globalThis.performance
         ?.memory;
     if (memory && typeof memory.usedJSHeapSize === "number") {
-        const mb = (bytes) => typeof bytes === "number" && Number.isFinite(bytes) ? Math.round(bytes / 1048576) : 0;
+        const mb = (bytes) => Number.isFinite(bytes) ? Math.round(bytes / 1048576) : 0;
         out.memory = { usedMB: mb(memory.usedJSHeapSize), limitMB: mb(memory.jsHeapSizeLimit) };
     }
     return Object.keys(out).length > 0 ? out : null;
@@ -225,14 +213,14 @@ export function getStorageSnapshot() {
     const local = store("localStorage");
     const session = store("sessionStorage");
     const localKeys = listStore(local);
-    if (localKeys.length > 0)
+    if (localKeys.length)
         out.local = localKeys;
     const sessionKeys = listStore(session);
-    if (sessionKeys.length > 0)
+    if (sessionKeys.length)
         out.session = sessionKeys;
     try {
         const raw = globalThis.document?.cookie;
-        if (typeof raw === "string" && raw) {
+        if (typeof raw === "string") {
             const cookies = [];
             for (const pair of raw.split(";")) {
                 if (cookies.length >= MAX_COOKIE_NAMES)
@@ -243,14 +231,14 @@ export function getStorageSnapshot() {
                 if (name)
                     cookies.push(name.slice(0, MAX_STORAGE_KEY_LENGTH));
             }
-            if (cookies.length > 0)
+            if (cookies.length)
                 out.cookies = cookies;
         }
     }
     catch {
         // A document without cookies, or one that refuses to say.
     }
-    if (allowValues.length > 0) {
+    if (allowValues.length) {
         const values = {};
         for (const key of allowValues) {
             if (typeof key !== "string")
@@ -300,7 +288,6 @@ export function resetPerf() {
     longTaskMs = 0;
     allowValues = [];
     maxKeys = MAX_STORAGE_KEYS;
-    snapshotStorage = true;
     initialised = false;
 }
 //# sourceMappingURL=perf.js.map

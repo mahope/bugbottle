@@ -211,7 +211,7 @@ for (const firstInputFirst of [true, false]) {
 test("invalid interaction timings leave reports buildable and allow a valid fallback", () => {
   withBrowser({}, (env) => {
     initPerf();
-    for (const value of [undefined, null, "40", NaN, Infinity, -1]) {
+    for (const value of [undefined, null, "40", NaN, Infinity, -Infinity, -1, Symbol("invalid")]) {
       env.emit("event", [{ duration: value }]);
       env.emit("first-input", [
         { startTime: value, processingStart: 140, duration: 96 },
@@ -302,6 +302,18 @@ test("stop disconnects every observer and unregisters both sources", () => {
   });
 });
 
+test("restarting clears event timing so first-input can supply a fresh fallback", () => {
+  withBrowser({}, (env) => {
+    const stop = initPerf();
+    env.emit("event", [{ duration: 210 }]);
+    stop();
+    initPerf();
+    assert.equal(getPerf(), null);
+    env.emit("first-input", [{ startTime: 100, processingStart: 140 }]);
+    assert.equal(getPerf()?.inp, 40);
+  });
+});
+
 test("the storage snapshot lists key names and value lengths, never values", () => {
   withBrowser({}, (env) => {
     env.localStorage.setItem("authToken", "supersecret-token-value");
@@ -346,7 +358,7 @@ test("the key list is capped, and the cap cannot be raised past MAX_STORAGE_KEYS
   });
   withBrowser({}, (env) => {
     for (let i = 0; i < 80; i += 1) env.localStorage.setItem(`k${i}`, "v");
-    initPerf({ maxKeys: 3 });
+    initPerf({ maxKeys: 3.9 });
     assert.equal(getStorageSnapshot()?.local?.length, 3);
   });
 });

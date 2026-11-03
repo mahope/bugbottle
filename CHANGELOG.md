@@ -21,7 +21,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 - Compute the first-input fallback from `processingStart - startTime` rather
   than presentation duration (#207). Usable event timing takes precedence in
-  either callback order; invalid interaction timings are ignored.
+  either callback order; invalid interaction timings are ignored. Keep the
+  script-tag bundle within its existing size budget.
 
 - Cancel SMTP connections, TLS negotiation and command/message waits when the
   receiver context aborts, including signals aborted before entry (#166).
