@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createServer, type Socket } from "node:net";
+import { createServer, Socket } from "node:net";
 import { getEventListeners } from "node:events";
 import { sendReportSmtp, smtpSink } from "../src/sinks/smtp.ts";
 import { handleReport } from "../src/server/handle.ts";
@@ -49,6 +49,7 @@ async function stalledServer(phase: string) {
           return;
         } else if (verb === "DATA") {
           inData = true;
+          if (phase === "backpressure") socket.pause();
           socket.write("354 Send message\r\n");
         } else if (verb === "QUIT") {
           socket.end("221 Bye\r\n");
@@ -64,6 +65,7 @@ async function stalledServer(phase: string) {
   return {
     options: { host: "127.0.0.1", port: address.port, from: "bugs@example.com", to: "team@example.com", timeoutMs: 1500 },
     commands, ready, ended,
+    resume: () => { for (const socket of sockets) socket.resume(); },
     connections: () => connections,
     deliveries: () => deliveries,
     close: async () => {
@@ -112,6 +114,50 @@ for (const phase of ["greeting", "MAIL", "DATA", "message", "QUIT", "STARTTLS", 
     } finally { await fake.close(); await rejected; }
   });
 }
+
+test("SMTP cancellation interrupts a DATA write under backpressure", async (t) => {
+  const fake = await stalledServer("backpressure");
+  const controller = new AbortController();
+  let transport!: Socket;
+  let writeFinished = false;
+  let writing!: () => void;
+  const started = new Promise<void>((resolve) => { writing = resolve; });
+  const originalWrite = Socket.prototype.write;
+  t.mock.method(Socket.prototype, "write", function (this: Socket, ...args: Parameters<Socket["write"]>) {
+    if (typeof args[0] === "string" && args[0].length > 8 * 1024 * 1024) {
+      transport = this;
+      const callback = args[args.length - 1] as (error?: Error | null) => void;
+      args[args.length - 1] = (error?: Error | null) => { writeFinished = true; callback(error); };
+      const result = originalWrite.apply(this, args);
+      writing();
+      return result;
+    }
+    return originalWrite.apply(this, args);
+  });
+  const rejected = assert.rejects(sendReportSmtp(
+    reportBody,
+    // Messages are clipped to 4000 characters; a stored screenshot URL is not.
+    { ...fake.options, timeoutMs: 5000, screenshotUrl: `https://example.com/${"x".repeat(8 * 1024 * 1024)}` },
+    { signal: controller.signal },
+  ), /abort/i);
+  try {
+    await promptly(started);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    assert.equal(writeFinished, false, "the DATA write callback is still pending");
+    assert.ok(transport.writableLength > 0, "DATA bytes remain queued under backpressure");
+    const closed = new Promise<void>((resolve) => transport.once("close", resolve));
+    controller.abort();
+    await promptly(rejected);
+    await promptly(closed);
+    assert.equal(transport.destroyed, true);
+    assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+    // A paused peer cannot observe EOF until it drains the queued bytes.
+    fake.resume();
+    await promptly(fake.ended);
+    assert.equal(fake.deliveries(), 0);
+    assert.deepEqual(fake.commands.map((line) => line.split(" ")[0]), ["EHLO", "MAIL", "RCPT", "DATA"]);
+  } finally { controller.abort(); await fake.close(); await rejected; }
+});
 
 test("handleReport times out SMTP and keeps its accepted response policy", async () => {
   const fake = await stalledServer("greeting");
