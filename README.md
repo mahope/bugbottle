@@ -6523,6 +6523,15 @@ A hook that throws is caught, passed to `onError` and forgotten. The answer is
 already decided by then, and an audit sink being down is not the reporter
 losing their report.
 
+Receiver `onError` and `onSinkError` callbacks are diagnostic observers.
+Synchronous exceptions they throw are ignored, including in Express/Fastify
+adapter diagnostics and fail-open shared-store paths. They cannot replace the
+original error, change the response, or stop later sinks. If `onDecision`
+throws, `onError` receives that error once; even if it throws too, the original
+decision and response stand. These callbacks are synchronous; returned promises
+are not awaited. Functional hooks such as `store`, `authorize` and `respond`
+retain their normal failure handling.
+
 ### A directory of files
 
 `store` is a function you write, and for a great many deployments the function
