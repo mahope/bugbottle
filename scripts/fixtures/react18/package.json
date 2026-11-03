@@ -1,0 +1,22 @@
+{
+  "name": "bugbottle-react18-consumer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@types/react": "18.3.12",
+    "happy-dom": "20.14.5",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "loose-envify": "1.4.0",
+    "js-tokens": "4.0.0",
+    "scheduler": "0.23.2",
+    "csstype": "3.2.3",
+    "@types/prop-types": "15.7.15",
+    "@types/node": "26.6.3",
+    "@types/ws": "8.18.1",
+    "ws": "8.21.3"
+  }
+}

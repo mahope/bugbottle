@@ -10,6 +10,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- Isolated packed React 18.3.1 and 19.3.0 consumers covering mounted StrictMode
+  forms, pending-delivery unmount/remount and matching TypeScript types (#156).
+
 - Real Chrome coverage for IndexedDB queue persistence with screenshots,
   concurrent tab enqueues and successful concurrent flushes. The browser CI
   job runs the isolated localhost smoke test with a bounded timeout (#121).
@@ -20,6 +23,13 @@ attribute needs a major version, and a new entry point needs a minor one.
   until a fresh full snapshot restores capture, bounding retained replay data
   even when the recorder delays its next checkout. Preserve the recovering
   checkout's viewport metadata with its snapshot within the same byte cap (#175).
+- Return independent file-store entry snapshots from `list`, `read` and
+  `refresh`, preventing caller mutations from corrupting lookup or retention (#185).
+- Drop screenshot regions together with pictures when queue storage refuses a
+  write, preserving the remaining evidence and screenshot-loss note (#186).
+
+- Ignore emissions from stopped or failed rrweb recorder attachments, keeping
+  replacement sessions isolated while retaining synchronous startup snapshots (#174).
 
 - Reject invalid GitHub Action report size limits before reading reports,
   preserving the 4096 KB default and positive whole-KB custom limits (#154).
