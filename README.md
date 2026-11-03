@@ -349,6 +349,11 @@ were looking at rather than the form on top of it. Anything marked
 `data-bugbottle` is left out of the picture and cannot be picked — put it on
 your panel and your trigger button.
 
+Overlapping `submit()` calls on the same form share one promise and one
+delivery attempt, including `onSent` and queueing. They resolve to `true`
+when sent or queued, or `false` on failure. After it settles, a later call
+can submit another report. This applies to all four framework adapters.
+
 Every adapter also carries `contact` and `setContact`, for a form that asks
 how to reach the reporter — an ordinary input bound the way `message` is:
 

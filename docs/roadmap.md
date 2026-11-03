@@ -21,6 +21,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 **Unreleased** — form reset and destroy detach pending submissions while
 preserving original delivery and queue ownership; Svelte adapter coverage (#133).
 
+**Unreleased** — overlapping headless form submissions share one delivery
+attempt and result, preventing duplicate sends and queue entries (#132).
+
 **Unreleased** — real-browser IndexedDB queue coverage for screenshot
 persistence across closed pages, concurrent enqueues and concurrent delivery
 without duplicates under successful responses (#121).

@@ -67,6 +67,7 @@ export function createReportState(options) {
     // or turn it off.
     let shots = 0;
     let picking = null;
+    let submitting = null;
     const capture = async () => {
         const renderer = opts.screenshot;
         if (!renderer || capturing)
@@ -179,6 +180,7 @@ export function createReportState(options) {
         /** Clears the form and any status, ready for a new report. */
         reset() {
             draft++;
+            submitting = null;
             picking?.abort();
             const type = firstType();
             set({
@@ -192,87 +194,100 @@ export function createReportState(options) {
                 status: { kind: "idle" },
             });
         },
-        async submit() {
-            const mine = draft;
-            const submissionOptions = opts;
-            const ownsDraft = () => mine === draft;
-            const m = messages();
-            if (!state.message.trim()) {
-                set({ status: { kind: "error", reason: "empty", message: m.empty } });
-                return false;
-            }
-            set({ status: { kind: "sending" } });
-            // A report that is on its way — or safely queued — leaves an empty form
-            // behind, so the next one does not start with the last one still in it.
-            const clearForm = () => set({
-                message: "",
-                contact: "",
-                screenshot: null,
-                screenshotRegion: null,
-                elements: [],
-                includeScreenshot: canShoot() && armedFor(state.type),
-            });
-            // Kept outside the try so the failure path can hand the very same body to
-            // the queue rather than assembling a second one from stale state.
-            let report = null;
-            try {
-                report = buildReport({
-                    type: state.type,
-                    message: state.message,
-                    contact: state.contact,
-                    screenshotDataUrl: state.includeScreenshot ? state.screenshot : null,
-                    screenshotRegion: state.screenshotRegion,
-                    includeConsole: (opts.consoleFor ?? bugsOnly)(state.type),
-                    elements: state.elements,
-                    extra: opts.extra,
-                    scrub: opts.scrub,
-                });
-                const beforeSend = opts.beforeSend;
-                const { id } = await sendReport(opts.endpoint, report, {
-                    headers: opts.headers,
-                    credentials: opts.credentials,
-                    timeoutMs: opts.timeoutMs,
-                    parseError: opts.parseError,
-                    beforeSend: beforeSend && (async (payload) => {
-                        // Until the hook approves a payload, nothing is safe to queue.
-                        report = null;
-                        const decided = await beforeSend(payload);
-                        report = decided;
-                        return decided;
-                    }),
-                    sign: opts.sign,
-                });
-                if (ownsDraft()) {
-                    set({ status: { kind: "sent", id } });
-                    if (ownsDraft())
-                        clearForm();
-                    if (ownsDraft())
-                        submissionOptions.onSent?.(id);
+        submit() {
+            if (submitting)
+                return submitting;
+            let resolve;
+            const pending = new Promise((yes) => { resolve = yes; });
+            submitting = pending;
+            // Install the guard before notifying subscribers or calling user hooks.
+            resolve(deliver().finally(() => {
+                if (submitting === pending)
+                    submitting = null;
+            }));
+            return pending;
+            async function deliver() {
+                const mine = draft;
+                const submissionOptions = opts;
+                const ownsDraft = () => mine === draft;
+                const m = messages();
+                if (!state.message.trim()) {
+                    set({ status: { kind: "error", reason: "empty", message: m.empty } });
+                    return false;
                 }
-                return true;
-            }
-            catch (err) {
-                const queue = submissionOptions.queue;
-                const rejected = err instanceof SendFailedError &&
-                    err.status >= 400 && err.status < 500 && err.status !== 429;
-                if (queue && report && !rejected) {
-                    queue.enqueue(report);
+                set({ status: { kind: "sending" } });
+                // A report that is on its way — or safely queued — leaves an empty form
+                // behind, so the next one does not start with the last one still in it.
+                const clearForm = () => set({
+                    message: "",
+                    contact: "",
+                    screenshot: null,
+                    screenshotRegion: null,
+                    elements: [],
+                    includeScreenshot: canShoot() && armedFor(state.type),
+                });
+                // Kept outside the try so the failure path can hand the very same body to
+                // the queue rather than assembling a second one from stale state.
+                let report = null;
+                try {
+                    report = buildReport({
+                        type: state.type,
+                        message: state.message,
+                        contact: state.contact,
+                        screenshotDataUrl: state.includeScreenshot ? state.screenshot : null,
+                        screenshotRegion: state.screenshotRegion,
+                        includeConsole: (opts.consoleFor ?? bugsOnly)(state.type),
+                        elements: state.elements,
+                        extra: opts.extra,
+                        scrub: opts.scrub,
+                    });
+                    const beforeSend = opts.beforeSend;
+                    const { id } = await sendReport(opts.endpoint, report, {
+                        headers: opts.headers,
+                        credentials: opts.credentials,
+                        timeoutMs: opts.timeoutMs,
+                        parseError: opts.parseError,
+                        beforeSend: beforeSend && (async (payload) => {
+                            // Until the hook approves a payload, nothing is safe to queue.
+                            report = null;
+                            const decided = await beforeSend(payload);
+                            report = decided;
+                            return decided;
+                        }),
+                        sign: opts.sign,
+                    });
                     if (ownsDraft()) {
-                        set({ status: { kind: "queued" } });
+                        set({ status: { kind: "sent", id } });
                         if (ownsDraft())
                             clearForm();
+                        if (ownsDraft())
+                            submissionOptions.onSent?.(id);
                     }
                     return true;
                 }
-                if (ownsDraft())
-                    set({
-                        status: {
-                            kind: "error",
-                            reason: "send-failed",
-                            message: err instanceof Error && err.message ? err.message : m.sendFailed,
-                        },
-                    });
-                return false;
+                catch (err) {
+                    const queue = submissionOptions.queue;
+                    const rejected = err instanceof SendFailedError &&
+                        err.status >= 400 && err.status < 500 && err.status !== 429;
+                    if (queue && report && !rejected) {
+                        queue.enqueue(report);
+                        if (ownsDraft()) {
+                            set({ status: { kind: "queued" } });
+                            if (ownsDraft())
+                                clearForm();
+                        }
+                        return true;
+                    }
+                    if (ownsDraft())
+                        set({
+                            status: {
+                                kind: "error",
+                                reason: "send-failed",
+                                message: err instanceof Error && err.message ? err.message : m.sendFailed,
+                            },
+                        });
+                    return false;
+                }
             }
         },
     };
@@ -295,6 +310,7 @@ export function createReportState(options) {
         // they must go with it, or every click on the page is eaten until Escape.
         destroy() {
             draft++;
+            submitting = null;
             picking?.abort();
         },
     };

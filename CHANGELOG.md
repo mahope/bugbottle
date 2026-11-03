@@ -20,6 +20,10 @@ attribute needs a major version, and a new entry point needs a minor one.
   discoverable after failed deletion. Delete the PNG before the JSON so a
   partial deletion leaves a readable report that removal or retention can
   retry (#119).
+- Coalesce overlapping form submissions into one delivery attempt and shared
+  result, calling `onSent` or queueing at most once. Later submissions remain
+  available after success or failure (#132). Share promise cleanup to keep
+  the React entry within its unchanged 6144-byte gzipped budget.
 - Smoke-test the packed dependency-free exports, JSON contracts and server
   validation/store round trip on Node 18 before publishing (#120).
 - Preserve replacement drafts after reset or destroy when an earlier submission
