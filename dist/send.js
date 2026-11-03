@@ -167,12 +167,21 @@ export async function sendReport(endpoint, report, options = {}) {
             : new SendTimeoutError(timeoutMs);
         const { onError } = options;
         if (onError) {
+            let observerTimer;
             try {
-                await onError(payload, failure);
+                await Promise.race([
+                    new Promise((resolve) => {
+                        observerTimer = setTimeout(resolve, 1_000);
+                    }),
+                    Promise.resolve(onError(payload, failure)),
+                ]);
             }
             catch {
                 // A queue that cannot write must not replace the error that says the
                 // report never arrived. The send failed either way.
+            }
+            finally {
+                clearTimeout(observerTimer);
             }
         }
         throw failure;

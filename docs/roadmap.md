@@ -6,18 +6,20 @@ Short version. The reasoning is in `research-features.md` and
 Guiding rule, borrowed from Sentry: every addition is a tree-shakeable module
 you import, never a boolean flag in the core. CI enforces the budgets: the
 bare core under 1.5 kB gzipped, `bugbottle/react` under 6 kB, `bugbottle/ui`
-under 12.5 kB, `bugbottle/annotate` under 2 kB, `bugbottle/region` under 6 kB, `bugbottle/breadcrumbs` under
+under 12864 bytes, `bugbottle/annotate` under 2 kB, `bugbottle/region` under 6 kB, `bugbottle/breadcrumbs` under
 1.5 kB, `bugbottle/network` under 1.3 kB, `bugbottle/queue` under 2112 bytes,
 `bugbottle/queue-idb` under 1024 bytes,
 `bugbottle/perf` under 1.5 kB, `bugbottle/triggers` under 1.3 kB,
 `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` under 1.5 kB each
 over the shared core, `bugbottle/sign` under 512 bytes, `bugbottle/shake` under
 768 bytes, `bugbottle/rrweb` under 1024 bytes, the script-tag build under
-26880 bytes and its slim twin under 23296. The core budget was 1 kB until 0.6, when stack
+26944 bytes and its slim twin under 23424. The core budget was 1 kB until 0.6, when stack
 frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — send failure observers have a separate one-second completion
+budget, retaining the original delivery error even when persistence hangs (#187).
 **Unreleased** — file-store entry snapshots isolate caller mutations from
 lookup, deletion and retention (#185).
 **Unreleased** — packed React 18.3.1 and 19.3.0 consumers check StrictMode

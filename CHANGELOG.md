@@ -19,6 +19,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Bound send failure observers to a separate one-second cleanup budget,
+  preserving the original delivery error when observers hang or reject (#187).
 - Cancel SMTP connections, TLS negotiation and command/message waits when the
   receiver context aborts, including signals aborted before entry (#166).
 - Redact sensitive query values in breadcrumb `from`/`to` URLs and console
