@@ -6523,6 +6523,15 @@ A hook that throws is caught, passed to `onError` and forgotten. The answer is
 already decided by then, and an audit sink being down is not the reporter
 losing their report.
 
+Receiver `onError` and `onSinkError` callbacks are diagnostic observers.
+Synchronous exceptions they throw are ignored, including in Express/Fastify
+adapter diagnostics and fail-open shared-store paths. They cannot replace the
+original error, change the response, or stop later sinks. If `onDecision`
+throws, `onError` receives that error once; even if it throws too, the original
+decision and response stand. These callbacks are synchronous; returned promises
+are not awaited. Functional hooks such as `store`, `authorize` and `respond`
+retain their normal failure handling.
+
 ### A directory of files
 
 `store` is a function you write, and for a great many deployments the function
@@ -8501,6 +8510,15 @@ Single `*` and `?` never cross `/` or `\`. Other characters, including regex
 punctuation, are literal; character classes, brace expansion, negation,
 escape syntax and multiple patterns are not supported. Dotfiles are included,
 but `.git` and `node_modules` directories are always skipped.
+
+`max-report-size-kb` defaults to `4096`, with 1 KB = 1024 bytes. Set it to a
+positive safe integer (at most `9007199254740991`), using decimal digits only.
+Fractional KB values are not supported: whole KB keeps the limit unambiguous
+and avoids silently rounding fractions. Text, numeric suffixes, zero, negatives,
+non-finite values and other number formats fail with a configuration error
+before any reports are scanned or read; report counts are not emitted.
+With a valid limit, files above it fail as `unreadable or oversized` and count
+toward `invalid-count`; files at or below it proceed to report validation.
 
 ## Who makes it
 
