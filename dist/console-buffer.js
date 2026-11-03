@@ -129,7 +129,12 @@ export function initConsoleBuffer(options = {}) {
 }
 /** A copy of what has been recorded so far. */
 export function getConsoleBuffer() {
-    return [...buffer];
+    return buffer.map((entry) => {
+        const copy = { ...entry };
+        if (copy.stack)
+            copy.stack = copy.stack.map((frame) => ({ ...frame }));
+        return copy;
+    });
 }
 /** Empties the buffer and restores the real console functions. */
 export function resetConsoleBuffer() {

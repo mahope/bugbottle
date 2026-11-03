@@ -111,7 +111,7 @@ test("the returned buffer is a copy", () => {
   snapshot.push({ ts: "", level: "error", message: "injected" });
   assert.equal(getConsoleBuffer().length, 1, "callers cannot mutate the buffer");
   assert.equal(getConsoleBuffer()[0]?.message, "first");
-  assert.equal(buildReport({ type: "bug", message: "snapshot" }).console[0]?.message, "first");
+  assert.equal(buildReport({ type: "bug", message: "snapshot" }).console?.[0]?.message, "first");
 });
 
 test("uncaught errors are recorded once, even after a reset and re-init", () => {
@@ -178,7 +178,8 @@ test("an uncaught error carries the frames from its error object", () => {
     entry.stack[0].fn = "redacted";
     entry.stack.pop();
     assert.deepEqual(getConsoleBuffer()[0], original);
-    assert.deepEqual(buildReport({ type: "bug", message: "snapshot" }).console[0], original);
+    delete (globalThis as { window?: unknown }).window;
+    assert.deepEqual(buildReport({ type: "bug", message: "snapshot" }).console?.[0], original);
   } finally {
     delete (globalThis as { window?: unknown }).window;
   }

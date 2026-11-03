@@ -206,7 +206,7 @@ export function initBreadcrumbs(options = {}) {
 }
 /** A copy of what has been recorded so far, oldest first. */
 export function getBreadcrumbs() {
-    return [...buffer];
+    return buffer.map((entry) => ({ ...entry }));
 }
 /** Whether `initBreadcrumbs` has run and not been reset since. */
 export function isBreadcrumbsActive() {

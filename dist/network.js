@@ -269,7 +269,7 @@ export function initNetwork(options = {}) {
 }
 /** A copy of what has been recorded so far, oldest first. */
 export function getNetwork() {
-    return [...buffer];
+    return buffer.map((entry) => ({ ...entry }));
 }
 /** Whether `initNetwork` has run and not been reset since. */
 export function isNetworkActive() {

@@ -157,7 +157,11 @@ export function initConsoleBuffer(options: ConsoleBufferOptions = {}): () => voi
 
 /** A copy of what has been recorded so far. */
 export function getConsoleBuffer(): ConsoleEntry[] {
-  return [...buffer];
+  return buffer.map((entry) => {
+    const copy = { ...entry };
+    if (copy.stack) copy.stack = copy.stack.map((frame) => ({ ...frame }));
+    return copy;
+  });
 }
 
 /** Empties the buffer and restores the real console functions. */
