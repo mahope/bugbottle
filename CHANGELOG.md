@@ -20,6 +20,8 @@ attribute needs a major version, and a new entry point needs a minor one.
   discoverable after failed deletion. Delete the PNG before the JSON so a
   partial deletion leaves a readable report that removal or retention can
   retry (#119).
+- Smoke-test the packed dependency-free exports, JSON contracts and server
+  validation/store round trip on Node 18 before publishing (#120).
 - Give the site image's history-copy test its own dated Git repository, so it
   works in linked worktrees and shallow clones without relying on checkout
   history (#122).

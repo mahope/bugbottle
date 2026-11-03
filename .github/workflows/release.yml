@@ -23,7 +23,11 @@ permissions:
   id-token: write
 
 jobs:
+  min-node-smoke:
+    uses: ./.github/workflows/min-node-smoke.yml
+
   publish:
+    needs: min-node-smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
