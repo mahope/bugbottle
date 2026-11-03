@@ -10,6 +10,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Keep successful framework-adapter submissions sent when `onSent` throws.
+  Synchronous callback exceptions are logged to `console.error` after form
+  cleanup, without failing submission or queueing a duplicate (#131).
+
 - Keep rate-limited reports (HTTP 429) in both initial submission and queued
   delivery. Queued retries honour `Retry-After` seconds or HTTP dates (including
   the obsolete RFC 850 and asctime formats), bounded

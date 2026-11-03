@@ -372,6 +372,11 @@ merged into the body — an app version, a tenant id), `headers` and
 `credentials` (for an authenticated or cross-origin endpoint), `timeoutMs`,
 `onSent`, `parseError`, and `messages` for translated strings. The defaults are English.
 
+For all four framework adapters, `onSent(id)` runs after delivery and form
+cleanup. A synchronous exception from it is logged with `console.error(error)`;
+the report stays `sent`, `submit()` resolves `true`, and no copy is queued.
+The callback is not awaited; handle rejections inside an asynchronous callback.
+
 ## The form (Vue)
 
 The same state machine, as refs. `type` and `message` are writable, so

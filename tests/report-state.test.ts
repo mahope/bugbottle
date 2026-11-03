@@ -28,6 +28,12 @@ for (const withQueue of [true, false]) {
     t.after(() => form.destroy());
     form.actions.setMessage("test report");
     form.actions.setContact("test contact");
+    const rect = { x: 0, y: 0, width: 10, height: 10 };
+    form.actions.attachScreenshot({
+      dataUrl: "data:image/png;base64,dGVzdA==",
+      region: { mode: "element", rect, viewport: rect, selector: "#test" },
+      element: { selector: "#test", tag: "button", text: "Test", rect, attributes: {} },
+    });
     assert.equal(await form.actions.submit(), true);
     assert.deepEqual(form.getState().status, { kind: "sent", id: "report-131" });
     assert.equal(form.getState().message, "");
@@ -41,6 +47,20 @@ for (const withQueue of [true, false]) {
     assert.deepEqual(logged.mock.calls.map((call) => call.arguments), [[error]]);
   });
 }
+
+test("a throwing console logger cannot fail a delivered report", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response("{}", { status: 201 }));
+  t.mock.method(console, "error", () => { throw new Error("Logger failed"); });
+  const form = createReportState({
+    endpoint: "/reports",
+    onSent: () => { throw new Error("Host callback failed"); },
+  });
+  t.after(() => form.destroy());
+  form.actions.setMessage("test report");
+  assert.equal(await form.actions.submit(), true);
+  assert.equal(form.getState().status.kind, "sent");
+  assert.equal(form.getState().message, "");
+});
 
 for (const status of [429, 400, 401, 403]) {
   test(`initial ${status} ${status === 429 ? "queues" : "rejects"} the report`, async (t) => {

@@ -83,7 +83,7 @@ export type UseBugReportOptions = {
   credentials?: SendOptions["credentials"];
   /** Give up on the endpoint after this long. Default 15 000 ms. */
   timeoutMs?: SendOptions["timeoutMs"];
-  /** Called after a successful submit. */
+  /** Called after a successful submit. Synchronous exceptions are logged to console.error. */
   onSent?: (id: string | undefined) => void;
   /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
   parseError?: SendOptions["parseError"];
@@ -381,6 +381,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       // Kept outside the try so the failure path can hand the very same body to
       // the queue rather than assembling a second one from stale state.
       let report: (BugReport & Record<string, unknown>) | null = null;
+      let id: string | undefined;
       try {
         report = buildReport({
           type: state.type,
@@ -394,7 +395,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           scrub: opts.scrub,
         });
         const beforeSend = opts.beforeSend;
-        const { id } = await sendReport(opts.endpoint, report, {
+        ({ id } = await sendReport(opts.endpoint, report, {
           headers: opts.headers,
           credentials: opts.credentials,
           timeoutMs: opts.timeoutMs,
@@ -407,11 +408,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
             return decided;
           }),
           sign: opts.sign,
-        });
-        set({ status: { kind: "sent", id } });
-        clearForm();
-        opts.onSent?.(id);
-        return true;
+        }));
       } catch (err) {
         const queue = opts.queue;
         const rejected = err instanceof SendFailedError &&
@@ -431,6 +428,19 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
         });
         return false;
       }
+      set({ status: { kind: "sent", id } });
+      clearForm();
+      try {
+        opts.onSent?.(id);
+      } catch (err) {
+        // Host code must not turn an already delivered report into a retry.
+        try {
+          console.error(err);
+        } catch {
+          // A host-provided logger must not change the delivery result either.
+        }
+      }
+      return true;
     },
   };
 

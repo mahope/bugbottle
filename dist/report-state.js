@@ -209,6 +209,7 @@ export function createReportState(options) {
             // Kept outside the try so the failure path can hand the very same body to
             // the queue rather than assembling a second one from stale state.
             let report = null;
+            let id;
             try {
                 report = buildReport({
                     type: state.type,
@@ -222,7 +223,7 @@ export function createReportState(options) {
                     scrub: opts.scrub,
                 });
                 const beforeSend = opts.beforeSend;
-                const { id } = await sendReport(opts.endpoint, report, {
+                ({ id } = await sendReport(opts.endpoint, report, {
                     headers: opts.headers,
                     credentials: opts.credentials,
                     timeoutMs: opts.timeoutMs,
@@ -235,11 +236,7 @@ export function createReportState(options) {
                         return decided;
                     }),
                     sign: opts.sign,
-                });
-                set({ status: { kind: "sent", id } });
-                clearForm();
-                opts.onSent?.(id);
-                return true;
+                }));
             }
             catch (err) {
                 const queue = opts.queue;
@@ -260,6 +257,21 @@ export function createReportState(options) {
                 });
                 return false;
             }
+            set({ status: { kind: "sent", id } });
+            clearForm();
+            try {
+                opts.onSent?.(id);
+            }
+            catch (err) {
+                // Host code must not turn an already delivered report into a retry.
+                try {
+                    console.error(err);
+                }
+                catch {
+                    // A host-provided logger must not change the delivery result either.
+                }
+            }
+            return true;
         },
     };
     return {
