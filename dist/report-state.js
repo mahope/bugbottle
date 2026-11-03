@@ -194,11 +194,10 @@ export function createReportState(options) {
             if (submitting)
                 return submitting;
             let resolve;
-            let reject;
-            const pending = new Promise((yes, no) => { resolve = yes; reject = no; });
+            const pending = new Promise((yes) => { resolve = yes; });
             submitting = pending;
             // Install the guard before notifying subscribers or calling user hooks.
-            void deliver().then((result) => { submitting = null; resolve(result); }, (error) => { submitting = null; reject(error); });
+            resolve(deliver().finally(() => { submitting = null; }));
             return pending;
             async function deliver() {
                 const m = messages();

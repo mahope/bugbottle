@@ -364,15 +364,11 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
 
     submit() {
       if (submitting) return submitting;
-      let resolve!: (result: boolean) => void;
-      let reject!: (error: unknown) => void;
-      const pending = new Promise<boolean>((yes, no) => { resolve = yes; reject = no; });
+      let resolve!: (result: Promise<boolean>) => void;
+      const pending = new Promise<boolean>((yes) => { resolve = yes; });
       submitting = pending;
       // Install the guard before notifying subscribers or calling user hooks.
-      void deliver().then(
-        (result) => { submitting = null; resolve(result); },
-        (error) => { submitting = null; reject(error); },
-      );
+      resolve(deliver().finally(() => { submitting = null; }));
       return pending;
 
       async function deliver(): Promise<boolean> {
