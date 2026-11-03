@@ -7832,9 +7832,17 @@ const clean = scrubReport(await request.json());
 On by default: email addresses, `Bearer <token>`, JWTs (`eyJ…`), 13 to 19 digit
 card numbers that pass the Luhn check, IBANs, and query values whose key matches
 `/token|key|secret|password|auth/i`. They are applied to `message`,
-`console[].message`, `context.url`, `elements[].text`, an element's `href` and
-`data-*` attributes, and `breadcrumbs` if you add them. The pixels of the
-screenshot are a separate job, done by the masking below.
+`console[].message`, `console[].stack[].file` and `fn`, `context.url`,
+`elements[].text` and `selector`, element attributes other than `id`, `role`
+and `type`, breadcrumb strings and their direct string properties,
+`screenshotRegion.selector`, `storage.values` strings and cookie names.
+The query pattern runs only on `context.url`, `elements[].attributes.href`,
+`breadcrumbs[].from` and `to`, and `console[].stack[].file`, including nested
+URL query parameters matched by the pattern. Ordinary parameters and stack
+frame `line`/`col` coordinates are kept. `keep: ['query']` disables query
+redaction in all these fields. The input report is never modified.
+Screenshot pixels and replay events are not scrubbed; use screenshot masking
+and the replay recorder's privacy options for those.
 
 An order number of 16 digits is kept, because it fails Luhn. Prose that happens
 to say `key=value` is kept, because the query pattern only runs on URLs.

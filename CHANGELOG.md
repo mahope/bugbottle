@@ -16,6 +16,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Redact sensitive query values in breadcrumb `from`/`to` URLs and console
+  stack frame `file` URLs, including nested queries. Scrub frame function names
+  as prose, preserve coordinates and query opt-outs, and leave the input
+  report unchanged (#171).
 - Match reports in the parent directory with Action globstars (`reports/**/*.json`),
   and keep `?` within one path segment. Document and test the supported glob
   dialect without adding dependencies (#153).

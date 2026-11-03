@@ -174,7 +174,7 @@ function scrubBreadcrumb(entry, p) {
     const out = { ...entry };
     for (const [key, value] of Object.entries(out)) {
         if (typeof value === "string")
-            out[key] = scrubString(value, p, false);
+            out[key] = scrubString(value, p, key === "from" || key === "to");
     }
     return out;
 }
@@ -207,6 +207,16 @@ export function scrubReport(report, options = {}) {
                     return entry;
                 const copy = { ...entry };
                 scrubField(copy, "message", p);
+                if (Array.isArray(copy.stack)) {
+                    copy.stack = copy.stack.map((frame) => {
+                        if (!isObject(frame))
+                            return frame;
+                        const copy = { ...frame };
+                        scrubField(copy, "file", p, true);
+                        scrubField(copy, "fn", p);
+                        return copy;
+                    });
+                }
                 return copy;
             });
         }

@@ -31,8 +31,9 @@ export type Scrubber = {
   /** Returns the text for one match. Returning the match keeps it. */
   replace?: (match: string, groups: (string | undefined)[], replacement: string) => string;
   /**
-   * Only applied to fields that hold a URL — `context.url` and an `href`
-   * attribute. A message that happens to say `key=value` is prose, not a
+   * Only applied to fields that hold a URL — `context.url`, an `href`
+   * attribute, breadcrumb `from`/`to`, and console stack frame `file`.
+   * A message that happens to say `key=value` is prose, not a
    * credential, and redacting it would be worse than leaving it.
    */
   urlsOnly?: boolean;
@@ -229,7 +230,7 @@ function scrubBreadcrumb(entry: unknown, p: Plan): unknown {
   if (!isObject(entry)) return entry;
   const out: Record<string, unknown> = { ...entry };
   for (const [key, value] of Object.entries(out)) {
-    if (typeof value === "string") out[key] = scrubString(value, p, false);
+    if (typeof value === "string") out[key] = scrubString(value, p, key === "from" || key === "to");
   }
   return out;
 }
@@ -265,6 +266,15 @@ export function scrubReport<T>(report: T, options: ScrubOptions = {}): T {
         if (!isObject(entry)) return entry;
         const copy = { ...entry };
         scrubField(copy, "message", p);
+        if (Array.isArray(copy.stack)) {
+          copy.stack = copy.stack.map((frame) => {
+            if (!isObject(frame)) return frame;
+            const copy = { ...frame };
+            scrubField(copy, "file", p, true);
+            scrubField(copy, "fn", p);
+            return copy;
+          });
+        }
         return copy;
       });
     }
