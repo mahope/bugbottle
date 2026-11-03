@@ -112,7 +112,7 @@ export const SCREENSHOT_NOTE = "Screenshot dropped: it did not fit in the offlin
 function dropPicture(item) {
     if (!item.body.screenshotDataUrl)
         return item;
-    const { screenshotDataUrl: _dropped, ...rest } = item.body;
+    const { screenshotDataUrl: _dropped, screenshotRegion: _region, ...rest } = item.body;
     const body = { ...rest, notes: [...(item.body.notes ?? []), SCREENSHOT_NOTE] };
     return { ...item, body: body };
 }

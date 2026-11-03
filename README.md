@@ -4143,8 +4143,8 @@ or two on its own. A write is refused sooner than anyone expects — and until
 the next reload, which is exactly what an outage ends in.
 
 It costs the picture instead. When the storage refuses a write, the queue
-writes the same reports again without their screenshots and leaves a line on
-each one it took a picture from:
+writes the same reports again without their screenshots or screenshot regions
+and leaves a line on each one it took a picture from:
 
 ```jsonc
 "notes": ["Screenshot dropped: it did not fit in the offline queue."]

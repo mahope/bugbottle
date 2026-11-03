@@ -663,7 +663,11 @@ for (const asynchronous of [false, true]) {
     const pictured = {
       ...report("the crop explains the problem"),
       screenshotDataUrl: "data:image/png;base64,AAAA",
-      screenshotRegion: { x: 10, y: 20, width: 30, height: 40, pixelRatio: 1 },
+      screenshotRegion: {
+        mode: "area" as const,
+        rect: { x: 10, y: 20, width: 30, height: 40 },
+        viewport: { x: 10, y: 20, width: 30, height: 40 },
+      },
       notes: ["Existing evidence note"],
     };
     queue.enqueue(pictured);
