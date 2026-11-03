@@ -502,10 +502,11 @@ function takeReply(buffer: string): { reply: Reply; rest: string } | undefined {
  * it — the raw connection becomes the transport under a `TLSSocket`, and every
  * listener has to move across with it or the first encrypted byte is lost.
  */
-function createSession(socket: Socket, timeoutMs: number) {
+function createSession(socket: Socket, timeoutMs: number, signal?: AbortSignal) {
   let current: Socket | TLSSocket = socket;
   let buffer = "";
   let failure: unknown;
+  let interrupt: ((error: unknown) => void) | undefined;
   let waiting: { resolve: (reply: Reply) => void; reject: (error: unknown) => void } | undefined;
 
   const onData = (chunk: Buffer) => {
@@ -536,6 +537,7 @@ function createSession(socket: Socket, timeoutMs: number) {
     const settle = waiting;
     waiting = undefined;
     settle?.reject(error);
+    interrupt?.(error);
   }
 
   function listen(next: Socket | TLSSocket): void {
@@ -550,7 +552,14 @@ function createSession(socket: Socket, timeoutMs: number) {
     previous.off("close", onClose);
   }
 
+  const onAbort = () => {
+    fail(localError("The SMTP delivery was aborted"));
+    current.destroy();
+    socket.destroy();
+  };
   listen(current);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  if (signal?.aborted) onAbort();
 
   /** Waits for one reply, on this phase's deadline. */
   function read(phase: string): Promise<Reply> {
@@ -584,15 +593,17 @@ function createSession(socket: Socket, timeoutMs: number) {
   function write(text: string, phase: string): Promise<void> {
     if (failure) return Promise.reject(failure);
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        fail(localError(`The SMTP server did not read ${phase} within ${timeoutMs} ms`));
-        reject(failure);
-      }, timeoutMs);
-      current.write(text, (error) => {
+      const finish = (error?: unknown) => {
         clearTimeout(timer);
+        interrupt = undefined;
         if (error) reject(error);
         else resolve();
-      });
+      };
+      const timer = setTimeout(() => {
+        fail(localError(`The SMTP server did not read ${phase} within ${timeoutMs} ms`));
+      }, timeoutMs);
+      interrupt = finish;
+      current.write(text, (error) => finish(failure ?? error));
     });
   }
 
@@ -604,31 +615,40 @@ function createSession(socket: Socket, timeoutMs: number) {
 
   /** Puts TLS over the connection, keeping the reply reader attached. */
   async function upgrade(host: string, options: ConnectionOptions | undefined): Promise<void> {
+    if (failure) throw failure;
     unlisten(current);
-    const upgraded = await new Promise<TLSSocket>((resolve, reject) => {
+    const tlsSocket = tlsConnect({ servername: host, ...options, socket: current });
+    current = tlsSocket;
+    listen(current);
+    await new Promise<void>((resolve, reject) => {
+      const finish = (error?: unknown) => {
+        clearTimeout(timer);
+        tlsSocket.off("secureConnect", onSecure);
+        interrupt = undefined;
+        if (error) reject(error);
+        else resolve();
+      };
+      const onSecure = () => finish();
       const timer = setTimeout(() => {
-        reject(localError(`The TLS handshake did not finish within ${timeoutMs} ms`));
+        fail(localError(`The TLS handshake did not finish within ${timeoutMs} ms`));
       }, timeoutMs);
-      const tlsSocket = tlsConnect({ servername: host, ...options, socket: current }, () => {
-        clearTimeout(timer);
-        resolve(tlsSocket);
-      });
-      tlsSocket.once("error", (error: Error) => {
-        clearTimeout(timer);
-        reject(localError(`The TLS handshake failed: ${error.message}`));
-      });
+      interrupt = finish;
+      tlsSocket.once("secureConnect", onSecure);
     });
-    current = upgraded;
     session.secure = true;
     // Whatever the server said before the handshake is not part of the
     // encrypted session, and RFC 3207 says to discard it.
     buffer = "";
-    listen(current);
   }
 
   function close(): void {
-    unlisten(current);
+    signal?.removeEventListener("abort", onAbort);
+    current.off("data", onData);
+    // Keep the error handler until destroy has finished emitting socket events.
+    if (current.closed) unlisten(current);
+    else current.once("close", () => unlisten(current));
     current.destroy();
+    socket.destroy();
   }
 
   /** Whether AUTH may travel: true once the transport is encrypted. */
@@ -643,25 +663,45 @@ function open(
   secure: boolean,
   timeoutMs: number,
   tlsOptions: ConnectionOptions | undefined,
+  signal?: AbortSignal,
 ): Promise<Socket> {
+  if (signal?.aborted) return Promise.reject(localError("The SMTP delivery was aborted"));
   return new Promise<Socket>((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      socket.off(secure ? "secureConnect" : "connect", done);
+    };
+    const fail = (error: unknown) => {
+      cleanup();
       socket.destroy();
-      reject(localError(`The SMTP connection to ${host}:${port} timed out after ${timeoutMs} ms`));
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      fail(localError(`The SMTP connection to ${host}:${port} timed out after ${timeoutMs} ms`));
     }, timeoutMs);
     const done = () => {
-      clearTimeout(timer);
+      cleanup();
       socket.off("error", onError);
+      socket.off("close", onClose);
       resolve(socket);
     };
     const onError = (error: Error) => {
-      clearTimeout(timer);
-      reject(localError(`The SMTP connection to ${host}:${port} failed: ${error.message}`));
+      fail(localError(`The SMTP connection to ${host}:${port} failed: ${error.message}`));
     };
+    const onClose = () => {
+      cleanup();
+      socket.off("error", onError);
+      reject(localError("The SMTP server closed the connection"));
+    };
+    const onAbort = () => fail(localError("The SMTP delivery was aborted"));
     const socket: Socket = secure
       ? tlsConnect({ host, port, servername: host, ...tlsOptions }, done)
       : netConnect({ host, port }, done);
-    socket.once("error", onError);
+    socket.on("error", onError);
+    socket.once("close", onClose);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
   });
 }
 
@@ -726,6 +766,7 @@ export async function sendReportSmtp(
   options: SmtpSinkOptions,
   ctx: ChatSinkContext = {},
 ): Promise<SendReportSmtpResult> {
+  if (ctx.signal?.aborted) throw localError("The SMTP delivery was aborted");
   const locale = options.locale ?? en;
   const secure = options.secure ?? (options.port ?? DEFAULT_SMTP_PORT) === SMTP_TLS_PORT;
   const port = options.port ?? (secure ? SMTP_TLS_PORT : DEFAULT_SMTP_PORT);
@@ -774,8 +815,8 @@ export async function sendReportSmtp(
     id,
   });
 
-  const socket = await open(options.host, port, secure, timeoutMs, options.tls);
-  const session = createSession(socket, timeoutMs);
+  const socket = await open(options.host, port, secure, timeoutMs, options.tls, ctx.signal);
+  const session = createSession(socket, timeoutMs, ctx.signal);
   session.secure = secure;
   try {
     const greeting = await session.read("the greeting");
@@ -844,6 +885,7 @@ export async function sendReportSmtp(
     } catch {
       // Nothing to do about it, and nothing worth telling the caller.
     }
+    if (ctx.signal?.aborted) throw localError("The SMTP delivery was aborted");
     return { messageId: id, response: accepted.text };
   } finally {
     session.close();
