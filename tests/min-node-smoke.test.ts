@@ -8,8 +8,7 @@ test("CI and publishing require the isolated Node 18 consumer smoke", () => {
   assert.match(smoke, /node-version: 22/);
   assert.match(smoke, /node-version: 18/);
   assert.match(smoke, /node scripts\/smoke-packed.mjs/);
-  for (const workflow of ["ci", "release"]) {
-    assert.match(read(`../.github/workflows/${workflow}.yml`), /uses: \.\/\.github\/workflows\/min-node-smoke.yml/);
-  }
-  assert.match(read("../.github/workflows/release.yml"), /publish:\s+needs: min-node-smoke/);
+  assert.match(read("../.github/workflows/ci.yml"), /uses: \.\/\.github\/workflows\/min-node-smoke.yml/);
+  assert.match(read("../.github/workflows/release.yml"), /validation:\s+uses: \.\/\.github\/workflows\/ci.yml/);
+  assert.match(read("../.github/workflows/release.yml"), /publish:\s+needs: validation/);
 });

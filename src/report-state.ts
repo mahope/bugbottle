@@ -172,6 +172,7 @@ export type ReportActions = {
   open: () => void;
   /** Overlapping calls share one promise and its success/queued (true) or failure (false) result. */
   submit: () => Promise<boolean>;
+  /** Clears the draft and detaches pending submissions without aborting delivery. */
   reset: () => void;
 };
 
@@ -181,7 +182,7 @@ export type ReportStateStore = {
   actions: ReportActions;
   /** Hand the store the current options. Adapters that re-render call it every time. */
   setOptions: (next: UseBugReportOptions) => void;
-  /** Aborts a pick in progress. Call when the form goes away. */
+  /** Aborts a pick and detaches pending submissions. Call when the form goes away. */
   destroy: () => void;
 };
 
@@ -230,6 +231,8 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     for (const listener of listeners) listener();
   };
 
+  // Delivery belongs to its original payload; only the current draft may be updated.
+  let draft = 0;
   let capturing: number | null = null;
   // Only the current generation may change the form when a render settles.
   let shots = 0;
@@ -360,6 +363,8 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     /** Clears the form and any status, ready for a new report. */
     reset() {
       invalidateCapture();
+      draft++;
+      submitting = null;
       picking?.abort();
       const type = firstType();
       set({
@@ -380,11 +385,16 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       const pending = new Promise<boolean>((yes) => { resolve = yes; });
       submitting = pending;
       // Install the guard before notifying subscribers or calling user hooks.
-      resolve(deliver().finally(() => { submitting = null; }));
+      resolve(deliver().finally(() => {
+        if (submitting === pending) submitting = null;
+      }));
       return pending;
 
       async function deliver(): Promise<boolean> {
         invalidateCapture();
+        const mine = draft;
+        const submissionOptions = opts;
+        const ownsDraft = () => mine === draft;
         const m = messages();
         if (!state.message.trim()) {
           set({ status: { kind: "error", reason: "empty", message: m.empty } });
@@ -432,21 +442,25 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
             }),
             sign: opts.sign,
           });
-          set({ status: { kind: "sent", id } });
-          clearForm();
-          opts.onSent?.(id);
+          if (ownsDraft()) {
+            set({ status: { kind: "sent", id } });
+            if (ownsDraft()) clearForm();
+            if (ownsDraft()) submissionOptions.onSent?.(id);
+          }
           return true;
         } catch (err) {
-          const queue = opts.queue;
+          const queue = submissionOptions.queue;
           const rejected = err instanceof SendFailedError &&
             err.status >= 400 && err.status < 500 && err.status !== 429;
           if (queue && report && !rejected) {
             queue.enqueue(report);
-            set({ status: { kind: "queued" } });
-            clearForm();
+            if (ownsDraft()) {
+              set({ status: { kind: "queued" } });
+              if (ownsDraft()) clearForm();
+            }
             return true;
           }
-          set({
+          if (ownsDraft()) set({
             status: {
               kind: "error",
               reason: "send-failed",
@@ -477,6 +491,8 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     // they must go with it, or every click on the page is eaten until Escape.
     destroy() {
       invalidateCapture();
+      draft++;
+      submitting = null;
       picking?.abort();
     },
   };

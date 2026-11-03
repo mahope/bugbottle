@@ -1,11 +1,26 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:
 
 jobs:
+  inbox-docker:
+    name: Inbox Docker persistence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run smoke:inbox-docker
+
   min-node-smoke:
     uses: ./.github/workflows/min-node-smoke.yml
 
@@ -247,9 +262,8 @@ jobs:
           # The contact field (#51) and the replay registry read (#55) then took it
           # to 5647, fifteen bytes over 5632, so the budget is 6144: the hook
           # carries every core default, and two of them landed in one release.
-          # #134 preserves capture generations alongside #132's submission guard.
-          # Together they measure 6187 bytes with esbuild 0.24.0 and GNU gzip;
-          # allow 128 more bytes for both lifecycle protections.
+          # Preserve capture generations (#134), draft ownership (#133) and
+          # submission coalescing (#132) within the 6272-byte ceiling.
           if [ "$react" -gt 6272 ]; then
             echo "bugbottle/react is $react bytes gzipped; the budget is 6272" >&2
             exit 1

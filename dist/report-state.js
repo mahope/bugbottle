@@ -59,6 +59,8 @@ export function createReportState(options) {
         for (const listener of listeners)
             listener();
     };
+    // Delivery belongs to its original payload; only the current draft may be updated.
+    let draft = 0;
     let capturing = null;
     // Only the current generation may change the form when a render settles.
     let shots = 0;
@@ -189,6 +191,8 @@ export function createReportState(options) {
         /** Clears the form and any status, ready for a new report. */
         reset() {
             invalidateCapture();
+            draft++;
+            submitting = null;
             picking?.abort();
             const type = firstType();
             set({
@@ -209,10 +213,16 @@ export function createReportState(options) {
             const pending = new Promise((yes) => { resolve = yes; });
             submitting = pending;
             // Install the guard before notifying subscribers or calling user hooks.
-            resolve(deliver().finally(() => { submitting = null; }));
+            resolve(deliver().finally(() => {
+                if (submitting === pending)
+                    submitting = null;
+            }));
             return pending;
             async function deliver() {
                 invalidateCapture();
+                const mine = draft;
+                const submissionOptions = opts;
+                const ownsDraft = () => mine === draft;
                 const m = messages();
                 if (!state.message.trim()) {
                     set({ status: { kind: "error", reason: "empty", message: m.empty } });
@@ -259,28 +269,36 @@ export function createReportState(options) {
                         }),
                         sign: opts.sign,
                     });
-                    set({ status: { kind: "sent", id } });
-                    clearForm();
-                    opts.onSent?.(id);
+                    if (ownsDraft()) {
+                        set({ status: { kind: "sent", id } });
+                        if (ownsDraft())
+                            clearForm();
+                        if (ownsDraft())
+                            submissionOptions.onSent?.(id);
+                    }
                     return true;
                 }
                 catch (err) {
-                    const queue = opts.queue;
+                    const queue = submissionOptions.queue;
                     const rejected = err instanceof SendFailedError &&
                         err.status >= 400 && err.status < 500 && err.status !== 429;
                     if (queue && report && !rejected) {
                         queue.enqueue(report);
-                        set({ status: { kind: "queued" } });
-                        clearForm();
+                        if (ownsDraft()) {
+                            set({ status: { kind: "queued" } });
+                            if (ownsDraft())
+                                clearForm();
+                        }
                         return true;
                     }
-                    set({
-                        status: {
-                            kind: "error",
-                            reason: "send-failed",
-                            message: err instanceof Error && err.message ? err.message : m.sendFailed,
-                        },
-                    });
+                    if (ownsDraft())
+                        set({
+                            status: {
+                                kind: "error",
+                                reason: "send-failed",
+                                message: err instanceof Error && err.message ? err.message : m.sendFailed,
+                            },
+                        });
                     return false;
                 }
             }
@@ -305,6 +323,8 @@ export function createReportState(options) {
         // they must go with it, or every click on the page is eaten until Escape.
         destroy() {
             invalidateCapture();
+            draft++;
+            submitting = null;
             picking?.abort();
         },
     };
