@@ -767,6 +767,8 @@ test("a retry after the backoff signs again, with a fresh timestamp", async () =
     endpoint: "/api/feedback",
     fetch,
     sign: createSigner({ key: SIGN_KEY }),
+    // The shortened backoff timer must not also give WebCrypto a 5 ms deadline.
+    timeoutMs: 0,
   });
   // The retry is armed with the queue's own backoff timer, a second at least.
   // A loaded CI runner has been seen to miss that inside the test's deadline,

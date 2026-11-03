@@ -21,6 +21,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 - Bound send failure observers to a separate one-second cleanup budget,
   preserving the original delivery error when observers hang or reject (#187).
+- Redact sensitive query values in breadcrumb `from`/`to` URLs and console
+  stack frame `file` URLs, including nested queries. Scrub frame function names
+  as prose, preserve coordinates and query opt-outs, and leave the input
+  report unchanged (#171).
 - Return independent file-store entry snapshots from `list`, `read` and
   `refresh`, preventing caller mutations from corrupting lookup or retention (#185).
 - Drop screenshot regions together with pictures when queue storage refuses a

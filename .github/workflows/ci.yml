@@ -163,8 +163,9 @@ jobs:
           # page that passes one can import the module from jsDelivr too. The
           # budget goes to 26624.
           # #116 adds bounded Retry-After parsing and retains HTTP 429 reports.
-          if [ "$iife" -gt 26880 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 26880" >&2
+          # #187 and #171 together measure 26897 bytes on Linux.
+          if [ "$iife" -gt 26944 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 26944" >&2
             exit 1
           fi
       - name: The slim script-tag bundle stays under its budget
@@ -196,8 +197,9 @@ jobs:
           # #115 bounds signing as well as fetching and ignores late signer
           # completion. The deadline promise and guard add about 50 bytes;
           # the queue entry itself remains within its unchanged 2112 budget.
-          if [ "$slim" -gt 23360 ]; then
-            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23360" >&2
+          # #187 and #171 together measure 23393 bytes on Linux.
+          if [ "$slim" -gt 23424 ]; then
+            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23424" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
