@@ -5894,7 +5894,11 @@ rather than low, which is the safe direction for evidence. **INP** here is the
 worst interaction, where the real metric is roughly the 98th percentile: on
 the handful of interactions a session usually has these are the same number,
 and on a long session this over-reports rather than hides. `first-input` is
-observed too, so a browser without the `event` type still contributes its FID.
+observed too: when no usable `event` duration has arrived, `inp` falls back to
+its input delay (`processingStart - startTime`), not its duration through
+presentation. Usable event timing always takes precedence, regardless of
+observer callback order. Missing, non-finite or negative interaction timings
+are ignored. This fallback is FID, not a full INP measurement.
 
 `report.storage` says what was in the browser's stores at the moment the
 report was written — not when `initPerf` ran, because what matters is the

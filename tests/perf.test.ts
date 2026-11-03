@@ -187,9 +187,46 @@ test("INP is the worst interaction, which is the documented simplification", () 
 });
 
 test("a browser with no `event` type still contributes its first-input delay", () => {
-  withBrowser({ buffered: { "first-input": [{ duration: 180 }] } }, () => {
+  withBrowser({ buffered: { "first-input": [{ startTime: 100, processingStart: 140, duration: 96 }] } }, () => {
     initPerf();
-    assert.equal(getPerf()?.inp, 180);
+    assert.equal(getPerf()?.inp, 40);
+  });
+});
+
+for (const firstInputFirst of [true, false]) {
+  test(`event timing takes precedence with first-input delivered ${firstInputFirst ? "first" : "last"}`, () => {
+    withBrowser({}, (env) => {
+      initPerf();
+      const fallback = () => env.emit("first-input", [
+        { startTime: 100, processingStart: 240, duration: 296 },
+      ]);
+      if (firstInputFirst) fallback();
+      env.emit("event", [{ duration: 40 }]);
+      if (!firstInputFirst) fallback();
+      assert.equal(getPerf()?.inp, 40);
+    });
+  });
+}
+
+test("invalid interaction timings leave reports buildable and allow a valid fallback", () => {
+  withBrowser({}, (env) => {
+    initPerf();
+    for (const value of [undefined, null, "40", NaN, Infinity, -1]) {
+      env.emit("event", [{ duration: value }]);
+      env.emit("first-input", [
+        { startTime: value, processingStart: 140, duration: 96 },
+        { startTime: 100, processingStart: value, duration: 96 },
+      ]);
+    }
+    env.emit("first-input", [{ startTime: 140, processingStart: 100 }]);
+    assert.equal(getPerf()?.inp, undefined);
+    assert.doesNotThrow(() => buildReport({ type: "bug", message: "Timing" }));
+    env.emit("first-input", [{ startTime: 100, processingStart: 140 }]);
+    assert.equal(getPerf()?.inp, 40);
+    env.emit("event", [{ duration: 0 }]);
+    assert.equal(getPerf()?.inp, undefined);
+    env.emit("event", [{ duration: 24 }, { duration: NaN }]);
+    assert.equal(getPerf()?.inp, 24);
   });
 });
 

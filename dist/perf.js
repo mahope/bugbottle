@@ -29,7 +29,8 @@ import { MAX_COOKIE_NAMES, MAX_STORAGE_KEYS, MAX_STORAGE_KEY_LENGTH, MAX_STORAGE
 /** The four numbers the observers accumulate, before rounding. */
 let lcp = 0;
 let cls = 0;
-let inp = 0;
+let inp;
+let fid = 0;
 let longTaskCount = 0;
 let longTaskMs = 0;
 let initialised = false;
@@ -79,7 +80,8 @@ export function initPerf(options = {}) {
     initialised = true;
     lcp = 0;
     cls = 0;
-    inp = 0;
+    inp = undefined;
+    fid = 0;
     longTaskCount = 0;
     longTaskMs = 0;
     allowValues = Array.isArray(options.allowValues) ? options.allowValues : [];
@@ -107,12 +109,23 @@ export function initPerf(options = {}) {
         // the worst one instead: on the handful of interactions a session usually
         // has, the percentile *is* the worst one, and on a long session this
         // over-reports rather than hides. `first-input` is observed too, so a
-        // browser without the `event` type still contributes its FID.
-        const interaction = (entry) => {
-            inp = Math.max(inp, entry.duration ?? 0);
-        };
-        observe("event", interaction);
-        observe("first-input", interaction);
+        // browser without usable event timing still contributes its input delay.
+        // Keep it separate so event timing wins regardless of callback order.
+        observe("event", (entry) => {
+            const duration = entry.duration;
+            if (typeof duration === "number" && Number.isFinite(duration) && duration >= 0) {
+                inp = Math.max(inp ?? 0, duration);
+            }
+        });
+        observe("first-input", (entry) => {
+            const { startTime, processingStart } = entry;
+            if (typeof startTime !== "number" || !Number.isFinite(startTime) || startTime < 0 ||
+                typeof processingStart !== "number" || !Number.isFinite(processingStart))
+                return;
+            const delay = processingStart - startTime;
+            if (Number.isFinite(delay) && delay >= 0)
+                fid = delay;
+        });
         observe("longtask", (entry) => {
             longTaskCount += 1;
             longTaskMs += entry.duration ?? 0;
@@ -138,7 +151,7 @@ export function getPerf() {
             out[key] = value;
     };
     set("lcp", ms(lcp));
-    set("inp", ms(inp));
+    set("inp", ms(inp ?? fid));
     if (cls > 0)
         out.cls = Math.round(cls * 1000) / 1000;
     // The navigation entry carries the milestones, and it is read now rather
@@ -281,7 +294,8 @@ export function resetPerf() {
     registerStorageSource(null);
     lcp = 0;
     cls = 0;
-    inp = 0;
+    inp = undefined;
+    fid = 0;
     longTaskCount = 0;
     longTaskMs = 0;
     allowValues = [];
