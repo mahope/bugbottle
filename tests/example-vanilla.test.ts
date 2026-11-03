@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { request, type Server } from "node:http";
 import { once } from "node:events";
+import { spawn } from "node:child_process";
 // @ts-expect-error The runnable example is plain JavaScript.
 import { createDemoServer } from "../examples/vanilla-js/server.mjs";
 import { fullReportBody, PNG_DATA_URL } from "./report-fixtures.ts";
@@ -79,3 +80,35 @@ for (const oversized of [true, false]) {
     } finally { upload.destroy(); await stop(server); }
   });
 }
+
+
+test("node server.mjs serves the demo and acknowledges a report with an id", async () => {
+  const child = spawn(process.execPath, ["server.mjs"], {
+    cwd: new URL("../examples/vanilla-js/", import.meta.url),
+    env: { ...process.env, PORT: "0" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    let output = "";
+    const origin = await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Demo did not start")), 3000);
+      child.once("exit", () => { clearTimeout(timer); reject(new Error("Demo exited")); });
+      child.stdout.on("data", chunk => {
+        output += chunk;
+        const address = /http:\/\/localhost:\d+/.exec(output);
+        if (address) { clearTimeout(timer); resolve(address[0].replace("localhost", "127.0.0.1")); }
+      });
+    });
+    assert.equal((await fetch(origin)).status, 200);
+    const response = await fetch(`${origin}/api/feedback`, { method: "POST",
+      body: JSON.stringify({ type: "bug", message: "Demo button failed" }) });
+    assert.equal(response.status, 201);
+    assert.match(((await response.json()) as { id: string }).id, /^[0-9a-f-]{36}$/);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      const ended = once(child, "exit");
+      child.kill();
+      await ended;
+    }
+  }
+});

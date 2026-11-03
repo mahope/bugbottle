@@ -75,7 +75,7 @@ export function createDemoServer(options = {}) {
         body,
         duplex: "half",
       }), { store, ...options });
-      if (!req.complete) {
+      if (!req.readableEnded) {
         res.setHeader("Connection", "close");
         res.once("finish", () => req.destroy());
       }
