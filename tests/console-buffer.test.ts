@@ -48,6 +48,54 @@ test("the original console is still called", () => {
   assert.deepEqual(seen, [["passed through"]], "nothing disappears from the console");
 });
 
+for (const level of ["error", "warn"] as const) {
+  for (const kind of ["conversion", "name", "message", "proxy"] as const) {
+    test(`${level} preserves unreadable ${kind} arguments and readable neighbours`, () => {
+      const fail = () => { throw new Error("cannot inspect"); };
+      let unreadable: unknown;
+      if (kind === "conversion") {
+        unreadable = { toJSON: fail, toString: fail };
+      } else if (kind === "proxy") {
+        const revocable = Proxy.revocable({}, {});
+        revocable.revoke();
+        unreadable = revocable.proxy;
+      } else {
+        unreadable = Object.defineProperty(new Error("hidden"), kind, { get: fail });
+      }
+      const args = ["before", unreadable, "after"];
+      const { seen } = withSilencedConsole(() => {
+        initConsoleBuffer({ maxMessageLength: 32 });
+        assert.doesNotThrow(() => console[level](...args));
+        assert.equal(getConsoleBuffer()[0]?.message, "before [Unserialisable] after");
+        console[level](...args, "x".repeat(100));
+      });
+      assert.equal(seen.length, 2);
+      for (const received of seen) {
+        args.forEach((arg, i) => assert.equal(received[i], arg));
+      }
+      assert.equal(getConsoleBuffer()[1]?.message, "before [Unserialisable] after xx");
+      assert.equal(getConsoleBuffer()[1]?.message.length, 32);
+    });
+  }
+
+  test(`${level} calls the original once even when recording itself fails`, () => {
+    const args = ["readable", { code: 42 }];
+    const { seen } = withSilencedConsole(() => {
+      initConsoleBuffer();
+      const original = Date.prototype.toISOString;
+      Date.prototype.toISOString = () => { throw new Error("clock failed"); };
+      try {
+        assert.doesNotThrow(() => console[level](...args));
+      } finally {
+        Date.prototype.toISOString = original;
+      }
+    });
+    assert.equal(seen.length, 1);
+    args.forEach((arg, i) => assert.equal(seen[0]?.[i], arg));
+    assert.equal(getConsoleBuffer().length, 0);
+  });
+}
+
 test("log and debug are deliberately not captured", () => {
   withSilencedConsole(() => {
     initConsoleBuffer();
