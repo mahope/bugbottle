@@ -66,6 +66,8 @@ export type QueuedReport = {
      * queue: every write names the ids it touches instead of replacing the array.
      */
     id: string;
+    /** Receiving URL. Missing on legacy records, which are never delivered automatically. */
+    endpoint?: string;
     /** Milliseconds since the epoch, for `maxAgeMs`. */
     at: number;
     body: BugReport & Record<string, unknown>;

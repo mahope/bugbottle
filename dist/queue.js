@@ -200,6 +200,16 @@ function resolveMaxEntries(requested) {
  * the tab becomes visible.
  */
 export function createQueue(options) {
+    let endpoint = options.endpoint;
+    try {
+        endpoint = new URL(endpoint, globalThis.document?.baseURI).href;
+    }
+    catch {
+        // Outside a browser, relative endpoints keep their exact supplied string.
+    }
+    const owns = (item) => item?.endpoint === endpoint &&
+        typeof item.id === "string" && typeof item.at === "number" &&
+        item.body !== null && typeof item.body === "object";
     const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
     const maxEntries = resolveMaxEntries(options.maxEntries);
     const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
@@ -219,21 +229,6 @@ export function createQueue(options) {
     let nextAttempt = 0;
     let timer = null;
     let destroyed = false;
-    /** What came out of storage, minus anything that is not a queued report. */
-    function sanitise(stored) {
-        if (!Array.isArray(stored))
-            return [];
-        return (stored
-            .filter((item) => typeof item === "object" &&
-            item !== null &&
-            typeof item.at === "number" &&
-            typeof item.body === "object" &&
-            item.body !== null)
-            // Reports queued by an older version have no id. Deriving one from the
-            // time they were queued keeps every tab naming the same item the same
-            // way, which is the whole job an id has here.
-            .map((item) => (typeof item.id === "string" ? item : { ...item, id: `old-${item.at}` })));
-    }
     function prune(list) {
         const oldest = Date.now() - maxAgeMs;
         const kept = list.filter((item) => item.at > oldest).sort((a, b) => a.at - b.at);
@@ -244,9 +239,12 @@ export function createQueue(options) {
     }
     /** One attempt at a stored write. A throw and a rejection mean the same thing. */
     function attempt(change, onRefused) {
-        const keep = (list) => void (items = list);
+        const keep = (list) => void (items = list.filter(owns));
         try {
-            const done = storage?.update(change);
+            const done = storage?.update((stored) => [
+                ...stored.filter((item) => !owns(item)),
+                ...change(stored.filter(owns)),
+            ]);
             if (done instanceof Promise)
                 return done.then(keep, onRefused);
             if (done)
@@ -274,13 +272,11 @@ export function createQueue(options) {
         // what the other tabs stored.
         let merged = null;
         const apply = (stored) => {
-            const map = new Map();
-            for (const item of sanitise(stored))
-                map.set(item.id, item);
+            const map = new Map(stored.map((item) => [item.id, item]));
             change?.(map);
             return (merged = prune([...map.values()]));
         };
-        if (!storage || !writable) {
+        if (!writable) {
             items = apply(items);
             return;
         }
@@ -302,7 +298,7 @@ export function createQueue(options) {
     /** Takes the oldest unclaimed report and writes the claim before returning it. */
     function claimNext() {
         const now = Date.now();
-        const picked = [];
+        let picked;
         // The map is in `at` order already: `prune` sorts before every write, so
         // that is the order storage is read back in, and a merged-in report from
         // another tab is by definition one of the newest.
@@ -311,13 +307,13 @@ export function createQueue(options) {
                 // Somebody is already delivering this one, or was until very recently.
                 if ((item.claimedAt ?? 0) + CLAIM_MS > now)
                     continue;
-                picked.push(item.id);
+                picked = item.id;
                 queue.set(item.id, { ...item, claimedAt: now });
                 return;
             }
         });
         // The merge prunes, so the item we picked may have been evicted by it.
-        return later(done, () => items.find((item) => item.id === picked[0]) ?? null);
+        return later(done, () => items.find((item) => item.id === picked) ?? null);
     }
     /** Hands a report back after a failed delivery, if it is still queued. */
     function release(item) {
@@ -400,7 +396,7 @@ export function createQueue(options) {
                                 Object.assign(headers, await options.sign(body));
                             // Signing cannot be cancelled, but an expired attempt must not send.
                             controller.signal.throwIfAborted();
-                            return doFetch(options.endpoint, init);
+                            return doFetch(endpoint, init);
                         })().then(resolve, reject);
                     });
                     // Rate limiting is temporary; other 4xx responses reject the report
@@ -458,7 +454,7 @@ export function createQueue(options) {
         // make it wait for a delivery that never started.
         if (typeof started === "number")
             return Promise.resolve(started);
-        pending = Promise.resolve(started).finally(() => {
+        pending = started.finally(() => {
             pending = null;
         });
         return pending;
@@ -492,7 +488,7 @@ export function createQueue(options) {
             // Nothing is measured here. A picture that fits is a picture worth
             // keeping, and only the storage knows whether it fits; the merge asks
             // it, and drops the pictures when the answer is no.
-            const item = { id: newId(), at: Date.now(), body: report };
+            const item = { id: newId(), endpoint, at: Date.now(), body: report };
             void commit((queue) => void queue.set(item.id, item));
         },
         flush,
@@ -501,8 +497,7 @@ export function createQueue(options) {
             failures = 0;
             nextAttempt = 0;
             stopTimer();
-            // Everything in the key, including whatever another tab put there: this
-            // is the reporter saying they want none of it sent.
+            // Other destinations and legacy reports have no place in this map.
             void commit((queue) => queue.clear());
         },
         destroy() {

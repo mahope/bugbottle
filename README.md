@@ -4130,6 +4130,25 @@ queue.clear();         // throw them away
 queue.destroy();       // remove the listeners; the reports stay in storage
 ```
 
+Each persisted entry carries its receiving `endpoint`. Queues sharing the default
+key, an explicit `storageKey`, or an injected async/IndexedDB `storage` only
+recover and deliver entries for their own destination. `size()`, `clear()`,
+`maxEntries`, `maxAgeMs` and screenshot removal on quota failure also apply only
+to that destination. Browser endpoints are resolved against `document.baseURI`
+when the queue is created; outside a browser, relative endpoints use the exact
+supplied string. Different destinations can safely share storage without
+remembering separate keys.
+
+Legacy entries without an `endpoint` stay untouched in storage and are excluded
+from delivery and queue size, even with an explicit custom key. Their original
+receiver cannot be inferred safely. To recover them, inspect the stored array
+and enqueue each verified body through a queue configured for its original
+receiver, then remove the legacy entry through your storage tooling (or discard
+it). This assigns both a destination and a fresh identity. Do not use the
+current endpoint unless you have verified it was their original destination.
+Old versions do not enforce this isolation; avoid running them against the same
+storage after upgrading.
+
 ### When the quota runs out
 
 `localStorage` is a few megabytes for the whole origin, shared with whatever

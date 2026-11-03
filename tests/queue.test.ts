@@ -265,7 +265,7 @@ test("a maxEntries that is not a number falls back to the default bound", () => 
 });
 
 test("a report older than maxAgeMs is dropped rather than sent", async () => {
-  const stale = JSON.stringify([{ at: Date.now() - 10_000, body: report("last week") }]);
+  const stale = JSON.stringify([{ id: "fixture", endpoint: "/api/feedback", at: Date.now() - 10_000, body: report("last week") }]);
   globals["localStorage"] = fakeStorage({ [KEY]: stale }).storage;
   const { fetch, calls } = fakeFetch(200);
   const queue = makeQueue({ endpoint: "/api/feedback", maxAgeMs: 1_000, fetch });
@@ -313,7 +313,7 @@ test("rubbish in the storage key is ignored rather than thrown", () => {
 });
 
 test("a queue flushes what it found in storage without being asked", async () => {
-  const waiting = JSON.stringify([{ at: Date.now(), body: report("from last time") }]);
+  const waiting = JSON.stringify([{ id: "fixture", endpoint: "/api/feedback", at: Date.now(), body: report("from last time") }]);
   globals["localStorage"] = fakeStorage({ [KEY]: waiting }).storage;
   const { fetch, calls } = fakeFetch(200);
   const queue = makeQueue({ endpoint: "/api/feedback", fetch });
@@ -382,7 +382,7 @@ test("two tabs queueing at once keep both reports", () => {
 });
 
 test("two tabs do not deliver the same queued report twice", async () => {
-  const waiting = JSON.stringify([{ id: "r1", at: Date.now(), body: report("only once") }]);
+  const waiting = JSON.stringify([{ endpoint: "/api/feedback", id: "r1", at: Date.now(), body: report("only once") }]);
   globals["localStorage"] = fakeStorage({ [KEY]: waiting }).storage;
   const first = fakeFetch(200);
   const second = fakeFetch(200);
@@ -483,7 +483,7 @@ test("a report delivered while the queue shifted under it is removed by identity
 });
 
 test("a storage that reads but refuses writes still delivers what it held", async () => {
-  const waiting = JSON.stringify([{ id: "r1", at: Date.now(), body: report("queued yesterday") }]);
+  const waiting = JSON.stringify([{ endpoint: "/api/feedback", id: "r1", at: Date.now(), body: report("queued yesterday") }]);
   const broken = fakeStorage({ [KEY]: waiting });
   broken.break();
   globals["localStorage"] = broken.storage;
@@ -883,4 +883,84 @@ test("a delivery attempt that is never answered is given up on rather than wedgi
   assert.equal(attempts, 1, "one attempt, and no retry inside the same flush");
   assert.equal(left, 1, "the report is still waiting rather than lost");
   assert.equal(queue.size(), 1, "the report is in the queue and no longer claimed");
+});
+
+for (const mode of ["localStorage", "custom key", "async storage"]) {
+  test(`destinations sharing ${mode} stay isolated`, async () => {
+    const local = fakeStorage();
+    globals["localStorage"] = local.storage;
+    let stored: QueuedReport[] = [];
+    const storage: QueueStorage | undefined = mode === "async storage" ? {
+      async update(change) { stored = change(stored); return stored; },
+    } : undefined;
+    const storageKey = mode === "custom key" ? "shared-custom" : undefined;
+    const a = makeQueue({ endpoint: "/receiver-a", storage, storageKey, fetch: fakeFetch(200).fetch });
+    a.enqueue(report("a"));
+    await until(() => a.size() === 1);
+    a.destroy();
+    const receiver = fakeFetch(200);
+    const b = makeQueue({ endpoint: "/receiver-b", storage, storageKey, maxEntries: 1, fetch: receiver.fetch });
+    await b.flush();
+    assert.equal(receiver.calls.length, 0);
+    b.enqueue(report("b-old"));
+    b.enqueue(report("b-new"));
+    await until(() => b.size() === 1);
+    await b.flush();
+    assert.deepEqual(receiver.calls.map((call) => [call.url, (call.body as BugReport).message]),
+      [["/receiver-b", "b-new"]]);
+    b.enqueue(report("clear b"));
+    b.clear();
+    await b.flush();
+    const recovered = fakeFetch(200);
+    const reload = makeQueue({ endpoint: "/receiver-a", storage, storageKey, fetch: recovered.fetch });
+    await reload.flush();
+    assert.deepEqual(recovered.calls.map((call) => [call.url, (call.body as BugReport).message]),
+      [["/receiver-a", "a"]]);
+  });
+}
+
+test("legacy reports without a destination are retained and never sent or cleared", async () => {
+  const legacy = { id: "legacy", at: Date.now(), body: report("unknown receiver") };
+  const local = fakeStorage({ [KEY]: JSON.stringify([legacy]) });
+  globals["localStorage"] = local.storage;
+  const receiver = fakeFetch(200);
+  const queue = makeQueue({ endpoint: "/receiver-b", fetch: receiver.fetch });
+  await queue.flush();
+  queue.clear();
+  assert.equal(receiver.calls.length, 0);
+  assert.equal(queue.size(), 0);
+  assert.deepEqual(JSON.parse(local.map.get(KEY)!), [legacy]);
+});
+
+test("quota fallback leaves another destination's picture and expired report untouched", () => {
+  const foreign = { id: "foreign", endpoint: "/receiver-a", at: 1,
+    body: { ...report("a"), screenshotDataUrl: "data:image/png;base64,AAAA" } };
+  const local = fakeStorage({ [KEY]: JSON.stringify([foreign]) }, 900);
+  globals["localStorage"] = local.storage;
+  const b = makeQueue({ endpoint: "/receiver-b", storageKey: KEY, maxAgeMs: 1000 });
+  b.enqueue({ ...report("b"), screenshotDataUrl: "data:image/png;base64," + "A".repeat(2000) });
+  const stored = JSON.parse(local.map.get(KEY)!) as QueuedReport[];
+  assert.deepEqual(stored[0], foreign);
+  assert.equal(stored[1]?.body.screenshotDataUrl, undefined);
+  assert.deepEqual(stored[1]?.body.notes, [SCREENSHOT_NOTE]);
+});
+
+test("relative destinations are resolved before persistence and stay fixed during delivery", async () => {
+  globals["document"] = { baseURI: "https://example.test/one/" };
+  try {
+    const local = fakeStorage();
+    globals["localStorage"] = local.storage;
+    const receiver = fakeFetch(200);
+    const a = makeQueue({ endpoint: "receiver", fetch: receiver.fetch });
+    a.enqueue(report("a"));
+    globals["document"] = { baseURI: "https://example.test/two/" };
+    const other = fakeFetch(200);
+    const b = makeQueue({ endpoint: "receiver", fetch: other.fetch });
+    await b.flush();
+    assert.equal(other.calls.length, 0);
+    await a.flush();
+    assert.equal(receiver.calls[0]?.url, "https://example.test/one/receiver");
+  } finally {
+    delete globals["document"];
+  }
 });

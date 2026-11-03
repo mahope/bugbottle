@@ -273,7 +273,7 @@ test("two tabs on one database do not deliver the same report twice", async () =
   globals["indexedDB"] = factory;
 
   // One report already waiting, exactly as a reload would find it.
-  stores.set(STORE, new Map([[KEY, [{ id: "r1", at: Date.now(), body: report("only once") }]]]));
+  stores.set(STORE, new Map([[KEY, [{ endpoint: "/api/feedback", id: "r1", at: Date.now(), body: report("only once") }]]]));
 
   const first = fakeFetch(200);
   const second = fakeFetch(200);
@@ -393,4 +393,30 @@ test("a connection another tab forces closed is reopened on the next write", asy
     ["before the upgrade", "after the upgrade"],
     "nothing was lost across the reopen",
   );
+});
+
+test("different endpoints sharing IndexedDB cannot send, clear or evict each other's reports", async () => {
+  const { factory, idle } = fakeIndexedDB();
+  globals["indexedDB"] = factory;
+  const a = makeQueue({ endpoint: "/receiver-a", storage: createIdbStorage() });
+  a.enqueue(report("a"));
+  await idle();
+  a.destroy();
+  const receiver = fakeFetch(200);
+  const b = makeQueue({ endpoint: "/receiver-b", storage: createIdbStorage(), maxEntries: 1,
+    fetch: receiver.fetch });
+  await b.flush();
+  assert.equal(receiver.calls.length, 0);
+  b.enqueue(report("b-old"));
+  b.enqueue(report("b-new"));
+  await idle();
+  await b.flush();
+  assert.deepEqual(receiver.calls.map((call) => call.body.message), ["b-new"]);
+  b.enqueue(report("clear b"));
+  b.clear();
+  await idle();
+  const recovered = fakeFetch(200);
+  const reload = makeQueue({ endpoint: "/receiver-a", storage: createIdbStorage(), fetch: recovered.fetch });
+  await reload.flush();
+  assert.deepEqual(recovered.calls.map((call) => call.body.message), ["a"]);
 });

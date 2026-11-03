@@ -68,6 +68,8 @@ export type QueuedReport = {
    * queue: every write names the ids it touches instead of replacing the array.
    */
   id: string;
+  /** Receiving URL. Missing on legacy records, which are never delivered automatically. */
+  endpoint?: string;
   /** Milliseconds since the epoch, for `maxAgeMs`. */
   at: number;
   body: BugReport & Record<string, unknown>;
@@ -323,6 +325,15 @@ function resolveMaxEntries(requested: number | undefined): number {
  * the tab becomes visible.
  */
 export function createQueue(options: QueueOptions): Queue {
+  let endpoint = options.endpoint;
+  try {
+    endpoint = new URL(endpoint, globalThis.document?.baseURI).href;
+  } catch {
+    // Outside a browser, relative endpoints keep their exact supplied string.
+  }
+  const owns = (item: QueuedReport): boolean => item?.endpoint === endpoint &&
+    typeof item.id === "string" && typeof item.at === "number" &&
+    item.body !== null && typeof item.body === "object";
   const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
   const maxEntries = resolveMaxEntries(options.maxEntries);
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
@@ -344,26 +355,6 @@ export function createQueue(options: QueueOptions): Queue {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
 
-  /** What came out of storage, minus anything that is not a queued report. */
-  function sanitise(stored: QueuedReport[]): QueuedReport[] {
-    if (!Array.isArray(stored)) return [];
-    return (
-      stored
-        .filter(
-          (item): item is QueuedReport =>
-            typeof item === "object" &&
-            item !== null &&
-            typeof (item as QueuedReport).at === "number" &&
-            typeof (item as QueuedReport).body === "object" &&
-            (item as QueuedReport).body !== null,
-        )
-        // Reports queued by an older version have no id. Deriving one from the
-        // time they were queued keeps every tab naming the same item the same
-        // way, which is the whole job an id has here.
-        .map((item) => (typeof item.id === "string" ? item : { ...item, id: `old-${item.at}` }))
-    );
-  }
-
   function prune(list: QueuedReport[]): QueuedReport[] {
     const oldest = Date.now() - maxAgeMs;
     const kept = list.filter((item) => item.at > oldest).sort((a, b) => a.at - b.at);
@@ -378,9 +369,12 @@ export function createQueue(options: QueueOptions): Queue {
     change: (stored: QueuedReport[]) => QueuedReport[],
     onRefused: () => MaybePromise<void>,
   ): MaybePromise<void> {
-    const keep = (list: QueuedReport[]): void => void (items = list);
+    const keep = (list: QueuedReport[]): void => void (items = list.filter(owns));
     try {
-      const done = storage?.update(change);
+      const done = storage?.update((stored) => [
+        ...stored.filter((item) => !owns(item)),
+        ...change(stored.filter(owns)),
+      ]);
       if (done instanceof Promise) return done.then(keep, onRefused);
       if (done) keep(done);
       return;
@@ -406,12 +400,11 @@ export function createQueue(options: QueueOptions): Queue {
     // what the other tabs stored.
     let merged: QueuedReport[] | null = null;
     const apply = (stored: QueuedReport[]): QueuedReport[] => {
-      const map = new Map<string, QueuedReport>();
-      for (const item of sanitise(stored)) map.set(item.id, item);
+      const map = new Map(stored.map((item) => [item.id, item]));
       change?.(map);
       return (merged = prune([...map.values()]));
     };
-    if (!storage || !writable) {
+    if (!writable) {
       items = apply(items);
       return;
     }
@@ -439,7 +432,7 @@ export function createQueue(options: QueueOptions): Queue {
   /** Takes the oldest unclaimed report and writes the claim before returning it. */
   function claimNext(): MaybePromise<QueuedReport | null> {
     const now = Date.now();
-    const picked: string[] = [];
+    let picked: string | undefined;
     // The map is in `at` order already: `prune` sorts before every write, so
     // that is the order storage is read back in, and a merged-in report from
     // another tab is by definition one of the newest.
@@ -447,13 +440,13 @@ export function createQueue(options: QueueOptions): Queue {
       for (const item of queue.values()) {
         // Somebody is already delivering this one, or was until very recently.
         if ((item.claimedAt ?? 0) + CLAIM_MS > now) continue;
-        picked.push(item.id);
+        picked = item.id;
         queue.set(item.id, { ...item, claimedAt: now });
         return;
       }
     });
     // The merge prunes, so the item we picked may have been evicted by it.
-    return later(done, () => items.find((item) => item.id === picked[0]) ?? null);
+    return later(done, () => items.find((item) => item.id === picked) ?? null);
   }
 
   /** Hands a report back after a failed delivery, if it is still queued. */
@@ -533,7 +526,7 @@ export function createQueue(options: QueueOptions): Queue {
               if (options.sign) Object.assign(headers, await options.sign(body));
               // Signing cannot be cancelled, but an expired attempt must not send.
               controller.signal.throwIfAborted();
-              return doFetch(options.endpoint, init);
+              return doFetch(endpoint, init);
             })().then(resolve, reject);
           });
           // Rate limiting is temporary; other 4xx responses reject the report
@@ -588,7 +581,7 @@ export function createQueue(options: QueueOptions): Queue {
     // attempt for the next flush to wait behind, and holding one here would
     // make it wait for a delivery that never started.
     if (typeof started === "number") return Promise.resolve(started);
-    pending = Promise.resolve(started as Promise<number>).finally(() => {
+    pending = (started as Promise<number>).finally(() => {
       pending = null;
     });
     return pending;
@@ -625,7 +618,7 @@ export function createQueue(options: QueueOptions): Queue {
       // Nothing is measured here. A picture that fits is a picture worth
       // keeping, and only the storage knows whether it fits; the merge asks
       // it, and drops the pictures when the answer is no.
-      const item: QueuedReport = { id: newId(), at: Date.now(), body: report };
+      const item: QueuedReport = { id: newId(), endpoint, at: Date.now(), body: report };
       void commit((queue) => void queue.set(item.id, item));
     },
     flush,
@@ -634,8 +627,7 @@ export function createQueue(options: QueueOptions): Queue {
       failures = 0;
       nextAttempt = 0;
       stopTimer();
-      // Everything in the key, including whatever another tab put there: this
-      // is the reporter saying they want none of it sent.
+      // Other destinations and legacy reports have no place in this map.
       void commit((queue) => queue.clear());
     },
     destroy() {

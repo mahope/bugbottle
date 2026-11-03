@@ -16,6 +16,12 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Isolate persisted queue reports by receiving endpoint, including shared custom
+  keys and async/IndexedDB storage. Clear, expiry, eviction and quota fallback
+  leave other destinations untouched. Legacy entries without a destination are
+  retained without automatic delivery; recovery requires explicitly verifying
+  their original endpoint and requeueing the bodies to it (#183).
+
 - Reject invalid GitHub Action report size limits before reading reports,
   preserving the 4096 KB default and positive whole-KB custom limits (#154).
 
