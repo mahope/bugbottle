@@ -120,8 +120,9 @@ export type QueueOptions = {
     /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
     credentials?: RequestCredentials;
     /**
-     * How long one delivery attempt may wait for an answer before it is called
-     * failed, released and retried. Default 30 seconds, the length of the claim
+     * How long one delivery attempt, including signing and fetching, may wait
+     * for an answer before it is called failed, released and retried.
+     * Default 30 seconds, the length of the claim
      * the attempt is holding: a claim nobody is using is the same as no claim, so
      * the two expire together on purpose.
      *

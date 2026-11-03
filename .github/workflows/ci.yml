@@ -139,8 +139,11 @@ jobs:
           # since it carries the same panel and the same eight languages; the
           # budget goes to 23040.
           # The same retry handling is included in the slim build (#116).
-          if [ "$slim" -gt 23296 ]; then
-            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23296" >&2
+          # #115 bounds signing as well as fetching and ignores late signer
+          # completion. The deadline promise and guard add about 50 bytes;
+          # the queue entry itself remains within its unchanged 2112 budget.
+          if [ "$slim" -gt 23360 ]; then
+            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23360" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp

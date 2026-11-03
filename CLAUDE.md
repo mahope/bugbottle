@@ -287,6 +287,9 @@ and the 429 exemption measure 2052 bytes with CI's esbuild 0.24.0 and gzip
 including the filename, leaving 2.9% headroom. Both submission
 paths retain 429 reports; other 4xx responses remain permanent rejections.
 The script-tag budgets rise to 26880 and 23296 bytes for the same handling.
+Signing shares the delivery deadline with fetching (#115); the deadline
+promise and late-signing guard add about 50 bytes to the slim build, whose
+budget is now 23360. The queue entry stays within 2112 bytes.
 Before that change, the queue measured
 1645 (1565 until 1.0 removed the `maxItems` alias and #98 gave it the
 `sign` seam — 26 bytes for one serialisation hoisted out of the request and one
