@@ -91,6 +91,8 @@ canvasProto.toDataURL = () => "data:image/png;base64,MARKED";
 
 /** The picture: 64x48, and one URL that refuses to load. */
 const BROKEN = "data:image/png;base64,broken";
+/** A picture that decodes a macrotask later, and is smaller than the others. */
+const LATE = "data:image/png;base64,late";
 class FakeImage {
   onload: (() => void) | null = null;
   onerror: ((error?: unknown) => void) | null = null;
@@ -103,8 +105,12 @@ class FakeImage {
       queueMicrotask(() => this.onerror?.(new Error("no")));
       return;
     }
-    this.naturalWidth = 64;
-    this.naturalHeight = 48;
+    this.naturalWidth = value === LATE ? 32 : 64;
+    this.naturalHeight = value === LATE ? 24 : 48;
+    if (value === LATE) {
+      setTimeout(() => this.onload?.(), 5);
+      return;
+    }
     queueMicrotask(() => this.onload?.());
   }
 }
@@ -330,6 +336,46 @@ test("destroy stops listening, and the canvas keeps what is on it", async () => 
   drag(canvas, 30, 30, 50, 40);
   assert.equal(annotator.count(), 1, "the drag after destroy draws nothing");
   assert.equal(annotator.toDataUrl(), "data:image/png;base64,MARKED");
+});
+
+test("destroy before the picture decodes: a late picture is ignored and ready rejects", async () => {
+  const canvas = freshCanvas();
+  const before = canvas.width;
+  const annotator = createAnnotator(canvas, PICTURE);
+  annotator.destroy();
+  annotator.destroy();
+
+  // The fake decodes on the next microtask; wait for it to have fired.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(canvas.width, before, "a late decode must not resize the canvas");
+  assert.equal(made("drawImage"), 0, "a late decode must not paint the canvas");
+  await assert.rejects(annotator.ready, /destroyed before the screenshot loaded/);
+});
+
+test("an earlier annotator's late picture cannot overwrite a later one on the same canvas", async () => {
+  const canvas = freshCanvas();
+  const earlier = createAnnotator(canvas, LATE);
+  earlier.destroy();
+  const later = createAnnotator(canvas, PICTURE);
+  await later.ready;
+  const size = [canvas.width, canvas.height];
+  const drawn = made("drawImage");
+
+  // Wait past the earlier picture's timer; it fires after the later one has drawn.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual([canvas.width, canvas.height], size, "the later picture keeps its size");
+  assert.equal(made("drawImage"), drawn, "the earlier picture paints nothing");
+  later.destroy();
+});
+
+test("ready rejected by destroy, with nobody awaiting it, is not an unhandled rejection", async () => {
+  const canvas = freshCanvas();
+  const annotator = createAnnotator(canvas, LATE);
+  annotator.destroy();
+
+  // Nothing awaits `ready`. An unhandled rejection would fail this run.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(annotator.count(), 0);
 });
 
 test("a picture that will not decode rejects rather than drawing nothing quietly", async () => {

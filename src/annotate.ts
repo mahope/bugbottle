@@ -44,7 +44,10 @@ export type AnnotatorOptions = {
 };
 
 export type Annotator = {
-  /** Resolves once the picture is drawn; rejects if the data URL will not load. */
+  /**
+   * Resolves once the picture is drawn. Rejects if the data URL will not load,
+   * or if `destroy()` runs before it has loaded, so it never stays pending.
+   */
   ready: Promise<void>;
   setTool(tool: AnnotateTool): void;
   getTool(): AnnotateTool;
@@ -97,9 +100,18 @@ export function createAnnotator(
 
   if (!canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
 
+  // The decode in flight, and the way to settle `ready` early. Both are cleared
+  // once they have been used, so `destroy()` only touches what is still pending.
+  let decoding: HTMLImageElement | null = null;
+  let abandon: ((error: Error) => void) | null = null;
+
   const ready = new Promise<void>((resolve, reject) => {
+    abandon = reject;
     const img = new Image();
+    decoding = img;
     img.onload = () => {
+      decoding = null;
+      abandon = null;
       image = img;
       canvas.width = img.naturalWidth || img.width;
       canvas.height = img.naturalHeight || img.height;
@@ -108,9 +120,17 @@ export function createAnnotator(
     };
     // A picture that will not decode is not the reporter's problem to solve;
     // the caller decides whether to say so or to drop the editor entirely.
-    img.onerror = () => reject(new Error("the screenshot could not be loaded"));
+    img.onerror = () => {
+      decoding = null;
+      abandon = null;
+      reject(new Error("the screenshot could not be loaded"));
+    };
     img.src = dataUrl;
   });
+  // A caller that destroys the editor first may never await `ready`, and a
+  // rejection nobody handles is reported as an error. Awaiting callers still
+  // see the rejection through their own `await`.
+  ready.catch(() => {});
 
   /** Replaces the region with the average colour of each block in it. */
   function pixelate(x: number, y: number, w: number, h: number): void {
@@ -281,6 +301,15 @@ export function createAnnotator(
       canvas.removeEventListener("pointerup", onUp);
       canvas.removeEventListener("pointercancel", onUp);
       canvas.removeEventListener("keydown", onKey as EventListener);
+      // A decode still in flight would otherwise resize the canvas and paint
+      // over whatever is on it by then — possibly another annotator's picture.
+      if (decoding) {
+        decoding.onload = null;
+        decoding.onerror = null;
+        decoding = null;
+      }
+      abandon?.(new Error("the annotator was destroyed before the screenshot loaded"));
+      abandon = null;
     },
   };
 }

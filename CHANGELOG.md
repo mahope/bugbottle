@@ -19,6 +19,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- `createAnnotator`'s `destroy()` cancels a picture that is still decoding: a
+  late decode no longer resizes or repaints the canvas, which could overwrite
+  another annotator's picture on the same canvas. `ready` rejects when destroy
+  wins the race instead of staying pending, and that rejection is handled
+  internally, so nothing is reported as unhandled (#224).
 - Isolate throwing element-picker hover observers so clicks, Escape and abort
   still clean up and settle the selection promise within the existing UI
   bundle budget (#196).
