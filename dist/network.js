@@ -193,12 +193,15 @@ function patchXhr() {
     const listening = new WeakSet();
     const era = generation;
     proto.open = function (method, url, ...rest) {
+        // Native reopen may synchronously end the old request. Keep its metadata
+        // until open succeeds; a thrown open must leave that request intact.
+        const result = openOriginal.call(this, method, url, ...rest);
         pending.set(this, {
             method: String(method ?? "GET").toUpperCase(),
             url: String(url ?? ""),
             started: Date.now(),
         });
-        return openOriginal.call(this, method, url, ...rest);
+        return result;
     };
     proto.send = function (body) {
         const request = pending.get(this);
@@ -213,6 +216,7 @@ function patchXhr() {
                     const current = pending.get(xhr);
                     if (!current || era !== generation)
                         return;
+                    pending.delete(xhr);
                     const status = Number(xhr.status) || 0;
                     record(current.method, current.url, status, Date.now() - current.started, status === 0);
                 });
