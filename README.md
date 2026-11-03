@@ -8480,6 +8480,33 @@ returns the validation exit status, but exports no step outputs. Set
 `GITHUB_OUTPUT` to a writable file path to append `valid-count=<number>` and
 `invalid-count=<number>` lines; no legacy stdout output commands are emitted.
 
+`reports-glob` matches the whole path relative to the workspace, using `/`
+as the directory separator. Matching is case-sensitive:
+
+| Pattern | Meaning |
+| --- | --- |
+| `*` | Zero or more characters within one path segment |
+| `?` | Exactly one character within one path segment |
+| `**` | Zero or more characters, including directory separators |
+| `**/` | Zero or more complete directory segments |
+
+For example, `reports/**/*.json` includes `reports/a.json`,
+`reports/nested/a.json` and deeper reports. `reports/*.json` includes only
+direct children. Neither matches `.txt` files or `reports-other/a.json`.
+Single `*` and `?` never cross `/` or `\`. Other characters, including regex
+punctuation, are literal; character classes, brace expansion, negation,
+escape syntax and multiple patterns are not supported. Dotfiles are included,
+but `.git` and `node_modules` directories are always skipped.
+
+`max-report-size-kb` defaults to `4096`, with 1 KB = 1024 bytes. Set it to a
+positive safe integer (at most `9007199254740991`), using decimal digits only.
+Fractional KB values are not supported: whole KB keeps the limit unambiguous
+and avoids silently rounding fractions. Text, numeric suffixes, zero, negatives,
+non-finite values and other number formats fail with a configuration error
+before any reports are scanned or read; report counts are not emitted.
+With a valid limit, files above it fail as `unreadable or oversized` and count
+toward `invalid-count`; files at or below it proceed to report validation.
+
 ## Who makes it
 
 Mads Holst Jensen, a freelance web and AI developer in Denmark. bugbottle came
