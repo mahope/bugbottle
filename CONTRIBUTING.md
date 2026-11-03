@@ -199,11 +199,31 @@ release separately. Gate fixtures run with `node --experimental-strip-types
   (axe over the panel's ten states and the site's thirty page-and-scheme
   runs, with the real security headers served, plus the reduced-motion duration
   check on both) and `npm run smoke:annotate`
-  (the blur destroyed the pixels it covered) in the Chrome the runner image
-  ships. `puppeteer-core` is installed globally there and downloads no browser;
+  (the blur destroyed the pixels it covered), plus `npm run smoke:region`
+  (scrolled area and element PNG pixels at DPR 1 and 2), in the Chrome shipped
+  with the runner image. `puppeteer-core` is installed globally there and downloads no browser;
   `scripts/chrome.mjs` finds the executable through `CHROME_BIN`, `CHROME_PATH`
   or the usual paths, which is the same lookup a local run uses. The axe
   reports are uploaded as an artifact when the job fails, and only then.
+
+The region screenshot smoke runs locally after `npm run build`:
+
+```bash
+npm run smoke:region
+```
+
+It uses the existing `html-to-image` dependency and the same Chrome lookup as
+the other browser audits. At device pixel ratios 1 and 2 it scrolls a coloured
+fixture, captures a dragged area and a selected element, decodes their PNGs,
+and checks dimensions, interior pixels and `screenshotRegion` metadata. It
+also compares masked input pixels and checks that Escape removes both selection
+overlays. Chrome and the localhost server are closed in `finally`, including
+when an assertion fails. No browser or package is downloaded by this command.
+
+To prove the pixel assertions detect a bad crop, run
+`npm run smoke:region -- --shift-crop`. This shifts the real crop by 24 source
+pixels in the in-memory test bundle and **must exit non-zero** on an interior
+pixel assertion. It does not change `dist/`.
 
 ## What fits
 
