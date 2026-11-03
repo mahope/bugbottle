@@ -19,6 +19,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Keep region renders within the 16,000,000-pixel ceiling on very long pages,
+  allowing ratios below 0.1 and rejecting invalid or unrepresentable page
+  sizes before rendering. Crops still use the actual rendered geometry (#205).
+
 - Redact sensitive query values in breadcrumb `from`/`to` URLs and console
   stack frame `file` URLs, including nested queries. Scrub frame function names
   as prose, preserve coordinates and query opt-outs, and leave the input

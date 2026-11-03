@@ -67,7 +67,8 @@ export declare function computeCropBox(rect: RegionRect, picture: PictureGeometr
  * The scale to render a page of this size at, before a crop: the device's
  * pixel ratio, so the crop is as sharp as what the reporter saw, lowered until
  * the whole render fits `maxPixels`. Never above 3, which is the densest
- * screen there is, and never zero.
+ * screen there is, and never zero. Throws RangeError for non-positive or
+ * non-finite dimensions, their area, or the pixel budget.
  */
 export declare function chooseRegionPixelRatio(width: number, height: number, devicePixelRatio: number, maxPixels?: number): number;
 export type SelectAreaOptions = {

@@ -107,7 +107,24 @@ test("a nonsense device pixel ratio is read as 1, and a huge one is capped at 3"
   assert.equal(chooseRegionPixelRatio(100, 100, Number.NaN), 1);
   assert.equal(chooseRegionPixelRatio(100, 100, 0), 1);
   assert.equal(chooseRegionPixelRatio(100, 100, 8), 3);
-  assert.equal(chooseRegionPixelRatio(0, 0, 2), 2, "an unknown size keeps the device's ratio");
-  assert.ok(chooseRegionPixelRatio(1e6, 1e6, 2) >= 0.1, "never zero, however large the page");
+});
+
+test("very large finite pages stay within the pixel ceiling without a scale floor", () => {
+  for (const [width, height] of [[2000, 1000000], [1e6, 1e6], [1e150, 1e150]]) {
+    const ratio = chooseRegionPixelRatio(width!, height!, 2);
+    assert.ok(ratio > 0 && ratio < 0.1);
+    assert.ok(width! * height! * ratio * ratio <= MAX_REGION_CANVAS_PIXELS);
+  }
+});
+
+test("invalid or unrepresentable dimensions and pixel budgets are rejected", () => {
+  for (const value of [0, -1, Number.NaN, Infinity, -Infinity]) {
+    assert.throws(() => chooseRegionPixelRatio(value, 100, 2), RangeError);
+    assert.throws(() => chooseRegionPixelRatio(100, value, 2), RangeError);
+    assert.throws(() => chooseRegionPixelRatio(100, 100, 2, value), RangeError);
+  }
+  assert.throws(() => chooseRegionPixelRatio(1e308, 1e308, 2), RangeError);
+  assert.throws(() => chooseRegionPixelRatio(Number.MIN_VALUE, Number.MIN_VALUE, 2), RangeError);
+  assert.throws(() => chooseRegionPixelRatio(1e150, 1e150, 2, Number.MIN_VALUE), RangeError);
 });
 

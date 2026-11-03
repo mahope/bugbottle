@@ -116,7 +116,8 @@ export function computeCropBox(
  * The scale to render a page of this size at, before a crop: the device's
  * pixel ratio, so the crop is as sharp as what the reporter saw, lowered until
  * the whole render fits `maxPixels`. Never above 3, which is the densest
- * screen there is, and never zero.
+ * screen there is, and never zero. Throws RangeError for non-positive or
+ * non-finite dimensions, their area, or the pixel budget.
  */
 export function chooseRegionPixelRatio(
   width: number,
@@ -127,9 +128,14 @@ export function chooseRegionPixelRatio(
   const wanted =
     Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? Math.min(devicePixelRatio, 3) : 1;
   const area = width * height;
-  if (!(area > 0)) return wanted;
-  const fits = Math.sqrt(maxPixels / area);
-  return Math.max(0.1, Math.min(wanted, fits));
+  if (![width, height, area, maxPixels].every((n) => Number.isFinite(n) && n > 0)) {
+    throw new RangeError("Region dimensions and pixel budget must be finite and positive");
+  }
+  // Leave room for floating-point rounding when the ratio is squared again.
+  const fits = Math.sqrt(maxPixels / area) / (1 + Number.EPSILON);
+  const ratio = Math.min(wanted, fits);
+  if (!(ratio > 0)) throw new RangeError("Region render scale is not representable");
+  return ratio;
 }
 
 export type SelectAreaOptions = {

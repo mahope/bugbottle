@@ -231,6 +231,31 @@ test("an area is rendered at the device pixel ratio and cut out at it", async ()
   });
 });
 
+test("a very long page requests a safe ratio and crops using the actual picture", async () => {
+  setRect(document.body, { left: 0, top: 0, width: 2000, height: 1000000 });
+  Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+  const pending = captureArea(async (_root, opts) => {
+    assert.ok(opts.pixelRatio > 0 && opts.pixelRatio < 0.1);
+    assert.ok(2000 * 1000000 * opts.pixelRatio ** 2 <= 16000000);
+    return "data:image/png;base64,W100x50000";
+  });
+  pointer(overlay()!, "pointerdown", 100, 100);
+  pointer(overlay()!, "pointerup", 500, 300);
+  const shot = await pending;
+  assert.equal(shot?.dataUrl, "data:image/png;base64,W20x10");
+  assert.deepEqual(calls[0]!.slice(2), [5, 5, 20, 10, 0, 0, 20, 10]);
+});
+
+test("invalid page dimensions reject capture before calling the renderer", async () => {
+  setRect(document.body, { left: 0, top: 0, width: Infinity, height: 1000000 });
+  const pending = captureArea(renderer);
+  const rejected = assert.rejects(pending, RangeError);
+  pointer(overlay()!, "pointerdown", 100, 100);
+  pointer(overlay()!, "pointerup", 500, 300);
+  await rejected;
+  assert.deepEqual(rendered, []);
+});
+
 test("annotate draws the rectangle on the whole page instead of cutting it out", async () => {
   const pending = captureArea(renderer, { annotate: true });
   const layer = overlay()!;

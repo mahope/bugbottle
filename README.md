@@ -6138,7 +6138,12 @@ The page is rendered the usual way — from the DOM, masked — and the rectangl
 is cut out of it on a canvas. The render is at the device's pixel ratio, so a
 crop on a 2x screen is as sharp as what the reporter saw, lowered when the
 whole page at that ratio would pass the 16 megapixels Safari on iOS allows a
-canvas. The scale is read back off the rendered picture rather than assumed, so
+canvas. Very long pages can use a ratio below 0.1 to stay within the
+16,000,000-pixel budget. Non-positive or non-finite dimensions, an overflowing
+or underflowing page area, and an unrepresentable scale reject with `RangeError`
+before the renderer is called. `chooseRegionPixelRatio` also rejects a
+non-positive or non-finite custom pixel budget.
+The scale is read back off the rendered picture rather than assumed, so
 a renderer that had to settle for less still crops the right pixels. A crop
 that is still over the size limit is halved, then quartered, before it gives up
 with `ScreenshotTooLargeError`, exactly as a whole page does.
