@@ -392,6 +392,9 @@ merged into the body — an app version, a tenant id), `headers` and
 The same state machine, as refs. `type` and `message` are writable, so
 `v-model` works on them directly.
 
+Run the [compiled Vue example](examples/vue/README.md) for a local form,
+receiver and browser submission smoke test.
+
 ```vue
 <script setup lang="ts">
 import { useBugReport } from "bugbottle/vue";
@@ -401,6 +404,9 @@ const report = useBugReport({
   endpoint: "/api/feedback",
   screenshot: htmlToImage, // leave out to disable screenshots
 });
+// Top-level refs are unwrapped by Vue templates, including v-model.
+const { message, isSending, statusMessage, canScreenshot, includeScreenshot,
+  screenshot, isPicking, elements } = report;
 </script>
 
 <template>
@@ -409,30 +415,30 @@ const report = useBugReport({
       {{ t }}
     </button>
 
-    <textarea v-model="report.message" />
+    <textarea v-model="message" />
 
-    <label v-if="report.canScreenshot">
+    <label v-if="canScreenshot">
       <input
         type="checkbox"
-        :checked="report.includeScreenshot"
+        :checked="includeScreenshot"
         @change="report.toggleScreenshot(($event.target as HTMLInputElement).checked)"
       />
       Attach a picture of this page
     </label>
-    <img v-if="report.screenshot" :src="report.screenshot" alt="" />
+    <img v-if="screenshot" :src="screenshot" alt="" />
 
     <button type="button" @click="report.pickElement()">
-      {{ report.isPicking ? "Click anything to attach it — Esc to stop" : "Point at the element" }}
+      {{ isPicking ? "Click anything to attach it — Esc to stop" : "Point at the element" }}
     </button>
     <ul>
-      <li v-for="(el, i) in report.elements" :key="i">
+      <li v-for="(el, i) in elements" :key="i">
         <code>{{ el.selector }}</code> {{ el.text }}
         <button type="button" @click="report.removeElement(i)">×</button>
       </li>
     </ul>
 
-    <p role="status">{{ report.statusMessage }}</p>
-    <button :disabled="report.isSending">Send</button>
+    <p role="status">{{ statusMessage }}</p>
+    <button :disabled="isSending">Send</button>
   </form>
 </template>
 ```
@@ -446,6 +452,9 @@ peer dependency, so nothing about it reaches a project that does not use it.
 
 The same state machine, as a readable store: `$form` for the values, the
 methods on `form` for everything the reporter does.
+
+Run the [compiled Svelte example](examples/svelte/README.md) for a local form,
+receiver and browser submission smoke test.
 
 ```svelte
 <script lang="ts">
@@ -8437,7 +8446,8 @@ endpoint exports reports as JSON files (e.g. into a repository or artifact)
 and you want malformed ones caught before they reach your issue tracker.
 
 ```yaml
-- uses: mahope/bugbottle@v0
+- uses: mahope/bugbottle/action@main
+  id: reports
   with:
     reports-glob: "reports/*.json"     # required
     require-screenshot: false          # fail reports without a screenshot
@@ -8445,7 +8455,26 @@ and you want malformed ones caught before they reach your issue tracker.
 ```
 
 Outputs `valid-count` and `invalid-count`. The job fails if any report is
-malformed or no files match. Zero dependencies — installs in about a second.
+malformed or no files match. Read the counts with
+`${{ steps.reports.outputs['valid-count'] }}` and
+`${{ steps.reports.outputs['invalid-count'] }}`. Counts are appended to the
+runner-provided `GITHUB_OUTPUT` file after validation, even when reports fail.
+Zero runtime dependencies.
+
+After checkout, this repository can invoke the action with `uses: ./action`.
+For standalone use, pass the same environment names the runner supplies
+(hyphens are preserved):
+
+```bash
+env 'INPUT_REPORTS-GLOB=reports/*.json' \
+  'INPUT_REQUIRE-SCREENSHOT=false' 'INPUT_MAX-REPORT-SIZE-KB=4096' \
+  node action/index.cjs
+```
+
+Without `GITHUB_OUTPUT`, standalone validation still prints its summary and
+returns the validation exit status, but exports no step outputs. Set
+`GITHUB_OUTPUT` to a writable file path to append `valid-count=<number>` and
+`invalid-count=<number>` lines; no legacy stdout output commands are emitted.
 
 `reports-glob` matches the whole path relative to the workspace, using `/`
 as the directory separator. Matching is case-sensitive:
