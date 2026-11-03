@@ -9,6 +9,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -567,3 +569,71 @@ test("a report stored while prune is deleting another is still listed", async ()
   );
   assert.ok(await store.read(stored.id), "the report stored during the prune is readable");
 });
+
+
+for (const code of ["EACCES", "EIO"]) {
+  test(`${code} directory failures reject initial callers and preserve a refreshed index`, async (t) => {
+    const dir = await scratch();
+    const existing = fileStore({ dir });
+    const { id } = await existing.store(report("Keep me"));
+    const before = await existing.list();
+    const failure = Object.assign(new Error("directory unavailable"), { code });
+    const mocked = t.mock.method(fs, "readdir", async () => { throw failure; });
+    syncBuiltinESMExports();
+    try {
+      for (const call of [
+        () => fileStore({ dir }).list(),
+        () => fileStore({ dir }).prune(),
+        () => fileStore({ dir }).remove(id),
+        () => fileStore({ dir }).store(report("Not written")),
+        () => existing.refresh(),
+      ]) await assert.rejects(call, (error) => error === failure);
+      assert.deepEqual(await existing.list(), before);
+    } finally {
+      mocked.mock.restore();
+      syncBuiltinESMExports();
+    }
+    assert.equal((await fileStore({ dir }).list()).length, 1);
+  });
+}
+
+for (const caller of ["remove", "age", "cap", "store"] as const) {
+  for (const extension of ["json", "png"]) {
+    test(`${caller} retains a retryable report after failed ${extension} deletion`, async (t) => {
+      const dir = await scratch();
+      const seed = fileStore({ dir });
+      const { id } = await seed.store(report("Old", daysAgo(5)), PNG);
+      await seed.store(report("New"));
+      const store = fileStore({ dir, maxReports: caller === "cap" || caller === "store" ? 1 : 0,
+        maxAgeDays: caller === "age" ? 1 : 0 });
+      await store.list();
+      const failure = Object.assign(new Error("deletion refused"), { code: "EACCES" });
+      const original = fs.rm;
+      const mocked = t.mock.method(fs, "rm", async (...args: Parameters<typeof fs.rm>) => {
+        const path = String(args[0]);
+        if (path.endsWith(extension === "json" ? `-${id}.json` : `${id}.png`)) throw failure;
+        return original(...args);
+      });
+      syncBuiltinESMExports();
+      try {
+        const action = caller === "remove" ? () => store.remove(id)
+          : caller === "store" ? () => store.store(report("Newest")) : () => store.prune();
+        await assert.rejects(action, (error) => error === failure);
+        const entry = (await store.list()).find((entry) => entry.id === id);
+        assert.ok(entry, "failed deletion remains discoverable");
+        assert.equal(entry.screenshot, extension === "png");
+        assert.ok(await store.read(id), "JSON remains readable");
+        const restarted = fileStore({ dir });
+        assert.equal((await restarted.list()).find((entry) => entry.id === id)?.screenshot,
+          extension === "png", "disk and index agree after partial deletion");
+      } finally {
+        mocked.mock.restore();
+        syncBuiltinESMExports();
+      }
+      if (caller === "remove") assert.equal(await store.remove(id), true);
+      else assert.ok(await store.prune() >= 1);
+      assert.equal((await store.list()).some((entry) => entry.id === id), false);
+      assert.equal((await readdir(dir)).includes(`${id}.png`), false);
+    });
+  }
+}
