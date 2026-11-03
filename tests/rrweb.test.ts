@@ -195,6 +195,69 @@ test("stop() twice stops the recorder once", () => {
   assert.equal(fake.stopped, 1);
 });
 
+test("a stopped recorder cannot emit into its replacement's replay", () => {
+  const a = fakeRecord();
+  attachRrweb(a.record);
+  const savedEmit = a.emit;
+  savedEmit(event(2, 1000), true);
+  resetRrweb();
+  const b = fakeRecord();
+  attachRrweb(b.record);
+  const snapshot = event(2, 2000);
+  b.emit(snapshot, true);
+  savedEmit(event(3, 3000));
+  savedEmit(event(2, 4000), true);
+  assert.deepEqual(getReplay()?.events, [snapshot]);
+  assert.deepEqual(buildReport({ type: "bug", message: "replacement" }).replay?.events, [snapshot]);
+});
+
+test("late emissions after reset cannot restore a replay", () => {
+  const fake = fakeRecord();
+  attachRrweb(fake.record);
+  resetRrweb();
+  fake.emit(event(2, 1000), true);
+  assert.equal(getReplay(), null);
+  assert.equal(buildReport({ type: "bug", message: "stopped" }).replay, undefined);
+});
+
+for (const throws of [false, true]) {
+  test(`stop-time emissions are ignored when stop ${throws ? "throws" : "returns"}`, () => {
+    const observed: unknown[] = [];
+    attachRrweb(({ emit }) => () => {
+      emit(event(2, 1000), true);
+      observed.push(getReplay(), buildReport({ type: "bug", message: "stopping" }).replay);
+      if (throws) throw new Error("stop refused");
+    });
+    resetRrweb();
+    assert.deepEqual(observed, [null, undefined]);
+    assert.equal(getReplay(), null);
+    assert.equal(isRrwebAttached(), false);
+  });
+}
+
+test("a synchronous startup snapshot is retained", () => {
+  const snapshot = event(2, 1000);
+  attachRrweb(({ emit }) => {
+    emit(snapshot, true);
+    return () => {};
+  });
+  assert.deepEqual(getReplay()?.events, [snapshot]);
+  assert.deepEqual(buildReport({ type: "bug", message: "started" }).replay?.events, [snapshot]);
+});
+
+test("failed startup discards synchronous and late emissions and unregisters replay", () => {
+  let savedEmit: RrwebRecordOptions["emit"] = () => {};
+  attachRrweb(({ emit }) => {
+    savedEmit = emit;
+    emit(event(2, 1000), true);
+    throw new Error("startup refused");
+  });
+  savedEmit(event(2, 2000), true);
+  assert.equal(isRrwebAttached(), false);
+  assert.equal(getReplay(), null);
+  assert.equal(buildReport({ type: "bug", message: "failed" }).replay, undefined);
+});
+
 test("a second attach does not start a second recorder", () => {
   const fake = fakeRecord();
   attachRrweb(fake.record);
