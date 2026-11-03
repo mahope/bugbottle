@@ -19,6 +19,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Isolate throwing element-picker hover observers so clicks, Escape and abort
+  still clean up and settle the selection promise (#196).
+
 - Drop screenshot regions together with pictures when queue storage refuses a
   write, preserving the remaining evidence and screenshot-loss note (#186).
 
