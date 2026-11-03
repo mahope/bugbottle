@@ -16,6 +16,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Require complete CI validation at the release SHA before npm publication,
+  and enforce version/tag consistency for manual releases too (#135).
 - Preserve the file-store index when directory access fails, and keep reports
   discoverable after failed deletion. Delete the PNG before the JSON so a
   partial deletion leaves a readable report that removal or retention can
