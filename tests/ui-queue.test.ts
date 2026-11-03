@@ -88,6 +88,54 @@ test("a failed send with a queue thanks the reporter with the queued message", a
   widget.destroy();
 });
 
+test("a failed send queues the async beforeSend copy", async () => {
+  const { queue, queued } = fakeQueue();
+  let calls = 0;
+  const widget = mountBugbottle({
+    endpoint: ENDPOINT,
+    queue,
+    beforeSend: async (report) => {
+      await Promise.resolve();
+      calls++;
+      return { ...report, message: "redacted" };
+    },
+    fetch: async () => { throw new TypeError("Failed to fetch"); },
+  });
+  try {
+    await fileReport(widget, "original test message");
+    assert.equal((queued[0] as { message: string }).message, "redacted");
+    assert.equal(calls, 1);
+  } finally {
+    widget.destroy();
+  }
+});
+
+for (const cancel of [true, false]) {
+  test(`the panel neither sends nor queues when beforeSend ${cancel ? "cancels" : "throws"}`, async () => {
+    const { queue, queued } = fakeQueue();
+    let requests = 0;
+    const widget = mountBugbottle({
+      endpoint: ENDPOINT,
+      queue,
+      beforeSend: async () => {
+        if (cancel) return null;
+        throw new Error("Hook failed");
+      },
+      fetch: async () => {
+        requests++;
+        return new Response("{}");
+      },
+    });
+    try {
+      await fileReport(widget, "original test message");
+      assert.equal(queued.length, 0);
+      assert.equal(requests, 0);
+    } finally {
+      widget.destroy();
+    }
+  });
+}
+
 test("a 4xx is shown as an error rather than queued", async () => {
   const { queue, queued } = fakeQueue();
   const widget = mountBugbottle({

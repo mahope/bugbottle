@@ -10,6 +10,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Preserve asynchronous `beforeSend` transformations when framework adapters
+  and the panel queue failed reports. Storage and retries use the approved payload without
+  running the hook twice; cancellation, hook errors and hook timeouts never
+  queue the original report (#114).
+
 - Build and stage `dist/` before the release checks, so `check:dist` can
   validate the new version against the index before committing and tagging.
 

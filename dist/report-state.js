@@ -221,12 +221,19 @@ export function createReportState(options) {
                     extra: opts.extra,
                     scrub: opts.scrub,
                 });
+                const beforeSend = opts.beforeSend;
                 const { id } = await sendReport(opts.endpoint, report, {
                     headers: opts.headers,
                     credentials: opts.credentials,
                     timeoutMs: opts.timeoutMs,
                     parseError: opts.parseError,
-                    beforeSend: opts.beforeSend,
+                    beforeSend: beforeSend && (async (payload) => {
+                        // Until the hook approves a payload, nothing is safe to queue.
+                        report = null;
+                        const decided = await beforeSend(payload);
+                        report = decided;
+                        return decided;
+                    }),
                     sign: opts.sign,
                 });
                 set({ status: { kind: "sent", id } });
