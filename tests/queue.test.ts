@@ -640,6 +640,63 @@ test("an asynchronous storage that refuses a write drops the picture too", async
   assert.deepEqual(stored[0]?.body.notes, [SCREENSHOT_NOTE]);
 });
 
+for (const asynchronous of [false, true]) {
+  test(`quota fallback removes regions with pictures (${asynchronous ? "async" : "sync"})`, async () => {
+    let stored: QueuedReport[] = [];
+    let refusePictures = false;
+    let refusals = 0;
+    const storage: QueueStorage = {
+      update(change) {
+        const write = () => {
+          const next = change(stored);
+          if (refusePictures && next.some((item) => item.body.screenshotDataUrl)) {
+            refusals++;
+            throw new Error("QuotaExceededError");
+          }
+          stored = JSON.parse(JSON.stringify(next)) as QueuedReport[];
+          return stored;
+        };
+        return asynchronous ? Promise.resolve().then(write) : write();
+      },
+    };
+    const queue = makeQueue({ endpoint: "/api/feedback", storage, fetch: fakeFetch(503).fetch });
+    const pictured = {
+      ...report("the crop explains the problem"),
+      screenshotDataUrl: "data:image/png;base64,AAAA",
+      screenshotRegion: {
+        mode: "area" as const,
+        rect: { x: 10, y: 20, width: 30, height: 40 },
+        viewport: { x: 10, y: 20, width: 30, height: 40 },
+      },
+      notes: ["Existing evidence note"],
+    };
+    queue.enqueue(pictured);
+    await until(() => stored.length === 1);
+    assert.deepEqual(stored[0]?.body, pictured, "a successful write keeps picture and region");
+
+    refusePictures = true;
+    const plain = report("no picture was taken");
+    queue.enqueue(plain);
+    await until(() => stored.length === 2);
+    const { screenshotDataUrl: _picture, screenshotRegion: _region, ...evidence } = pictured;
+    const expected = { ...evidence, notes: [...pictured.notes, SCREENSHOT_NOTE] };
+    assert.deepEqual(stored[0]?.body, expected, "only picture and region are removed");
+    assert.deepEqual(stored[1]?.body, plain, "reports without pictures are unchanged");
+
+    queue.enqueue(pictured);
+    await until(() => stored.length === 3);
+    assert.equal(refusals, 2, "two separate writes invoked quota fallback");
+    assert.deepEqual(stored.map((item) => item.body), [expected, plain, expected]);
+    queue.destroy();
+
+    const { fetch, calls } = fakeFetch(200);
+    const reloaded = makeQueue({ endpoint: "/api/feedback", storage, fetch });
+    assert.equal(await reloaded.flush(), 0);
+    assert.deepEqual(calls.map((call) => call.body), [expected, plain, expected]);
+    assert.deepEqual(stored, []);
+  });
+}
+
 test("a storage need only implement update", () => {
   // `read` was in the seam and never called: every path through the queue goes
   // through `update`, because it is the one that cannot race. A storage that
