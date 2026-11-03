@@ -180,10 +180,8 @@ function patchXhr() {
     const proto = ctor.prototype;
     const openOriginal = proto.open;
     const sendOriginal = proto.send;
-    // A WeakMap rather than a property on the instance: the host's object is not
-    // ours to add fields to, and a request that is never sent is collected as if
-    // this module had never seen it.
     const pending = new WeakMap();
+    const opening = new WeakMap();
     // An XMLHttpRequest is reusable: the same object can be opened and sent
     // again and again. One `loadend` listener per `send` meant the second
     // request reported itself twice and the third three times, each copy timed
@@ -193,17 +191,31 @@ function patchXhr() {
     const listening = new WeakSet();
     const era = generation;
     proto.open = function (method, url, ...rest) {
-        // Native reopen may synchronously end the old request. Keep its metadata
-        // until open succeeds; a thrown open must leave that request intact.
-        const result = openOriginal.call(this, method, url, ...rest);
-        pending.set(this, {
+        // Old completion events still read pending; a send from OPENED instead
+        // commits the candidate before native open has returned.
+        const candidate = {
             method: String(method ?? "GET").toUpperCase(),
             url: String(url ?? ""),
-            started: Date.now(),
-        });
-        return result;
+            started: 0,
+        };
+        opening.set(this, candidate);
+        try {
+            const result = openOriginal.call(this, method, url, ...rest);
+            // A synchronous send may already have completed and removed pending.
+            if (opening.get(this) === candidate)
+                pending.set(this, candidate);
+            return result;
+        }
+        finally {
+            opening.delete(this);
+        }
     };
     proto.send = function (body) {
+        const candidate = opening.get(this);
+        if (candidate) {
+            opening.delete(this);
+            pending.set(this, candidate);
+        }
         const request = pending.get(this);
         if (request) {
             request.started = Date.now();

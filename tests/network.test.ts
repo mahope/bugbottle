@@ -40,6 +40,7 @@ type FakeXhr = EventTarget & {
   listeners: number;
   openError?: Error;
   endOnOpen: boolean;
+  readyState: number;
   open(method: string, url: string): void;
   send(body?: unknown): void;
   /** Ends the request the way the browser would, through `loadend`. */
@@ -73,6 +74,7 @@ function withBrowser(fn: (env: Browser) => Promise<void> | void): Promise<void> 
     listeners = 0;
     openError?: Error;
     endOnOpen = false;
+    readyState = 0;
     override addEventListener(type: string, fn: EventListenerOrEventListenerObject | null): void {
       this.listeners += 1;
       super.addEventListener(type, fn);
@@ -85,6 +87,8 @@ function withBrowser(fn: (env: Browser) => Promise<void> | void): Promise<void> 
       }
       this.method = method;
       this.url = url;
+      this.readyState = 1;
+      this.dispatchEvent(new Event("readystatechange"));
     }
     send(_body?: unknown): void {
       // A real XMLHttpRequest sends; this one waits to be told how it ended.
@@ -503,6 +507,36 @@ test("synchronous reopen lifecycle events belong to the old XMLHttpRequest", asy
     assert.equal(xhr.listeners, 1);
   });
 });
+
+for (const reuse of ["fresh", "completed", "active"] as const) {
+  for (const synchronous of [false, true]) {
+    test(`send during native open records ${reuse} XHR (${synchronous ? "sync" : "async"} completion)`, async () => {
+      await withBrowser(async ({ Xhr }) => {
+        initNetwork({ all: true });
+        const xhr = new Xhr();
+        if (reuse !== "fresh") {
+          xhr.open("GET", "/old");
+          xhr.send();
+          if (reuse === "completed") await xhr.finish(200);
+          else xhr.endOnOpen = true;
+        }
+        xhr.addEventListener("readystatechange", () => {
+          if (xhr.readyState !== 1) return;
+          xhr.send();
+          if (synchronous) void xhr.finish(500);
+        });
+        xhr.open("POST", "/from-open-handler");
+        if (!synchronous) await xhr.finish(500);
+        assert.deepEqual(getNetwork().map(({ method, url, status }) => ({ method, url, status })), [
+          ...(reuse === "fresh" ? [] : [{ method: "GET", url: "/old", status: reuse === "active" ? 0 : 200 }]),
+          { method: "POST", url: "/from-open-handler", status: 500 },
+        ]);
+        xhr.dispatchEvent(new Event("loadend"));
+        assert.equal(getNetwork().length, reuse === "fresh" ? 1 : 2);
+      });
+    });
+  }
+}
 
 test("a request in flight across a reset lands in no buffer at all", async () => {
   await withBrowser(async ({ answer }) => {
