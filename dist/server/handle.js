@@ -17,6 +17,7 @@
  * report that was already stored, and an unexpected error answers 500 without
  * telling the reporter what broke.
  */
+import { notifyObserver } from "./observer.js";
 import { decodeScreenshotDataUrl, isReportType, normaliseBreadcrumbs, normaliseConsole, normaliseContact, normaliseContext, normaliseElements, normaliseMessage, normaliseNetwork, normaliseNotes, normalisePerf, normaliseReplay, normaliseScreenshotRegion, normaliseStorage, InvalidScreenshotError, } from "../report-core.js";
 import { fingerprint } from "../fingerprint.js";
 import { hmacHex, DEFAULT_SIGNATURE_HEADER } from "../sign.js";
@@ -412,7 +413,7 @@ async function overRateLimit(request, address, options, onError) {
             // Fails open, unlike the replay store: a rate limit exists to stop a
             // flood, and answering 429 to an honest reporter because Redis blinked
             // loses the one report that was worth having.
-            onError?.(err);
+            notifyObserver(onError, err);
             return false;
         }
     }
@@ -675,7 +676,7 @@ export async function handleReport(request, options = {}) {
         catch (err) {
             // The answer is already decided. A hook that throws is the operator's
             // bug to read, never the reporter's 500.
-            options.onError?.(err);
+            notifyObserver(options.onError, err);
         }
         return response;
     };
@@ -777,7 +778,7 @@ export async function handleReport(request, options = {}) {
                     // Fails open. A duplicate costs a row and an email; a store that is
                     // down, or answering with something else entirely, must not cost the
                     // report itself.
-                    options.onError?.(err);
+                    notifyObserver(options.onError, err);
                 }
             }
             else {
@@ -820,7 +821,7 @@ export async function handleReport(request, options = {}) {
             catch (err) {
                 // The bucket being down is not the reporter losing their report. The
                 // message is still stored and still delivered, only without a picture.
-                options.onError?.(err);
+                notifyObserver(options.onError, err);
             }
             if (!screenshotUrl)
                 delete report.screenshotRegion;
@@ -847,7 +848,7 @@ export async function handleReport(request, options = {}) {
                 catch (err) {
                     // The report is stored and about to be delivered. A store that could
                     // not remember it only means the next copy is answered as new.
-                    options.onError?.(err);
+                    notifyObserver(options.onError, err);
                 }
             }
             else {
@@ -872,7 +873,7 @@ export async function handleReport(request, options = {}) {
                 // A report that is already stored must not be lost to a webhook that
                 // was revoked last week.
                 sinkErrors.push(err);
-                options.onSinkError?.(err, i);
+                notifyObserver(options.onSinkError, err, i);
             }
         }
         const result = { report, id, screenshot, screenshotUrl, markdown, sinkErrors };
@@ -884,7 +885,7 @@ export async function handleReport(request, options = {}) {
         return decide(id === undefined ? json({}, 202, cors) : json({ id }, 201, cors), reason, id);
     }
     catch (err) {
-        options.onError?.(err);
+        notifyObserver(options.onError, err);
         // Whatever broke, its message is ours and not the reporter's to read.
         return decide(json({ error: "Could not store the report" }, 500, cors), "error");
     }

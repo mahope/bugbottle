@@ -42,6 +42,7 @@
  * `onError`, because a mounting mistake and a forged signature look identical
  * on the wire and should not look identical in the log.
  */
+import { notifyObserver } from "./observer.js";
 import { handleReport, clientScheme, BAD_SIGNATURE_ERROR, DEFAULT_MAX_BODY_BYTES, TOO_LARGE_ERROR, } from "./handle.js";
 import { RawBodyTimeoutError, timedChunks, stopAfterReply } from "./raw-body.js";
 import { DEFAULT_SIGNATURE_HEADER } from "../sign.js";
@@ -178,7 +179,7 @@ export function fastifyHandler(options = {}) {
                 if (signed || signature.require !== false) {
                     if (!warnedAboutParsedBody) {
                         warnedAboutParsedBody = true;
-                        options.onError?.(new Error("bugbottle: fastifyHandler cannot verify a signature on a body Fastify's " +
+                        notifyObserver(options.onError, new Error("bugbottle: fastifyHandler cannot verify a signature on a body Fastify's " +
                             "JSON content-type parser already turned into an object — re-serialising " +
                             "it gives different bytes and a different HMAC. Add a parser that keeps " +
                             'the text: fastify.addContentTypeParser("application/json", ' +
@@ -238,7 +239,7 @@ export function fastifyHandler(options = {}) {
         })().catch((err) => {
             // Only the translation can fail here — handleReport answers 500 itself —
             // but a rejected promise in a route is a crashed process in Node.
-            options.onError?.(err);
+            notifyObserver(options.onError, err);
             try {
                 if (reply.status)
                     reply.status(500);

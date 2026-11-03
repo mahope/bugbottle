@@ -26,6 +26,7 @@
  * because it is a mounting mistake and not an event: the second copy of the
  * line tells nobody anything the first did not.
  */
+import { notifyObserver } from "./observer.js";
 import { handleReport, clientScheme, BAD_SIGNATURE_ERROR, DEFAULT_MAX_BODY_BYTES, TOO_LARGE_ERROR, } from "./handle.js";
 import { RawBodyTimeoutError, timedChunks, stopAfterReply } from "./raw-body.js";
 import { DEFAULT_SIGNATURE_HEADER } from "../sign.js";
@@ -171,7 +172,7 @@ export function expressHandler(options = {}) {
                 if (signed || signature.require !== false) {
                     if (!warnedAboutParsedBody) {
                         warnedAboutParsedBody = true;
-                        options.onError?.(new Error("bugbottle: expressHandler cannot verify a signature on a body that " +
+                        notifyObserver(options.onError, new Error("bugbottle: expressHandler cannot verify a signature on a body that " +
                             "express.json() (or another parser) already turned into an object — " +
                             "re-serialising it gives different bytes and a different HMAC. Mount " +
                             "the signed route without a body parser: " +
@@ -228,7 +229,7 @@ export function expressHandler(options = {}) {
         })().catch((err) => {
             // Only the translation can fail here — handleReport answers 500 itself —
             // but a rejected promise in a route is a crashed process in Node.
-            options.onError?.(err);
+            notifyObserver(options.onError, err);
             try {
                 res.status(500);
                 res.send(JSON.stringify({ error: "Could not store the report" }));

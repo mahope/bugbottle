@@ -12,6 +12,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 - Packed-consumer HTTP coverage for Express 5.2.1 and Fastify 5.12.6, including
   parser boundaries, signatures, persistence and OPTIONS/CORS in CI (#155).
+- Isolated packed React 18.3.1 and 19.3.0 consumers covering mounted StrictMode
+  forms, pending-delivery unmount/remount and matching TypeScript types (#156).
 
 - Real Chrome coverage for IndexedDB queue persistence with screenshots,
   concurrent tab enqueues and successful concurrent flushes. The browser CI
@@ -19,6 +21,21 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Drop screenshot regions together with pictures when queue storage refuses a
+  write, preserving the remaining evidence and screenshot-loss note (#186).
+
+- Ignore emissions from stopped or failed rrweb recorder attachments, keeping
+  replacement sessions isolated while retaining synchronous startup snapshots (#174).
+
+- Reject invalid GitHub Action report size limits before reading reports,
+  preserving the 4096 KB default and positive whole-KB custom limits (#154).
+
+- Match reports in the parent directory with Action globstars (`reports/**/*.json`),
+  and keep `?` within one path segment. Document and test the supported glob
+  dialect without adding dependencies (#153).
+- Read GitHub Action inputs with the runner's hyphenated environment names
+  and append validation counts to `GITHUB_OUTPUT` instead of legacy stdout
+  commands (#152).
 - Require complete CI validation at the release SHA before npm publication,
   and enforce version/tag consistency for manual releases too (#135).
 - Preserve the file-store index when directory access fails, and keep reports

@@ -468,9 +468,9 @@ export type HandleReportOptions = {
     } | void;
     /** Deliveries, run in order after `store`. A failure is collected, not thrown. */
     sinks?: ReportSink[];
-    /** Called once per failed sink, with its position in `sinks`. */
+    /** Called once per failed sink, with its position in `sinks`. Synchronous throws are ignored. */
     onSinkError?: (error: unknown, index: number) => void;
-    /** Called for anything unexpected, before the 500 goes out. */
+    /** Called for unexpected errors, including fail-open diagnostics. Synchronous throws are ignored. */
     onError?: (error: unknown) => void;
     /**
      * Called once per request with what was decided and why — an audit line or

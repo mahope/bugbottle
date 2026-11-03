@@ -4052,6 +4052,10 @@ const { id } = await sendReport("/api/feedback", report);
 `sendReport` resolves on a 2xx, throws `SendFailedError` (with `status` and
 the parsed body) on anything else, gives up with `SendTimeoutError` after
 15 seconds (`timeoutMs`), and lets network errors through untouched.
+The deadline and caller cancellation also apply while reading the response body.
+Empty and non-JSON successful responses return `body: null`. A client timeout
+cannot tell you whether the receiver already stored the report; retrying may
+create a duplicate.
 `captureScreenshot` estimates from the capture area whether a full-scale render
 would be larger than a server would accept, and starts at half scale when it
 would — rendering is expensive, so a page that was never going to fit should
@@ -4139,8 +4143,8 @@ or two on its own. A write is refused sooner than anyone expects — and until
 the next reload, which is exactly what an outage ends in.
 
 It costs the picture instead. When the storage refuses a write, the queue
-writes the same reports again without their screenshots and leaves a line on
-each one it took a picture from:
+writes the same reports again without their screenshots or screenshot regions
+and leaves a line on each one it took a picture from:
 
 ```jsonc
 "notes": ["Screenshot dropped: it did not fit in the offline queue."]
@@ -6537,6 +6541,15 @@ A hook that throws is caught, passed to `onError` and forgotten. The answer is
 already decided by then, and an audit sink being down is not the reporter
 losing their report.
 
+Receiver `onError` and `onSinkError` callbacks are diagnostic observers.
+Synchronous exceptions they throw are ignored, including in Express/Fastify
+adapter diagnostics and fail-open shared-store paths. They cannot replace the
+original error, change the response, or stop later sinks. If `onDecision`
+throws, `onError` receives that error once; even if it throws too, the original
+decision and response stand. These callbacks are synchronous; returned promises
+are not awaited. Functional hooks such as `store`, `authorize` and `respond`
+retain their normal failure handling.
+
 ### A directory of files
 
 `store` is a function you write, and for a great many deployments the function
@@ -8460,7 +8473,8 @@ endpoint exports reports as JSON files (e.g. into a repository or artifact)
 and you want malformed ones caught before they reach your issue tracker.
 
 ```yaml
-- uses: mahope/bugbottle@v0
+- uses: mahope/bugbottle/action@main
+  id: reports
   with:
     reports-glob: "reports/*.json"     # required
     require-screenshot: false          # fail reports without a screenshot
@@ -8468,7 +8482,53 @@ and you want malformed ones caught before they reach your issue tracker.
 ```
 
 Outputs `valid-count` and `invalid-count`. The job fails if any report is
-malformed or no files match. Zero dependencies — installs in about a second.
+malformed or no files match. Read the counts with
+`${{ steps.reports.outputs['valid-count'] }}` and
+`${{ steps.reports.outputs['invalid-count'] }}`. Counts are appended to the
+runner-provided `GITHUB_OUTPUT` file after validation, even when reports fail.
+Zero runtime dependencies.
+
+After checkout, this repository can invoke the action with `uses: ./action`.
+For standalone use, pass the same environment names the runner supplies
+(hyphens are preserved):
+
+```bash
+env 'INPUT_REPORTS-GLOB=reports/*.json' \
+  'INPUT_REQUIRE-SCREENSHOT=false' 'INPUT_MAX-REPORT-SIZE-KB=4096' \
+  node action/index.cjs
+```
+
+Without `GITHUB_OUTPUT`, standalone validation still prints its summary and
+returns the validation exit status, but exports no step outputs. Set
+`GITHUB_OUTPUT` to a writable file path to append `valid-count=<number>` and
+`invalid-count=<number>` lines; no legacy stdout output commands are emitted.
+
+`reports-glob` matches the whole path relative to the workspace, using `/`
+as the directory separator. Matching is case-sensitive:
+
+| Pattern | Meaning |
+| --- | --- |
+| `*` | Zero or more characters within one path segment |
+| `?` | Exactly one character within one path segment |
+| `**` | Zero or more characters, including directory separators |
+| `**/` | Zero or more complete directory segments |
+
+For example, `reports/**/*.json` includes `reports/a.json`,
+`reports/nested/a.json` and deeper reports. `reports/*.json` includes only
+direct children. Neither matches `.txt` files or `reports-other/a.json`.
+Single `*` and `?` never cross `/` or `\`. Other characters, including regex
+punctuation, are literal; character classes, brace expansion, negation,
+escape syntax and multiple patterns are not supported. Dotfiles are included,
+but `.git` and `node_modules` directories are always skipped.
+
+`max-report-size-kb` defaults to `4096`, with 1 KB = 1024 bytes. Set it to a
+positive safe integer (at most `9007199254740991`), using decimal digits only.
+Fractional KB values are not supported: whole KB keeps the limit unambiguous
+and avoids silently rounding fractions. Text, numeric suffixes, zero, negatives,
+non-finite values and other number formats fail with a configuration error
+before any reports are scanned or read; report counts are not emitted.
+With a valid limit, files above it fail as `unreadable or oversized` and count
+toward `invalid-count`; files at or below it proceed to report validation.
 
 ## Who makes it
 

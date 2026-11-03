@@ -21,6 +21,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 **Unreleased** — packed-consumer localhost Express and Fastify adapter coverage
 for persistence, signatures, parser limits and OPTIONS/CORS (#155).
 
+**Unreleased** — packed React 18.3.1 and 19.3.0 consumers check StrictMode
+forms, pending-delivery cleanup, remount and matching TypeScript types (#156).
+
 **Unreleased** — form reset and destroy detach pending submissions while
 preserving original delivery and queue ownership; Svelte adapter coverage (#133).
 
@@ -267,7 +270,11 @@ script-tag builds grew by the three bytes of that parameter.
 
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
-Action `mahope/bugbottle@v0` that validates exported reports in CI.
+Action `mahope/bugbottle@v0` that validates exported reports in CI. Its documented
+glob dialect supports `*`, `?`, `**` and `**/`, including reports directly in
+the search directory for recursive patterns (#153). Report size limits reject
+invalid configuration before accessing files and accept positive whole KB,
+with a 4096 KB default (#154).
 
 **Alongside** — `examples/inbox`: a dependency-free Node server that receives
 reports with `handleReport`, writes each one to disk as JSON beside its PNG,

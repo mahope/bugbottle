@@ -7,8 +7,8 @@
  * and never breaks on a transitive dependency. Kept in sync by a unit test
  * in the parent repo that compares behaviour against report-core itself.
  *
- * Memory note: @actions/core is avoided on purpose — stdout workflow commands
- * (::set-output, ::error) do the same job without the dependency.
+ * Memory note: @actions/core is avoided on purpose — runner output files and
+ * stdout error annotations need no dependency.
  */
 'use strict';
 const fs = require('fs');
@@ -22,7 +22,7 @@ const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
 const MAX_SCREENSHOT_DATA_URL_LENGTH = 2_900_000;
 
 function setInput(name, fallback) {
-  const key = 'INPUT_' + name.toUpperCase().replace(/-/g, '_');
+  const key = 'INPUT_' + name.toUpperCase();
   const v = process.env[key];
   return v === undefined || v === '' ? fallback : v;
 }
@@ -32,7 +32,9 @@ function fail(msg) {
 }
 
 function setOutput(name, value) {
-  process.stdout.write(`::set-output name=${name}::${value}\n`);
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`, 'utf8');
+  }
 }
 
 /** Mirrors normaliseMessage in report-core.ts. */
@@ -105,10 +107,11 @@ function validateReport(report, { requireScreenshot }) {
 /** Minimal glob: supports **, * and ? — no dependency on minimatch. */
 function globToRegExp(pattern) {
   const esc = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '\u0000')
-    .replace(/\*/g, '[^/\\\\]*')
-    .replace(/\u0000/g, '.*')
-    .replace(/\?/g, '.');
+    .replace(/\*\*\/|\*\*|\*|\?/g, (wildcard) => {
+      if (wildcard === '**/') return '(?:[^/\\\\]+/)*';
+      if (wildcard === '**') return '[\\s\\S]*';
+      return wildcard === '*' ? '[^/\\\\]*' : '[^/\\\\]';
+    });
   return new RegExp(`^${esc}$`);
 }
 
@@ -125,7 +128,13 @@ function walk(dir, out) {
 function main() {
   const glob = setInput('reports-glob', null);
   const requireScreenshot = String(setInput('require-screenshot', 'false')) === 'true';
-  const maxKb = parseInt(setInput('max-report-size-kb', '4096'), 10);
+  const maxKbInput = setInput('max-report-size-kb', '4096');
+  const maxKb = Number(maxKbInput);
+
+  if (/[^0-9]/.test(maxKbInput) || !Number.isSafeInteger(maxKb) || maxKb <= 0) {
+    fail('configuration error: max-report-size-kb must be a positive safe integer in KB (whole decimal digits only; default 4096)');
+    process.exit(1);
+  }
 
   if (!glob) {
     fail("input 'reports-glob' is required (e.g. reports/*.json)");
