@@ -1,5 +1,8 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import ts from "typescript";
 import Ajv2020 from "ajv/dist/2020.js";
 import { buildReportSchema } from "../scripts/build-schema.ts";
 import {
@@ -148,6 +151,57 @@ test("a single group larger than the cap is not sent at all", () => {
   fake.emit(event(2, t0, 2000), true);
   assert.equal(getReplay(), null);
 });
+
+// Inspect retained references without exposing buffer internals in the public API
+// or relying on garbage collection timing.
+function inspectedBuffer() {
+  const source = readFileSync(new URL("../src/rrweb.ts", import.meta.url), "utf8");
+  const { outputText } = ts.transpileModule(
+    source + "\nexport function retained() { return groups.flatMap(g => g.events); }",
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+  );
+  const exports = {} as typeof import("../src/rrweb.ts") & { retained(): RrwebEvent[] };
+  new Function("require", "exports", outputText)(
+    createRequire(new URL("../src/rrweb.ts", import.meta.url)), exports,
+  );
+  return exports;
+}
+
+for (const oversizedSnapshot of [true, false]) {
+  test(`overflow releases retained events after ${oversizedSnapshot ? "one large snapshot" : "incremental growth"}`, () => {
+    const buffer = inspectedBuffer();
+    const fake = fakeRecord();
+    buffer.attachRrweb(fake.record, { maxBytes: 500 });
+    try {
+      fake.emit(event(2, 1000, oversizedSnapshot ? 2000 : 100), true);
+      if (!oversizedSnapshot) {
+        assert.equal(buffer.retained().length, 1);
+        fake.emit(event(3, 2000, 400));
+      }
+      assert.deepEqual(buffer.retained(), []);
+      for (let i = 0; i < 10_000; i += 1) {
+        fake.emit(event(3, 3000 + i, 100));
+        assert.equal(buffer.retained().length, 0);
+      }
+      assert.equal(buffer.getReplay(), null);
+      // A checkout flag on an incremental event cannot restore a lost snapshot.
+      fake.emit(event(3, 14_000), true);
+      assert.deepEqual(buffer.retained(), []);
+      const snapshot = event(2, 15_000);
+      const incremental = event(3, 16_000);
+      fake.emit(snapshot, true);
+      fake.emit(incremental);
+      assert.deepEqual(buffer.getReplay()?.events, [snapshot, incremental]);
+      fake.emit(event(3, 17_000, 2000));
+      buffer.resetRrweb();
+      buffer.attachRrweb(fake.record, { maxBytes: 500 });
+      fake.emit(snapshot, true);
+      assert.deepEqual(buffer.getReplay()?.events, [snapshot]);
+    } finally {
+      buffer.resetRrweb();
+    }
+  });
+}
 
 test("the buffer is measured in UTF-8 bytes, not in code units", () => {
   const fake = fakeRecord();
