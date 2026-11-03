@@ -99,7 +99,6 @@ export async function sendReport(endpoint, report, options = {}) {
     // dead host — leaves the form on "sending" for ever, which is exactly the
     // failure `timeoutMs` exists to bound. The whole send is on the clock.
     const timer = timeoutMs > 0 ? setTimeout(() => controller.abort("timeout"), timeoutMs) : null;
-    const timedOut = () => controller.signal.aborted && controller.signal.reason === "timeout";
     let payload = report;
     try {
         if (options.beforeSend) {
@@ -144,13 +143,13 @@ export async function sendReport(endpoint, report, options = {}) {
         if (options.keepalive && utf8Length(serialised) < KEEPALIVE_MAX_BYTES)
             init.keepalive = true;
         const response = await doFetch(endpoint, init);
-        const body = await response.json().catch((error) => {
-            // Empty and non-JSON responses are valid, but cancellation and transport
-            // failures must still reach the caller, even after successful headers.
-            if (controller.signal.aborted || !(error instanceof SyntaxError))
-                throw error;
-            return null;
-        });
+        const text = await response.text();
+        let body = null;
+        // Only parsing may fail silently; reading the body must preserve failures.
+        try {
+            body = JSON.parse(text);
+        }
+        catch { }
         if (!response.ok) {
             const fromBody = body;
             const message = options.parseError?.(response, body) ||
@@ -163,7 +162,9 @@ export async function sendReport(endpoint, report, options = {}) {
         return { id: typeof id === "string" ? id : undefined, body, response };
     }
     catch (err) {
-        const failure = err instanceof SendFailedError || !timedOut() ? err : new SendTimeoutError(timeoutMs);
+        const failure = err instanceof SendFailedError || controller.signal.reason !== "timeout"
+            ? err
+            : new SendTimeoutError(timeoutMs);
         const { onError } = options;
         if (onError) {
             try {
