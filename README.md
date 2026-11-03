@@ -5835,8 +5835,11 @@ initNetwork({
 - Requests to `endpoint` are skipped, so a report never describes its own
   delivery. `ignore` replaces that check when you need a different rule.
 
-The patched `fetch` always calls the original and hands back its result
-untouched, rejections included; `XMLHttpRequest` is timed with `loadend`, the
+The patched `fetch` calls the original exactly once with the original arguments
+and leaves request validation to it. Responses and rejection reasons are returned
+unchanged even when diagnostic metadata getters, URL conversion or recording
+throw; evidence that cannot be collected safely is dropped.
+`XMLHttpRequest` is timed with `loadend`, the
 one event that fires for every ending. `getNetwork()` returns a copy of what
 has been recorded, and `resetNetwork()` empties it and puts both globals back
 as it found them. `initNetwork` returns that same function as its `stop()`.

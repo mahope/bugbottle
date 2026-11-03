@@ -19,6 +19,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Isolate fetch metadata extraction and recording failures from dispatch,
+  preserving original responses, rejection reasons and native validation (#211).
 - Cancel SMTP connections, TLS negotiation and command/message waits when the
   receiver context aborts, including signals aborted before entry (#166).
 - Redact sensitive query values in breadcrumb `from`/`to` URLs and console

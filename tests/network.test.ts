@@ -116,13 +116,16 @@ function withBrowser(fn: (env: Browser) => Promise<void> | void): Promise<void> 
 
 afterEach(() => resetNetwork());
 
-for (const metadata of ["method", "url", "conversion", "status"] as const) {
+for (const metadata of ["method", "init method", "url", "conversion", "status"] as const) {
   for (const rejects of [false, true]) {
     test(`throwing ${metadata} metadata preserves fetch ${rejects ? "rejection" : "response"}`, async () => {
       await withBrowser(async () => {
         const diagnosticError = new Error("metadata unavailable");
         const failure = new TypeError("host fetch failed");
-        const response = { status: 503 } as Response;
+        const response = { status: 200 } as Response;
+        const options = metadata === "init method" ? {
+          get method(): string { throw diagnosticError; },
+        } : undefined;
         const input = {
           get method() {
             if (metadata === "method") throw diagnosticError;
@@ -142,14 +145,14 @@ for (const metadata of ["method", "url", "conversion", "status"] as const) {
         globalThis.fetch = ((actual, init) => {
           calls += 1;
           assert.equal(actual, input);
-          assert.equal(init, undefined);
+          assert.equal(init, options);
           return rejects ? Promise.reject(failure) : Promise.resolve(response);
         }) as typeof fetch;
         initNetwork({ all: true });
         if (rejects) {
-          await assert.rejects(() => fetch(input), (error) => error === failure);
+          await assert.rejects(() => fetch(input, options), (error) => error === failure);
         } else {
-          assert.equal(await fetch(input), response);
+          assert.equal(await fetch(input, options), response);
         }
         assert.equal(calls, 1);
         assert.equal(getNetwork().length, metadata === "status" && rejects ? 1 : 0);
@@ -158,6 +161,43 @@ for (const metadata of ["method", "url", "conversion", "status"] as const) {
     });
   }
 }
+
+test("native fetch retains request validation when method extraction throws", async () => {
+  const nativeFetch = globalThis.fetch;
+  const failure = new Error("invalid method getter");
+  const options = { get method(): string { throw failure; } };
+  await assert.rejects(() => nativeFetch("https://app.example/", options), (err) => err === failure);
+  initNetwork({ all: true });
+  await assert.rejects(() => fetch("https://app.example/", options), (err) => err === failure);
+  assert.deepEqual(getNetwork(), []);
+});
+
+test("native Request and URL inputs retain recording and query redaction", async () => {
+  await withBrowser(async ({ answer }) => {
+    initNetwork({ all: true });
+    answer({ status: 200 });
+    await fetch(new Request("https://app.example/api/orders?token=example", { method: "PUT" }));
+    await fetch(new URL("https://app.example/api/orders?token=example"));
+    assert.deepEqual(getNetwork().map(({ method, url }) => ({ method, url })), [
+      { method: "PUT", url: "/api/orders?token=[redacted]" },
+      { method: "GET", url: "/api/orders?token=[redacted]" },
+    ]);
+  });
+});
+
+test("native fetch reads method before diagnostic getters can change validation", async () => {
+  let reads = 0;
+  const options = {
+    get method(): string {
+      if (++reads > 1) throw new Error("diagnostic read failed");
+      return "GET";
+    },
+  };
+  initNetwork({ all: true });
+  const response = await fetch("data:text/plain,ok", options);
+  assert.equal(await response.text(), "ok");
+  assert.deepEqual(getNetwork(), []);
+});
 
 test("a fast, successful request is not recorded", async () => {
   await withBrowser(async ({ answer }) => {

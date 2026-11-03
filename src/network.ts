@@ -186,18 +186,35 @@ function patchFetch(): void {
   if (typeof original !== "function") return;
   const era = generation;
   const patched: typeof globalThis.fetch = function (this: unknown, input, init) {
-    const method = methodOf(input, init);
     const started = Date.now();
+    // Let the host validate and dispatch before diagnostic getters are read.
+    const pending = original.call(globalThis, input, init);
+    let method: string | undefined;
+    try {
+      method = methodOf(input, init);
+    } catch {
+      // Unreadable diagnostic metadata drops the evidence, never the request.
+    }
     // The original is always called, and its result is always handed back
     // untouched. Whatever this module does with the timing, the host sees the
     // fetch it wrote — including its rejections, rethrown as they were.
-    return original.call(globalThis, input, init).then(
+    return pending.then(
       (response) => {
-        if (era === generation) record(method, input, response.status, Date.now() - started, false);
+        try {
+          if (era === generation && method !== undefined)
+            record(method, input, response.status, Date.now() - started, false);
+        } catch {
+          // Recording must not replace the host's response.
+        }
         return response;
       },
       (err: unknown) => {
-        if (era === generation) record(method, input, 0, Date.now() - started, true);
+        try {
+          if (era === generation && method !== undefined)
+            record(method, input, 0, Date.now() - started, true);
+        } catch {
+          // Preserve the original rejection even when URL extraction fails.
+        }
         throw err;
       },
     );
