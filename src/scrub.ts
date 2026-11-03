@@ -95,13 +95,18 @@ function passesLuhn(digits: string): boolean {
  * imported then drops every other pattern, `passesLuhn` included — which is
  * what lets `bugbottle/network` scrub its URLs inside a 1.2 kB budget.
  */
-const QUERY_PATTERN = /([?&][^?&=#\s]+=)[^?&#\s]*/g;
+const QUERY_PATTERN = /([?&][^?&=#\s]+=)[^&#\s]*/g;
 
-function redactQuery(match: string, groups: (string | undefined)[], replacement: string): string {
-  // The prefix contains only the key and its surrounding query delimiters.
-  // URLSearchParams decodes once, tolerating malformed escapes and invalid UTF-8.
-  const [key] = new URLSearchParams(groups[0]).keys();
-  return /token|key|secret|password|auth/i.test(key!) ? keepPrefix(match, groups, replacement) : match;
+function redactQuery(match: string, _groups: (string | undefined)[], replacement: string): string {
+  // Scan nested URLs only until a sensitive key owns the rest of this value.
+  for (const candidate of match.matchAll(/[?&][^?&=#\s]+=/g)) {
+    // URLSearchParams decodes once, tolerating malformed escapes and invalid UTF-8.
+    const [key] = new URLSearchParams(candidate[0]).keys();
+    if (/token|key|secret|password|auth/i.test(key!)) {
+      return match.slice(0, candidate.index + candidate[0].length) + replacement;
+    }
+  }
+  return match;
 }
 
 /**

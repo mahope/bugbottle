@@ -5,6 +5,20 @@ import type { BugReport } from "../src/report-core.ts";
 
 const R = DEFAULT_REPLACEMENT;
 
+test("sensitive query values include raw question marks through the next delimiter", () => {
+  for (const key of ["token", "%74oken"]) {
+    for (const prefix of ["/api?", "/api?next=/login?", "/api?next=/hop?next=/login?"]) {
+      for (const value of ["first?still-secret", "first?safe=still-secret", "first?token=still-secret"]) {
+        const url = `${prefix}${key}=${value}&page=2#section`;
+        const expected = `${prefix}${key}=${R}&page=2#section`;
+        assert.equal(scrubUrl(url), expected);
+        assert.equal(scrubReport(report("x", url)).context.url, expected);
+        assert.equal(scrubUrl(url, "***"), expected.replace(R, "***"));
+      }
+    }
+  }
+});
+
 test("query keys are decoded once for matching, preserving spelling and URL structure", () => {
   for (const key of ["%74oken", "%54oKeN", "%61%70%69%5f%6b%65%79", "client_se%63ret", "pass%77ord", "%61uth", "%74oken%", "%74oken%FF", "%FF%74oken", "%ZZ%74oken", "%74oken%E2%82"]) {
     const url = `/api?${key}=synthetic-credential&safe=a%26b&${key}=synthetic-repeat#section`;

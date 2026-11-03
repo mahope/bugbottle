@@ -46,12 +46,17 @@ function passesLuhn(digits) {
  * imported then drops every other pattern, `passesLuhn` included — which is
  * what lets `bugbottle/network` scrub its URLs inside a 1.2 kB budget.
  */
-const QUERY_PATTERN = /([?&][^?&=#\s]+=)[^?&#\s]*/g;
-function redactQuery(match, groups, replacement) {
-    // The prefix contains only the key and its surrounding query delimiters.
-    // URLSearchParams decodes once, tolerating malformed escapes and invalid UTF-8.
-    const [key] = new URLSearchParams(groups[0]).keys();
-    return /token|key|secret|password|auth/i.test(key) ? keepPrefix(match, groups, replacement) : match;
+const QUERY_PATTERN = /([?&][^?&=#\s]+=)[^&#\s]*/g;
+function redactQuery(match, _groups, replacement) {
+    // Scan nested URLs only until a sensitive key owns the rest of this value.
+    for (const candidate of match.matchAll(/[?&][^?&=#\s]+=/g)) {
+        // URLSearchParams decodes once, tolerating malformed escapes and invalid UTF-8.
+        const [key] = new URLSearchParams(candidate[0]).keys();
+        if (/token|key|secret|password|auth/i.test(key)) {
+            return match.slice(0, candidate.index + candidate[0].length) + replacement;
+        }
+    }
+    return match;
 }
 /**
  * Redacts the sensitive query values in one URL, keeping the key that named
