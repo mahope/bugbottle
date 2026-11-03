@@ -134,6 +134,7 @@
     "smoke:annotate": "node scripts/annotate-smoke.mjs",
     "smoke:inbox-docker": "node scripts/inbox-docker-smoke.mjs",
     "smoke:queue-idb": "node scripts/queue-idb-smoke.mjs",
+    "smoke:workers": "node scripts/smoke-workers.mjs",
     "smoke:forms": "node scripts/forms-smoke.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
@@ -182,7 +183,8 @@
     "svelte": "5.57.1",
     "ts-json-schema-generator": "2.9.0",
     "typescript": "^5.7.0",
-    "vue": "3.5.43"
+    "vue": "3.5.43",
+    "workerd": "1.20260730.1"
   },
   "engines": {
     "node": ">=18"

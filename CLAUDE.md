@@ -14,6 +14,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 
 | Path | Role | May import |
 |---|---|---|
+| `examples/workers/`, `scripts/smoke-workers.mjs` | Packed public server export in pinned local workerd without Node compatibility; storage, JSON/origin rejection and native WebCrypto signatures. Dev-only dependency review in `docs/workers-dependency-review.md` | dist (at run time), esbuild, workerd |
 | `src/report-core.ts` | Types, limits, server validators. Pure. | nothing |
 | `src/console-buffer.ts` | `console.error/warn` + `window` error patching, ring buffer, stack frames on the uncaught ones | report-core, stack |
 | `src/stack.ts` | `parseStack(stack)` — one expression turning `error.stack` into at most ten `{ file, line, col, fn? }` frames, V8 and Firefox/Safari alike. Imported only by console-buffer, which keeps the parsing out of report-core; it does not make the core bundle smaller, since console-buffer is in it | report-core (types and limits) |

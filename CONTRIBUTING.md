@@ -31,6 +31,16 @@ browser audits. Both CI and the release workflow require this job before
 publishing. To reproduce: `npm run build` on Node 22+, then
 `node scripts/smoke-packed.mjs` on Node 18. No TypeScript loader is used there.
 
+For the local Workers integration, run `npm run build` then
+`npm run smoke:workers` on Node 22+. It installs a locally packed tarball in an
+isolated consumer, bundles the public server export, and starts and stops
+`workerd` without Node compatibility or Cloudflare credentials. It checks
+storage, malformed JSON, origin authorization and native WebCrypto signatures.
+The [example](examples/workers/) documents the portable import boundary; the
+[dependency review](docs/workers-dependency-review.md) records the exact dev-only
+runtime pin. Install with `npm ci --ignore-scripts`; optional platform binaries
+must be enabled. CI's Workers job runs this smoke with a five-minute job limit.
+
 ## Release gate and recovery
 
 Tag pushes and manual Release runs call the complete reusable `ci.yml` workflow
