@@ -349,6 +349,11 @@ were looking at rather than the form on top of it. Anything marked
 `data-bugbottle` is left out of the picture and cannot be picked — put it on
 your panel and your trigger button.
 
+Overlapping `submit()` calls on the same form share one promise and one
+delivery attempt, including `onSent` and queueing. They resolve to `true`
+when sent or queued, or `false` on failure. After it settles, a later call
+can submit another report. This applies to all four framework adapters.
+
 Every adapter also carries `contact` and `setContact`, for a form that asks
 how to reach the reporter — an ordinary input bound the way `message` is:
 
@@ -6544,6 +6549,13 @@ of the same thing: it walks the directory again and answers with what is there
 now, which is what to call after a backup is restored underneath the inbox or
 when something else has been writing to the directory. Nothing calls it on its
 own — a walk on every request is the cost this index exists to avoid.
+
+A missing directory is an empty inbox. Other directory access errors reject;
+a failed `refresh()` leaves the previous index intact. Deletion removes the
+PNG first, then the JSON, and only then the index entry. If PNG deletion fails,
+the report stays unchanged. If JSON deletion fails after the PNG was removed,
+the report stays listed and readable without its picture. `remove()` or
+retention can retry the deletion; filesystem errors are returned to the caller.
 
 **Retention.** "Store it like personal data" needs a way to stop storing it.
 `maxAgeDays` is how long a report is kept, and `prune()` is what applies it:
