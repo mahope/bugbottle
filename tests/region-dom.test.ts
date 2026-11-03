@@ -767,3 +767,56 @@ test("a whole-page capture that fails late does not take an attached area off th
   assert.equal(store.getState().screenshot, fakeShot.dataUrl);
   assert.equal(store.getState().status.kind, "idle");
 });
+
+for (const lifecycle of ["reset", "opt-out", "destroy", "attach"] as const) {
+  for (const outcome of ["success", "failure"] as const) {
+    test(`${lifecycle}: late capture ${outcome} leaves current form untouched`, async () => {
+      let finish!: (value: string) => void;
+      let fail!: (error: Error) => void;
+      const store = createReportState({
+        endpoint: ENDPOINT,
+        screenshot: () => new Promise<string>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+      });
+      const pending = store.actions.recapture();
+      await tick();
+      if (lifecycle === "reset") store.actions.reset();
+      if (lifecycle === "opt-out") store.actions.toggleScreenshot(false);
+      if (lifecycle === "destroy") store.destroy();
+      if (lifecycle === "attach") {
+        store.actions.attachScreenshot(fakeShot);
+        await store.actions.submit(); // A newer validation error owns the status.
+      }
+      const current = store.getState();
+      if (outcome === "success") finish("data:image/png;base64,W1x1");
+      else fail(new Error("the renderer gave up"));
+      await pending;
+      assert.equal(store.getState(), current, "stale completion must not notify or change state");
+    });
+  }
+}
+
+test("reset allows a fresh capture while the old renderer is still pending", async () => {
+  let finish!: (value: string) => void;
+  let started = 0;
+  const store = createReportState({
+    endpoint: ENDPOINT,
+    screenshot: () => {
+      started++;
+      return started === 1
+        ? new Promise<string>((resolve) => { finish = resolve; })
+        : Promise.resolve("data:image/png;base64,W2x2");
+    },
+  });
+  const old = store.actions.recapture();
+  await tick();
+  store.actions.reset();
+  const fresh = store.actions.recapture();
+  finish("data:image/png;base64,W1x1");
+  await Promise.all([old, fresh]);
+  assert.equal(started, 2);
+  assert.equal(store.getState().screenshot, "data:image/png;base64,W2x2");
+  assert.equal(store.getState().status.kind, "idle");
+});
