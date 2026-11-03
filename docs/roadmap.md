@@ -124,7 +124,9 @@ rolling replay buffer over the application's own rrweb `record` — an adapter,
 not a recorder, with rrweb neither imported nor depended on. A full snapshot
 every ten seconds is what makes the buffer trimmable, since a replay can only
 be cut at a checkout; whole checkout groups are dropped, oldest first, when
-they fall outside the window and again over `maxBytes`. `maskAllInputs` is on
+they fall outside the window and again over `maxBytes`. An oversized newest
+group is released, and dependent events are discarded until a fresh full
+snapshot restores capture (#175). `maskAllInputs` is on
 by default and the screenshot markers map onto rrweb's own selectors, because
 the scrubber cannot walk somebody else's event format. `normaliseReplay` and a
 1 MB ceiling on the server, `replay: "keep" | "drop"` on `handleReport`, one
