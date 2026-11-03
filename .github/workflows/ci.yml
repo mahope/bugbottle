@@ -541,6 +541,9 @@ jobs:
       # The pixels rather than the accessibility tree: a blur that did not
       # destroy what it covered fails here.
       - run: npm run smoke:annotate
+      - name: Region PNG pixels after scrolling at DPR 1 and 2
+        timeout-minutes: 2
+        run: npm run smoke:region
       - name: IndexedDB persistence and concurrent queue delivery
         timeout-minutes: 2
         run: npm run smoke:queue-idb

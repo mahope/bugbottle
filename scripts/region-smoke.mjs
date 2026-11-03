@@ -120,9 +120,14 @@ try {
     console.log(`region DPR ${dpr}: scrolled area, element metadata, masked pixels and cancellation passed`);
   }
 } finally {
-  try { await browser?.close(); }
+  try {
+    await browser?.close();
+    if (browser) assert.notEqual(browser.process().exitCode, null, "Chrome must exit");
+  }
   finally {
     server.closeAllConnections();
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    assert.equal(server.listening, false);
+    console.log("region cleanup: Chrome closed and localhost server stopped");
   }
 }
