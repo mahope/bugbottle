@@ -355,7 +355,9 @@ HTTP API (#81). Email meant Resend, which meant an account and a verified
 domain; most self-hosters already have an SMTP account and no reason to get
 another one. So it speaks SMTP itself on `node:net` and `node:tls`: EHLO,
 STARTTLS when the server offers it, AUTH PLAIN or LOGIN, one message, QUIT,
-with a deadline on every phase. The message is RFC 5322 with folded headers,
+with a deadline on every phase. Receiver context cancellation also closes the
+transport during connect, STARTTLS and command/message waits (#166); once DATA
+is accepted, cancellation cannot recall delivery. The message is RFC 5322 with folded headers,
 dot-stuffing and a `multipart/alternative` of the report as text and as
 Markdown; the `Reply-To` comes from the `contact` line as it does for Resend.
 AUTH over an unencrypted connection is refused unless `allowInsecureAuth` says
