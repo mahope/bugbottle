@@ -1,4 +1,5 @@
 import { test, afterEach } from "node:test";
+import { getEventListeners } from "node:events";
 import assert from "node:assert/strict";
 import {
   buildReport,
@@ -86,7 +87,51 @@ test("a non-string id is ignored and a non-JSON body is tolerated", async () => 
     fetch: fakeFetch(200, "").fetch,
   });
   assert.equal(empty.body, null);
+  for (const response of [new Response(null, { status: 204 }), new Response("accepted")]) {
+    const result = await sendReport("/x", buildReport({ type: "bug", message: "a" }), {
+      fetch: (async () => response) as typeof globalThis.fetch,
+    });
+    assert.equal(result.body, null);
+  }
 });
+
+for (const cancellation of ["timeout", "caller"] as const) {
+  test(`a ${cancellation} abort during response-body consumption rejects and cleans up`, async (t) => {
+    const outer = new AbortController();
+    const reason = new Error("caller cancelled");
+    const seen: unknown[] = [];
+    const clearTimer = t.mock.method(globalThis, "clearTimeout");
+    const fetch = (async (_url: unknown, init?: RequestInit) => {
+      const signal = init!.signal!;
+      return new Response(new ReadableStream({
+        start(controller) {
+          signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
+        },
+        pull() {
+          if (cancellation === "caller") outer.abort(reason);
+        },
+      }), { status: 201 });
+    }) as typeof globalThis.fetch;
+
+    await assert.rejects(
+      sendReport("/x", buildReport({ type: "bug", message: "a" }), {
+        fetch,
+        signal: outer.signal,
+        timeoutMs: cancellation === "timeout" ? 20 : 5000,
+        onError: (_report, error) => void seen.push(error),
+      }),
+      (error: unknown) => {
+        assert.deepEqual(seen, [error], "onError receives the final error exactly once");
+        if (cancellation === "timeout") assert.ok(error instanceof SendTimeoutError);
+        else assert.equal(error, reason);
+        return true;
+      },
+    );
+    assert.equal(getEventListeners(outer.signal, "abort").length, 0);
+    assert.equal(clearTimer.mock.callCount(), 1);
+    clearTimer.mock.restore();
+  });
+}
 
 test("a failed response becomes a SendFailedError with the server message", async () => {
   const report = buildReport({ type: "bug", message: "a" });
