@@ -57,6 +57,34 @@ release separately. Gate fixtures run with `node --experimental-strip-types
 ## Before opening a pull request
 
 - `npm run check` is green.
+- Adapter changes also pass `npm run smoke:forms` after the build. It compiles
+  Vue, Svelte and Solid forms in temporary consumers outside the checkout,
+  installs the packed tarball offline with scripts and peer installation
+  disabled, and serves an in-memory receiver on localhost. Chrome and
+  `puppeteer-core` are found through `scripts/chrome.mjs`; CI bounds the command
+  to two minutes. Browser pages, the server and temporary package storage are
+  closed in `finally` blocks, including on assertion failures.
+  The Solid fixture tests **solid-js 1.9.15**, **babel-preset-solid 1.9.9**,
+  **babel-plugin-jsx-dom-expressions 0.40.11**, **@babel/core 7.29.7** and
+  **esbuild 0.28.2**. It verifies browser-runtime resolution from esbuild's
+  input graph, JSX accessor updates, sending/error/sent states, normalised
+  single deliveries and owner disposal during a pending send followed by remount.
+  A send already in progress may finish after disposal; the old accessors must
+  stay frozen and the replacement must remain independent.
+
+  Compiler dependency audit (3 November 2026): Babel is maintained by the
+  Babel team (published since 2017); the Solid preset is maintained by
+  Ryan Carniato in solidjs/solid (published since 2019). The pinned Babel and
+  preset releases date from 25 May 2026 and 12 August 2025 respectively.
+  The compiler adds 35 lockfile package entries, all development-only, with
+  no install lifecycle scripts. Published JavaScript was checked for network
+  imports/calls; none were found on the compiler load path. Babel, debug,
+  semver and browserslist read environment-based configuration; this fixture
+  disables Babel config discovery and supplies its preset explicitly.
+  Overrides retain older baseline-browser-mapping, electron-to-chromium,
+  node-releases and semver versions because the registry's newest releases were under three
+  days old. Conclusion: install with `--ignore-scripts`; no runtime dependency
+  is added. Existing runtime peer versions are intentionally unchanged.
 - Queue storage changes also pass `npm run smoke:queue-idb` after the build.
   It uses Chrome and `puppeteer-core` through `scripts/chrome.mjs`, without
   downloading a browser, and runs in CI's browser job.
