@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import { syncBuiltinESMExports } from "node:module";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -54,6 +55,81 @@ function report(message: string, receivedAt = new Date().toISOString()): Validat
 
 /** Stamps that sort, so "oldest first" means something in a fast test. */
 const at = (minute: number) => `2026-09-08T10:${String(minute).padStart(2, "0")}:00.000Z`;
+
+test("out-of-order arrivals retain the newest reports across refresh and restart", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxReports: 2 });
+  const newest = await store.store(report("Newest", at(3)));
+  const middle = await store.store(report("Middle", at(2)));
+  const oldest = await store.store(report("Oldest", at(1)), PNG);
+  const expected = [newest.id, middle.id];
+  assert.deepEqual((await store.list()).map(({ id }) => id), expected);
+  assert.deepEqual((await store.refresh()).map(({ id }) => id), expected);
+  assert.deepEqual((await fileStore({ dir }).list()).map(({ id }) => id), expected);
+  assert.equal(await store.read(oldest.id), null);
+  assert.equal((await readdir(dir)).includes(`${oldest.id}.png`), false);
+});
+
+test("an older concurrent screenshot finishing last cannot evict newer reports", async (t) => {
+  const dir = await scratch();
+  const store = fileStore({ dir, maxReports: 2 });
+  let release!: () => void;
+  let started!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  const entered = new Promise<void>((resolve) => { started = resolve; });
+  const write = fs.writeFile;
+  const mocked = t.mock.method(fs, "writeFile", async (...args: Parameters<typeof write>) => {
+    if (String(args[0]).includes(".png.")) {
+      started();
+      await blocked;
+    }
+    return write(...args);
+  });
+  syncBuiltinESMExports();
+  const older = store.store(report("Oldest", at(1)), PNG);
+  try {
+    await entered;
+    const middle = await store.store(report("Middle", at(2)));
+    const newest = await store.store(report("Newest", at(3)));
+    release();
+    const oldest = await older;
+    const expected = [newest.id, middle.id];
+    assert.deepEqual((await store.list()).map(({ id }) => id), expected);
+    assert.deepEqual((await store.refresh()).map(({ id }) => id), expected);
+    assert.deepEqual((await fileStore({ dir }).list()).map(({ id }) => id), expected);
+    assert.equal(await store.read(oldest.id), null);
+    assert.equal((await readdir(dir)).includes(`${oldest.id}.png`), false);
+  } finally {
+    release();
+    await older;
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test("equal timestamps use descending UUID order for listing and retention", async (t) => {
+  const dir = await scratch();
+  const store = fileStore({ dir });
+  const stored = [];
+  let next = 100;
+  const mocked = t.mock.method(crypto, "randomUUID", () =>
+    `00000000-0000-4000-8000-${String(next--).padStart(12, "0")}` as ReturnType<typeof crypto.randomUUID>);
+  syncBuiltinESMExports();
+  try {
+    for (let n = 0; n < 8; n++) stored.push(await store.store(report("Same time", at(1))));
+  } finally {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
+  const expected = stored.map(({ id }) => id).sort().reverse();
+  assert.deepEqual((await store.list()).map(({ id }) => id), expected);
+  assert.deepEqual((await store.refresh()).map(({ id }) => id), expected);
+  const restarted = fileStore({ dir, maxReports: 2 });
+  assert.deepEqual((await restarted.list()).map(({ id }) => id), expected);
+  assert.equal(await restarted.prune(), 6);
+  assert.deepEqual((await restarted.list()).map(({ id }) => id), expected.slice(0, 2));
+  assert.deepEqual((await restarted.refresh()).map(({ id }) => id), expected.slice(0, 2));
+});
 
 for (const extension of ["png", "json"]) {
   for (const boundary of ["writeFile", "rename"] as const) {
