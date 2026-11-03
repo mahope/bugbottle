@@ -19,6 +19,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Create missing configured IndexedDB queue stores in an existing database,
+  preserving other stores and reopening connections after schema upgrades (#206).
+
 - Redact sensitive query values in breadcrumb `from`/`to` URLs and console
   stack frame `file` URLs, including nested queries. Scrub frame function names
   as prose, preserve coordinates and query opt-outs, and leave the input

@@ -4186,6 +4186,13 @@ milliseconds before the tab is closed may not reach the disk, where
 `localStorage` always does. Which of the two matters more depends on whether
 your reports carry pictures.
 
+Different `storeName` values can share one `databaseName`: each store keeps its
+own queue, even with the same `storageKey`. A missing store is added by upgrading
+the current database version, preserving existing stores and reports. Connections
+managed by `createIdbStorage` close for that upgrade and reopen on their next write.
+Other code sharing the database must also close its connections on `versionchange`;
+a blocked upgrade rejects the storage operation.
+
 When another tab loads a page that wants a newer version of the database, the
 browser asks this connection to stand aside. It does: the connection is closed
 and the next write opens a fresh one. A page that holds on instead blocks the
@@ -4194,7 +4201,7 @@ without reopening throws on every transaction afterwards and is memory-only for
 good.
 
 It is a separate entry point because the default must not pay for it:
-`bugbottle/queue` is about 2.1 kB and this is another 650 bytes, only for those
+`bugbottle/queue` is about 2.1 kB and this is another 730 bytes, only for those
 who ask for it. A browser with no IndexedDB at all makes the queue memory-only,
 and the reports are still sent.
 

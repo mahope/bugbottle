@@ -30,6 +30,7 @@ type FakeRequest = {
 
 function fakeIndexedDB(options: { quota?: number } = {}) {
   const stores = new Map<string, Map<unknown, unknown>>();
+  const databases = new Map<string, { version: number; stores: typeof stores }>();
   /** How many bytes the whole database may hold. Refused writes abort the tx. */
   const quota = options.quota ?? Infinity;
   /** Transactions run one at a time, in the order they were opened. */
@@ -54,7 +55,7 @@ function fakeIndexedDB(options: { quota?: number } = {}) {
     return bytes;
   };
 
-  function transaction(name: string, _mode: string) {
+  function transaction(stores: Map<string, Map<unknown, unknown>>, name: string, _mode: string) {
     transactions += 1;
     const store = stores.get(name);
     if (!store) throw new Error(`No object store named ${name}`);
@@ -127,6 +128,8 @@ function fakeIndexedDB(options: { quota?: number } = {}) {
 
   /** Every connection handed out, so a test can act on the live one. */
   type FakeDatabase = {
+    version: number;
+    databaseName: string;
     onversionchange: (() => void) | null;
     closed: boolean;
     close: () => void;
@@ -137,27 +140,53 @@ function fakeIndexedDB(options: { quota?: number } = {}) {
   const connections: FakeDatabase[] = [];
 
   const factory = {
-    open(_name: string, _version: number) {
+    open(databaseName: string, version?: number) {
+      let schema = databases.get(databaseName);
+      if (!schema) {
+        schema = { version: 0, stores: databases.size === 0 ? stores : new Map() };
+        databases.set(databaseName, schema);
+      }
+      const current = schema;
       const req = request() as FakeRequest & { result: unknown };
       const db: FakeDatabase = {
+        version: 0,
+        databaseName,
         onversionchange: null,
         closed: false,
         close() {
           db.closed = true;
         },
-        objectStoreNames: { contains: (name: string) => stores.has(name) },
-        createObjectStore: (name: string) => void stores.set(name, new Map()),
+        objectStoreNames: { contains: (name: string) => current.stores.has(name) },
+        createObjectStore: (name: string) => void current.stores.set(name, new Map()),
         transaction(name: string, mode: string) {
           // What a real connection does once it is closed, and the reason a
           // page that ignores `versionchange` goes memory-only for good.
           if (db.closed) throw new Error("InvalidStateError: the database is closed");
-          return transaction(name, mode);
+          return transaction(current.stores, name, mode);
         },
       };
       connections.push(db);
       req.result = db;
       queueMicrotask(() => {
-        req.onupgradeneeded?.();
+        const requested = version ?? (current.version || 1);
+        if (requested < current.version) {
+          req.error = new DOMException("Older version", "VersionError");
+          req.onerror?.();
+          return;
+        }
+        if (requested > current.version) {
+          for (const connection of connections) {
+            if (connection.version > 0 && connection !== db &&
+                connection.databaseName === databaseName && !connection.closed) {
+              connection.onversionchange?.();
+              assert.ok(connection.closed, "upgrade waits for existing connections to close");
+            }
+          }
+          current.version = requested;
+          db.version = requested;
+          req.onupgradeneeded?.();
+        }
+        db.version = current.version;
         req.onsuccess?.();
       });
       return req;
@@ -393,4 +422,33 @@ test("a connection another tab forces closed is reopened on the next write", asy
     ["before the upgrade", "after the upgrade"],
     "nothing was lost across the reopen",
   );
+});
+
+
+test("distinct stores upgrade one database and retain independent reports", async () => {
+  const { factory, connections } = fakeIndexedDB();
+  globals["indexedDB"] = factory;
+  const a = createIdbStorage({ storeName: "a" });
+  const b = createIdbStorage({ storeName: "b" });
+  const row = (id: string) => ({ id, at: 1, body: report(id) });
+  await a.update(() => [row("a")]);
+  await b.update(() => [row("b")]);
+  assert.equal(connections[0]?.closed, true);
+  await a.update(items => [...items, row("a2")]);
+  for (const name of ["a", "b"]) {
+    const reopened = createIdbStorage({ storeName: name });
+    assert.deepEqual((await reopened.update(items => items)).map(item => item.id),
+      name === "a" ? ["a", "a2"] : ["b"]);
+  }
+});
+
+
+test("equal store names in different databases keep separate queues", async () => {
+  const { factory } = fakeIndexedDB();
+  globals["indexedDB"] = factory;
+  const a = createIdbStorage({ databaseName: "a" });
+  const b = createIdbStorage({ databaseName: "b" });
+  await a.update(() => [{ id: "a", at: 1, body: report("a") }]);
+  assert.deepEqual(await b.update(items => items), []);
+  assert.equal((await a.update(items => items))[0]?.id, "a");
 });

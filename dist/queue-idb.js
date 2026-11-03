@@ -71,35 +71,56 @@ export function createIdbStorage(options = {}) {
         if (!factory)
             return Promise.reject(new Error("IndexedDB is unavailable"));
         const attempt = new Promise((resolve, reject) => {
-            const request = factory.open(databaseName, 1);
-            request.onupgradeneeded = () => {
-                // Keyed by the caller, not by a key path: what is stored is one array
-                // under one name, which is the same shape `localStorage` holds.
-                if (!request.result.objectStoreNames.contains(storeName)) {
-                    request.result.createObjectStore(storeName);
-                }
-            };
-            request.onsuccess = () => {
-                const db = request.result;
-                // Another tab has loaded a page that wants a newer database, and the
-                // browser is asking this connection to get out of the way. Refusing
-                // blocks the upgrade for as long as this tab is open; closing without
-                // forgetting the connection is worse, because every transaction after
-                // it throws and the queue is memory-only for the life of the page. So
-                // it is closed here and reopened by whatever needs it next.
-                db.onversionchange = () => {
-                    db.close();
-                    // Only if it is still the connection everyone is using: an open
-                    // that has already replaced this one must not be thrown away.
-                    if (opening === attempt)
-                        opening = null;
+            let blocked = false;
+            function connect(version) {
+                const request = factory.open(databaseName, version);
+                request.onupgradeneeded = () => {
+                    // Keyed by the caller, not by a key path: what is stored is one array
+                    // under one name, which is the same shape `localStorage` holds.
+                    if (!request.result.objectStoreNames.contains(storeName)) {
+                        request.result.createObjectStore(storeName);
+                    }
                 };
-                resolve(db);
-            };
-            request.onerror = () => reject(request.error ?? new Error("IndexedDB would not open"));
-            // Another tab is holding an older version open. Nothing here upgrades
-            // twice, so this only ever fires on a database somebody else named.
-            request.onblocked = () => reject(new Error("IndexedDB is blocked by another tab"));
+                request.onsuccess = () => {
+                    const db = request.result;
+                    if (blocked) {
+                        db.close();
+                        return;
+                    }
+                    if (!db.objectStoreNames.contains(storeName)) {
+                        const version = db.version + 1;
+                        db.close();
+                        connect(version);
+                        return;
+                    }
+                    // Another tab has loaded a page that wants a newer database, and the
+                    // browser is asking this connection to get out of the way. Refusing
+                    // blocks the upgrade for as long as this tab is open; closing without
+                    // forgetting the connection is worse, because every transaction after
+                    // it throws and the queue is memory-only for the life of the page. So
+                    // it is closed here and reopened by whatever needs it next.
+                    db.onversionchange = () => {
+                        db.close();
+                        // Only if it is still the connection everyone is using: an open
+                        // that has already replaced this one must not be thrown away.
+                        if (opening === attempt)
+                            opening = null;
+                    };
+                    resolve(db);
+                };
+                request.onerror = () => {
+                    // A concurrent store creator may have advanced the version first.
+                    if (request.error?.name === "VersionError")
+                        connect();
+                    else
+                        reject(request.error ?? new Error("IndexedDB would not open"));
+                };
+                request.onblocked = () => {
+                    blocked = true;
+                    reject(new Error("IndexedDB is blocked by another tab"));
+                };
+            }
+            connect();
         }).catch((error) => {
             if (opening === attempt)
                 opening = null;

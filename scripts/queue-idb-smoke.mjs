@@ -16,7 +16,7 @@ const pageHtml = `<!doctype html><title>IndexedDB queue smoke</title>
 import { createQueue } from '/dist/queue.js';
 import { createIdbStorage } from '/dist/queue-idb.js';
 const databaseName = new URL(location.href).searchParams.get('database');
-window.storage = createIdbStorage({ databaseName });
+window.storage = createIdbStorage({ databaseName, storeName: new URL(location.href).searchParams.get("store") ?? "queue" });
 window.readQueue = () => storage.update(items => items);
 let allowSend;
 const sending = new Promise(resolve => { allowSend = resolve; });
@@ -74,14 +74,14 @@ async function run() {
     executablePath: findChrome(), headless: "new", timeout: 10_000, protocolTimeout: 10_000,
   });
   context = await browser.createBrowserContext();
-  async function openPage() {
+  async function openPage(store = "queue") {
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
     page.on("pageerror", error => diagnostics.push(`pageerror: ${error.message}`));
     page.on("console", message => {
       if (message.type() === "error") diagnostics.push(`console: ${message.text()}`);
     });
-    await page.goto(url);
+    await page.goto(`${url}&store=${store}`);
     await page.waitForFunction(() => window.ready === true);
     return page;
   }
@@ -99,6 +99,53 @@ async function run() {
     }
     return page.evaluate(() => window.readQueue());
   }
+
+  phase = "distinct stores upgrade with an existing connection";
+  const storeA = await openPage("a");
+  await storeA.evaluate(() => enqueue("store-a"));
+  const aBefore = await stored(storeA, ["store-a"]);
+  const storeB = await openPage("b");
+  await storeB.evaluate(() => enqueue("store-b"));
+  const bBefore = await stored(storeB, ["store-b"]);
+  await storeA.evaluate(() => enqueue("store-a2"));
+  await stored(storeA, ["store-a", "store-a2"]);
+  const bUnchanged = await stored(storeB, ["store-b"]);
+  assert.equal(bUnchanged[0].id, bBefore[0].id);
+  assert.equal(bUnchanged[0].at, bBefore[0].at);
+  assert.deepEqual(bUnchanged[0].body, bBefore[0].body);
+  await storeA.close();
+  await storeB.close();
+  const reopenedA = await openPage("a");
+  const reopenedB = await openPage("b");
+  const aAfter = await stored(reopenedA, ["store-a", "store-a2"]);
+  assert.equal(aAfter[0].id, aBefore[0].id);
+  assert.equal(aAfter[0].at, aBefore[0].at);
+  assert.deepEqual(aAfter[0].body, aBefore[0].body);
+  const bAfter = await stored(reopenedB, ["store-b"]);
+  assert.equal(bAfter[0].id, bBefore[0].id);
+  assert.equal(bAfter[0].at, bBefore[0].at);
+  assert.deepEqual(bAfter[0].body, bBefore[0].body);
+  await reopenedA.close();
+  await reopenedB.close();
+  console.log("PASS: distinct stores upgrade, remain independent and survive reopening");
+
+  phase = "concurrent schema upgrades";
+  const concurrent = await openPage();
+  await concurrent.evaluate(async () => {
+    const { createIdbStorage } = await import('/dist/queue-idb.js');
+    const stores = ["c", "d", "e"].map(storeName => createIdbStorage({
+      databaseName: new URL(location.href).searchParams.get('database'), storeName,
+    }));
+    await Promise.all(stores.map((storage, index) => storage.update(() => [{
+      id: String(index), at: 1, body: { message: String(index) },
+    }])));
+    for (const [index, storage] of stores.entries()) {
+      const rows = await storage.update(items => items);
+      if (rows.length !== 1 || rows[0].id !== String(index)) throw new Error('store mixed');
+    }
+  });
+  await concurrent.close();
+  console.log("PASS: concurrent store creators preserve independent data");
 
   phase = "persist screenshot before closing page";
   let first = await openPage();

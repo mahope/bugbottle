@@ -417,6 +417,12 @@ transactions are ordered across tabs, so the multi-tab claim is a lock there
 rather than a lease. The 1 MB guess that used to strip the picture off a large
 report before it was ever stored is gone: what fits is kept.
 
+**Unreleased** — distinct IndexedDB queue stores can share a database (#206).
+A missing configured `storeName` upgrades the current database version without
+removing existing stores or reports. Existing queue connections close for the
+upgrade and reopen on their next write. Real Chrome smoke coverage checks open
+connections, concurrent store creators and persistence across page reloads.
+
 **Unreleased** — the offline queue signs what it delivers (#98).
 `createQueue({ endpoint, headers, sign })` takes the same signer `sendReport`
 takes and signs the serialised body at delivery time, so every attempt — the
