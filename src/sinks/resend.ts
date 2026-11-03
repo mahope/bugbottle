@@ -36,6 +36,8 @@ export type SendReportEmailOptions = {
   replyTo?: string | string[] | false;
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
+  /** Cancels the request and response-body read. */
+  signal?: AbortSignal;
   /** Decoded PNG bytes from `decodeScreenshotDataUrl`, attached as a file. */
   screenshot?: Uint8Array;
   /**
@@ -138,9 +140,11 @@ export async function sendReportEmail(
     ];
   }
 
+  options.signal?.throwIfAborted();
   const doFetch = options.fetch ?? globalThis.fetch;
   const response = await doFetch(RESEND_ENDPOINT, {
     method: "POST",
+    ...(options.signal ? { signal: options.signal } : {}),
     headers: {
       Authorization: `Bearer ${options.apiKey}`,
       "Content-Type": "application/json",
@@ -149,6 +153,7 @@ export async function sendReportEmail(
   });
 
   const body = await readBody(response);
+  options.signal?.throwIfAborted();
   if (!response.ok) {
     const fallback = `Resend refused the report with status ${response.status}`;
     throw new SinkError(messageFromBody(body, fallback), response.status, body);
