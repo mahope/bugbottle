@@ -19,6 +19,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Retain the newest file-store reports by arrival time regardless of write
+  completion order, with consistent descending UUID ties on refresh and
+  restart (#213).
+
 - Bound send failure observers to a separate one-second cleanup budget,
   preserving the original delivery error when observers hang or reject (#187).
 - Cancel SMTP connections, TLS negotiation and command/message waits when the

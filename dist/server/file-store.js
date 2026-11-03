@@ -31,6 +31,14 @@ import { decodeScreenshotDataUrl, InvalidScreenshotError, MAX_SCREENSHOT_BYTES, 
 export const DEFAULT_MAX_REPORTS = 2000;
 /** One day in milliseconds, because `maxAgeDays` is given in days. */
 const DAY_MS = 86_400_000;
+/** Arrival order, with a stable tie-breaker shared by writes and directory walks. */
+function newestFirst(a, b) {
+    const arrivedA = Date.parse(a.receivedAt);
+    const arrivedB = Date.parse(b.receivedAt);
+    const age = (Number.isFinite(arrivedB) ? arrivedB : -Infinity)
+        - (Number.isFinite(arrivedA) ? arrivedA : -Infinity);
+    return age || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+}
 /**
  * The shape `crypto.randomUUID()` writes, and the only thing that is ever
  * allowed to become part of a path.
@@ -100,8 +108,7 @@ export function fileStore(options) {
         }
         const pictures = new Set(files.filter((name) => name.endsWith(".png")));
         const entries = [];
-        // The name begins with the arrival time, so sorting the names sorts by age.
-        for (const file of files.filter((name) => name.endsWith(".json")).sort().reverse()) {
+        for (const file of files.filter((name) => name.endsWith(".json"))) {
             const id = UUID_IN_NAME.exec(file)?.[1];
             if (!id)
                 continue;
@@ -114,7 +121,7 @@ export function fileStore(options) {
                 // empty the list. Our own writes cannot land here: see `writeAtomic`.
             }
         }
-        return entries;
+        return entries.sort(newestFirst);
     }
     /**
      * Deletes the oldest reports until the directory is back inside the ceiling.
@@ -242,7 +249,9 @@ export function fileStore(options) {
         // `index` rather than the `entries` this call was handed: the two are the
         // same array unless the walk was replaced under us, and the index is the
         // one a listing reads.
-        (index ?? entries).unshift(summarise(id, file, report, screenshotStored));
+        const current = index ?? entries;
+        current.push(summarise(id, file, report, screenshotStored));
+        current.sort(newestFirst);
         // The cap only: age is what `prune()` is for, and a write is not the
         // moment to walk every entry's timestamp.
         await pruneToCap();

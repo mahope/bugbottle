@@ -6588,6 +6588,11 @@ Entries returned by `list()`, `refresh()` and `read().entry` are independent
 snapshots. Editing them cannot change the index, file lookup or retention;
 later writes, deletions and refreshes do not update earlier snapshots.
 
+Listings and count retention use `receivedAt`, newest first, regardless of
+write completion order (including slower screenshot writes). Equal timestamps
+use descending UUID order, consistently after refresh or restart. Unparseable
+timestamps sort after dated reports, with the same UUID tie-breaker.
+
 An entry `read` finds nothing behind is dropped from the listing then and
 there, so a report deleted by something outside this process stops being a link
 that answers 404 for the rest of the run. `refresh()` is the deliberate version

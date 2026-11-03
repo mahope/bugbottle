@@ -111,7 +111,7 @@ test("equal timestamps use descending UUID order for listing and retention", asy
   const dir = await scratch();
   const store = fileStore({ dir });
   const stored = [];
-  let next = 8;
+  let next = 100;
   const mocked = t.mock.method(crypto, "randomUUID", () =>
     `00000000-0000-4000-8000-${String(next--).padStart(12, "0")}` as ReturnType<typeof crypto.randomUUID>);
   syncBuiltinESMExports();
