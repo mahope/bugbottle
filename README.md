@@ -7348,6 +7348,18 @@ Recipient address rejected` reaches your log as it was said — and a failure
 that never got a reply, such as a hang or a refused connection, throws one with
 a status of `0`.
 
+`sendReportSmtp(report, options, { signal })` honours cancellation during
+connection, greeting, TLS negotiation, commands and message writes. The SMTP
+sink uses the receiver's context signal, so `sinkTimeoutMs` closes the active
+transport and stops further commands. An already-aborted signal opens no
+connection. Cancellation rejects with `SinkError` status `0`; without a signal,
+the per-phase `timeoutMs` deadlines still apply.
+
+Cancellation cannot recall mail. Once the server accepts DATA, it may deliver
+the message even if cancellation interrupts the acceptance reply or QUIT.
+A failed or cancelled call therefore does not prove non-delivery; retrying can
+send a duplicate.
+
 **AUTH is refused over a connection that is not encrypted.** If the server
 offers no STARTTLS and you did not connect on an implicit-TLS port, the
 password would go to the wire in base64, which is not encryption: every hop

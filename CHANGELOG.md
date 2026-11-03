@@ -25,6 +25,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Cancel SMTP connections, TLS negotiation and command/message waits when the
+  receiver context aborts, including signals aborted before entry (#166).
 - Redact sensitive query values in breadcrumb `from`/`to` URLs and console
   stack frame `file` URLs, including nested queries. Scrub frame function names
   as prose, preserve coordinates and query opt-outs, and leave the input
