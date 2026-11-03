@@ -4082,8 +4082,10 @@ initial submissions show an error without queueing, and queued reports are dropp
 On failed queued deliveries, `Retry-After` accepts non-negative integer seconds
 or an HTTP date (IMF-fixdate, RFC 850 or asctime), bounded to one second through
 five minutes. Missing or malformed values use the exponential backoff instead.
-`timeoutMs` (30 seconds by default) bounds one attempt:
-a request that is written and then never answered is the dropped mobile
+`timeoutMs` (30 seconds by default) bounds signing and fetching together in one
+delivery attempt. A signer that never settles also expires; its late completion
+is ignored and cannot send a request. Set `timeoutMs: 0` to disable the deadline.
+For example, a request that is written and then never answered is the dropped mobile
 connection, and it is the report the queue exists to save, so the attempt is
 given up on, released and retried on the backoff rather than waited for.
 

@@ -373,8 +373,6 @@ export function createQueue(options) {
                     "Content-Type": "application/json",
                     ...options.headers,
                 };
-                if (options.sign)
-                    Object.assign(headers, await options.sign(body));
                 const init = { method: "POST", headers, body };
                 if (options.credentials)
                     init.credentials = options.credentials;
@@ -389,9 +387,22 @@ export function createQueue(options) {
                 // false, the claim is released and the backoff schedules the retry.
                 const controller = new AbortController();
                 init.signal = controller.signal;
-                const clock = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
+                let clock;
                 try {
-                    const response = await doFetch(options.endpoint, init);
+                    const response = await new Promise((resolve, reject) => {
+                        if (timeoutMs > 0)
+                            clock = setTimeout(() => {
+                                controller.abort();
+                                reject();
+                            }, timeoutMs);
+                        (async () => {
+                            if (options.sign)
+                                Object.assign(headers, await options.sign(body));
+                            // Signing cannot be cancelled, but an expired attempt must not send.
+                            controller.signal.throwIfAborted();
+                            return doFetch(options.endpoint, init);
+                        })().then(resolve, reject);
+                    });
                     // Rate limiting is temporary; other 4xx responses reject the report
                     // permanently (a malformed body, revoked token or rejected origin).
                     done = response.ok ||
@@ -400,8 +411,7 @@ export function createQueue(options) {
                         retryAfter = retryAfterMs(response.headers.get("Retry-After"));
                 }
                 finally {
-                    if (clock !== null)
-                        clearTimeout(clock);
+                    clearTimeout(clock);
                 }
             }
             catch {

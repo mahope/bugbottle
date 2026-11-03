@@ -746,6 +746,122 @@ test("a queue without a signer sends no signature header", async () => {
   assert.equal(seen[0]?.headers["Content-Type"], "application/json");
 });
 
+for (const late of ["resolve", "reject"] as const) {
+  test(`a hanging signer expires, releases its claim and ignores late ${late}`, async () => {
+    const stored = fakeStorage();
+    globals["localStorage"] = stored.storage;
+    const { fetch, calls } = fakeFetch(200);
+    let resolve!: (headers: Record<string, string>) => void;
+    let reject!: (error: Error) => void;
+    const queue = makeQueue({
+      endpoint: "/api/feedback", fetch, timeoutMs: 10,
+      sign: () => new Promise((yes, no) => { resolve = yes; reject = no; }),
+    });
+    queue.enqueue(report("signing stalled"));
+    let left: number | undefined;
+    void queue.flush().then((count) => { left = count; });
+    await until(() => left !== undefined, 200);
+    assert.equal(left, 1, "flush must finish even when signing never settles");
+    assert.equal(JSON.parse(stored.map.get(KEY)!)[0].claimedAt, 0);
+    assert.equal(calls.length, 0);
+
+    // A second queue has no backoff: it can only retry if the claim was released.
+    const retry = makeQueue({
+      endpoint: "/api/feedback", fetch, sign: async () => ({ "X-Signature": "fresh" }),
+    });
+    assert.equal(await retry.flush(), 0);
+    assert.equal(calls.length, 1);
+    if (late === "resolve") resolve({ "X-Signature": "expired" });
+    else reject(new Error("late signing failure"));
+    await new Promise((done) => setTimeout(done, 0));
+    assert.equal(calls.length, 1, "expired signing must never send a duplicate");
+    assert.equal(stored.map.get(KEY), undefined);
+  });
+}
+
+for (const synchronous of [false, true]) {
+  test(`a ${synchronous ? "throwing" : "rejected"} signer retains the report and releases its claim`, async () => {
+    const stored = fakeStorage();
+    globals["localStorage"] = stored.storage;
+    const { fetch, calls } = fakeFetch(200);
+    const queue = makeQueue({
+      endpoint: "/api/feedback", fetch, timeoutMs: 10,
+      sign: () => {
+        if (synchronous) throw new Error("signing failed");
+        return Promise.reject(new Error("signing failed"));
+      },
+    });
+    queue.enqueue(report("retry signing"));
+    assert.equal(await queue.flush(), 1);
+    assert.equal(JSON.parse(stored.map.get(KEY)!)[0].claimedAt, 0);
+    assert.equal(calls.length, 0);
+  });
+}
+
+test("signing and fetching share one deadline and the backoff retry signs again", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });
+  let signed = 0;
+  let finishSigning!: (headers: Record<string, string>) => void;
+  let finishFetch!: (response: Response) => void;
+  let fetched = 0;
+  const queue = makeQueue({
+    endpoint: "/api/feedback", timeoutMs: 100,
+    sign: async () => {
+      signed++;
+      return signed === 1 ? new Promise((resolve) => { finishSigning = resolve; }) : {};
+    },
+    fetch: async () => {
+      fetched++;
+      return fetched === 1 ? new Promise((resolve) => { finishFetch = resolve; }) : new Response("{}");
+    },
+  });
+  t.after(() => queue.destroy());
+  queue.enqueue(report("shared deadline"));
+  const flushed = queue.flush();
+  // Let claimNext and signing start before advancing the attempt's clock.
+  await Promise.resolve();
+  t.mock.timers.tick(60);
+  finishSigning({});
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(fetched, 1);
+  t.mock.timers.tick(40);
+  assert.equal(await flushed, 1, "fetch gets only the time left after signing");
+  t.mock.timers.tick(1_000);
+  assert.equal(await queue.flush(), 0);
+  assert.equal(signed, 2);
+  assert.equal(fetched, 2);
+  finishFetch(new Response("{}"));
+  await Promise.resolve();
+  assert.equal(queue.size(), 0);
+});
+
+test("timeoutMs zero waits for signing and fetching without a deadline", async () => {
+  let sign!: (headers: Record<string, string>) => void;
+  let respond!: (response: Response) => void;
+  let fetched = false;
+  let settled = false;
+  const queue = makeQueue({
+    endpoint: "/api/feedback", timeoutMs: 0,
+    sign: () => new Promise((resolve) => { sign = resolve; }),
+    fetch: async (_url, init) => {
+      fetched = true;
+      assert.equal(init?.signal?.aborted, false);
+      return new Promise((resolve) => { respond = resolve; });
+    },
+  });
+  queue.enqueue(report("wait without a deadline"));
+  const flushed = queue.flush().then((left) => { settled = true; return left; });
+  await new Promise((done) => setTimeout(done, 30));
+  assert.equal(settled, false);
+  assert.equal(fetched, false);
+  sign({});
+  await until(() => fetched);
+  await new Promise((done) => setTimeout(done, 30));
+  assert.equal(settled, false);
+  respond(new Response("{}"));
+  assert.equal(await flushed, 0);
+});
+
 test("a delivery attempt that is never answered is given up on rather than wedging the queue", async () => {
   let attempts = 0;
   // The connection drops after the request is written: the promise never

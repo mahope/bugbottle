@@ -125,8 +125,9 @@ export type QueueOptions = {
   /** Passed to `fetch`. Set to `"include"` for a cross-origin endpoint that needs cookies. */
   credentials?: RequestCredentials;
   /**
-   * How long one delivery attempt may wait for an answer before it is called
-   * failed, released and retried. Default 30 seconds, the length of the claim
+   * How long one delivery attempt, including signing and fetching, may wait
+   * for an answer before it is called failed, released and retried.
+   * Default 30 seconds, the length of the claim
    * the attempt is holding: a claim nobody is using is the same as no claim, so
    * the two expire together on purpose.
    *
@@ -508,7 +509,6 @@ export function createQueue(options: QueueOptions): Queue {
           "Content-Type": "application/json",
           ...options.headers,
         };
-        if (options.sign) Object.assign(headers, await options.sign(body));
         const init: RequestInit = { method: "POST", headers, body };
         if (options.credentials) init.credentials = options.credentials;
         // One attempt is on the clock, for the length of the claim it holds. A
@@ -522,16 +522,27 @@ export function createQueue(options: QueueOptions): Queue {
         // false, the claim is released and the backoff schedules the retry.
         const controller = new AbortController();
         init.signal = controller.signal;
-        const clock = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
+        let clock: ReturnType<typeof setTimeout> | undefined;
         try {
-          const response = await doFetch(options.endpoint, init);
+          const response = await new Promise<Response>((resolve, reject) => {
+            if (timeoutMs > 0) clock = setTimeout(() => {
+              controller.abort();
+              reject();
+            }, timeoutMs);
+            (async () => {
+              if (options.sign) Object.assign(headers, await options.sign(body));
+              // Signing cannot be cancelled, but an expired attempt must not send.
+              controller.signal.throwIfAborted();
+              return doFetch(options.endpoint, init);
+            })().then(resolve, reject);
+          });
           // Rate limiting is temporary; other 4xx responses reject the report
           // permanently (a malformed body, revoked token or rejected origin).
           done = response.ok ||
             (response.status >= 400 && response.status < 500 && response.status !== 429);
           if (!done) retryAfter = retryAfterMs(response.headers.get("Retry-After"));
         } finally {
-          if (clock !== null) clearTimeout(clock);
+          clearTimeout(clock);
         }
       } catch {
         done = false;
