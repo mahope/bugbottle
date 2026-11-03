@@ -102,6 +102,21 @@ for (const asynchronous of [false, true]) {
   for (const action of ["recover", "mixed", "clear", "destroy"] as const) {
     test(`${asynchronous ? "asynchronous storage" : "localStorage"} wakes for abandoned claims: ${action}`, async (t) => {
       t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });
+      const active = new Set<ReturnType<typeof setTimeout>>();
+      const schedule = globalThis.setTimeout;
+      const cancel = globalThis.clearTimeout;
+      t.mock.method(globalThis, "setTimeout", (callback: () => void, delay: number) => {
+        const timer = schedule(() => {
+          active.delete(timer);
+          callback();
+        }, delay);
+        active.add(timer);
+        return timer;
+      });
+      t.mock.method(globalThis, "clearTimeout", (timer: ReturnType<typeof setTimeout>) => {
+        active.delete(timer);
+        cancel(timer);
+      });
       let stored: QueuedReport[] = [
         { id: "later", at: Date.now() - 3, claimedAt: Date.now(), body: report("later") },
         { id: "earlier", at: Date.now() - 2, claimedAt: Date.now() - 10_000, body: report("earlier") },
@@ -122,10 +137,15 @@ for (const asynchronous of [false, true]) {
       const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
       await settle();
       assert.equal(calls.length, action === "mixed" ? 1 : 0);
+      assert.equal(active.size, 1, "one wake-up waits for the earliest claim");
       if (action !== "recover") {
-        await Promise.all(Array.from({ length: 10 }, () => queue.flush()));
-        queue[action === "mixed" ? "flush" : action]();
+        for (let i = 0; i < 10; i++) {
+          await Promise.all([queue.flush(), queue.flush()]);
+          assert.equal(active.size, 1, "repeated flushes replace rather than accumulate timers");
+        }
+        if (action !== "mixed") queue[action]();
         await settle();
+        assert.equal(active.size, action === "mixed" ? 1 : 0);
       }
       t.mock.timers.tick(19_999);
       await settle();
@@ -139,6 +159,7 @@ for (const asynchronous of [false, true]) {
       assert.deepEqual(calls.map((call) => (call.body as BugReport).message),
         cancelled ? [] : action === "mixed" ? ["free", "earlier", "later"] : ["earlier", "later"]);
       if (!cancelled) assert.equal(queue.size(), 0);
+      assert.equal(active.size, 0, "draining or cancelling leaves no wake-up");
       t.mock.timers.tick(60_000);
       await settle();
       assert.equal(calls.length, cancelled ? 0 : action === "mixed" ? 3 : 2, "no duplicate sends");

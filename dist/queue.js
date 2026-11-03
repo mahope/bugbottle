@@ -56,7 +56,9 @@
  * one read-modify-write, the outcome is a duplicate rather than a loss, and the
  * server can fall back on the report fingerprint if duplicates matter to it. A
  * tab that is closed mid-delivery leaves its claim behind; the next tab picks
- * the report up 30 seconds later.
+ * the report up when that claim expires, scheduling its own wake-up without
+ * waiting for an online or visibility event. Browser timer throttling may
+ * delay that recovery; it does not make the lease an exactly-once guarantee.
  */
 const DEFAULT_STORAGE_KEY = "bugbottle:queue";
 const DEFAULT_MAX_ENTRIES = 5;
@@ -341,17 +343,18 @@ export function createQueue(options) {
         if (destroyed)
             return;
         failures += 1;
-        const delay = retryAfter ?? Math.min(MIN_BACKOFF_MS * 2 ** (failures - 1), MAX_BACKOFF_MS);
-        nextAttempt = Date.now() + delay;
+        wakeAt(nextAttempt = Date.now() +
+            (retryAfter ?? Math.min(MIN_BACKOFF_MS * 2 ** (failures - 1), MAX_BACKOFF_MS)));
+    }
+    function wakeAt(at) {
         stopTimer();
         timer = setTimeout(() => {
-            timer = null;
             // The timer is the backoff. A clock that reads a millisecond behind the
             // timer would otherwise make `flush` refuse its own retry, and nothing
             // else runs it until the network or the tab changes state.
             nextAttempt = 0;
             void flush();
-        }, delay);
+        }, at - Date.now());
         // Node keeps the process alive for a pending timer; a browser does not
         // care either way. A retry must not hold a test run or a script open.
         timer.unref?.();
@@ -433,6 +436,11 @@ export function createQueue(options) {
             failures = 0;
             nextAttempt = 0;
             stopTimer();
+            // All remaining reports are claimed. Recover without needing another
+            // online or visibility event when the earliest lease expires.
+            if (items.length) {
+                wakeAt(Math.min(...items.map((item) => (item.claimedAt ?? 0))) + CLAIM_MS);
+            }
         }
         return items.length;
     }

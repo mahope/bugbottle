@@ -4230,7 +4230,12 @@ write within the same few milliseconds can both claim one report and post it
 twice. The window is the length of one read-modify-write, the failure is a
 duplicate rather than a loss, and `fingerprint(report)` is there if duplicates
 matter to your storage. A tab closed mid-delivery leaves its claim behind, and
-the next tab picks the report up 30 seconds later. `createIdbStorage()` closes
+an open queue schedules a wake-up for the earliest remaining claim expiry
+(30 seconds after it was claimed), without needing an online, visibility or
+manual flush event. Unclaimed reports continue sending while it waits;
+`clear()` and `destroy()` cancel the wake-up. Browser timer throttling can
+delay recovery. This does not strengthen the lease into exactly-once delivery.
+`createIdbStorage()` closes
 that window: reading the queue and writing the claim happen inside one
 IndexedDB transaction, and the browser orders those across tabs.
 

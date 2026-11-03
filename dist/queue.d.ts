@@ -56,7 +56,9 @@
  * one read-modify-write, the outcome is a duplicate rather than a loss, and the
  * server can fall back on the report fingerprint if duplicates matter to it. A
  * tab that is closed mid-delivery leaves its claim behind; the next tab picks
- * the report up 30 seconds later.
+ * the report up when that claim expires, scheduling its own wake-up without
+ * waiting for an online or visibility event. Browser timer throttling may
+ * delay that recovery; it does not make the lease an exactly-once guarantee.
  */
 import type { BugReport } from "./report-core.ts";
 /** A report as it was assembled, plus when it was queued. */
