@@ -25,6 +25,42 @@ test("malformed query escapes do not throw and decoding is not recursive", () =>
   assert.equal(scrubReport(report("x", url)).context.url, expected);
 });
 
+for (const key of ["token", "api_key", "secret", "password", "auth", "%74oken", "client_se%63ret"]) {
+  test(`navigation and stack URLs redact ${key} without changing the input`, () => {
+    const url = `/app.js?page=2&next=/login?${key}=synthetic-171&tab=notes`;
+    const clean = `/app.js?page=2&next=/login?${key}=${R}&tab=notes`;
+    const input = {
+      ...report(`message ?${key}=prose`),
+      breadcrumbs: [{ kind: "navigation", from: url, to: url, text: `?${key}=prose` }],
+      console: [{ message: `?${key}=prose`, stack: [
+        { file: url, line: 42, col: 7, fn: "anna@example.com" },
+      ] }],
+    };
+    const before = structuredClone(input);
+    const out = scrubReport(input);
+    assert.equal(out.breadcrumbs[0]?.from, clean);
+    assert.equal(out.breadcrumbs[0]?.to, clean);
+    assert.deepEqual(out.console[0]?.stack[0], { file: clean, line: 42, col: 7, fn: R });
+    assert.equal(out.message, input.message);
+    assert.equal(out.breadcrumbs[0]?.text, input.breadcrumbs[0]?.text);
+    assert.equal(out.console[0]?.message, input.console[0]?.message);
+    assert.deepEqual(input, before);
+    const kept = scrubReport(input, { keep: ["query"] });
+    assert.equal(kept.breadcrumbs[0]?.from, url);
+    assert.equal(kept.breadcrumbs[0]?.to, url);
+    assert.equal(kept.console[0]?.stack[0]?.file, url);
+    assert.equal(kept.console[0]?.stack[0]?.fn, R);
+    assert.equal(scrubReport(input, { replacement: "***" }).console[0]?.stack[0]?.file,
+      clean.replace(R, "***"));
+  });
+}
+
+test("stack frame names are prose and malformed frames are preserved", () => {
+  const input = { console: [{ stack: [null, "not a frame", { file: 7, fn: "?token=prose" }] },
+    { stack: "not an array" }] };
+  assert.deepEqual(scrubReport(input), input);
+});
+
 /** A minimal valid report, with the message and url the test cares about. */
 function report(message: string, url = "/orders/42"): BugReport & Record<string, unknown> {
   return {
