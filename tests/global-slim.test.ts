@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Window } from "happy-dom";
 import { build } from "esbuild";
+import { scriptTagPicker } from "../scripts/script-tag-picker.mjs";
 
 /**
  * The slim script-tag build: the same panel as `dist/bugbottle.js` without the
@@ -16,6 +17,7 @@ const bundled = await build({
   entryPoints: ["src/global-slim.ts"],
   bundle: true,
   minify: true,
+  plugins: [scriptTagPicker(false)],
   format: "iife",
   platform: "browser",
   target: ["es2020"],

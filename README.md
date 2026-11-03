@@ -5416,6 +5416,11 @@ upgraded from 4.
 
 ## One script tag
 
+The full script loads `dist/bugbottle-picker.js` from beside `bugbottle.js` on
+first element selection. When self-hosting, serve both files from the same
+directory and allow that module in your Content Security Policy. ESM keeps
+the picker in your application's bundle; slim keeps pointer-only selection.
+
 For a site with no build step — a WordPress theme, a static page, a client
 site somebody else deploys — `dist/bugbottle.js` is a self-contained bundle
 that mounts the panel from the tag itself, the annotator included. About

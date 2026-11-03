@@ -13,8 +13,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 - Keyboard element selection with Tab, arrows, Home/End and Enter/Space,
   including non-focusable headings and images, visible and announced selection,
   localised instructions and focus restoration on cancellation (#197). Available
-  in the full bundle and ESM; slim retains pointer selection and Escape
-  cancellation within its unchanged bundle budget.
+  in the full bundle (loaded on demand from `bugbottle-picker.js`) and ESM;
+  slim retains pointer selection and Escape cancellation within its unchanged
+  bundle budget.
 
 - Isolated packed React 18.3.1 and 19.3.0 consumers covering mounted StrictMode
   forms, pending-delivery unmount/remount and matching TypeScript types (#156).

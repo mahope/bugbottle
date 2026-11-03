@@ -1,5 +1,5 @@
 /** Pointer-only picker retained by the slim script-tag build. */
-import { describeElement } from "./element-picker.js";
+import { describeElement } from "./element-description.js";
 export function pickElementWithPointer(options = {}) {
     const ignore = options.ignore ?? ((el) => !!el.closest("[data-bugbottle]"));
     const highlight = options.highlight ?? true;

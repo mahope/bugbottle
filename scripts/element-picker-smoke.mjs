@@ -4,10 +4,12 @@ import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { findChrome, loadPuppeteer } from "./chrome.mjs";
 
+const scriptTag = process.argv.includes("--script-tag");
 const bundle = await build({
   stdin: { contents: `
+    ${scriptTag ? 'const { mountBugbottle, pickElement } = window.bugbottle;' : `
     import { mountBugbottle } from "./src/ui/index.ts";
-    import { pickElement } from "./src/element-picker.ts";
+    import { pickElement } from "./src/element-picker.ts";`}
     window.bb = mountBugbottle({ endpoint: "/reports", fetch: async (_, init) => {
       window.report = JSON.parse(init.body);
       return new Response('{}', { status: 201 });
@@ -33,8 +35,16 @@ const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Picker
 <form onsubmit="event.preventDefault();window.submits++"><button id="submit">Submit</button></form>
 <a id="link" href="#activated" onclick="window.clicks++">Link</a>
 <button id="button" onclick="window.clicks++">Button</button></main>
+${scriptTag ? '<script src="/dist/bugbottle.js"></script>' : ""}
 <script>window.clicks=0;window.submits=0;</script><script type="module" src="/test.js"></script></html>`;
-const server = createServer((req, res) => {
+const chunks = [];
+const server = createServer(async (req, res) => {
+  if (req.url.startsWith("/dist/")) {
+    chunks.push(req.url);
+    res.writeHead(200, { "Content-Type": "text/javascript" });
+    res.end(await readFile(new URL(`..${req.url}`, import.meta.url)));
+    return;
+  }
   res.writeHead(200, { "Content-Type": req.url === "/test.js" ? "text/javascript" : "text/html" });
   res.end(req.url === "/test.js" ? bundle.outputFiles[0].text : html);
 });
@@ -73,13 +83,16 @@ try {
     }
     assert.fail(`keyboard did not visibly select ${id}`);
   };
+  if (scriptTag) assert.equal(chunks.includes("/dist/bugbottle-picker.js"), false);
   await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
   await page.keyboard.press("Home");
   assert.equal(await page.evaluate(() => window.selected), "content", "Home skips transparent elements and descendants");
   await page.keyboard.press("Enter");
   assert.equal(await page.evaluate(() => window.result.selector), "main#content");
   await page.$eval('#heading', el => { el.style.opacity = '0.5'; });
   await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowDown");
   assert.equal(await page.evaluate(() => window.selected), "heading", "partly transparent elements remain selectable");
@@ -125,6 +138,7 @@ try {
   await page.evaluate(() => window.bb.close());
   for (const [id, key] of [["submit", "Enter"], ["link", "Enter"], ["button", "Space"]]) {
     await page.evaluate(() => window.start());
+    await page.waitForSelector('[data-bugbottle="picker"]');
     await select(id);
     await page.keyboard.press(key);
     await page.waitForFunction(() => window.result !== undefined);
@@ -132,6 +146,7 @@ try {
   }
   assert.deepEqual(await page.evaluate(() => [window.clicks, window.submits, location.hash]), [0, 0, ""]);
   await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
   await page.keyboard.press("Enter");
   assert.equal(await page.evaluate(() => window.result), undefined, "confirmation requires a selection");
   await page.keyboard.press("Home");
@@ -161,12 +176,14 @@ try {
   await page.click('#button');
   assert.equal(await page.evaluate(() => window.clicks), 1, "host events work after abort");
   await page.evaluate(() => window.start({ ignore: el => el.id === 'heading' }));
+  await page.waitForSelector('[data-bugbottle="picker"]');
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowRight");
   assert.equal(await page.evaluate(() => window.selected), "image", "custom exclusions apply to keyboard navigation");
   await page.keyboard.press("Escape");
   await page.$eval('#button', el => { el.style.display = 'block'; el.style.marginTop = '600px'; });
   await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
   await page.keyboard.press("End");
   assert.equal(await page.evaluate(() => {
     const target = document.querySelector('#button').getBoundingClientRect();
@@ -176,10 +193,15 @@ try {
   await page.keyboard.press("Escape");
   await page.$eval('#button', el => el.removeAttribute('style'));
   await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
   await page.hover('#heading');
   await page.click('#heading');
   await page.waitForFunction(() => window.result !== undefined);
   assert.equal(await page.evaluate(() => window.result.selector), "h1#heading");
+  if (scriptTag) {
+    assert.equal(chunks.filter(url => url === "/dist/bugbottle-picker.js").length, 1,
+      "the keyboard chunk is fetched once for repeated picks");
+  }
   console.log("Element picker: keyboard panel attachments, announcements, cancellation, abort, host isolation and pointer selection passed");
 } finally {
   await browser?.close();

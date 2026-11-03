@@ -1,5 +1,6 @@
 /** Pointer-only picker retained by the slim script-tag build. */
-import { describeElement, type PickOptions } from "./element-picker.ts";
+import { describeElement } from "./element-description.ts";
+import type { PickOptions } from "./element-picker.ts";
 import type { ElementRef } from "./report-core.ts";
 
 export function pickElementWithPointer(options: PickOptions = {}): Promise<ElementRef | null> {
