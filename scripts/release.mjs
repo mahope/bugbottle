@@ -80,6 +80,6 @@ sh("npm run check");
 sh("git add -A");
 sh(`git commit -q -m "Release ${version}"`);
 sh(`git tag v${version}`);
-sh(`git push origin main v${version}`);
+sh(`git push --atomic origin main v${version}`);
 console.log(`\nReleased ${version}. Watch: gh run list --workflow=release.yml`);
 console.log("Remember: the landing-page size table and the release date on the page are hand-maintained; check site/README.md.");

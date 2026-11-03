@@ -8430,7 +8430,10 @@ evergreen browser on the client.
 
 ## Releasing
 
-`npm run release -- patch` (or `minor`/`major`) bumps the version, commits and pushes the tag.
+`npm run release -- patch` (or `minor`/`major`) bumps the version, commits and
+pushes `main` and the tag atomically. A rejected push preserves the local
+commit/tag; see [release recovery](CONTRIBUTING.md#release-gate-and-recovery)
+before retrying.
 CI publishes to npm and creates the GitHub release.
 
 ## Licence

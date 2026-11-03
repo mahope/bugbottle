@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runInNewContext } from "node:vm";
@@ -66,7 +66,76 @@ for (const unstable of [false, true]) {
       } else {
         run();
         assert.ok(commands.includes('git commit -q -m "Release 1.1.1"'));
-        assert.ok(commands.includes("git push origin main v1.1.1"));
+        assert.ok(commands.includes("git push --atomic origin main v1.1.1"));
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const scenario of ["success", "advanced main", "no atomic support"]) {
+  test(`release push with ${scenario} preserves transactional refs and recovery state`, () => {
+    const dir = mkdtempSync(join(tmpdir(), "bugbottle-release-push-"));
+    const local = join(dir, "local");
+    const remote = join(dir, "remote.git");
+    const bin = join(dir, "bin");
+    const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+    try {
+      mkdirSync(local);
+      mkdirSync(bin);
+      git(dir, "init", "--bare", "--initial-branch=main", remote);
+      git(local, "init", "--initial-branch=main");
+      git(local, "config", "user.name", "Test");
+      git(local, "config", "user.email", "test@example.invalid");
+      for (const path of ["site/da", "src/sinks", "scripts", "dist"]) mkdirSync(join(local, path), { recursive: true });
+      for (const [file, content] of [
+        ["package.json", '{"version":"1.1.0"}'],
+        ["CHANGELOG.md", "## Unreleased\n"],
+        ["README.md", "v1.1.0"],
+        ["site/index.html", "Version 1.1.0"],
+        ["site/da/index.html", "Version 1.1.0"],
+        ["site/da/kom-i-gang.md", "v1.1.0"],
+        ["src/sinks/sentry.ts", 'export const SENTRY_CLIENT_VERSION = "1.1.0";'],
+        ["scripts/release.mjs", readFileSync(new URL("../scripts/release.mjs", import.meta.url), "utf8")],
+      ] as const) writeFileSync(join(local, file), content);
+      git(local, "add", ".");
+      git(local, "commit", "-qm", "Initial fixture");
+      git(local, "remote", "add", "origin", remote);
+      git(local, "push", "origin", "main");
+      if (scenario === "advanced main") {
+        const other = join(dir, "other");
+        git(dir, "clone", remote, other);
+        git(other, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "Advance remote main");
+        git(other, "push", "origin", "main");
+      }
+      if (scenario === "no atomic support") git(remote, "config", "receive.advertiseAtomic", "false");
+      const before = git(remote, "show-ref");
+      // Only npm is stubbed: the release process performs real commits, tags and pushes.
+      writeFileSync(join(bin, "npm"), `#!${process.execPath}
+const fs = require("node:fs");
+if (process.argv[2] === "version") fs.writeFileSync("package.json", '{"version":"1.1.1"}');
+`);
+      chmodSync(join(bin, "npm"), 0o755);
+      const result = spawnSync(process.execPath, ["scripts/release.mjs", "patch"], {
+        cwd: local, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      });
+      assert.ifError(result.error);
+      const head = git(local, "rev-parse", "HEAD");
+      assert.equal(git(local, "rev-parse", "refs/tags/v1.1.1"), head);
+      assert.equal(git(local, "log", "-1", "--format=%s"), "Release 1.1.1");
+      assert.equal(git(local, "status", "--porcelain"), "");
+      if (scenario === "success") {
+        assert.equal(result.status, 0, result.stderr);
+        assert.match(result.stdout, /Released 1\.1\.1/);
+        assert.equal(git(remote, "rev-parse", "refs/heads/main"), head);
+        assert.equal(git(remote, "rev-parse", "refs/tags/v1.1.1"), head);
+      } else {
+        assert.notEqual(result.status, 0);
+        assert.doesNotMatch(result.stdout, /Released/);
+        assert.equal(git(remote, "show-ref"), before);
+        assert.equal(git(remote, "tag", "--list", "v1.1.1"), "");
+        assert.match(result.stderr, scenario === "advanced main" ? /rejected|non-fast-forward/ : /does not support --atomic push/);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });

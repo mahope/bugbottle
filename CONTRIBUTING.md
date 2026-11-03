@@ -52,6 +52,22 @@ React 19's root error handlers are a React 19 API, not a React 18 capability.
 
 ## Release gate and recovery
 
+The release script pushes `main` and the version tag together with
+`git push --atomic origin main vX.Y.Z`. A rejected ref or a remote without
+atomic-push support fails the release without updating either remote ref.
+There is no non-atomic fallback. The local release commit and tag remain for
+inspection and recovery; the script does not print `Released` after failure.
+
+After a failed push, fetch and inspect `origin/main` and the remote tag with
+`git ls-remote origin refs/heads/main refs/tags/vX.Y.Z` before retrying. For a
+transient failure with unchanged refs, retry the same atomic push above;
+do not rerun the version-bumping script. If `main` advanced, keep the original
+local commit/tag as recovery state, create a fresh checkout from `origin/main`,
+reapply the intended changes, and prepare a new version with the release script.
+Do not force-push, move an existing version tag, or delete remote refs. If the
+remote lacks atomic support, stop until support is enabled or use an approved
+remote that supports it; never split the push into separate ref updates.
+
 Tag pushes and manual Release runs call the complete reusable `ci.yml` workflow
 at the release commit. Publication waits for all its jobs: both Node versions
 (including the OpenAPI linter), bundle budgets, browser audits, the Node 18

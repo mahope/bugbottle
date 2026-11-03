@@ -19,6 +19,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Push the release commit and version tag atomically, so a rejected `main`
+  update cannot trigger publication through a new tag (#214).
 - Bound send failure observers to a separate one-second cleanup budget,
   preserving the original delivery error when observers hang or reject (#187).
 - Cancel SMTP connections, TLS negotiation and command/message waits when the
