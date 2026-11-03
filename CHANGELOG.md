@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Reject invalid GitHub Action report size limits before reading reports,
+  preserving the 4096 KB default and positive whole-KB custom limits (#154).
+
 - Match reports in the parent directory with Action globstars (`reports/**/*.json`),
   and keep `?` within one path segment. Document and test the supported glob
   dialect without adding dependencies (#153).

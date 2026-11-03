@@ -128,7 +128,13 @@ function walk(dir, out) {
 function main() {
   const glob = setInput('reports-glob', null);
   const requireScreenshot = String(setInput('require-screenshot', 'false')) === 'true';
-  const maxKb = parseInt(setInput('max-report-size-kb', '4096'), 10);
+  const maxKbInput = setInput('max-report-size-kb', '4096');
+  const maxKb = Number(maxKbInput);
+
+  if (/[^0-9]/.test(maxKbInput) || !Number.isSafeInteger(maxKb) || maxKb <= 0) {
+    fail('configuration error: max-report-size-kb must be a positive safe integer in KB (whole decimal digits only; default 4096)');
+    process.exit(1);
+  }
 
   if (!glob) {
     fail("input 'reports-glob' is required (e.g. reports/*.json)");

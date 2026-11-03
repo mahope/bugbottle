@@ -19,7 +19,7 @@ inputs:
     required: false
     default: 'false'
   max-report-size-kb:
-    description: 'Fail any single report file larger than this (in KB).'
+    description: 'Maximum report file size in KB (1024 bytes). Positive safe integer, decimal digits only; fractions are not supported. Invalid configuration fails before scanning reports.'
     required: false
     default: '4096'
 
