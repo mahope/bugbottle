@@ -132,6 +132,7 @@
     "shot:panel": "node scripts/capture-panel.mjs",
     "shot:og": "node scripts/render-og.mjs",
     "smoke:annotate": "node scripts/annotate-smoke.mjs",
+    "smoke:inbox-docker": "node scripts/inbox-docker-smoke.mjs",
     "smoke:queue-idb": "node scripts/queue-idb-smoke.mjs",
     "smoke:workers": "node scripts/smoke-workers.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",

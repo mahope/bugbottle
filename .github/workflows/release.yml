@@ -23,14 +23,21 @@ permissions:
   id-token: write
 
 jobs:
-  min-node-smoke:
-    uses: ./.github/workflows/min-node-smoke.yml
+  validation:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
 
   publish:
-    needs: min-node-smoke
+    needs: validation
+    if: ${{ needs.validation.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require the version tag at the release SHA (including manual runs)
+        run: node scripts/check-release-ref.mjs
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -40,17 +47,6 @@ jobs:
       - run: npm --version
       - run: npm ci --ignore-scripts
       - run: npm run check
-      - name: Refuse to publish if the tag does not match package.json
-        run: |
-          version="$(node -p 'require("./package.json").version')"
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            tag="${GITHUB_REF_NAME#v}"
-            if [ "$tag" != "$version" ]; then
-              echo "Tag v$tag does not match package.json version $version" >&2
-              exit 1
-            fi
-          fi
-          echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
       - run: npm publish --access public
       - name: Create GitHub release if it does not exist
         env:

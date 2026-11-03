@@ -41,6 +41,29 @@ The [example](examples/workers/) documents the portable import boundary; the
 runtime pin. Install with `npm ci --ignore-scripts`; optional platform binaries
 must be enabled. CI's Workers job runs this smoke with a five-minute job limit.
 
+## Release gate and recovery
+
+Tag pushes and manual Release runs call the complete reusable `ci.yml` workflow
+at the release commit. Publication waits for all its jobs: both Node versions
+(including the OpenAPI linter), bundle budgets, browser audits and the Node 18
+packed-consumer smoke. Only a successful aggregate result enables `publish`;
+missing, pending, failed, skipped or cancelled validation cannot publish.
+Checks from another commit or a separate CI run do not authorise publication.
+
+Both paths require `refs/tags/v<package.json version>`, with the tag peeled to
+the exact release SHA and the publish checkout at that SHA. For manual recovery,
+select the existing version **tag**, not `main`, in Run workflow (or use
+`gh workflow run release.yml --ref vX.Y.Z`). A branch dispatch is refused.
+
+If validation fails, inspect the failing job in the Release run. For transient
+failures, rerun the failed jobs on that same run/tag; publication still waits
+for successful validation. If code needs changing, commit the fix and prepare
+a new version/tag with `npm run release -- patch`; do not move a published tag
+or bypass the gate. Before retrying a publish failure, check npm for that version:
+if it already exists, do not attempt to republish it, and recover the GitHub
+release separately. Gate fixtures run with `node --experimental-strip-types
+--test tests/release-gate.test.ts` and need neither npm credentials nor publishing.
+
 ## Before opening a pull request
 
 - `npm run check` is green.
