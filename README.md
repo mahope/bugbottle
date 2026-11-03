@@ -6349,7 +6349,8 @@ delivery: a sink that has not answered by then is abandoned and counted in
 `sinkErrors` and `onSinkError` exactly like one that threw, and the sink is
 handed an `AbortSignal` in its context that it can pass to `fetch`.
 `toResend`, `toWebhook`, `toGithub` and `toLinear` forward that exact signal
-to their HTTP request, including response-body consumption. A timeout still
+to their HTTP request, including response-body consumption. Webhooks also read
+successful response bodies before completing delivery. A timeout still
 allows later sinks to run. The direct helpers `sendReportEmail`,
 `sendReportWebhook`, `createGithubIssue` and `createLinearIssue` also accept
 an optional `signal: AbortSignal`; an already-aborted signal rejects before

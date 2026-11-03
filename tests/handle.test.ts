@@ -2125,29 +2125,31 @@ for (const [name, makeSink] of legacyHttpSinks) {
     })), { name: "AbortError" });
   });
 
-  test(`${name} cancels a stalled response body at the receiver deadline and continues`, async () => {
-    let cancelled = false;
-    let continued = false;
-    const errors: unknown[] = [];
-    const response = await handleReport(post(body), {
-      sinkTimeoutMs: 20,
-      sinks: [makeSink(async (_url, init) => {
-        const stream = new ReadableStream({
-          start(controller) {
-            init?.signal?.addEventListener("abort", () => {
-              cancelled = true;
-              controller.error(init.signal?.reason);
-            }, { once: true });
-          },
-        });
-        return new Response(stream, { status: 400 });
-      }), async () => { continued = true; }],
-      onSinkError: (error) => errors.push(error),
+  for (const status of name === "webhook" ? [200, 400] : [400]) {
+    test(`${name} cancels a stalled ${status} response body at the receiver deadline and continues`, async () => {
+      let cancelled = false;
+      let continued = false;
+      const errors: unknown[] = [];
+      const response = await handleReport(post(body), {
+        sinkTimeoutMs: 20,
+        sinks: [makeSink(async (_url, init) => {
+          const stream = new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => {
+                cancelled = true;
+                controller.error(init.signal?.reason);
+              }, { once: true });
+            },
+          });
+          return new Response(stream, { status });
+        }), async () => { continued = true; }],
+        onSinkError: (error) => errors.push(error),
+      });
+      assert.equal(response.status, 202);
+      assert.equal(cancelled, true);
+      assert.equal(continued, true);
+      assert.equal(errors.length, 1);
+      assert.equal((errors[0] as Error).name, "SinkTimeoutError");
     });
-    assert.equal(response.status, 202);
-    assert.equal(cancelled, true);
-    assert.equal(continued, true);
-    assert.equal(errors.length, 1);
-    assert.equal((errors[0] as Error).name, "SinkTimeoutError");
-  });
+  }
 }

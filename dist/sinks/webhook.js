@@ -46,9 +46,9 @@ export async function sendReportWebhook(report, options) {
         headers: { "Content-Type": "application/json", ...options.headers },
         body: JSON.stringify(bodyFor(report, format, markdown)),
     });
+    const body = await readBody(response);
+    options.signal?.throwIfAborted();
     if (!response.ok) {
-        const body = await readBody(response);
-        options.signal?.throwIfAborted();
         const fallback = `The webhook refused the report with status ${response.status}`;
         throw new SinkError(messageFromBody(body, fallback), response.status, body);
     }
