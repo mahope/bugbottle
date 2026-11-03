@@ -116,6 +116,49 @@ function withBrowser(fn: (env: Browser) => Promise<void> | void): Promise<void> 
 
 afterEach(() => resetNetwork());
 
+for (const metadata of ["method", "url", "conversion", "status"] as const) {
+  for (const rejects of [false, true]) {
+    test(`throwing ${metadata} metadata preserves fetch ${rejects ? "rejection" : "response"}`, async () => {
+      await withBrowser(async () => {
+        const diagnosticError = new Error("metadata unavailable");
+        const failure = new TypeError("host fetch failed");
+        const response = { status: 503 } as Response;
+        const input = {
+          get method() {
+            if (metadata === "method") throw diagnosticError;
+            return "POST";
+          },
+          get url() {
+            if (metadata === "url") throw diagnosticError;
+            return metadata === "conversion" ? {
+              toString() { throw diagnosticError; },
+            } : "/api/orders";
+          },
+        } as unknown as Request;
+        if (metadata === "status") {
+          Object.defineProperty(response, "status", { get() { throw diagnosticError; } });
+        }
+        let calls = 0;
+        globalThis.fetch = ((actual, init) => {
+          calls += 1;
+          assert.equal(actual, input);
+          assert.equal(init, undefined);
+          return rejects ? Promise.reject(failure) : Promise.resolve(response);
+        }) as typeof fetch;
+        initNetwork({ all: true });
+        if (rejects) {
+          await assert.rejects(() => fetch(input), (error) => error === failure);
+        } else {
+          assert.equal(await fetch(input), response);
+        }
+        assert.equal(calls, 1);
+        assert.equal(getNetwork().length, metadata === "status" && rejects ? 1 : 0);
+        resetNetwork();
+      });
+    });
+  }
+}
+
 test("a fast, successful request is not recorded", async () => {
   await withBrowser(async ({ answer }) => {
     initNetwork();
