@@ -3,6 +3,45 @@ import assert from "node:assert/strict";
 import { createReportState } from "../src/report-state.ts";
 import { createQueue, type QueuedReport } from "../src/queue.ts";
 
+for (const withQueue of [true, false]) {
+  test(`onSent throwing preserves successful delivery ${withQueue ? "with" : "without"} a queue`, async (t) => {
+    const fetch = t.mock.method(globalThis, "fetch", async () =>
+      new Response(JSON.stringify({ id: "report-131" }), { status: 201 }));
+    const error = new Error("Host callback failed");
+    const logged = t.mock.method(console, "error", () => {});
+    const queued: unknown[] = [];
+    const onSent = t.mock.fn((id: string | undefined) => {
+      assert.equal(id, "report-131");
+      throw error;
+    });
+    const form = createReportState({
+      endpoint: "/reports",
+      onSent,
+      queue: withQueue ? {
+        enqueue: (report) => { queued.push(report); },
+        flush: async () => 0,
+        size: () => queued.length,
+        clear() {},
+        destroy() {},
+      } : undefined,
+    });
+    t.after(() => form.destroy());
+    form.actions.setMessage("test report");
+    form.actions.setContact("test contact");
+    assert.equal(await form.actions.submit(), true);
+    assert.deepEqual(form.getState().status, { kind: "sent", id: "report-131" });
+    assert.equal(form.getState().message, "");
+    assert.equal(form.getState().contact, "");
+    assert.equal(form.getState().screenshot, null);
+    assert.equal(form.getState().screenshotRegion, null);
+    assert.deepEqual(form.getState().elements, []);
+    assert.equal(queued.length, 0);
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.equal(onSent.mock.callCount(), 1);
+    assert.deepEqual(logged.mock.calls.map((call) => call.arguments), [[error]]);
+  });
+}
+
 for (const status of [429, 400, 401, 403]) {
   test(`initial ${status} ${status === 429 ? "queues" : "rejects"} the report`, async (t) => {
     t.mock.method(globalThis, "fetch", async () => new Response("{}", { status }));
