@@ -19,6 +19,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Reject non-increasing release versions against package metadata, local tags
+  and npm before editing or staging files; stop safely when registry evidence
+  is unavailable (#215).
+
 - Bound send failure observers to a separate one-second cleanup budget,
   preserving the original delivery error when observers hang or reject (#187).
 - Cancel SMTP connections, TLS negotiation and command/message waits when the

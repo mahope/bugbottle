@@ -52,6 +52,24 @@ React 19's root error handlers are a React 19 API, not a React 18 capability.
 
 ## Release gate and recovery
 
+`npm run release -- patch|minor|major|<x.y.z>` first resolves a stable version
+without changing files. It must exceed package.json, every available local
+stable version tag (`vX.Y.Z` or `X.Y.Z`), and every version returned by
+`npm view bugbottle versions --json --prefer-online`. Components are compared
+numerically, including multi-digit components. Fetch release tags before
+preparing a release when working from a shallow or outdated clone.
+
+Registry errors, timeouts (30 seconds), missing evidence and invalid responses
+stop before `npm version`, documentation edits, builds, staging or tagging.
+Check npm registry access and retry the same release command; there is no local
+preflight mutation to undo. Do not bypass the lookup or reuse an existing
+version/tag: choose an explicit version above all known releases if an ordinary
+bump is too low. These checks are a snapshot, so publication can still lose a
+race with another release; follow the recovery policy below in that case.
+Preflight fixtures mock registry responses and use temporary local Git repos:
+`node --experimental-strip-types --test tests/release.test.ts` needs no network,
+credentials or publication.
+
 Tag pushes and manual Release runs call the complete reusable `ci.yml` workflow
 at the release commit. Publication waits for all its jobs: both Node versions
 (including the OpenAPI linter), bundle budgets, browser audits, the Node 18

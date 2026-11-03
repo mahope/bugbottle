@@ -28,8 +28,50 @@ if (out("git branch --show-current") !== "main") {
 }
 
 const before = JSON.parse(readFileSync("package.json", "utf8")).version;
-sh(`npm version ${bump} --no-git-tag-version`);
-const version = JSON.parse(readFileSync("package.json", "utf8")).version;
+const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const parts = (value) => {
+  if (typeof value !== "string" || !stable.test(value))
+    throw new Error(`Expected a stable x.y.z version: ${value}`);
+  return value.split(".").map(BigInt);
+};
+const compare = (left, right) => {
+  const a = parts(left), b = parts(right);
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
+  }
+  return 0;
+};
+const next = parts(before);
+const component = ["major", "minor", "patch"].indexOf(bump);
+if (component !== -1) {
+  next[component]++;
+  for (let i = component + 1; i < 3; i++) next[i] = 0n;
+}
+const version = component === -1 ? bump : next.join(".");
+if (compare(version, before) <= 0)
+  throw new Error(`Release ${version} must exceed current version ${before}.`);
+for (const tag of out("git tag --list").split("\n")) {
+  const tagged = tag.replace(/^v/, "");
+  if (stable.test(tagged) && compare(version, tagged) <= 0)
+    throw new Error(`Release ${version} must exceed existing tag ${tag}.`);
+}
+let published;
+try {
+  published = JSON.parse(execSync("npm view bugbottle versions --json --prefer-online", {
+    stdio: ["ignore", "pipe", "pipe"], timeout: 30_000,
+  }).toString());
+  if (typeof published === "string") published = [published];
+  if (!Array.isArray(published) || !published.length ||
+      published.some((value) => typeof value !== "string" || !stable.test(value)))
+    throw new Error("Missing stable registry versions");
+} catch {
+  throw new Error("Cannot verify npm registry versions. Check registry access and retry the release; no files have changed.");
+}
+for (const existing of published) {
+  if (compare(version, existing) <= 0)
+    throw new Error(`Release ${version} must exceed published version ${existing}.`);
+}
+sh(`npm version ${version} --no-git-tag-version`);
 const today = new Date().toISOString().slice(0, 10);
 
 function edit(file, fn) {

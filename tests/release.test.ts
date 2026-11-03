@@ -48,7 +48,9 @@ for (const unstable of [false, true]) {
         writeFileSync: (file: string, value: string) => files.set(file, value),
         execSync: (command: string) => {
           commands.push(command);
-          if (command === "npm version patch --no-git-tag-version") files.set("package.json", '{"version":"1.1.1"}');
+          if (command === "git tag --list") return "";
+          else if (command === "npm view bugbottle versions --json --prefer-online") return '["1.1.0"]';
+          else if (command === "npm version 1.1.1 --no-git-tag-version") files.set("package.json", '{"version":"1.1.1"}');
           else if (command === "npm run build") build();
           else if (command === "npm run check") {
             build();
@@ -56,18 +58,79 @@ for (const unstable of [false, true]) {
           } else if (command.startsWith("git add ")) git(...command.slice(4).split(" "));
           else if (command === "git status --porcelain") return "";
           else if (command === "git branch --show-current") return "main";
-          else if (!/^git (commit|tag|push) /.test(command)) throw new Error(`unexpected command: ${command}`);
+          else if (!/^git (commit|tag(?! --list)|push) /.test(command)) throw new Error(`unexpected command: ${command}`);
           return "";
         },
       });
       if (unstable) {
         assert.throws(run);
-        assert.ok(!commands.some((command) => /^git (commit|tag|push) /.test(command)));
+        assert.ok(!commands.some((command) => /^git (commit|tag(?! --list)|push) /.test(command)));
       } else {
         run();
         assert.ok(commands.includes('git commit -q -m "Release 1.1.1"'));
         assert.ok(commands.includes("git push origin main v1.1.1"));
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const fixture of [
+  { bump: "1.9.9", current: "1.10.0", error: /current version/ },
+  { bump: "1.10.0", current: "1.10.0", error: /current version/ },
+  { bump: "1.2.9", registry: '["1.2.10"]', error: /published/ },
+  { bump: "2.0.0", tag: "v2.0.0", error: /tag/ },
+  { bump: "2.9.9", tag: "v2.10.0", error: /tag/ },
+  { bump: "2.0.0", registry: '["2.0.0"]', error: /published/ },
+  { bump: "2.9.9", registry: '["2.10.0"]', error: /published/ },
+  { bump: "patch", registry: "failure", error: /registry.*retry/i },
+  ...["null", "[]", "{}", '"garbage"'].map((registry) =>
+    ({ bump: "patch", registry, error: /registry.*retry/i })),
+  { bump: "patch", current: "1.9.9", next: "1.9.10" },
+  { bump: "minor", current: "1.9.9", next: "1.10.0" },
+  { bump: "major", current: "1.9.9", next: "2.0.0" },
+  { bump: "10.0.0", current: "9.10.11", tag: "v9.99.99", next: "10.0.0" },
+]) {
+  test(`release preflight ${JSON.stringify(fixture)}`, () => {
+    const dir = mkdtempSync(join(tmpdir(), "bugbottle-preflight-"));
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    const current = fixture.current ?? "1.0.0";
+    const mutations: string[] = [];
+    try {
+      git("init", "-q", "--initial-branch=main");
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ version: current }));
+      git("add", "package.json");
+      git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "Fixture");
+      if (fixture.tag) git("tag", fixture.tag);
+      const snapshot = () => [
+        readFileSync(join(dir, "package.json"), "utf8"),
+        git("write-tree"), git("show-ref"), git("status", "--porcelain"),
+      ];
+      const before = snapshot();
+      const run = () => runInNewContext(release, {
+        process: { argv: ["node", "release.mjs", fixture.bump] },
+        console,
+        readFileSync: (file: string) => readFileSync(join(dir, file), "utf8"),
+        writeFileSync: () => { mutations.push("write"); throw new Error("unexpected write"); },
+        execSync: (command: string) => {
+          if (command.startsWith("git ")) return git(...command.slice(4).split(" "));
+          if (command === "npm view bugbottle versions --json --prefer-online") {
+            if (fixture.registry === "failure") throw new Error("offline");
+            return fixture.registry ?? JSON.stringify([current]);
+          }
+          mutations.push(command);
+          throw new Error("mutation boundary");
+        },
+      });
+      if (fixture.error) {
+        assert.throws(run, fixture.error);
+        assert.deepEqual(mutations, []);
+      } else {
+        assert.throws(run, /mutation boundary/);
+        assert.deepEqual(mutations, [`npm version ${fixture.next} --no-git-tag-version`]);
+      }
+      assert.deepEqual(snapshot(), before);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
