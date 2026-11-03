@@ -29,6 +29,8 @@ if (out("git branch --show-current") !== "main") {
 
 const before = JSON.parse(readFileSync("package.json", "utf8")).version;
 const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const identifier = "(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)";
+const registryVersion = new RegExp(`^${stable.source.slice(1, -1)}(?:-(${identifier}(?:\\.${identifier})*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`);
 const parts = (value) => {
   if (typeof value !== "string" || !stable.test(value))
     throw new Error(`Expected a stable x.y.z version: ${value}`);
@@ -62,13 +64,15 @@ try {
   }).toString());
   if (typeof published === "string") published = [published];
   if (!Array.isArray(published) || !published.length ||
-      published.some((value) => typeof value !== "string" || !stable.test(value)))
-    throw new Error("Missing stable registry versions");
+      published.some((value) => typeof value !== "string" || !registryVersion.test(value)))
+    throw new Error("Missing valid registry versions");
 } catch {
   throw new Error("Cannot verify npm registry versions. Check registry access and retry the release; no files have changed.");
 }
 for (const existing of published) {
-  if (compare(version, existing) <= 0)
+  const core = existing.split(/[-+]/)[0];
+  const ordering = compare(version, core);
+  if (ordering < 0 || (ordering === 0 && existing[core.length] !== "-"))
     throw new Error(`Release ${version} must exceed published version ${existing}.`);
 }
 sh(`npm version ${version} --no-git-tag-version`);

@@ -58,6 +58,9 @@ stable version tag (`vX.Y.Z` or `X.Y.Z`), and every version returned by
 `npm view bugbottle versions --json --prefer-online`. Components are compared
 numerically, including multi-digit components. Fetch release tags before
 preparing a release when working from a shallow or outdated clone.
+Valid registry prereleases are compared by their numeric core: a stable release
+exceeds a prerelease of the same core, but must exceed any higher core first.
+Build metadata does not affect precedence. Malformed versions still stop preflight.
 
 Registry errors, timeouts (30 seconds), missing evidence and invalid responses
 stop before `npm version`, documentation edits, builds, staging or tagging.

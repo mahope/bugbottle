@@ -85,6 +85,13 @@ for (const fixture of [
   { bump: "2.0.0", registry: '["2.0.0"]', error: /published/ },
   { bump: "2.9.9", registry: '["2.10.0"]', error: /published/ },
   { bump: "patch", registry: "failure", error: /registry.*retry/i },
+  { bump: "patch", current: "1.1.0", registry: '["1.0.0-beta.1","1.1.0"]', next: "1.1.1" },
+  { bump: "1.1.1", registry: '["1.1.1-rc.1+build.2"]', next: "1.1.1" },
+  { bump: "1.1.1", registry: '["1.2.0-beta.1"]', error: /published/ },
+  { bump: "1.1.1", registry: '["1.1.1+build.2"]', error: /published/ },
+  { bump: "1.1.1", registry: '["1.1.1+build-2"]', error: /published/ },
+  ...["1.0.0-01", "1.0.0-beta..1", "1.0.0-", "01.0.0-beta.1"].map((value) =>
+    ({ bump: "patch", registry: JSON.stringify(["1.0.0", value]), error: /registry.*retry/i })),
   ...["null", "[]", "{}", '"garbage"'].map((registry) =>
     ({ bump: "patch", registry, error: /registry.*retry/i })),
   { bump: "patch", current: "1.9.9", next: "1.9.10" },
