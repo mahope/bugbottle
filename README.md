@@ -6545,6 +6545,13 @@ now, which is what to call after a backup is restored underneath the inbox or
 when something else has been writing to the directory. Nothing calls it on its
 own — a walk on every request is the cost this index exists to avoid.
 
+A missing directory is an empty inbox. Other directory access errors reject;
+a failed `refresh()` leaves the previous index intact. Deletion removes the
+PNG first, then the JSON, and only then the index entry. If PNG deletion fails,
+the report stays unchanged. If JSON deletion fails after the PNG was removed,
+the report stays listed and readable without its picture. `remove()` or
+retention can retry the deletion; filesystem errors are returned to the caller.
+
 **Retention.** "Store it like personal data" needs a way to stop storing it.
 `maxAgeDays` is how long a report is kept, and `prune()` is what applies it:
 everything that arrived longer ago than that goes first, then everything over
