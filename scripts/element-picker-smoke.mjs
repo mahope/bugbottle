@@ -25,6 +25,8 @@ const bundle = await build({
 });
 const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Picker</title>
 <style>img{width:80px;height:60px} main{padding:20px}</style>
+<h1 id="transparent" style="opacity:0">Invisible</h1>
+<div style="opacity:0"><div><h1 id="transparent-child" style="opacity:1">Invisible child</h1></div></div>
 <main id="content"><h1 id="heading">Orders</h1>
 <img id="image" alt="Order diagram" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='blue'/%3E%3C/svg%3E">
 <h2 hidden id="hidden">Hidden</h2><div inert><h2 id="inert">Inert</h2></div>
@@ -71,6 +73,18 @@ try {
     }
     assert.fail(`keyboard did not visibly select ${id}`);
   };
+  await page.evaluate(() => window.start());
+  await page.keyboard.press("Home");
+  assert.equal(await page.evaluate(() => window.selected), "content", "Home skips transparent elements and descendants");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.evaluate(() => window.result.selector), "main#content");
+  await page.$eval('#heading', el => { el.style.opacity = '0.5'; });
+  await page.evaluate(() => window.start());
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await page.evaluate(() => window.selected), "heading", "partly transparent elements remain selectable");
+  await page.keyboard.press("Escape");
+  await page.$eval('#heading', el => el.removeAttribute('style'));
   await page.evaluate(() => window.bb.open());
   await page.screenshot({ path: "/tmp/bugbottle-picker-before.png" });
   for (const id of ["heading", "image"]) {

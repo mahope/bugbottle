@@ -241,6 +241,10 @@ export function pickElement(options = {}) {
             const candidates = Array.from(document.body.querySelectorAll("*")).filter(el => {
                 if (el.closest('[data-bugbottle], [hidden], [inert], [aria-hidden="true"]') || ignore(el))
                     return false;
+                for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
+                    if (window.getComputedStyle(ancestor).opacity === "0")
+                        return false;
+                }
                 const style = window.getComputedStyle(el);
                 const rect = el.getBoundingClientRect();
                 return style.visibility === "visible" && style.display !== "none" && rect.width > 0 && rect.height > 0;

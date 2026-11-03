@@ -5707,7 +5707,8 @@ Tab or Down/Right moves forward through rendered page elements in document
 order; Shift+Tab or Up/Left moves back, wrapping at either end. Home/End
 selects the first/last element. Headings, images and text containers need no
 `tabindex`. Hidden, inert, `aria-hidden` and bugbottle-owned content is skipped,
-as are elements excluded by `ignore`. The selection scrolls into view, uses
+as are elements excluded by `ignore` or made fully transparent by their own
+or an ancestor's `opacity: 0`. The selection scrolls into view, uses
 the same highlight as pointer selection, and is announced in a live region.
 Enter or Space attaches it without activating links, buttons or forms.
 Escape or the abort signal cancels; the panel returns focus to its picker
