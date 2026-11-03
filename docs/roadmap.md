@@ -265,7 +265,11 @@ script-tag builds grew by the three bytes of that parameter.
 
 **Alongside** — the WordPress plugin `mahope/bugbottle-wordpress` (panel plus
 endpoint, private post type, admin, email, Danish and English), and the GitHub
-Action `mahope/bugbottle@v0` that validates exported reports in CI.
+Action `mahope/bugbottle@v0` that validates exported reports in CI. Its documented
+glob dialect supports `*`, `?`, `**` and `**/`, including reports directly in
+the search directory for recursive patterns (#153). Report size limits reject
+invalid configuration before accessing files and accept positive whole KB,
+with a 4096 KB default (#154).
 
 **Alongside** — `examples/inbox`: a dependency-free Node server that receives
 reports with `handleReport`, writes each one to disk as JSON beside its PNG,

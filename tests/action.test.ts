@@ -15,13 +15,24 @@ import { fileURLToPath } from "node:url";
 
 const ACTION = fileURLToPath(new URL("../action/index.cjs", import.meta.url));
 
-function runAction(files: Record<string,string>, env: Record<string,string> = {}) {
+function runAction(files: Record<string,string>, env: Record<string,string> = {}, forbidReportAccess = false) {
   const dir = mkdtempSync(join(tmpdir(), "bugbottle-action-"));
   try {
     for (const [name, content] of Object.entries(files) as [string, string][]) {
       const p = join(dir, name);
       mkdirSync(join(p, ".."), { recursive: true });
       writeFileSync(p, content);
+    }
+    const args = [ACTION];
+    if (forbidReportAccess) {
+      const guard = join(dir, "guard.cjs");
+      writeFileSync(guard, `const fs = require('node:fs');
+const readFile = fs.readFileSync;
+const refuse = () => { throw new Error('report access before configuration validation'); };
+fs.readdirSync = refuse;
+fs.readFileSync = (file, ...args) => file === ${JSON.stringify(ACTION)} ? readFile(file, ...args) : refuse();
+require(${JSON.stringify(ACTION)});`);
+      args[0] = guard;
     }
     const outputFile = join(dir, "github-output");
     writeFileSync(outputFile, "existing=value\n");
@@ -34,7 +45,7 @@ function runAction(files: Record<string,string>, env: Record<string,string> = {}
       ...env,
     };
     if (env.GITHUB_OUTPUT === "") delete runnerEnv.GITHUB_OUTPUT;
-    const result = spawnSync(process.execPath, [ACTION], {
+    const result = spawnSync(process.execPath, args, {
       cwd: dir,
       env: runnerEnv,
       encoding: "utf8",
@@ -118,11 +129,63 @@ test("no matching files is an error, not a silent pass", () => {
   assert.match(r.out, /no report files matched/);
 });
 
-test("runner max-report-size-kb input limits file size", () => {
+test("default size limit remains 4096 KB", () => {
+  const below = runAction({ "reports/a.json": goodReport.padEnd(4096 * 1024, " ") });
+  assert.equal(below.code, 0, below.out);
+  const above = runAction({ "reports/a.json": goodReport.padEnd(4096 * 1024 + 1, " ") });
+  assert.equal(above.code, 1);
+  assert.match(above.out, /file larger than 4096 KB/);
+});
+
+test("custom size limit accepts a report one byte below and rejects one byte above", () => {
+  const r = runAction({
+    "reports/below.json": goodReport.padEnd(1023, " "),
+    "reports/above.json": goodReport.padEnd(1025, " "),
+  }, { "INPUT_MAX-REPORT-SIZE-KB": "1" });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /ok: reports\/below.json/);
+  assert.match(r.out, /reports\/above.json: unreadable or oversized \(file larger than 1 KB\)/);
+  assert.match(r.out, /1 valid, 1 invalid/);
+  assert.doesNotMatch(r.out, /configuration error/);
+});
+
+for (const limit of ["nonsense", "10junk", "0", "-1", "NaN", "Infinity", "-Infinity", "1e309", "0.5", "1.5", "0x10", "1e3", "9007199254740992", " ", " 1", "1\n", "+1"]) {
+  test(`invalid size limit ${limit} fails before walking or reading reports`, () => {
+    const r = runAction({ "reports/a.json": goodReport }, { "INPUT_MAX-REPORT-SIZE-KB": limit }, true);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /::error::configuration error: max-report-size-kb must be a positive safe integer in KB/);
+    assert.doesNotMatch(r.out, /report access|unreadable or oversized|valid-count|invalid-count/);
+  });
+}
+
+const globFixtures = [
+  { pattern: "reports/**/*.json", matches: ["reports/a.json"], excludes: ["reports/a.txt"] },
+  { pattern: "**/*.json", matches: ["a.json", "reports/nested/a.json"], excludes: ["a.txt", "node_modules/a.json", ".git/a.json"] },
+  { pattern: "reports/**/*.json", matches: ["reports/a.json", "reports/nested/a.json", "reports/nested/deep/a.json"], excludes: ["reports/a.txt", "reports/nested/a.json.bak", "reports-other/a.json"] },
+  { pattern: "reports/*.json", matches: ["reports/a.json", "reports/.json"], excludes: ["reports/nested/a.json", "reports/a.txt", "reports-other/a.json"] },
+  { pattern: "reports/?.json", matches: ["reports/a.json"], excludes: ["reports/.json", "reports/ab.json", "reports/x/y.json", "reports/a.txt"] },
+  { pattern: "reports?.json", matches: ["reportsa.json"], excludes: ["reports/.json", "reports.json", "reportsab.json"] },
+  { pattern: "reports/**.json", matches: ["reports/a.json", "reports/nested/deep/a.json"], excludes: ["reports/a.txt", "reports-other/a.json"] },
+  { pattern: "reports/a.+(x)[1]{$}^|.json", matches: ["reports/a.+(x)[1]{$}^|.json"], excludes: ["reports/aaax1.json", "reports/a.+(x)[1]{$}^|Xjson"] },
+  { pattern: "reports/**/*.json", matches: [], excludes: ["reports/a.txt", "reports-other/a.json", "node_modules/reports/a.json", ".git/reports/a.json"] },
+];
+
+for (const { pattern, matches, excludes } of globFixtures) {
+  test(`glob ${pattern} selects exactly ${JSON.stringify(matches)}`, () => {
+    const files = Object.fromEntries([...matches, ...excludes].map((name) => [name, goodReport]));
+    const r = runAction(files, { "INPUT_REPORTS-GLOB": pattern });
+    assert.equal(r.code, matches.length ? 0 : 1, r.out);
+    const selected = r.out.split("\n").filter((line) => line.startsWith("ok: ")).map((line) => line.slice(4));
+    assert.deepEqual(selected.sort(), [...matches].sort(), r.out);
+    if (!matches.length) assert.match(r.out, /no report files matched/);
+  });
+}
+
+test("runner max-report-size-kb input rejects zero before writing counts", () => {
   const r = runAction({ "reports/a.json": goodReport }, { "INPUT_MAX-REPORT-SIZE-KB": "0" });
   assert.equal(r.code, 1);
-  assert.match(r.out, /file larger than 0 KB/);
-  assert.equal(r.outputs, "existing=value\nvalid-count=0\ninvalid-count=1\n");
+  assert.match(r.out, /configuration error: max-report-size-kb must be a positive safe integer in KB/);
+  assert.equal(r.outputs, "existing=value\n");
 });
 
 test("standalone validation without GITHUB_OUTPUT keeps its exit status and summary", () => {
