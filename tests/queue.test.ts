@@ -765,6 +765,8 @@ test("a retry after the backoff signs again, with a fresh timestamp", async (t) 
     endpoint: "/api/feedback",
     fetch,
     sign: createSigner({ key: SIGN_KEY }),
+    // The shortened backoff timer must not also give WebCrypto a 5 ms deadline.
+    timeoutMs: 0,
   });
   queue.enqueue(report("the outage it describes"));
   assert.equal(await queue.flush(), 1);
