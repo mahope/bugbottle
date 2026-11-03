@@ -29,6 +29,7 @@ import { MAX_BREADCRUMBS, MAX_BREADCRUMB_TEXT_LENGTH, } from "./report-core.js";
 const EDITABLE_SELECTOR = "[contenteditable]:not([contenteditable=\"false\"])";
 let buffer = [];
 let initialised = false;
+let generation = 0;
 let maxEntries = MAX_BREADCRUMBS;
 let beforeBreadcrumb = null;
 /** One undo per thing `initBreadcrumbs` did, so reset cannot forget one. */
@@ -179,16 +180,19 @@ export function initBreadcrumbs(options = {}) {
     on(win, "hashchange", navigated);
     // Single-page routers navigate through the History API, which fires no event
     // of its own — so the two methods are wrapped. The originals are always
-    // called, and put back on reset.
+    // called, and put back on reset only while the wrapper is still ours.
     const past = globalThis.history;
     if (past?.pushState) {
         const target = past;
+        const era = generation;
         for (const name of ["pushState", "replaceState"]) {
             const original = target[name];
-            target[name] = function (data, unused, url) {
+            const patched = function (data, unused, url) {
                 original.call(this, data, unused, url);
                 try {
-                    recordNavigation(pathOf(url));
+                    // A host wrapper can retain this closure across reset and re-init.
+                    if (era === generation)
+                        recordNavigation(pathOf(url));
                 }
                 catch {
                     // The navigation has already happened by this point, and recording it
@@ -196,8 +200,10 @@ export function initBreadcrumbs(options = {}) {
                     // may turn a router's `pushState` into a thrown error.
                 }
             };
+            target[name] = patched;
             undo.push(() => {
-                target[name] = original;
+                if (target[name] === patched)
+                    target[name] = original;
             });
         }
     }
@@ -214,6 +220,7 @@ export function isBreadcrumbsActive() {
 }
 /** Empties the buffer, removes the listeners and unpatches `history`. */
 export function resetBreadcrumbs() {
+    generation += 1;
     buffer = [];
     registerBreadcrumbSource(null);
     for (const step of undo)

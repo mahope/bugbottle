@@ -5769,7 +5769,10 @@ initBreadcrumbs({
   a name, an address or an amount on a card never travels with the click.
 
 `getBreadcrumbs()` returns a copy of the timeline, and `resetBreadcrumbs()`
-empties it, removes the listeners and puts `history` back as it found it.
+empties it, removes the listeners and restores the History methods only if
+they are still the recorder's own wrappers. Wrappers installed later by a
+router or observer stay in place. Old recorder wrappers retained in that
+chain still call through, but cannot record into a stopped or later session.
 `initBreadcrumbs` returns that same function as its `stop()`, so a caller that
 started the recorder can undo it without importing a second name.
 

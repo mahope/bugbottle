@@ -62,6 +62,7 @@ const EDITABLE_SELECTOR = "[contenteditable]:not([contenteditable=\"false\"])";
 
 let buffer: Breadcrumb[] = [];
 let initialised = false;
+let generation = 0;
 let maxEntries = MAX_BREADCRUMBS;
 let beforeBreadcrumb: ((crumb: Breadcrumb) => Breadcrumb | null) | null = null;
 
@@ -221,24 +222,27 @@ export function initBreadcrumbs(options: BreadcrumbsOptions = {}): () => void {
 
   // Single-page routers navigate through the History API, which fires no event
   // of its own — so the two methods are wrapped. The originals are always
-  // called, and put back on reset.
+  // called, and put back on reset only while the wrapper is still ours.
   const past = globalThis.history as HistoryLike | undefined;
   if (past?.pushState) {
     const target = past;
+    const era = generation;
     for (const name of ["pushState", "replaceState"] as const) {
       const original = target[name];
-      target[name] = function (data, unused, url) {
+      const patched: HistoryLike[typeof name] = function (this: HistoryLike, data, unused, url) {
         original.call(this, data, unused, url);
         try {
-          recordNavigation(pathOf(url));
+          // A host wrapper can retain this closure across reset and re-init.
+          if (era === generation) recordNavigation(pathOf(url));
         } catch {
           // The navigation has already happened by this point, and recording it
           // is the least important thing on the stack. Nothing this module does
           // may turn a router's `pushState` into a thrown error.
         }
       };
+      target[name] = patched;
       undo.push(() => {
-        target[name] = original;
+        if (target[name] === patched) target[name] = original;
       });
     }
   }
@@ -259,6 +263,7 @@ export function isBreadcrumbsActive(): boolean {
 
 /** Empties the buffer, removes the listeners and unpatches `history`. */
 export function resetBreadcrumbs(): void {
+  generation += 1;
   buffer = [];
   registerBreadcrumbSource(null);
   for (const step of undo) step();

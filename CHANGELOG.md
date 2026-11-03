@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Preserve later History wrappers when stopping breadcrumbs, and prevent
+  retained recorder wrappers from recording into stopped or later sessions
+  across repeated init/reset cycles (#173).
 - Match reports in the parent directory with Action globstars (`reports/**/*.json`),
   and keep `?` within one path segment. Document and test the supported glob
   dialect without adding dependencies (#153).

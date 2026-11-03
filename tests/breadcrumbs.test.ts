@@ -127,6 +127,87 @@ function withBrowser(fn: (env: Browser) => void): void {
 
 afterEach(() => resetBreadcrumbs());
 
+for (const name of ["pushState", "replaceState"] as const) {
+  test(`reset preserves a later ${name} wrapper and calls through once`, () => {
+    withBrowser(({ history }) => {
+      initBreadcrumbs();
+      const recorded = history[name];
+      let calls = 0;
+      const host: typeof recorded = function (this: FakeHistory, ...args) {
+        calls += 1;
+        return recorded.apply(this, args);
+      };
+      history[name] = host;
+      resetBreadcrumbs();
+      assert.equal(history[name], host);
+      history[name]({}, "", "/after-reset");
+      assert.equal(calls, 1);
+      assert.deepEqual(history.calls, [`${name === "pushState" ? "push" : "replace"}:/after-reset`]);
+      assert.deepEqual(getBreadcrumbs(), []);
+    });
+  });
+
+  test(`a retained ${name} wrapper cannot record into stopped or later sessions`, () => {
+    withBrowser(({ history }) => {
+      initBreadcrumbs();
+      const retained = history[name];
+      resetBreadcrumbs();
+      retained.call(history, {}, "", "/stopped");
+      assert.deepEqual(getBreadcrumbs(), []);
+      initBreadcrumbs();
+      retained.call(history, {}, "", "/old-session");
+      assert.deepEqual(getBreadcrumbs(), []);
+      history[name]({}, "", "/current");
+      assert.deepEqual(getBreadcrumbs().map(({ from, to }) => ({ from, to })), [
+        { from: "/orders/1", to: "/current" },
+      ]);
+      assert.equal(history.calls.length, 3);
+    });
+  });
+}
+
+test("repeated sessions preserve host chains without duplicating navigation or listeners", () => {
+  withBrowser(({ history, doc, win, go }) => {
+    const originals = { pushState: history.pushState, replaceState: history.replaceState };
+    const hostCalls = { pushState: 0, replaceState: 0 };
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      initBreadcrumbs();
+      initBreadcrumbs();
+      const hosts = { ...originals };
+      for (const name of ["pushState", "replaceState"] as const) {
+        const recorded = history[name];
+        hosts[name] = function (...args) {
+          hostCalls[name] += 1;
+          return recorded.apply(this, args);
+        };
+        history[name] = hosts[name];
+        history[name]({}, "", `/${name}/${cycle}`);
+      }
+      doc.dispatch("click", { target: element("button", { id: "once" }) });
+      doc.dispatch("submit", { target: element("form") });
+      doc.dispatch("visibilitychange", {});
+      go(`/back/${cycle}`);
+      win.dispatchEvent(new Event("popstate"));
+      assert.deepEqual(getBreadcrumbs().map(({ kind }) => kind), [
+        "navigation", "navigation", "click", "submit", "visibility", "navigation",
+      ]);
+      assert.equal(history.calls.length, (cycle + 1) * 2);
+      resetBreadcrumbs();
+      for (const name of ["pushState", "replaceState"] as const) {
+        assert.equal(history[name], hosts[name]);
+      }
+      doc.dispatch("click", { target: element("button") });
+      doc.dispatch("submit", { target: element("form") });
+      doc.dispatch("visibilitychange", {});
+      go(`/stopped/${cycle}`);
+      win.dispatchEvent(new Event("popstate"));
+      win.dispatchEvent(new Event("hashchange"));
+      assert.deepEqual(getBreadcrumbs(), []);
+    }
+    assert.deepEqual(hostCalls, { pushState: 6, replaceState: 6 });
+  });
+});
+
 test("a click records the selector and the trimmed text", () => {
   withBrowser(({ doc }) => {
     initBreadcrumbs();
