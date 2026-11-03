@@ -200,12 +200,18 @@ export function attachRrweb(record: RrwebRecord, options: RrwebOptions = {}): ()
 
   const emit = (event: RrwebEvent, isCheckout?: boolean) => {
     if (typeof event !== "object" || event === null) return;
+    const resuming = awaitingCheckout && event.type === 2;
     if (awaitingCheckout) {
-      if (event.type !== 2) return;
-      awaitingCheckout = false;
+      if (event.type === 4) {
+        // rrweb emits viewport metadata immediately before its full snapshot.
+        groups = [];
+        totalBytes = 0;
+      } else if (resuming) {
+        awaitingCheckout = false;
+      } else return;
     }
     const timestamp = typeof event.timestamp === "number" ? event.timestamp : Date.now();
-    if (isCheckout || groups.length === 0) groups.push({ start: timestamp, events: [], bytes: 0 });
+    if ((isCheckout && !resuming) || groups.length === 0) groups.push({ start: timestamp, events: [], bytes: 0 });
     const group = groups[groups.length - 1] as Group;
     group.events.push(event);
     const bytes = sizeOf(event);
@@ -243,7 +249,7 @@ export function attachRrweb(record: RrwebRecord, options: RrwebOptions = {}): ()
  * resumes at a fresh full snapshot rather than returning a truncated replay.
  */
 export function getReplay(): ReplayCapture | null {
-  if (totalBytes > maxBytes || totalBytes > MAX_REPLAY_BYTES) return null;
+  if (awaitingCheckout || totalBytes > maxBytes || totalBytes > MAX_REPLAY_BYTES) return null;
   const events: ReplayEvent[] = [];
   for (const group of groups) for (const event of group.events) events.push(event);
   if (events.length === 0) return null;

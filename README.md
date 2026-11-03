@@ -6003,6 +6003,8 @@ and less than that only in the first seconds after the page loaded.
 If the newest checkout group exceeds the cap, whether from one large snapshot
 or its accumulated incremental events, the adapter releases the whole group.
 Its dependent events are discarded until a fresh full snapshot fits the cap.
+The next checkout's viewport metadata is kept with that snapshot and counts
+toward the same cap; metadata alone is never attached as a replay.
 An oversized checkout is omitted rather than retained indefinitely, and no
 truncated or orphaned incremental replay is attached.
 

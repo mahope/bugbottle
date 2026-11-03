@@ -18,7 +18,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 - Release an oversized rrweb checkout group and discard its dependent events
   until a fresh full snapshot restores capture, bounding retained replay data
-  even when the recorder delays its next checkout (#175).
+  even when the recorder delays its next checkout. Preserve the recovering
+  checkout's viewport metadata with its snapshot within the same byte cap (#175).
 
 - Reject invalid GitHub Action report size limits before reading reports,
   preserving the 4096 KB default and positive whole-KB custom limits (#154).

@@ -131,13 +131,21 @@ export function attachRrweb(record, options = {}) {
     const emit = (event, isCheckout) => {
         if (typeof event !== "object" || event === null)
             return;
+        const resuming = awaitingCheckout && event.type === 2;
         if (awaitingCheckout) {
-            if (event.type !== 2)
+            if (event.type === 4) {
+                // rrweb emits viewport metadata immediately before its full snapshot.
+                groups = [];
+                totalBytes = 0;
+            }
+            else if (resuming) {
+                awaitingCheckout = false;
+            }
+            else
                 return;
-            awaitingCheckout = false;
         }
         const timestamp = typeof event.timestamp === "number" ? event.timestamp : Date.now();
-        if (isCheckout || groups.length === 0)
+        if ((isCheckout && !resuming) || groups.length === 0)
             groups.push({ start: timestamp, events: [], bytes: 0 });
         const group = groups[groups.length - 1];
         group.events.push(event);
@@ -174,7 +182,7 @@ export function attachRrweb(record, options = {}) {
  * resumes at a fresh full snapshot rather than returning a truncated replay.
  */
 export function getReplay() {
-    if (totalBytes > maxBytes || totalBytes > MAX_REPLAY_BYTES)
+    if (awaitingCheckout || totalBytes > maxBytes || totalBytes > MAX_REPLAY_BYTES)
         return null;
     const events = [];
     for (const group of groups)

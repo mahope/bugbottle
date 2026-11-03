@@ -203,6 +203,40 @@ for (const oversizedSnapshot of [true, false]) {
   });
 }
 
+test("overflow recovery keeps Meta with its full snapshot within the byte cap", () => {
+  const buffer = inspectedBuffer();
+  const fake = fakeRecord();
+  buffer.attachRrweb(fake.record, { maxBytes: 500 });
+  try {
+    fake.emit(event(2, 1000, 2000), true);
+    const meta = { type: 4, timestamp: 2000, data: { width: 1280, height: 720 } };
+    fake.emit(meta, true);
+    fake.emit(event(3, 2100));
+    assert.deepEqual(buffer.retained(), [meta]);
+    assert.equal(buffer.getReplay(), null);
+    const snapshot = event(2, 2200);
+    const incremental = event(3, 2300);
+    fake.emit(snapshot, true);
+    fake.emit(incremental);
+    assert.deepEqual(buffer.getReplay()?.events, [meta, snapshot, incremental]);
+
+    fake.emit(event(3, 2400, 2000));
+    fake.emit(event(4, 2500, 2000), true);
+    assert.deepEqual(buffer.retained(), []);
+    fake.emit(meta, true);
+    fake.emit({ ...meta, timestamp: 2600 }, true);
+    assert.equal(buffer.retained().length, 1);
+    fake.emit(event(2, 2700, 400), true);
+    assert.deepEqual(buffer.retained(), []);
+    assert.equal(buffer.getReplay(), null);
+    fake.emit(meta, true);
+    buffer.resetRrweb();
+    assert.deepEqual(buffer.retained(), []);
+  } finally {
+    buffer.resetRrweb();
+  }
+});
+
 test("the buffer is measured in UTF-8 bytes, not in code units", () => {
   const fake = fakeRecord();
   attachRrweb(fake.record, { maxBytes: 500, seconds: 3600 });
