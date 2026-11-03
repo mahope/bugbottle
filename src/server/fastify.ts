@@ -51,6 +51,7 @@ import {
   TOO_LARGE_ERROR,
   type HandleReportOptions,
 } from "./handle.ts";
+import { RawBodyTimeoutError, timedChunks, stopAfterReply } from "./raw-body.ts";
 import { DEFAULT_SIGNATURE_HEADER } from "../sign.ts";
 
 /** As much of a Fastify request as the adapter reads. */
@@ -84,6 +85,7 @@ export type FastifyRequestLike = {
 
 /** As much of a Fastify reply as the adapter writes. */
 export type FastifyReplyLike = {
+  raw?: { once(event: "finish", listener: () => void): unknown };
   status(code: number): unknown;
   code?(code: number): unknown;
   header(name: string, value: string): unknown;
@@ -112,6 +114,7 @@ class RawBodyTooLargeError extends Error {}
 async function rawBody(
   req: FastifyRequestLike,
   maxBytes: number,
+  timeoutMs?: number,
 ): Promise<string | undefined> {
   const raw = req.raw;
   if (!raw || typeof raw[Symbol.asyncIterator] !== "function") return undefined;
@@ -119,7 +122,7 @@ async function rawBody(
   const decoder = new TextDecoder();
   const parts: string[] = [];
   let total = 0;
-  for await (const chunk of raw as AsyncIterable<unknown>) {
+  for await (const chunk of timedChunks(raw as AsyncIterable<unknown>, timeoutMs)) {
     const bytes = typeof chunk === "string" ? encoder.encode(chunk) : (chunk as Uint8Array);
     total += bytes.byteLength;
     if (total > maxBytes) {
@@ -140,9 +143,10 @@ async function rawBody(
 async function bodyText(
   req: FastifyRequestLike,
   maxBytes: number,
+  timeoutMs?: number,
 ): Promise<string | undefined> {
   const body = req.body;
-  if (body === undefined || body === null) return await rawBody(req, maxBytes);
+  if (body === undefined || body === null) return await rawBody(req, maxBytes, timeoutMs);
   if (typeof body === "string") return body;
   if (body instanceof Uint8Array) return new TextDecoder().decode(body);
   return JSON.stringify(body);
@@ -256,8 +260,16 @@ export function fastifyHandler(
       let body: string | undefined;
       if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
         try {
-          body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES);
+          body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES, options.bodyTimeoutMs);
         } catch (err) {
+          if (err instanceof RawBodyTimeoutError) {
+            try {
+              writeJson(reply, 408, { error: err.message }, options.cors);
+            } finally {
+              stopAfterReply(reply.raw, err.stop);
+            }
+            return;
+          }
           if (!(err instanceof RawBodyTooLargeError)) throw err;
           // `handleReport` never sees this body, so the 413 is written here.
           writeJson(reply, 413, { error: TOO_LARGE_ERROR }, options.cors);

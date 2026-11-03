@@ -27,6 +27,7 @@
  * line tells nobody anything the first did not.
  */
 import { handleReport, clientScheme, BAD_SIGNATURE_ERROR, DEFAULT_MAX_BODY_BYTES, TOO_LARGE_ERROR, } from "./handle.js";
+import { RawBodyTimeoutError, timedChunks, stopAfterReply } from "./raw-body.js";
 import { DEFAULT_SIGNATURE_HEADER } from "../sign.js";
 /** One header value: Node gives arrays for the repeatable ones. */
 function headerValue(value) {
@@ -48,14 +49,14 @@ class RawBodyTooLargeError extends Error {
  * two-byte character split across it decodes to two replacement characters if
  * every chunk is decoded on its own.
  */
-async function rawBody(req, maxBytes) {
+async function rawBody(req, maxBytes, timeoutMs) {
     if (typeof req[Symbol.asyncIterator] !== "function")
         return undefined;
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
     const parts = [];
     let total = 0;
-    for await (const chunk of req) {
+    for await (const chunk of timedChunks(req, timeoutMs)) {
         const bytes = typeof chunk === "string" ? encoder.encode(chunk) : chunk;
         total += bytes.byteLength;
         if (total > maxBytes) {
@@ -73,10 +74,10 @@ async function rawBody(req, maxBytes) {
  * The body as text: already-parsed JSON is re-serialised, a string or a
  * `Buffer` is taken as it is, and an unparsed request is read from the stream.
  */
-async function bodyText(req, maxBytes) {
+async function bodyText(req, maxBytes, timeoutMs) {
     const body = req.body;
     if (body === undefined || body === null)
-        return await rawBody(req, maxBytes);
+        return await rawBody(req, maxBytes, timeoutMs);
     if (typeof body === "string")
         return body;
     if (body instanceof Uint8Array)
@@ -86,7 +87,7 @@ async function bodyText(req, maxBytes) {
     // stream it already drained iterates zero chunks and yields "", which is not
     // JSON either, so an empty read means the same as no read at all.
     if (typeof body === "object" && Object.keys(body).length === 0) {
-        const raw = await rawBody(req, maxBytes);
+        const raw = await rawBody(req, maxBytes, timeoutMs);
         return raw ? raw : "{}";
     }
     return JSON.stringify(body);
@@ -186,9 +187,18 @@ export function expressHandler(options = {}) {
             let body;
             if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
                 try {
-                    body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES);
+                    body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES, options.bodyTimeoutMs);
                 }
                 catch (err) {
+                    if (err instanceof RawBodyTimeoutError) {
+                        try {
+                            writeJson(res, 408, { error: err.message }, options.cors);
+                        }
+                        finally {
+                            stopAfterReply(res, err.stop);
+                        }
+                        return;
+                    }
                     if (!(err instanceof RawBodyTooLargeError))
                         throw err;
                     // `handleReport` never sees this body, so the 413 is written here.
