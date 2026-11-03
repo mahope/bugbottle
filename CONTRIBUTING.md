@@ -31,6 +31,58 @@ browser audits. Both CI and the release workflow require this job before
 publishing. To reproduce: `npm run build` on Node 22+, then
 `node scripts/smoke-packed.mjs` on Node 18. No TypeScript loader is used there.
 
+## Packed Express and Fastify consumer
+
+On Node 22 or 24, run exactly:
+
+```bash
+npm ci --ignore-scripts
+npm run build
+npm run smoke:frameworks
+```
+
+`scripts/smoke-frameworks.mjs` packs the build and installs only that tarball
+in a temporary consumer outside the checkout, with optional peers and scripts
+disabled. It links the lockfile-installed development frameworks into that
+consumer; bugbottle is imported through its published exports, without source
+or a TypeScript loader. Express **5.2.1** and Fastify **5.12.6** are pinned dev
+dependencies, never runtime dependencies. CI runs this on Node 22 and 24.
+
+The fixture starts real servers on ephemeral `127.0.0.1` ports. Each request
+has a three-second deadline; child commands have a two-minute deadline.
+Listeners close in `finally`, reports are removed in `finally`, and the parent
+removes the entire consumer (including report storage) even if the child fails.
+It checks normalised UTF-8 messages on disk, exactly one write per accepted
+request, signed whitespace, replay refusal, parsed-object signature refusal
+and its once-per-handler diagnostic, malformed JSON, exact 512-byte parser
+boundaries, receiver limits, and OPTIONS/CORS.
+
+Parser ownership matters: Express `express.json({ limit })` and Fastify's
+default JSON parser reject malformed JSON and oversized bodies **before** the
+adapter runs. The Express fixture's error middleware exposes body-parser's
+`error.type`; Fastify keeps its native error codes. These framework errors do
+not acquire bugbottle's CORS headers. Raw routes use
+`express.raw({ type: "application/json", limit })` or Fastify's
+`addContentTypeParser("application/json", { parseAs: "string" }, ...)`.
+There, bugbottle owns malformed-JSON and receiver-limit errors and adds its
+CORS headers. OPTIONS must be routed to the adapter explicitly and a browser
+preflight carries no JSON content type or body.
+
+Dependency review (2026-11-03): Express is maintained by the Express team
+(published since 2010; 5.2.1 released 2025-12-01), Fastify by the Fastify team
+(since 2016; 5.12.6 released 2026-10-13). Fastify 5.12.6 includes the header
+validation fix for GHSA-389g-gv7q-r4x8; 5.12.5 from the source review in the
+README is affected. Neither has install lifecycle hooks.
+The added lockfile tree has no install scripts; all selected releases are
+older than three days. Their entry points load framework modules without
+opening network listeners; debug/logger dependencies read environment-based
+configuration, so the fixture uses no credentials and leaves logging disabled.
+The framework tree adds 112 lockfile entries. The scoped semver/thread-stream
+and fast-json-stringify overrides exclude releases less than three days old
+at review time (7.8.6, 4.2.1 and 7.2.1 respectively). Conclusion: install with
+`--ignore-scripts`. Review the dependency tree and release dates again when
+updating these pins; do not remove the age guard merely to take a new release.
+
 ## React compatibility
 
 The separate `Packed React 18 and 19 StrictMode consumers` CI job runs
@@ -212,6 +264,7 @@ release separately. Gate fixtures run with `node --experimental-strip-types
   TypeScript consumers against isolated tarball installs, as described above.
 
 - **Node 22 / Node 24** — `npm run typecheck`, `npm test`, `npm run build`,
+  `npm run smoke:frameworks` (real Express/Fastify tarball consumers),
   `npm run build:docs`, `npm run check:dist` (the committed `dist/` is both
   current and complete), and `npm pack --dry-run`.
 - **Bundles without html-to-image** — packs the tarball, installs it in a

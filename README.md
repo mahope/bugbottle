@@ -4789,6 +4789,13 @@ you send it to. Point `FEEDBACK_URL` at a host that stores, and let
 
 ## Fastify
 
+The packed localhost consumer tests this recipe with **Fastify 5.12.6** on
+Node 22 and 24: `npm ci --ignore-scripts`, `npm run build`, then
+`npm run smoke:frameworks`. See [the fixture guide](https://github.com/mahope/bugbottle/blob/main/CONTRIBUTING.md#packed-express-and-fastify-consumer)
+for parser ownership, boundaries and cleanup. Fastify owns errors raised by its
+content-type parser; bugbottle cannot add CORS headers to those errors. Mount
+an OPTIONS route with the same handler for preflight requests when using `cors`.
+
 Fastify is the framework with the most server-side search behind it that this
 package does not yet have a page for, and it is a different job from the
 [Hono page](#hono) in one specific way: Hono *is* a `fetch` handler, so
@@ -5170,6 +5177,13 @@ and Nest has its own `trust proxy` setting on the adapter, which is a
 *different* one from `handleReport`'s. Decide with one of them, not with both.
 
 ## Express
+
+The packed localhost consumer tests this recipe with **Express 5.2.1** on
+Node 22 and 24: `npm ci --ignore-scripts`, `npm run build`, then
+`npm run smoke:frameworks`. See [the fixture guide](https://github.com/mahope/bugbottle/blob/main/CONTRIBUTING.md#packed-express-and-fastify-consumer)
+for parser ownership, boundaries and cleanup. Body-parser owns errors raised
+before the adapter; bugbottle cannot add CORS headers to those errors. Mount
+an OPTIONS route with the same handler for preflight requests when using `cors`.
 
 `expressHandler` is the most-used export in `bugbottle/server`, and until now it
 had no page. Express is also the odd one out in this row in a way worth saying

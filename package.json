@@ -136,6 +136,7 @@
     "smoke:inbox-docker": "node scripts/inbox-docker-smoke.mjs",
     "smoke:queue-idb": "node scripts/queue-idb-smoke.mjs",
     "smoke:forms": "node scripts/forms-smoke.mjs",
+    "smoke:frameworks": "node scripts/smoke-frameworks.mjs",
     "smoke:react": "node scripts/smoke-react-packed.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
@@ -175,6 +176,8 @@
     "ajv": "8.20.0",
     "axe-core": "4.13.0",
     "esbuild": "0.28.2",
+    "express": "5.2.1",
+    "fastify": "5.12.6",
     "happy-dom": "20.14.5",
     "html-to-image": "^1.11.13",
     "marked": "18.0.14",
@@ -185,6 +188,15 @@
     "ts-json-schema-generator": "2.9.0",
     "typescript": "^5.7.0",
     "vue": "3.5.43"
+  },
+  "overrides": {
+    "fast-json-stringify": "7.2.0",
+    "fastify": {
+      "semver": "7.8.5",
+      "pino": {
+        "thread-stream": "4.2.0"
+      }
+    }
   },
   "engines": {
     "node": ">=18"

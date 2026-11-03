@@ -18,6 +18,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — packed-consumer localhost Express and Fastify adapter coverage
+for persistence, signatures, parser limits and OPTIONS/CORS (#155).
+
 **Unreleased** — packed React 18.3.1 and 19.3.0 consumers check StrictMode
 forms, pending-delivery cleanup, remount and matching TypeScript types (#156).
 

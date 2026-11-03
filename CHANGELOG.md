@@ -10,6 +10,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- Packed-consumer HTTP coverage for Express 5.2.1 and Fastify 5.12.6, including
+  parser boundaries, signatures, persistence and OPTIONS/CORS in CI (#155).
 - Isolated packed React 18.3.1 and 19.3.0 consumers covering mounted StrictMode
   forms, pending-delivery unmount/remount and matching TypeScript types (#156).
 
