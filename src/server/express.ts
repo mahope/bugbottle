@@ -35,6 +35,7 @@ import {
   TOO_LARGE_ERROR,
   type HandleReportOptions,
 } from "./handle.ts";
+import { RawBodyTimeoutError, timedChunks, stopAfterReply } from "./raw-body.ts";
 import { DEFAULT_SIGNATURE_HEADER } from "../sign.ts";
 
 /** As much of an Express request as the adapter reads. */
@@ -73,6 +74,8 @@ export type ExpressResponseLike = {
   set?(name: string, value: string): unknown;
   send(body?: unknown): unknown;
   end?(body?: unknown): unknown;
+  once?(event: "finish" | "close", listener: () => void): unknown;
+  removeListener?(event: "finish" | "close", listener: () => void): unknown;
 };
 
 /** One header value: Node gives arrays for the repeatable ones. */
@@ -95,13 +98,13 @@ class RawBodyTooLargeError extends Error {}
  * two-byte character split across it decodes to two replacement characters if
  * every chunk is decoded on its own.
  */
-async function rawBody(req: ExpressRequestLike, maxBytes: number): Promise<string | undefined> {
+async function rawBody(req: ExpressRequestLike, maxBytes: number, timeoutMs?: number): Promise<string | undefined> {
   if (typeof req[Symbol.asyncIterator] !== "function") return undefined;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const parts: string[] = [];
   let total = 0;
-  for await (const chunk of req as AsyncIterable<unknown>) {
+  for await (const chunk of timedChunks(req as AsyncIterable<unknown>, timeoutMs)) {
     const bytes = typeof chunk === "string" ? encoder.encode(chunk) : (chunk as Uint8Array);
     total += bytes.byteLength;
     if (total > maxBytes) {
@@ -120,9 +123,9 @@ async function rawBody(req: ExpressRequestLike, maxBytes: number): Promise<strin
  * The body as text: already-parsed JSON is re-serialised, a string or a
  * `Buffer` is taken as it is, and an unparsed request is read from the stream.
  */
-async function bodyText(req: ExpressRequestLike, maxBytes: number): Promise<string | undefined> {
+async function bodyText(req: ExpressRequestLike, maxBytes: number, timeoutMs?: number): Promise<string | undefined> {
   const body = req.body;
-  if (body === undefined || body === null) return await rawBody(req, maxBytes);
+  if (body === undefined || body === null) return await rawBody(req, maxBytes, timeoutMs);
   if (typeof body === "string") return body;
   if (body instanceof Uint8Array) return new TextDecoder().decode(body);
   // An empty object is what `express.json()` leaves when there was no body,
@@ -130,7 +133,7 @@ async function bodyText(req: ExpressRequestLike, maxBytes: number): Promise<stri
   // stream it already drained iterates zero chunks and yields "", which is not
   // JSON either, so an empty read means the same as no read at all.
   if (typeof body === "object" && Object.keys(body as object).length === 0) {
-    const raw = await rawBody(req, maxBytes);
+    const raw = await rawBody(req, maxBytes, timeoutMs);
     return raw ? raw : "{}";
   }
   return JSON.stringify(body);
@@ -241,8 +244,14 @@ export function expressHandler(
       let body: string | undefined;
       if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
         try {
-          body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES);
+          body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES, options.bodyTimeoutMs);
         } catch (err) {
+          if (err instanceof RawBodyTimeoutError) {
+            stopAfterReply(res, err.stop, () => {
+              writeJson(res, 408, { error: err.message }, options.cors);
+            });
+            return;
+          }
           if (!(err instanceof RawBodyTooLargeError)) throw err;
           // `handleReport` never sees this body, so the 413 is written here.
           writeJson(res, 413, { error: TOO_LARGE_ERROR }, options.cors);

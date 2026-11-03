@@ -6416,7 +6416,14 @@ It reads an already-parsed `req.body` when a parser ran and the raw stream when
 none did, so `express.json()` is convenient rather than required. A raw stream
 is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
 answers `413` and calls `req.destroy()` rather than buffering the rest of a
-body it has already refused.
+body it has already refused. Both adapters also apply `bodyTimeoutMs` (15 s
+by default) to the entire unparsed stream read, including pauses between
+chunks. A deadline produces `408` with `{ "error": "Report took too long to
+arrive" }` while the response is writable, then closes the stream after the
+response finishes. Timers and iterators are released on completion or failure.
+When Express middleware or Fastify's content-type parser reads the body before
+the adapter runs, that read's deadline remains the host framework/server's
+responsibility; configure its request/body-parser timeouts separately.
 
 Fastify gets [`fastifyHandler`](#fastify), the same translation for a Fastify
 route. Its two traps are sharper than these two, because its body parser cannot
