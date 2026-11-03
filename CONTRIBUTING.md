@@ -23,6 +23,9 @@ need Node 18.
 ## Before opening a pull request
 
 - `npm run check` is green.
+- Queue storage changes also pass `npm run smoke:queue-idb` after the build.
+  It uses Chrome and `puppeteer-core` through `scripts/chrome.mjs`, without
+  downloading a browser, and runs in CI's browser job.
 - New behaviour has a test. Anything that handles browser input has a test for
   the malformed case, not just the happy path.
 - Nothing outside `src/html-to-image.ts` imports `html-to-image`. Bundlers
