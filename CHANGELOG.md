@@ -16,6 +16,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Require complete CI validation at the release SHA before npm publication,
+  and enforce version/tag consistency for manual releases too (#135).
 - Smoke-test the packed dependency-free exports, JSON contracts and server
   validation/store round trip on Node 18 before publishing (#120).
 
