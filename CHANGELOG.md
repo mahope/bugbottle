@@ -19,6 +19,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Return independent entry snapshots from `getConsoleBuffer`, `getNetwork`
+  and `getBreadcrumbs`, including console stack arrays and frames, so consumer
+  mutations cannot change the evidence in later reports (#195).
+
 - Ignore emissions from stopped or failed rrweb recorder attachments, keeping
   replacement sessions isolated while retaining synchronous startup snapshots (#174).
 
