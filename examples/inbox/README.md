@@ -412,6 +412,37 @@ On **Dokploy**, in eight lines:
 Coolify is the same list with different menu names. A bare VPS is
 `docker compose up -d` plus the `Caddyfile` above.
 
+## Docker smoke test
+
+From the repository root, with Node 22+ and a running Docker daemon:
+
+```bash
+npm ci
+npm run build
+npm run smoke:inbox-docker
+```
+
+The separate **Inbox Docker persistence** CI job runs the same command. It
+builds this Dockerfile from the repository root (three-minute build deadline),
+publishes an ephemeral port on `127.0.0.1` only, and waits up to 90 seconds per
+container for the image's configured HEALTHCHECK to report healthy. It checks
+the running user's UID, denied anonymous inbox/report/screenshot reads, and an
+authenticated report round trip. It then removes the container, starts a new
+one on the same temporary named volume, and verifies the original report id,
+message and exact PNG bytes again. Each HTTP request has a five-second timeout;
+Docker commands have a 30-second timeout unless noted above.
+
+Failures identify the phase and report container status, exit code, OOM state,
+health status and probe timings/exit codes. Raw container logs, health output,
+environment variables and report bodies are deliberately omitted to keep
+credentials and report contents out of CI logs. The password is generated for
+each run and passed through the environment rather than command arguments.
+Containers, the named volume and the temporary image are removed on success,
+failure, SIGINT and SIGTERM. Like any cleanup handler, this cannot run after
+SIGKILL or a lost Docker daemon; resource names begin `bugbottle-inbox-smoke-`
+for identifying leftovers on a persistent runner. CI also caps the job at ten
+minutes.
+
 ## Please read this part
 
 Verbatim from the main README, because this example is exactly the situation
