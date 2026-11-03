@@ -14,6 +14,46 @@ const drainMicrotasks = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
 };
 
+for (const completes of [true, false]) {
+  test(`onError ${completes ? "awaits asynchronous queue persistence" : "cannot replace a failure by rejecting"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const clear = t.mock.method(globalThis, "clearTimeout");
+    const original = new TypeError("offline");
+    const stored: unknown[] = [];
+    const queue = {
+      enqueue: (report: unknown) => new Promise<void>((resolve, reject) => {
+        setTimeout(() => {
+          if (completes) {
+            stored.push(report);
+            resolve();
+          } else reject(new Error("storage refused"));
+        }, 50);
+      }),
+    };
+    let settled = false;
+    const report = buildReport({ type: "bug", message: "x" });
+    const outcome = sendReport("/x", report, {
+      timeoutMs: 5,
+      fetch: async () => { throw original; },
+      onError: (failed) => queue.enqueue(failed),
+    }).catch((error: unknown) => {
+      settled = true;
+      return error;
+    });
+    await drainMicrotasks();
+    t.mock.timers.tick(49);
+    await drainMicrotasks();
+    assert.equal(settled, false);
+    t.mock.timers.tick(1);
+    await drainMicrotasks();
+    assert.equal(await outcome, original);
+    assert.deepEqual(stored, completes ? [report] : []);
+    assert.equal(clear.mock.callCount(), 2, "delivery and observer timers are cleared");
+    t.mock.timers.runAll();
+    assert.equal(await outcome, original);
+  });
+}
+
 for (const mode of ["network", "timeout", "cancel"] as const) {
   test(`a hanging onError is bounded after ${mode} failure`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -22,6 +62,7 @@ for (const mode of ["network", "timeout", "cancel"] as const) {
     let observed: unknown;
     let calls = 0;
     let settlements = 0;
+    let resolveObserver!: () => void;
     let rejectObserver!: (reason: unknown) => void;
     const remove = t.mock.method(controller.signal, "removeEventListener");
     const outcome = sendReport("/x", buildReport({ type: "bug", message: "x" }), {
@@ -36,7 +77,10 @@ for (const mode of ["network", "timeout", "cancel"] as const) {
       onError: (_report, error) => {
         calls++;
         observed = error;
-        return new Promise<void>((_resolve, reject) => { rejectObserver = reject; });
+        return new Promise<void>((resolve, reject) => {
+          resolveObserver = resolve;
+          rejectObserver = reject;
+        });
       },
     }).then(() => assert.fail("delivery must fail"), (error: unknown) => {
       settlements++;
@@ -56,7 +100,8 @@ for (const mode of ["network", "timeout", "cancel"] as const) {
     if (mode === "timeout") assert.ok(observed instanceof SendTimeoutError);
     else assert.equal(observed, original);
     assert.equal(remove.mock.callCount(), 1);
-    rejectObserver(new Error("late observer rejection"));
+    if (mode === "network") resolveObserver();
+    else rejectObserver(new Error("late observer rejection"));
     await drainMicrotasks();
     t.mock.timers.runAll();
     assert.equal(settlements, 1);

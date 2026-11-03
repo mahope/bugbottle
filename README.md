@@ -4258,7 +4258,17 @@ anything larger, the queue is the answer.
 
 Below the two integrations, `SendOptions` has the seam they are built on:
 `onError(report, error)` runs after a failed send, before the error reaches
-you, and is awaited.
+you, and is awaited for up to **1 second from the failure**. This cleanup
+budget is separate from `timeoutMs` and still applies after a delivery timeout
+or caller cancellation. Return an asynchronous persistence promise to wait for
+that write within the budget. Slow work is not cancelled and may finish later;
+once the budget expires, persistence is not guaranteed when the caller receives
+the original delivery error. Observer throws and rejections, including late
+rejections, are swallowed and never replace that error.
+
+`createQueue().enqueue()` returns immediately, so the example below schedules
+its write without waiting for asynchronous storage. An observer can only be
+awaited for persistence when it returns a promise for that operation.
 
 ```ts
 await sendReport("/api/feedback", report, {

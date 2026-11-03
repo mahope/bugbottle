@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Bound send failure observers to a separate one-second cleanup budget,
+  preserving the original delivery error when observers hang or reject (#187).
+
 - Ignore emissions from stopped or failed rrweb recorder attachments, keeping
   replacement sessions isolated while retaining synchronous startup snapshots (#174).
 
