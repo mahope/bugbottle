@@ -6288,8 +6288,14 @@ export const POST = (req: Request) =>
 ```
 
 That works unchanged in a Next.js route handler, Hono, Cloudflare Workers, Bun
-and Deno: they all speak the web `Request`. Nothing about it is magic, and
-everything is an option:
+and Deno: they all speak the web `Request`. The [local Workers example](examples/workers/)
+tests the packed public export in `workerd` without `nodejs_compat`, including
+storage and native WebCrypto signature verification. Import named portable
+helpers so your bundler can discard Node-only exports: `fileStore` requires
+Node filesystem APIs, SMTP requires Node sockets/TLS, and Express/Fastify
+adapters target Node request streams. The receiver, validators, Markdown,
+fingerprinting and HTTP sinks use Web APIs; your store must fit your runtime.
+Nothing about it is magic, and everything is an option:
 
 ```ts
 export const POST = (req: Request) =>

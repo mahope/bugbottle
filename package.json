@@ -133,6 +133,7 @@
     "shot:og": "node scripts/render-og.mjs",
     "smoke:annotate": "node scripts/annotate-smoke.mjs",
     "smoke:queue-idb": "node scripts/queue-idb-smoke.mjs",
+    "smoke:workers": "node scripts/smoke-workers.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check:dist": "node scripts/check-dist.mjs",

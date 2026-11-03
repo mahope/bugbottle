@@ -18,6 +18,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — a local Workers example and packed-package smoke execute the
+receiver and native WebCrypto signatures without Node compatibility (#146).
+
 **Unreleased** — overlapping headless form submissions share one delivery
 attempt and result, preventing duplicate sends and queue entries (#132).
 

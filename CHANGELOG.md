@@ -10,6 +10,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- Local Workers receiver example and packed-package runtime smoke without
+  Node compatibility, covering storage, malformed JSON, origin authorization
+  and native WebCrypto signatures in credential-free CI (#146).
 - Real Chrome coverage for IndexedDB queue persistence with screenshots,
   concurrent tab enqueues and successful concurrent flushes. The browser CI
   job runs the isolated localhost smoke test with a bounded timeout (#121).

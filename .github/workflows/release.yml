@@ -38,7 +38,7 @@ jobs:
           cache: npm
       - run: npm install -g npm@latest
       - run: npm --version
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run check
       - name: Refuse to publish if the tag does not match package.json
         run: |

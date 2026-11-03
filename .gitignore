@@ -1,4 +1,5 @@
 node_modules/
+examples/workers/bundle.mjs
 dist/
 *.tsbuildinfo
 .claude/

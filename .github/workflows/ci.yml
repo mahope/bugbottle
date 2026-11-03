@@ -9,6 +9,20 @@ jobs:
   min-node-smoke:
     uses: ./.github/workflows/min-node-smoke.yml
 
+  workers-smoke:
+    name: Local Workers receiver
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm run smoke:workers
+
   check:
     runs-on: ubuntu-latest
     strategy:
@@ -21,7 +35,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -50,7 +64,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       # The IIFE is already in dist/ after the build — esbuild made it there —
       # so it only has to be weighed, not bundled again.
@@ -519,7 +533,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       # The site audit serves the generated pages — /docs/, /compare/ and
       # /da/sammenlign/ — so they have to exist before Chrome asks for them.

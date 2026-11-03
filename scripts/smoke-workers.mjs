@@ -17,6 +17,10 @@ const run = (args, cwd) => execFileSync("npm", args, {
 let runtime;
 let exited;
 let watchdog;
+const interrupt = () => {
+  process.exitCode = 1;
+  runtime?.kill("SIGTERM");
+};
 try {
   const [packed] = JSON.parse(run(["pack", "--json", "--ignore-scripts", "--pack-destination", dir], root));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ private: true, type: "module" }));
@@ -33,13 +37,16 @@ try {
     // Resolve unused Node-only barrel exports, without providing implementations.
     external: ["node:*"],
   });
-  assert.deepEqual(result.metafile.outputs[join(dir, "bundle.mjs")]?.imports ??
-    Object.values(result.metafile.outputs)[0].imports, [], "No external modules may reach workerd");
+  for (const output of Object.values(result.metafile.outputs)) {
+    assert.deepEqual(output.imports, [], "No external modules may reach workerd");
+  }
   assert.doesNotMatch(readFileSync(join(dir, "bundle.mjs"), "utf8"), /node:/);
   runtime = spawn(workerd.default, ["serve", "--control-fd=3", "workerd.capnp"], {
     cwd: dir, stdio: ["ignore", "inherit", "inherit", "pipe"],
   });
   exited = once(runtime, "exit");
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", interrupt);
   watchdog = setTimeout(() => runtime.kill("SIGKILL"), 30_000);
   const lines = createInterface({ input: runtime.stdio[3] });
   const ready = (async () => {
@@ -78,11 +85,16 @@ try {
   assert.equal((await stored()).length, 2, "Only the valid signed report reaches storage");
   console.log("Workers: packed public server export, storage, JSON/origin rejection and native WebCrypto passed");
 } finally {
+  process.removeListener("SIGINT", interrupt);
+  process.removeListener("SIGTERM", interrupt);
   clearTimeout(watchdog);
-  if (runtime && runtime.exitCode === null && runtime.signalCode === null) {
-    runtime.kill("SIGTERM");
-    const force = setTimeout(() => runtime.kill("SIGKILL"), 2_000);
-    try { await exited; } finally { clearTimeout(force); }
+  try {
+    if (runtime && runtime.exitCode === null && runtime.signalCode === null) {
+      runtime.kill("SIGTERM");
+      const force = setTimeout(() => runtime.kill("SIGKILL"), 2_000);
+      try { await exited; } finally { clearTimeout(force); }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  rmSync(dir, { recursive: true, force: true });
 }
