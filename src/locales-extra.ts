@@ -60,7 +60,7 @@ export const it: Locale = {
     pickElement: "Indica l'elemento",
     picking: "Fai clic su ciò che vuoi allegare — Esc per interrompere",
     pickingAnnounce:
-      "Modalità di selezione. Fai clic su un elemento della pagina per allegarlo, oppure premi Esc per interrompere.",
+      "Fai clic su un elemento o spostati con Tab e le frecce. Invio o Spazio lo allega. Esc annulla.",
     pickingDone: "Modalità di selezione terminata.",
     shotModeLabel: "Screenshot di",
     shotNone: "Nessuna",
@@ -121,7 +121,7 @@ export const pl: Locale = {
     pickElement: "Wskaż element",
     picking: "Kliknij to, co chcesz dołączyć — Esc, aby przerwać",
     pickingAnnounce:
-      "Tryb wskazywania. Kliknij element na stronie, aby go dołączyć, albo naciśnij Esc, aby przerwać.",
+      "Kliknij element lub nawiguj klawiszem Tab i strzałkami. Enter lub Spacja dołącza element. Esc anuluje.",
     pickingDone: "Tryb wskazywania zakończony.",
     shotModeLabel: "Zrzut ekranu",
     shotNone: "Brak",
@@ -182,7 +182,7 @@ export const pt: Locale = {
     pickElement: "Apontar para o elemento",
     picking: "Clique no que quiser anexar — Esc para parar",
     pickingAnnounce:
-      "Modo de seleção. Clique num elemento da página para o anexar, ou prima Esc para parar.",
+      "Clique num elemento ou navegue com Tab e as setas. Enter ou Espaço anexa o elemento. Esc cancela.",
     pickingDone: "Modo de seleção terminado.",
     shotModeLabel: "Captura de",
     shotNone: "Nenhuma",
@@ -242,7 +242,7 @@ export const fi: Locale = {
     pickElement: "Osoita elementtiä",
     picking: "Napsauta sitä, minkä haluat liittää — Esc lopettaa",
     pickingAnnounce:
-      "Osoitustila. Napsauta sivun elementtiä liittääksesi sen, tai lopeta painamalla Esc.",
+      "Napsauta elementtiä tai siirry sarkaimella ja nuolinäppäimillä. Enter tai välilyönti liittää elementin. Esc peruuttaa.",
     pickingDone: "Osoitustila päättyi.",
     shotModeLabel: "Kuvakaappaus",
     shotNone: "Ei kuvaa",
@@ -302,7 +302,7 @@ export const uk: Locale = {
     pickElement: "Вказати на елемент",
     picking: "Клацніть те, що хочете долучити — Esc, щоб зупинити",
     pickingAnnounce:
-      "Режим вказування. Клацніть будь-який елемент сторінки, щоб долучити його, або натисніть Esc, щоб зупинити.",
+      "Клацніть елемент або переходьте клавішами Tab і стрілками. Enter або пробіл долучає елемент. Esc скасовує.",
     pickingDone: "Режим вказування завершено.",
     shotModeLabel: "Знімок екрана",
     shotNone: "Без знімка",

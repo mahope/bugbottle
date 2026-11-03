@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Window } from "happy-dom";
 import { build } from "esbuild";
+import { scriptTagPicker } from "../scripts/script-tag-picker.mjs";
 
 /**
  * The slim script-tag build: the same panel as `dist/bugbottle.js` without the
@@ -16,17 +17,22 @@ const bundled = await build({
   entryPoints: ["src/global-slim.ts"],
   bundle: true,
   minify: true,
+  plugins: [scriptTagPicker(false)],
   format: "iife",
   platform: "browser",
   target: ["es2020"],
   legalComments: "none",
-  define: { __BUGBOTTLE_VERSION__: JSON.stringify("0.0.0-test") },
+  define: {
+    __BUGBOTTLE_VERSION__: JSON.stringify("0.0.0-test"),
+    __BUGBOTTLE_KEYBOARD_PICKER__: "false",
+  },
   write: false,
 });
 const code = bundled.outputFiles[0]!.text;
 
 interface Loaded {
   api: Record<string, unknown>;
+  win: Window;
   warnings: string[];
   close: () => void;
 }
@@ -65,7 +71,7 @@ function load(attributes: Record<string, string>): Loaded {
 
   const api = (win as unknown as { bugbottle?: Record<string, unknown> }).bugbottle;
   assert.ok(api, "the bundle did not put anything on window.bugbottle");
-  return { api, warnings, close: () => void win.close() };
+  return { api, win, warnings, close: () => void win.close() };
 }
 
 test("the slim build leaves the four optional recorders out of the namespace", () => {
@@ -124,4 +130,29 @@ test("a page that asks for nothing the slim build lacks is not warned at", () =>
   });
   assert.deepEqual(warnings, []);
   close();
+});
+
+
+test("the slim picker keeps click selection and Escape without keyboard navigation", async () => {
+  const { api, win, close } = load({});
+  try {
+    const pick = api.pickElement as () => Promise<{ tag: string } | null>;
+    const button = win.document.createElement("button");
+    win.document.body.append(button);
+    let result = pick();
+    assert.equal(win.document.querySelector('[data-bugbottle="picker"]'), null);
+    const tab = new win.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    win.document.dispatchEvent(tab);
+    assert.equal(tab.defaultPrevented, false);
+    const click = new win.MouseEvent("click", { bubbles: true, cancelable: true });
+    button.dispatchEvent(click);
+    assert.equal((await result)?.tag, "button");
+    assert.equal(click.defaultPrevented, true);
+    result = pick();
+    win.document.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(await result, null);
+    assert.equal(win.document.querySelector('[data-bugbottle="highlight"]'), null);
+  } finally {
+    close();
+  }
 });

@@ -1,17 +1,3 @@
-/**
- * An optional, ready-made report panel: a floating button and a small dialog,
- * rendered in a shadow root so your styles and its styles never meet.
- *
- * The headless core stays headless. This is a separate entry point
- * (`bugbottle/ui`) for the applications that want something on the page in
- * five minutes and are happy to brand it with a handful of CSS variables and
- * a locale, rather than build a form.
- *
- * Everything the reporter reads comes from a `Locale`; everything they see
- * comes from `Theme` and `Brand`. Custom properties (`--bb-primary` and
- * friends) pierce the shadow root, so a stylesheet can also restyle it from
- * outside without touching JavaScript.
- */
 import { captureScreenshot, ScreenshotTooLargeError, } from "../capture.js";
 import { pickElement } from "../element-picker.js";
 import { en, sentLine } from "../locales.js";
@@ -639,7 +625,9 @@ export function mountBugbottle(options) {
         pickController = controller;
         // Picking an element for the picture is the picker the panel already has,
         // with a picture taken at the end, so it says the same two sentences.
-        const instructions = mode === "area" ? text("areaInstructions") : ui.picking;
+        const instructions = mode === "area" ? text("areaInstructions") :
+            typeof __BUGBOTTLE_KEYBOARD_PICKER__ !== "undefined" && !__BUGBOTTLE_KEYBOARD_PICKER__
+                ? ui.picking : ui.pickingAnnounce;
         live.textContent = mode === "area" ? instructions : ui.pickingAnnounce;
         panel.hidden = true;
         try {
@@ -720,7 +708,11 @@ export function mountBugbottle(options) {
         // The panel is in the way of the page while picking.
         panel.hidden = true;
         try {
-            const picked = await pickElement({ signal: pickController.signal });
+            const picked = await pickElement({
+                signal: pickController.signal,
+                ...(typeof __BUGBOTTLE_KEYBOARD_PICKER__ !== "undefined" && !__BUGBOTTLE_KEYBOARD_PICKER__
+                    ? {} : { instructions: ui.pickingAnnounce }),
+            });
             if (picked) {
                 elements = [...elements, picked].slice(-MAX_ELEMENTS);
                 renderElements();

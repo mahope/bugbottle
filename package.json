@@ -133,6 +133,7 @@
     "shot:og": "node scripts/render-og.mjs",
     "smoke:annotate": "node scripts/annotate-smoke.mjs",
     "smoke:region": "node scripts/region-smoke.mjs",
+    "smoke:element-picker": "node scripts/element-picker-smoke.mjs",
     "smoke:inbox-docker": "node scripts/inbox-docker-smoke.mjs",
     "smoke:queue-idb": "node scripts/queue-idb-smoke.mjs",
     "smoke:forms": "node scripts/forms-smoke.mjs",

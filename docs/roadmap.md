@@ -18,6 +18,12 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — the element picker navigates rendered page elements with the
+keyboard, including headings and images without tabindex, and confirms without
+activating the page. Instructions are localised and cancellation restores focus (#197). Keyboard
+selection ships in the full bundle and ESM; slim keeps pointer selection and
+Escape cancellation within its unchanged bundle budget.
+
 **Unreleased** — send failure observers have a separate one-second completion
 budget, retaining the original delivery error even when persistence hangs (#187).
 **Unreleased** — file-store entry snapshots isolate caller mutations from

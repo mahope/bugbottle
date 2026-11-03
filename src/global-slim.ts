@@ -10,6 +10,9 @@
  * working, and dropping them would save a few kilobytes at the cost of every
  * page that is not in English.
  *
+ * Element selection is pointer-only here; the build removes keyboard selection
+ * and uses pointer instructions in every locale to keep the slim size budget.
+ *
  * Nothing here is a second implementation of anything: the shared `data-*`
  * reading is `src/global-shared.ts`, the same module the full build uses.
  *

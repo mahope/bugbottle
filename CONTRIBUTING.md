@@ -190,6 +190,10 @@ release separately. Gate fixtures run with `node --experimental-strip-types
   `browser` job runs them on every push and pull request, so a violation is
   caught whether or not anybody remembered. Run them by hand to see a failure
   before CI does.
+- Picker changes also run `npm run smoke:element-picker`: real Tab/arrow and
+  Enter/Space input from the panel, heading/image ElementRefs, live selection,
+  Escape/abort cleanup, host activation isolation and pointer regression coverage.
+  It runs axe on the active picker as well and is part of the browser CI job.
 - A new or changed sink has a row in the table at the top of the README's
   "Sending it somewhere" — what you need, whether the picture travels or is
   linked, whether a self-hosted instance works, what one report becomes, and

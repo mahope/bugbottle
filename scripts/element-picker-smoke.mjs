@@ -1,0 +1,209 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { build } from "esbuild";
+import { findChrome, loadPuppeteer } from "./chrome.mjs";
+
+const scriptTag = process.argv.includes("--script-tag");
+const bundle = await build({
+  stdin: { contents: `
+    ${scriptTag ? 'const { mountBugbottle, pickElement } = window.bugbottle;' : `
+    import { mountBugbottle } from "./src/ui/index.ts";
+    import { pickElement } from "./src/element-picker.ts";`}
+    window.bb = mountBugbottle({ endpoint: "/reports", fetch: async (_, init) => {
+      window.report = JSON.parse(init.body);
+      return new Response('{}', { status: 201 });
+    }});
+    window.start = (options = {}) => {
+      window.controller = new AbortController();
+      window.result = undefined;
+      window.pending = pickElement({ ...options, signal: controller.signal,
+        onHover: el => window.selected = el?.id ?? null }).then(value => window.result = value);
+    };
+    window.cancelled = () => pickElement({ signal: AbortSignal.abort() });
+    window.ready = true;
+  `, resolveDir: process.cwd(), loader: "ts" },
+  bundle: true, format: "esm", write: false,
+});
+const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Picker</title>
+<style>img{width:80px;height:60px} main{padding:20px}</style>
+<h1 id="transparent" style="opacity:0">Invisible</h1>
+<div style="opacity:0"><div><h1 id="transparent-child" style="opacity:1">Invisible child</h1></div></div>
+<main id="content"><h1 id="heading">Orders</h1>
+<img id="image" alt="Order diagram" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='blue'/%3E%3C/svg%3E">
+<h2 hidden id="hidden">Hidden</h2><div inert><h2 id="inert">Inert</h2></div>
+<form onsubmit="event.preventDefault();window.submits++"><button id="submit">Submit</button></form>
+<a id="link" href="#activated" onclick="window.clicks++">Link</a>
+<button id="button" onclick="window.clicks++">Button</button></main>
+${scriptTag ? '<script src="/dist/bugbottle.js"></script>' : ""}
+<script>window.clicks=0;window.submits=0;</script><script type="module" src="/test.js"></script></html>`;
+const chunks = [];
+const server = createServer(async (req, res) => {
+  if (req.url.startsWith("/dist/")) {
+    chunks.push(req.url);
+    res.writeHead(200, { "Content-Type": "text/javascript" });
+    res.end(await readFile(new URL(`..${req.url}`, import.meta.url)));
+    return;
+  }
+  res.writeHead(200, { "Content-Type": req.url === "/test.js" ? "text/javascript" : "text/html" });
+  res.end(req.url === "/test.js" ? bundle.outputFiles[0].text : html);
+});
+let browser;
+try {
+  await new Promise(done => server.listen(0, "127.0.0.1", done));
+  browser = await loadPuppeteer().launch({ executablePath: findChrome(), headless: "new" });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.waitForFunction(() => window.ready);
+  await page.addScriptTag({ content: await readFile(new URL('../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8') });
+  const shadow = selector => page.evaluate(selector =>
+    document.querySelector('[data-bugbottle="ui"]').shadowRoot.querySelector(selector)?.textContent, selector);
+  const focusPick = async () => {
+    for (let i = 0; i < 20; i++) {
+      if (await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className === 'pick')) return;
+      await page.keyboard.press("Tab");
+    }
+    assert.fail("Tab did not reach the panel picker control");
+  };
+  const select = async id => {
+    for (let i = 0; i < 20; i++) {
+      await page.keyboard.press("ArrowDown");
+      const selected = await page.evaluate(() => {
+        const box = document.querySelector('[data-bugbottle="highlight"]');
+        if (!box || box.style.display === "none") return null;
+        return [...document.querySelectorAll('main,main *')].find(el => {
+          const r = el.getBoundingClientRect();
+          return [[box.style.left, r.left], [box.style.top, r.top],
+            [box.style.width, r.width], [box.style.height, r.height]]
+            .every(([actual, expected]) => Math.abs(parseFloat(actual) - expected) < 0.01);
+        })?.id;
+      });
+      if (selected === id) return;
+    }
+    assert.fail(`keyboard did not visibly select ${id}`);
+  };
+  if (scriptTag) assert.equal(chunks.includes("/dist/bugbottle-picker.js"), false);
+  await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
+  await page.keyboard.press("Home");
+  assert.equal(await page.evaluate(() => window.selected), "content", "Home skips transparent elements and descendants");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.evaluate(() => window.result.selector), "main#content");
+  await page.$eval('#heading', el => { el.style.opacity = '0.5'; });
+  await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await page.evaluate(() => window.selected), "heading", "partly transparent elements remain selectable");
+  await page.keyboard.press("Escape");
+  await page.$eval('#heading', el => el.removeAttribute('style'));
+  await page.evaluate(() => window.bb.open());
+  await page.screenshot({ path: "/tmp/bugbottle-picker-before.png" });
+  for (const id of ["heading", "image"]) {
+    await focusPick();
+    await page.keyboard.press("Enter");
+    await select(id);
+    assert.match(await page.$eval('[data-bugbottle="picker"]', el => el.textContent),
+      id === "heading" ? /Orders/ : /Order diagram/);
+    assert.deepEqual(await page.evaluate(async () => (await window.axe.run(
+      document.querySelector('[data-bugbottle="picker"]'))).violations.map(v => v.id)), []);
+    assert.equal(await page.$eval('[data-bugbottle="picker"] [role="status"]', el => el.getAttribute('aria-live')), 'polite');
+    await page.screenshot({ path: `/tmp/bugbottle-picker-${id}.png` });
+    await page.keyboard.press("Enter");
+    assert.match(await shadow("ul"), new RegExp(`#${id}`));
+    assert.equal(await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className), "pick");
+  }
+  await page.evaluate(() => {
+    const root = document.querySelector('[data-bugbottle="ui"]').shadowRoot;
+    root.querySelector('textarea').value = 'Keyboard targets';
+    root.querySelector('textarea').dispatchEvent(new Event('input'));
+    root.querySelector('.send').click();
+  });
+  await page.waitForFunction(() => window.report);
+  assert.deepEqual(await page.evaluate(() => window.report.elements.map(el => [el.selector, el.tag])),
+    [["h1#heading", "h1"], ["img#image", "img"]]);
+  await page.evaluate(() => { window.bb.close(); window.bb.open(); });
+  await focusPick();
+  await page.keyboard.press("Space");
+  await select("image");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className), "pick");
+  assert.equal(await page.$('[data-bugbottle="picker"]'), null);
+  await page.keyboard.press("Enter");
+  await select("heading");
+  await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.querySelector('.pick').click());
+  assert.equal(await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className), "pick");
+  assert.equal(await page.$('[data-bugbottle="picker"]'), null);
+  await page.evaluate(() => window.bb.close());
+  for (const [id, key] of [["submit", "Enter"], ["link", "Enter"], ["button", "Space"]]) {
+    await page.evaluate(() => window.start());
+    await page.waitForSelector('[data-bugbottle="picker"]');
+    await select(id);
+    await page.keyboard.press(key);
+    await page.waitForFunction(() => window.result !== undefined);
+    assert.equal(await page.evaluate(() => window.result.attributes.id), id);
+  }
+  assert.deepEqual(await page.evaluate(() => [window.clicks, window.submits, location.hash]), [0, 0, ""]);
+  await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
+  await page.keyboard.press("Enter");
+  assert.equal(await page.evaluate(() => window.result), undefined, "confirmation requires a selection");
+  await page.keyboard.press("Home");
+  assert.equal(await page.evaluate(() => window.selected), "content");
+  await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => window.selected), "heading");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await page.evaluate(() => window.selected), "image");
+  await page.keyboard.press("ArrowDown");
+  assert.notEqual(await page.evaluate(() => window.selected), "hidden");
+  assert.notEqual(await page.evaluate(() => window.selected), "inert");
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Tab");
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("Tab");
+  await page.keyboard.up("Shift");
+  assert.equal(await page.evaluate(() => window.selected), "content");
+  await page.keyboard.press("End");
+  assert.equal(await page.evaluate(() => window.selected), "button");
+  await page.evaluate(() => window.controller.abort());
+  assert.equal(await page.evaluate(() => window.result), null);
+  assert.equal(await page.$('[data-bugbottle="highlight"]'), null);
+  assert.equal(await page.$('[data-bugbottle="picker"]'), null);
+  assert.equal(await page.$eval('#heading', el => el.hasAttribute('tabindex')), false);
+  assert.equal(await page.evaluate(() => window.cancelled()), null);
+  assert.equal(await page.$('[data-bugbottle="picker"]'), null);
+  await page.click('#button');
+  assert.equal(await page.evaluate(() => window.clicks), 1, "host events work after abort");
+  await page.evaluate(() => window.start({ ignore: el => el.id === 'heading' }));
+  await page.waitForSelector('[data-bugbottle="picker"]');
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await page.evaluate(() => window.selected), "image", "custom exclusions apply to keyboard navigation");
+  await page.keyboard.press("Escape");
+  await page.$eval('#button', el => { el.style.display = 'block'; el.style.marginTop = '600px'; });
+  await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
+  await page.keyboard.press("End");
+  assert.equal(await page.evaluate(() => {
+    const target = document.querySelector('#button').getBoundingClientRect();
+    const hint = document.querySelector('[data-bugbottle="picker"]').getBoundingClientRect();
+    return hint.bottom <= target.top || hint.top >= target.bottom;
+  }), true, "instructions do not obscure the visible selection");
+  await page.keyboard.press("Escape");
+  await page.$eval('#button', el => el.removeAttribute('style'));
+  await page.evaluate(() => window.start());
+  await page.waitForSelector('[data-bugbottle="picker"]');
+  await page.hover('#heading');
+  await page.click('#heading');
+  await page.waitForFunction(() => window.result !== undefined);
+  assert.equal(await page.evaluate(() => window.result.selector), "h1#heading");
+  if (scriptTag) {
+    assert.equal(chunks.filter(url => url === "/dist/bugbottle-picker.js").length, 1,
+      "the keyboard chunk is fetched once for repeated picks");
+  }
+  console.log("Element picker: keyboard panel attachments, announcements, cancellation, abort, host isolation and pointer selection passed");
+} finally {
+  await browser?.close();
+  await new Promise(done => server.close(done));
+}
