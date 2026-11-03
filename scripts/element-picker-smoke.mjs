@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { findChrome, loadPuppeteer } from "./chrome.mjs";
 
@@ -17,6 +18,7 @@ const bundle = await build({
       window.pending = pickElement({ ...options, signal: controller.signal,
         onHover: el => window.selected = el?.id ?? null }).then(value => window.result = value);
     };
+    window.cancelled = () => pickElement({ signal: AbortSignal.abort() });
     window.ready = true;
   `, resolveDir: process.cwd(), loader: "ts" },
   bundle: true, format: "esm", write: false,
@@ -42,11 +44,16 @@ try {
   page.setDefaultTimeout(5000);
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.waitForFunction(() => window.ready);
+  await page.addScriptTag({ content: await readFile(new URL('../node_modules/axe-core/axe.min.js', import.meta.url), 'utf8') });
   const shadow = selector => page.evaluate(selector =>
     document.querySelector('[data-bugbottle="ui"]').shadowRoot.querySelector(selector)?.textContent, selector);
-  const focusPick = () => page.evaluate(() => {
-    document.querySelector('[data-bugbottle="ui"]').shadowRoot.querySelector('.pick').focus();
-  });
+  const focusPick = async () => {
+    for (let i = 0; i < 20; i++) {
+      if (await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className === 'pick')) return;
+      await page.keyboard.press("Tab");
+    }
+    assert.fail("Tab did not reach the panel picker control");
+  };
   const select = async id => {
     for (let i = 0; i < 20; i++) {
       await page.keyboard.press("ArrowDown");
@@ -55,8 +62,9 @@ try {
         if (!box || box.style.display === "none") return null;
         return [...document.querySelectorAll('main,main *')].find(el => {
           const r = el.getBoundingClientRect();
-          return box.style.left === `${r.left}px` && box.style.top === `${r.top}px`
-            && box.style.width === `${r.width}px` && box.style.height === `${r.height}px`;
+          return [[box.style.left, r.left], [box.style.top, r.top],
+            [box.style.width, r.width], [box.style.height, r.height]]
+            .every(([actual, expected]) => Math.abs(parseFloat(actual) - expected) < 0.01);
         })?.id;
       });
       if (selected === id) return;
@@ -71,6 +79,9 @@ try {
     await select(id);
     assert.match(await page.$eval('[data-bugbottle="picker"]', el => el.textContent),
       id === "heading" ? /Orders/ : /Order diagram/);
+    assert.deepEqual(await page.evaluate(async () => (await window.axe.run(
+      document.querySelector('[data-bugbottle="picker"]'))).violations.map(v => v.id)), []);
+    assert.equal(await page.$eval('[data-bugbottle="picker"] [role="status"]', el => el.getAttribute('aria-live')), 'polite');
     await page.screenshot({ path: `/tmp/bugbottle-picker-${id}.png` });
     await page.keyboard.press("Enter");
     assert.match(await shadow("ul"), new RegExp(`#${id}`));
@@ -92,6 +103,11 @@ try {
   await page.keyboard.press("Escape");
   assert.equal(await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className), "pick");
   assert.equal(await page.$('[data-bugbottle="picker"]'), null);
+  await page.keyboard.press("Enter");
+  await select("heading");
+  await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.querySelector('.pick').click());
+  assert.equal(await page.evaluate(() => document.querySelector('[data-bugbottle="ui"]').shadowRoot.activeElement?.className), "pick");
+  assert.equal(await page.$('[data-bugbottle="picker"]'), null);
   await page.evaluate(() => window.bb.close());
   for (const [id, key] of [["submit", "Enter"], ["link", "Enter"], ["button", "Space"]]) {
     await page.evaluate(() => window.start());
@@ -102,11 +118,22 @@ try {
   }
   assert.deepEqual(await page.evaluate(() => [window.clicks, window.submits, location.hash]), [0, 0, ""]);
   await page.evaluate(() => window.start());
+  await page.keyboard.press("Enter");
+  assert.equal(await page.evaluate(() => window.result), undefined, "confirmation requires a selection");
   await page.keyboard.press("Home");
   assert.equal(await page.evaluate(() => window.selected), "content");
   await page.keyboard.press("Tab");
   assert.equal(await page.evaluate(() => window.selected), "heading");
-  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await page.evaluate(() => window.selected), "image");
+  await page.keyboard.press("ArrowDown");
+  assert.notEqual(await page.evaluate(() => window.selected), "hidden");
+  assert.notEqual(await page.evaluate(() => window.selected), "inert");
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Tab");
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("Tab");
+  await page.keyboard.up("Shift");
   assert.equal(await page.evaluate(() => window.selected), "content");
   await page.keyboard.press("End");
   assert.equal(await page.evaluate(() => window.selected), "button");
@@ -115,8 +142,25 @@ try {
   assert.equal(await page.$('[data-bugbottle="highlight"]'), null);
   assert.equal(await page.$('[data-bugbottle="picker"]'), null);
   assert.equal(await page.$eval('#heading', el => el.hasAttribute('tabindex')), false);
+  assert.equal(await page.evaluate(() => window.cancelled()), null);
+  assert.equal(await page.$('[data-bugbottle="picker"]'), null);
   await page.click('#button');
   assert.equal(await page.evaluate(() => window.clicks), 1, "host events work after abort");
+  await page.evaluate(() => window.start({ ignore: el => el.id === 'heading' }));
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await page.evaluate(() => window.selected), "image", "custom exclusions apply to keyboard navigation");
+  await page.keyboard.press("Escape");
+  await page.$eval('#button', el => { el.style.display = 'block'; el.style.marginTop = '600px'; });
+  await page.evaluate(() => window.start());
+  await page.keyboard.press("End");
+  assert.equal(await page.evaluate(() => {
+    const target = document.querySelector('#button').getBoundingClientRect();
+    const hint = document.querySelector('[data-bugbottle="picker"]').getBoundingClientRect();
+    return hint.bottom <= target.top || hint.top >= target.bottom;
+  }), true, "instructions do not obscure the visible selection");
+  await page.keyboard.press("Escape");
+  await page.$eval('#button', el => el.removeAttribute('style'));
   await page.evaluate(() => window.start());
   await page.hover('#heading');
   await page.click('#heading');

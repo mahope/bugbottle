@@ -8,7 +8,7 @@
  *
  * `describeElement` is the pure part: it turns an element into a small,
  * serialisable description. `pickElement` is the interactive part: it waits
- * for the reporter to click something and describes that.
+ * for the reporter to choose something with the pointer or keyboard.
  */
 import type { ElementRef } from "./report-core.ts";
 /** The subset of Element the selector builder needs, so it can be tested without a DOM. */
@@ -33,17 +33,19 @@ export declare function describeElement(el: Element): ElementRef;
 export type PickOptions = {
     /** Cancels the pick. Resolves with null. */
     signal?: AbortSignal;
-    /** Called as the pointer moves, with the element that would be picked. */
+    /** Called when the pointer or keyboard selection changes. */
     onHover?: (el: Element | null) => void;
-    /** Draw a highlight over the hovered element. Default true. */
+    /** Visible and accessible keyboard instructions. Defaults to English. */
+    instructions?: string;
+    /** Draw a highlight over the selected element. Default true. */
     highlight?: boolean;
     /** Elements that cannot be picked. Defaults to anything inside `[data-bugbottle]`. */
     ignore?: (el: Element) => boolean;
 };
 /**
- * Waits for the reporter to click an element and resolves with its
- * description. Escape, or the signal, resolves with null. The click is
- * swallowed so it does not also press the button it landed on.
+ * Waits for a click, or Tab/arrow navigation followed by Enter/Space, and
+ * resolves with the element's description. Escape, or the signal, resolves
+ * with null. Selection never activates the chosen element.
  *
  * The highlight box carries `data-bugbottle`, so it never appears in a
  * screenshot and cannot be picked itself.

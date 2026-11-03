@@ -192,6 +192,7 @@ function mountOverlay(text: string, interactive: boolean): Overlay {
   const hint = document.createElement("p");
   hint.className = "hint";
   hint.textContent = text;
+  hint.hidden = !interactive;
   // `role="status"` so the instruction is read out when it appears, which is
   // the only way a screen reader learns the page just changed mode.
   hint.setAttribute("role", "status");
@@ -555,6 +556,7 @@ export async function captureElement(
   let element: ElementRef | null;
   try {
     element = await pickElement({
+      instructions: options.instructions,
       signal: options.signal,
       highlight: false,
       onHover(el) {

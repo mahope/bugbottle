@@ -307,6 +307,8 @@ test("an element is picked with a high-contrast box and cut out with its padding
   assert.equal(layer.getAttribute("role"), null, "the page underneath keeps the pointer");
   assert.match(layer.style.cssText, /pointer-events: ?none/);
   assert.equal(layer.shadowRoot!.querySelector(".hint")?.textContent, "Pick it");
+  assert.equal((layer.shadowRoot!.querySelector(".hint") as HTMLElement).hidden, true,
+    "the picker supplies the instructions during element selection");
 
   pointer(button, "pointermove", 120, 310);
   const box = layer.shadowRoot!.querySelector<HTMLElement>(".box")!;
@@ -415,7 +417,7 @@ test("picking an element for the picture hides the panel, then sends the region 
   const buttons = [...root.querySelectorAll<HTMLButtonElement>(".modes button")];
   buttons[3]!.click();
   assert.equal(panel.hidden, true, "the panel is out of the way while picking");
-  assert.deepEqual(asked, [{ mode: "element", instructions: da.ui.picking }]);
+  assert.deepEqual(asked, [{ mode: "element", instructions: da.ui.pickingAnnounce }]);
 
   release(fakeShot);
   await tick();

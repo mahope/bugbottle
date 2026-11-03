@@ -207,7 +207,7 @@ export const en: Locale = {
     pickElement: "Point at the element",
     picking: "Click anything to attach it — Esc to stop",
     pickingAnnounce:
-      "Pointing mode. Click any element on the page to attach it, or press Escape to stop.",
+      "Click an element, or use Tab and arrow keys to move, Enter or Space to attach. Escape cancels.",
     pickingDone: "Pointing mode ended.",
     shotModeLabel: "Screenshot of",
     shotNone: "None",
@@ -267,7 +267,7 @@ export const da: Locale = {
     pickElement: "Peg på elementet",
     picking: "Klik på det, der skal vedhæftes. Esc stopper.",
     pickingAnnounce:
-      "Pegetilstand. Klik på et element på siden for at vedhæfte det, eller tryk på Esc for at stoppe.",
+      "Klik på et element, eller flyt med Tab og piletaster. Enter eller mellemrum vedhæfter. Esc annullerer.",
     pickingDone: "Pegetilstand er slut.",
     shotModeLabel: "Skærmbillede af",
     shotNone: "Intet",
@@ -328,7 +328,7 @@ export const sv: Locale = {
     pickElement: "Peka på elementet",
     picking: "Klicka på det som ska bifogas — Esc för att avbryta",
     pickingAnnounce:
-      "Pekläge. Klicka på ett element på sidan för att bifoga det, eller tryck på Esc för att avbryta.",
+      "Klicka på ett element eller flytta med Tab och piltangenterna. Enter eller mellanslag bifogar. Esc avbryter.",
     pickingDone: "Pekläget är avslutat.",
     shotModeLabel: "Skärmbild av",
     shotNone: "Ingen",
@@ -388,7 +388,7 @@ export const nb: Locale = {
     pickElement: "Pek på elementet",
     picking: "Klikk på det som skal legges ved — Esc for å avbryte",
     pickingAnnounce:
-      "Pekemodus. Klikk på et element på siden for å legge det ved, eller trykk Esc for å avbryte.",
+      "Klikk på et element, eller flytt med Tab og piltastene. Enter eller mellomrom legger ved. Esc avbryter.",
     pickingDone: "Pekemodus er avsluttet.",
     shotModeLabel: "Skjermbilde av",
     shotNone: "Ingen",
@@ -448,7 +448,7 @@ export const de: Locale = {
     pickElement: "Auf das Element zeigen",
     picking: "Klicken Sie auf das Element — Esc zum Abbrechen",
     pickingAnnounce:
-      "Zeigemodus. Klicken Sie auf ein Element der Seite, um es anzuhängen, oder drücken Sie Esc zum Abbrechen.",
+      "Klicken Sie auf ein Element oder navigieren Sie mit Tab und Pfeiltasten. Enter oder Leertaste hängt es an. Esc bricht ab.",
     pickingDone: "Zeigemodus beendet.",
     shotModeLabel: "Screenshot von",
     shotNone: "Keins",
@@ -510,7 +510,7 @@ export const nl: Locale = {
     pickElement: "Wijs het element aan",
     picking: "Klik op wat je wilt bijvoegen — Esc om te stoppen",
     pickingAnnounce:
-      "Aanwijsmodus. Klik op een element op de pagina om het bij te voegen, of druk op Esc om te stoppen.",
+      "Klik op een element of navigeer met Tab en de pijltoetsen. Enter of spatie voegt het bij. Esc annuleert.",
     pickingDone: "Aanwijsmodus beëindigd.",
     shotModeLabel: "Screenshot van",
     shotNone: "Geen",
@@ -571,7 +571,7 @@ export const fr: Locale = {
     pickElement: "Désigner l'élément",
     picking: "Cliquez sur l'élément à joindre — Échap pour arrêter",
     pickingAnnounce:
-      "Mode désignation. Cliquez sur un élément de la page pour le joindre, ou appuyez sur Échap pour arrêter.",
+      "Cliquez sur un élément ou naviguez avec Tab et les flèches. Entrée ou Espace le joint. Échap annule.",
     pickingDone: "Mode désignation terminé.",
     shotModeLabel: "Capture de",
     shotNone: "Aucune",
@@ -633,7 +633,7 @@ export const es: Locale = {
     pickElement: "Señalar el elemento",
     picking: "Haz clic en lo que quieras adjuntar — Esc para cancelar",
     pickingAnnounce:
-      "Modo de señalar. Haz clic en un elemento de la página para adjuntarlo, o pulsa Esc para cancelar.",
+      "Haz clic en un elemento o navega con Tab y las flechas. Intro o Espacio lo adjunta. Esc cancela.",
     pickingDone: "Modo de señalar finalizado.",
     shotModeLabel: "Captura de",
     shotNone: "Ninguna",

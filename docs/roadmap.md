@@ -18,6 +18,10 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — the element picker navigates rendered page elements with the
+keyboard, including headings and images without tabindex, and confirms without
+activating the page. Instructions are localised and cancellation restores focus (#197).
+
 **Unreleased** — packed React 18.3.1 and 19.3.0 consumers check StrictMode
 forms, pending-delivery cleanup, remount and matching TypeScript types (#156).
 

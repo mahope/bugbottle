@@ -49,12 +49,12 @@ import { initConsoleBuffer, buildReport, sendReport } from "https://cdn.jsdelivr
   route handler you write, with the validation helpers shipped alongside.
 - **Nothing in your bundle you did not ask for.** Zero dependencies. The core
   is about 1.5 kB gzipped; with the element picker and the React, Vue, Svelte
-  or Solid adapter, 5.7 kB; the optional ready-made panel, 11.6 kB; the picture
+  or Solid adapter, about 6.8 kB; the optional ready-made panel, 13.2 kB; the picture
   annotator 1.4 kB on top of it, and only for the applications that ask for it;
   breadcrumbs 1.3 kB; the network log
   1.2 kB; the timings and storage snapshot 1.2 kB; the offline queue 2.1 kB;
   shake-to-report 0.6 kB;
-  the everything script tag, 24.6 kB, and the slim one 21.0 kB. `html-to-image` is only pulled in by the module that
+  the everything script tag, 27.1 kB, and the slim one 23.7 kB. `html-to-image` is only pulled in by the module that
   imports it, the annotator only by the panel you handed it to, and the
   scrubber only by the code that calls it.
 - **Sends itself onward.** Email through Resend, a Slack, Discord or plain
@@ -5701,6 +5701,19 @@ description of the element the reporter clicks: a short CSS selector, the tag,
 the visible text, the position on the page, and the useful attributes (`id`,
 `name`, `role`, `aria-label`, `href`, every `data-*`). Escape cancels. The click
 is swallowed, so picking a button does not also press it.
+
+The panel's picker button also works with the keyboard. Once it is open,
+Tab or Down/Right moves forward through rendered page elements in document
+order; Shift+Tab or Up/Left moves back, wrapping at either end. Home/End
+selects the first/last element. Headings, images and text containers need no
+`tabindex`. Hidden, inert, `aria-hidden` and bugbottle-owned content is skipped,
+as are elements excluded by `ignore`. The selection scrolls into view, uses
+the same highlight as pointer selection, and is announced in a live region.
+Enter or Space attaches it without activating links, buttons or forms.
+Escape or the abort signal cancels; the panel returns focus to its picker
+button. The picker removes its overlay and listeners and never changes page
+elements' attributes. `pickElement({ instructions })` overrides its visible
+and accessible instructions; the panel supplies the current locale's text.
 
 ```jsonc
 {

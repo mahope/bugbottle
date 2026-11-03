@@ -597,6 +597,9 @@ jobs:
       - name: Region PNG pixels after scrolling at DPR 1 and 2
         timeout-minutes: 2
         run: npm run smoke:region
+      - name: Keyboard and pointer element selection
+        timeout-minutes: 2
+        run: npm run smoke:element-picker
       - name: Compiled Vue and Svelte packed-consumer forms
         timeout-minutes: 2
         run: npm run smoke:forms

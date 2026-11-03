@@ -10,6 +10,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- Keyboard element selection with Tab, arrows, Home/End and Enter/Space,
+  including non-focusable headings and images, visible and announced selection,
+  localised instructions and focus restoration on cancellation (#197).
+
 - Isolated packed React 18.3.1 and 19.3.0 consumers covering mounted StrictMode
   forms, pending-delivery unmount/remount and matching TypeScript types (#156).
 

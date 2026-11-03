@@ -639,7 +639,7 @@ export function mountBugbottle(options) {
         pickController = controller;
         // Picking an element for the picture is the picker the panel already has,
         // with a picture taken at the end, so it says the same two sentences.
-        const instructions = mode === "area" ? text("areaInstructions") : ui.picking;
+        const instructions = mode === "area" ? text("areaInstructions") : ui.pickingAnnounce;
         live.textContent = mode === "area" ? instructions : ui.pickingAnnounce;
         panel.hidden = true;
         try {
@@ -720,7 +720,7 @@ export function mountBugbottle(options) {
         // The panel is in the way of the page while picking.
         panel.hidden = true;
         try {
-            const picked = await pickElement({ signal: pickController.signal });
+            const picked = await pickElement({ signal: pickController.signal, instructions: ui.pickingAnnounce });
             if (picked) {
                 elements = [...elements, picked].slice(-MAX_ELEMENTS);
                 renderElements();
