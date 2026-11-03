@@ -414,7 +414,8 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
         return true;
       } catch (err) {
         const queue = opts.queue;
-        const rejected = err instanceof SendFailedError && err.status >= 400 && err.status < 500;
+        const rejected = err instanceof SendFailedError &&
+          err.status >= 400 && err.status < 500 && err.status !== 429;
         if (queue && report && !rejected) {
           queue.enqueue(report);
           set({ status: { kind: "queued" } });

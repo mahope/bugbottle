@@ -4075,10 +4075,14 @@ if the hook throws or times out, the form shows an error and queues nothing.
 
 The queue drains when it is created, when the browser fires `online`, and when
 the tab becomes visible again. A failed attempt backs off exponentially, from
-one second to five minutes. A 5xx or a network error keeps the report; a 4xx
-drops it, because the server has already said this report is not acceptable and
-retrying it would only fail again more quietly — nothing is ever queued on a
-4xx in the first place. `timeoutMs` (30 seconds by default) bounds one attempt:
+one second to five minutes. HTTP 429, 5xx and network errors keep the report;
+an initial submission receiving 429 is also queued when a queue is configured.
+Other 4xx responses, including 400, 401 and 403, are permanent rejections:
+initial submissions show an error without queueing, and queued reports are dropped.
+On failed queued deliveries, `Retry-After` accepts non-negative integer seconds
+or an HTTP date (`Tue, 03 Nov 2026 00:00:03 GMT`), bounded to one second through
+five minutes. Missing or malformed values use the exponential backoff instead.
+`timeoutMs` (30 seconds by default) bounds one attempt:
 a request that is written and then never answered is the dropped mobile
 connection, and it is the report the queue exists to save, so the attempt is
 given up on, released and retried on the backoff rather than waited for.

@@ -63,6 +63,19 @@ const DEFAULT_MAX_ENTRIES = 5;
 const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 300_000;
+function retryAfterMs(value) {
+    if (value === null)
+        return undefined;
+    const text = value.trim();
+    const delay = /^\d+$/.test(text)
+        ? Number(text) * 1_000
+        : new Date(text).toUTCString() === text
+            ? Date.parse(text) - Date.now()
+            : NaN;
+    if (Number.isNaN(delay))
+        return undefined;
+    return Math.max(MIN_BACKOFF_MS, Math.min(delay, MAX_BACKOFF_MS));
+}
 /**
  * How long a claim keeps the other tabs off a report. Long enough to cover a
  * slow POST, short enough that a tab closed mid-delivery does not strand the
@@ -309,14 +322,14 @@ export function createQueue(options) {
             clearTimeout(timer);
         timer = null;
     }
-    function retryLater() {
+    function retryLater(retryAfter) {
         // A destroyed queue schedules nothing. Without this a failure that arrives
         // after `destroy` starts a timer nobody will ever clear, and that timer
         // fails and schedules the next one, for ever.
         if (destroyed)
             return;
         failures += 1;
-        const delay = Math.min(MIN_BACKOFF_MS * 2 ** (failures - 1), MAX_BACKOFF_MS);
+        const delay = retryAfter ?? Math.min(MIN_BACKOFF_MS * 2 ** (failures - 1), MAX_BACKOFF_MS);
         nextAttempt = Date.now() + delay;
         stopTimer();
         timer = setTimeout(() => {
@@ -337,6 +350,7 @@ export function createQueue(options) {
             if (!item)
                 break;
             let done = false;
+            let retryAfter;
             try {
                 const doFetch = options.fetch ?? globalThis.fetch;
                 // Serialised once and signed as it is: the bytes that are signed have
@@ -366,10 +380,12 @@ export function createQueue(options) {
                 const clock = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
                 try {
                     const response = await doFetch(options.endpoint, init);
-                    // A 4xx is the server saying this report is not acceptable — a
-                    // malformed body, a revoked token, a rejected origin. Retrying it
-                    // changes nothing, so it goes. A 5xx is the server having a bad day.
-                    done = response.ok || (response.status >= 400 && response.status < 500);
+                    // Rate limiting is temporary; other 4xx responses reject the report
+                    // permanently (a malformed body, revoked token or rejected origin).
+                    done = response.ok ||
+                        (response.status >= 400 && response.status < 500 && response.status !== 429);
+                    if (!done)
+                        retryAfter = retryAfterMs(response.headers.get("Retry-After"));
                 }
                 finally {
                     if (clock !== null)
@@ -383,7 +399,7 @@ export function createQueue(options) {
                 await release(item);
                 // `destroy` may have been called while this request was in flight, and
                 // a queue that is gone must not schedule the next attempt.
-                retryLater();
+                retryLater(retryAfter);
                 return items.length;
             }
             // By id, not by position: `enqueue` and the eviction it triggers may have

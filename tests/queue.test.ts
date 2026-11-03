@@ -165,6 +165,7 @@ for (const [header, expected] of [
   ["invalid", 1_000],
   ["-1", 1_000],
   ["1.5", 1_000],
+  ["Tue, 31 Nov 2026 00:00:00 GMT", 1_000],
 ] as const) {
   test(`429 Retry-After ${header} waits ${expected} ms then delivers`, async (t) => {
     t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });

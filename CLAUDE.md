@@ -281,7 +281,12 @@ buffer, the checkout trim and the byte cap, importing two types and nothing at
 run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
 script tag nothing at all — the IIFE does not export it, because a page with no
-bundler has no `record` to hand in. `bugbottle/queue` is budgeted at 1728 bytes and measures
+bundler has no `record` to hand in. After #116, `bugbottle/queue` is budgeted at
+1856 bytes: bounded `Retry-After` parsing and the 429 exemption take it from
+1697 to 1822 bytes with esbuild 0.28.2 and filename-free gzip. Both submission
+paths retain 429 reports; other 4xx responses remain permanent rejections.
+The script-tag budgets rise to 26880 and 23296 bytes for the same handling.
+Before that change, the queue measured
 1645 (1565 until 1.0 removed the `maxItems` alias and #98 gave it the
 `sign` seam — 26 bytes for one serialisation hoisted out of the request and one
 `await` — and 1645 after a deadline on each delivery attempt, an
