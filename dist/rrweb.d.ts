@@ -113,10 +113,8 @@ export declare function attachRrweb(record: RrwebRecord, options?: RrwebOptions)
  * The buffer as a report field, or null when there is nothing to send. Called
  * by `buildReport` through the registry, at the moment a report is written.
  *
- * A buffer still over the cap after every droppable group has gone is answered
- * with null rather than with a truncated recording: one full snapshot larger
- * than half a megabyte is a page too big to replay, and half of it would not
- * play at all.
+ * An oversized checkout is released along with its dependent events. Capture
+ * resumes at a fresh full snapshot rather than returning a truncated replay.
  */
 export declare function getReplay(): ReplayCapture | null;
 /** Whether `attachRrweb` has run and not been stopped since. */

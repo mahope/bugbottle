@@ -5995,14 +5995,16 @@ only. The adapter asks rrweb for a fresh full snapshot every ten seconds
 cut: everything after one is a diff against it, so dropping events out of the
 middle leaves something that will not play. The buffer therefore keeps whole
 checkout groups and drops the oldest — first when it is entirely outside the
-window, then again while the serialised buffer is over `maxBytes`. The newest
-group is never dropped, so `seconds` is a floor and not a promise: you get at
-least what you asked for, up to ten seconds more, and less than that only in
-the first seconds after the page loaded.
+window, then again while the serialised buffer is over `maxBytes`. Time trimming
+keeps the newest group, so when the byte cap permits, `seconds` is a floor and
+not a promise: you get at least what you asked for, up to ten seconds more,
+and less than that only in the first seconds after the page loaded.
 
-If one snapshot alone is over the cap — a page too large to record at that
-size — nothing is attached at all, on the same principle as an oversized
-screenshot: half a replay is not half as useful, it is useless.
+If the newest checkout group exceeds the cap, whether from one large snapshot
+or its accumulated incremental events, the adapter releases the whole group.
+Its dependent events are discarded until a fresh full snapshot fits the cap.
+An oversized checkout is omitted rather than retained indefinitely, and no
+truncated or orphaned incremental replay is attached.
 
 `buildReport` attaches the buffer on its own while `attachRrweb` is recording,
 as `replay: { events, seconds }`; pass `includeReplay: false` to leave it out
