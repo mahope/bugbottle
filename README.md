@@ -6577,6 +6577,14 @@ not to write this yourself:
   caller called it, and one that does not is dropped while the report is
   stored — screenshots fail open here as everywhere else.
 
+The JSON write decides whether a report is stored. If it fails, `store` rejects
+and adds no index entry. Once the JSON is persisted, a screenshot write or
+rename failure is tolerated: `store` returns the report's id, the message stays
+readable and listed, and its entry has `screenshot: false`. Failed writes attempt
+to remove their temporary file; a cleanup failure can leave a `.tmp` file that
+listings ignore. Retrying a successfully stored message is unnecessary even
+when its picture could not be saved.
+
 It is a directory, not a database: one process is assumed to be the only thing
 writing to it, because the index is held in memory. Two instances over one
 volume want the real thing. `examples/inbox` is `fileStore` plus a password, a

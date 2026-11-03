@@ -8,6 +8,8 @@
  */
 
 import { test } from "node:test";
+import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -52,6 +54,62 @@ function report(message: string, receivedAt = new Date().toISOString()): Validat
 
 /** Stamps that sort, so "oldest first" means something in a fast test. */
 const at = (minute: number) => `2026-09-08T10:${String(minute).padStart(2, "0")}:00.000Z`;
+
+for (const extension of ["png", "json"]) {
+  for (const boundary of ["writeFile", "rename"] as const) {
+    test(`${extension} ${boundary} failure preserves only successfully stored reports`, async (t) => {
+      const dir = await scratch();
+      const store = fileStore({ dir });
+      const input = report("Keep the message", at(1));
+      const failure = new Error("Injected filesystem failure");
+      const write = fs.writeFile;
+      const rename = fs.rename;
+      let injected = 0;
+      if (boundary === "writeFile") {
+        t.mock.method(fs, "writeFile", async (...args: Parameters<typeof write>) => {
+          if (String(args[0]).includes(`.${extension}.`)) {
+            injected++;
+            await write(args[0], "partial write");
+            throw failure;
+          }
+          return write(...args);
+        });
+      } else {
+        t.mock.method(fs, "rename", async (...args: Parameters<typeof rename>) => {
+          if (String(args[1]).endsWith(`.${extension}`)) {
+            injected++;
+            throw failure;
+          }
+          return rename(...args);
+        });
+      }
+      syncBuiltinESMExports();
+      try {
+        if (extension === "json") {
+          await assert.rejects(store.store(input, PNG), (error) => error === failure);
+          assert.deepEqual(await store.list(), []);
+          assert.deepEqual(await readdir(dir), [], "no report, picture or temporary file survives");
+        } else {
+          const { id } = await store.store(input, PNG);
+          const entries = await store.list();
+          assert.equal(entries.length, 1);
+          assert.equal(entries[0]?.id, id);
+          assert.equal(entries[0]?.screenshot, false);
+          const found = await store.read(id, { screenshot: true });
+          assert.deepEqual(found?.report, input);
+          assert.equal(found?.screenshot, undefined);
+          assert.deepEqual(await readdir(dir), [entries[0]?.file], "only the JSON survives");
+          assert.deepEqual(await store.refresh(), entries);
+          assert.deepEqual(await fileStore({ dir }).list(), entries);
+        }
+        assert.equal(injected, 1, "the intended filesystem boundary was reached");
+      } finally {
+        t.mock.restoreAll();
+        syncBuiltinESMExports();
+      }
+    });
+  }
+}
 
 test("a report is written, listed, read back and removed", async () => {
   const dir = await scratch();

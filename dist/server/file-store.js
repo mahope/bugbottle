@@ -221,12 +221,21 @@ export function fileStore(options) {
         const file = `${nameSafe(receivedAt)}-${id}.json`;
         const picture = screenshots ? pngBytes(screenshot) : undefined;
         await writeAtomic(join(dir, file), JSON.stringify(report, null, 2));
-        if (picture)
-            await writeAtomic(join(dir, `${id}.png`), picture);
+        let screenshotStored = false;
+        if (picture) {
+            try {
+                await writeAtomic(join(dir, `${id}.png`), picture);
+                screenshotStored = true;
+            }
+            catch {
+                // The JSON is already stored. Rejecting would invite a retry of the
+                // message, so a picture failure leaves a report without a screenshot.
+            }
+        }
         // `index` rather than the `entries` this call was handed: the two are the
         // same array unless the walk was replaced under us, and the index is the
         // one a listing reads.
-        (index ?? entries).unshift(summarise(id, file, report, Boolean(picture)));
+        (index ?? entries).unshift(summarise(id, file, report, screenshotStored));
         // The cap only: age is what `prune()` is for, and a write is not the
         // moment to walk every entry's timestamp.
         await pruneToCap();
