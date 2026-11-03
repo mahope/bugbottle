@@ -8437,7 +8437,8 @@ endpoint exports reports as JSON files (e.g. into a repository or artifact)
 and you want malformed ones caught before they reach your issue tracker.
 
 ```yaml
-- uses: mahope/bugbottle@v0
+- uses: mahope/bugbottle/action@main
+  id: reports
   with:
     reports-glob: "reports/*.json"     # required
     require-screenshot: false          # fail reports without a screenshot
@@ -8445,7 +8446,26 @@ and you want malformed ones caught before they reach your issue tracker.
 ```
 
 Outputs `valid-count` and `invalid-count`. The job fails if any report is
-malformed or no files match. Zero dependencies — installs in about a second.
+malformed or no files match. Read the counts with
+`${{ steps.reports.outputs['valid-count'] }}` and
+`${{ steps.reports.outputs['invalid-count'] }}`. Counts are appended to the
+runner-provided `GITHUB_OUTPUT` file after validation, even when reports fail.
+Zero runtime dependencies.
+
+After checkout, this repository can invoke the action with `uses: ./action`.
+For standalone use, pass the same environment names the runner supplies
+(hyphens are preserved):
+
+```bash
+env 'INPUT_REPORTS-GLOB=reports/*.json' \
+  'INPUT_REQUIRE-SCREENSHOT=false' 'INPUT_MAX-REPORT-SIZE-KB=4096' \
+  node action/index.cjs
+```
+
+Without `GITHUB_OUTPUT`, standalone validation still prints its summary and
+returns the validation exit status, but exports no step outputs. Set
+`GITHUB_OUTPUT` to a writable file path to append `valid-count=<number>` and
+`invalid-count=<number>` lines; no legacy stdout output commands are emitted.
 
 ## Who makes it
 

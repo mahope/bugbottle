@@ -25,16 +25,18 @@ function runAction(files: Record<string,string>, env: Record<string,string> = {}
     }
     const outputFile = join(dir, "github-output");
     writeFileSync(outputFile, "existing=value\n");
+    const runnerEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      "INPUT_REPORTS-GLOB": GLOB,
+      "INPUT_REQUIRE-SCREENSHOT": "false",
+      "INPUT_MAX-REPORT-SIZE-KB": "4096",
+      GITHUB_OUTPUT: outputFile,
+      ...env,
+    };
+    if (env.GITHUB_OUTPUT === "") delete runnerEnv.GITHUB_OUTPUT;
     const result = spawnSync(process.execPath, [ACTION], {
       cwd: dir,
-      env: {
-        ...process.env,
-        "INPUT_REPORTS-GLOB": GLOB,
-        "INPUT_REQUIRE-SCREENSHOT": "false",
-        "INPUT_MAX-REPORT-SIZE-KB": "4096",
-        GITHUB_OUTPUT: outputFile,
-        ...env,
-      },
+      env: runnerEnv,
       encoding: "utf8",
     });
     assert.ifError(result.error);
