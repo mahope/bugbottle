@@ -33,7 +33,7 @@ export declare function describeElement(el: Element): ElementRef;
 export type PickOptions = {
     /** Cancels the pick. Resolves with null. */
     signal?: AbortSignal;
-    /** Called as the pointer moves, with the element that would be picked. */
+    /** Called as the pointer moves and with null on completion. Observer errors are ignored. */
     onHover?: (el: Element | null) => void;
     /** Draw a highlight over the hovered element. Default true. */
     highlight?: boolean;

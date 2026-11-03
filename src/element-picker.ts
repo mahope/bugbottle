@@ -133,7 +133,7 @@ export function describeElement(el: Element): ElementRef {
 export type PickOptions = {
   /** Cancels the pick. Resolves with null. */
   signal?: AbortSignal;
-  /** Called as the pointer moves, with the element that would be picked. */
+  /** Called as the pointer moves and with null on completion. Observer errors are ignored. */
   onHover?: (el: Element | null) => void;
   /** Draw a highlight over the hovered element. Default true. */
   highlight?: boolean;
@@ -159,6 +159,7 @@ export function pickElement(options: PickOptions = {}): Promise<ElementRef | nul
   const highlight = options.highlight ?? true;
 
   return new Promise((resolve) => {
+    let finished = false;
     let box: HTMLDivElement | null = null;
     if (highlight) {
       box = document.createElement("div");
@@ -178,21 +179,31 @@ export function pickElement(options: PickOptions = {}): Promise<ElementRef | nul
       return ignore(t) ? null : t;
     };
 
+    const notifyHover = (el: Element | null) => {
+      try {
+        options.onHover?.(el);
+      } catch {
+        // An observer must not interrupt highlighting or leave the pick pending.
+      }
+    };
+
     const finish = (result: ElementRef | null) => {
+      if (finished) return;
+      finished = true;
       document.removeEventListener("pointermove", onMove, true);
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKey, true);
       options.signal?.removeEventListener("abort", onAbort);
       document.documentElement.style.cursor = previousCursor;
       box?.remove();
-      options.onHover?.(null);
+      notifyHover(null);
       resolve(result);
     };
 
     const onMove = (e: PointerEvent) => {
       const el = targetOf(e);
-      options.onHover?.(el);
-      if (!box) return;
+      notifyHover(el);
+      if (finished || !box) return;
       if (!el) {
         box.style.display = "none";
         return;

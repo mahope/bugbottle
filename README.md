@@ -5702,6 +5702,10 @@ the visible text, the position on the page, and the useful attributes (`id`,
 `name`, `role`, `aria-label`, `href`, every `data-*`). Escape cancels. The click
 is swallowed, so picking a button does not also press it.
 
+An optional `onHover` observer receives the hovered element and `null` when
+picking ends. Errors thrown by the observer are ignored, so highlighting,
+cleanup and the selected element or `null` result still complete.
+
 ```jsonc
 {
   "selector": "form#checkout > button:nth-of-type(2)",
