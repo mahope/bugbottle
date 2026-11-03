@@ -4052,6 +4052,10 @@ const { id } = await sendReport("/api/feedback", report);
 `sendReport` resolves on a 2xx, throws `SendFailedError` (with `status` and
 the parsed body) on anything else, gives up with `SendTimeoutError` after
 15 seconds (`timeoutMs`), and lets network errors through untouched.
+The deadline and caller cancellation also apply while reading the response body.
+Empty and non-JSON successful responses return `body: null`. A client timeout
+cannot tell you whether the receiver already stored the report; retrying may
+create a duplicate.
 `captureScreenshot` estimates from the capture area whether a full-scale render
 would be larger than a server would accept, and starts at half scale when it
 would — rendering is expensive, so a page that was never going to fit should
@@ -4139,8 +4143,8 @@ or two on its own. A write is refused sooner than anyone expects — and until
 the next reload, which is exactly what an outage ends in.
 
 It costs the picture instead. When the storage refuses a write, the queue
-writes the same reports again without their screenshots and leaves a line on
-each one it took a picture from:
+writes the same reports again without their screenshots or screenshot regions
+and leaves a line on each one it took a picture from:
 
 ```jsonc
 "notes": ["Screenshot dropped: it did not fit in the offline queue."]
@@ -6579,6 +6583,10 @@ report — the strings a list shows, without reading every file for them. The
 directory is walked once, on the first call that needs it, and kept up to date
 by every write and delete after that; `read(id)` then reads exactly the one
 file that was asked for, and only fetches the picture when you ask for it.
+
+Entries returned by `list()`, `refresh()` and `read().entry` are independent
+snapshots. Editing them cannot change the index, file lookup or retention;
+later writes, deletions and refreshes do not update earlier snapshots.
 
 An entry `read` finds nothing behind is dropped from the listing then and
 there, so a report deleted by something outside this process stops being a link

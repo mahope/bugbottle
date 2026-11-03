@@ -489,6 +489,62 @@ test("an arrival time cannot walk out of the directory it names a file in", asyn
 /** An arrival time this many days ago, as a report carries it. */
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
 
+for (const source of ["list", "read", "refresh"] as const) {
+  test(`${source} entries are independent snapshots across writes, refresh and prune`, async () => {
+    const dir = await scratch();
+    const store = fileStore({ dir, maxReports: 2, maxAgeDays: 7 });
+    const old = await store.store(report("Old", daysAgo(10)), PNG);
+    const fresh = await store.store(report("Fresh", daysAgo(1)));
+    const before = await store.list();
+    const snapshots = source === "read"
+      ? await Promise.all(before.map(async ({ id }) => (await store.read(id))!.entry))
+      : await store[source]();
+
+    for (const entry of snapshots) {
+      entry.id = "11111111-2222-3333-4444-555555555555";
+      entry.file = "changed.json";
+      entry.receivedAt = entry.title === "Old" ? daysAgo(0) : daysAgo(20);
+    }
+    const mutatedSnapshots = snapshots.map((entry) => ({ ...entry }));
+    assert.deepEqual(await store.list(), before);
+    assert.ok(await store.read(old.id), "the original id and file remain readable");
+    assert.ok(await store.read(fresh.id));
+    assert.equal(await store.prune(), 1, "age uses the original arrival times");
+    assert.equal(await store.read(old.id), null);
+    assert.ok(await store.read(fresh.id));
+
+    const retained = (await store.list())[0];
+    assert.ok(retained);
+    await store.refresh();
+    retained.receivedAt = daysAgo(30);
+    const newer = await store.store(report("Newer", daysAgo(0.5)));
+    const newest = await store.store(report("Newest", daysAgo(0)));
+    assert.equal(await store.read(fresh.id), null, "the cap evicts the original oldest");
+    assert.equal(await store.prune(), 0);
+    assert.deepEqual((await store.list()).map(({ id }) => id), [newest.id, newer.id]);
+    assert.equal(await store.remove(newer.id), true);
+    assert.equal(await store.remove(newest.id), true);
+    assert.deepEqual(await store.refresh(), []);
+    assert.deepEqual(snapshots, mutatedSnapshots, "later operations leave snapshots unchanged");
+    assert.equal(snapshots.find(({ title }) => title === "Old")!.screenshot, true,
+      "deletion does not edit earlier entries");
+  });
+}
+
+test("mutating list entries cannot prevent removal of the original report", async () => {
+  const dir = await scratch();
+  const store = fileStore({ dir });
+  const { id } = await store.store(report("Remove me"), PNG);
+  const [entry] = await store.list();
+  assert.ok(entry);
+  entry.id = "11111111-2222-3333-4444-555555555555";
+  entry.file = "changed.json";
+  entry.receivedAt = daysAgo(30);
+  assert.ok(await store.read(id));
+  assert.equal(await store.remove(id), true);
+  assert.deepEqual(await readdir(dir), []);
+});
+
 test("prune deletes what is older than maxAgeDays and keeps what is not", async () => {
   const dir = await scratch();
   const store = fileStore({ dir, maxAgeDays: 7 });

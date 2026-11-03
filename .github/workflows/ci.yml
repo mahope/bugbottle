@@ -7,6 +7,20 @@ on:
   pull_request:
 
 jobs:
+  react-consumer:
+    name: Packed React 18 and 19 StrictMode consumers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run smoke:react
+
   inbox-docker:
     name: Inbox Docker persistence
     runs-on: ubuntu-latest
@@ -338,8 +352,10 @@ jobs:
           # buttons, the overlay's handover and five English strings. The
           # overlay is handed in like the annotator and is not in this number.
           # The budget goes to 12800.
-          if [ "$ui" -gt 12800 ]; then
-            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12800" >&2
+          # #187's independent failure-observer deadline adds 23 bytes to the
+          # merged main build (12797 -> 12820 with esbuild 0.24.0 on Linux).
+          if [ "$ui" -gt 12864 ]; then
+            echo "bugbottle/ui is $ui bytes gzipped; the budget is 12864" >&2
             exit 1
           fi
           # The area and element modes on their own entry. Most of this number

@@ -31,12 +31,32 @@ browser audits. Both CI and the release workflow require this job before
 publishing. To reproduce: `npm run build` on Node 22+, then
 `node scripts/smoke-packed.mjs` on Node 18. No TypeScript loader is used there.
 
+## React compatibility
+
+The separate `Packed React 18 and 19 StrictMode consumers` CI job runs
+`npm run build && npm run smoke:react` on Node 22+. It installs the tarball
+outside the checkout with React/React DOM **18.3.1** and **19.3.0**, each with
+matching React types (18.3.12 and 19.3.0). Locked fixture dependencies are
+installed with scripts disabled. A mounted happy-dom form runs React's
+development StrictMode effect replay, input and submission, pending-delivery
+unmount and remount; delivery is a local fake, with no external endpoint.
+A strict TypeScript consumer also compiles against each installed package.
+See [the fixture dependency audit](docs/react-consumer-audit.md).
+
+The runtime peer requirement remains `react >=18`; React DOM belongs to the
+consumer application. These two pinned versions are compatibility checkpoints,
+not a claim that every React release, renderer or browser has been tested.
+Repository development uses React/React DOM 19.3.0 and Node 22+, while the
+dependency-free runtime's Node 18 minimum is checked separately above.
+React 19's root error handlers are a React 19 API, not a React 18 capability.
+
 ## Release gate and recovery
 
 Tag pushes and manual Release runs call the complete reusable `ci.yml` workflow
 at the release commit. Publication waits for all its jobs: both Node versions
-(including the OpenAPI linter), bundle budgets, browser audits and the Node 18
-packed-consumer smoke. Only a successful aggregate result enables `publish`;
+(including the OpenAPI linter), bundle budgets, browser audits, the Node 18
+packed-consumer smoke and the packed React consumers. Only a successful
+aggregate result enables `publish`;
 missing, pending, failed, skipped or cancelled validation cannot publish.
 Checks from another commit or a separate CI run do not authorise publication.
 
@@ -189,6 +209,9 @@ release separately. Gate fixtures run with `node --experimental-strip-types
 
 - **Minimum Node consumer** — the isolated Node 18 tarball smoke described above,
   also required by the release workflow before publishing.
+
+- **Packed React 18 and 19 StrictMode consumers** — mounted forms and strict
+  TypeScript consumers against isolated tarball installs, as described above.
 
 - **Node 22 / Node 24** — `npm run typecheck`, `npm test`, `npm run build`,
   `npm run build:docs`, `npm run check:dist` (the committed `dist/` is both
