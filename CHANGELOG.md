@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Match reports in the parent directory with Action globstars (`reports/**/*.json`),
+  and keep `?` within one path segment. Document and test the supported glob
+  dialect without adding dependencies (#153).
 - Require complete CI validation at the release SHA before npm publication,
   and enforce version/tag consistency for manual releases too (#135).
 - Preserve the file-store index when directory access fails, and keep reports

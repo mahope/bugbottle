@@ -105,10 +105,11 @@ function validateReport(report, { requireScreenshot }) {
 /** Minimal glob: supports **, * and ? — no dependency on minimatch. */
 function globToRegExp(pattern) {
   const esc = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '\u0000')
-    .replace(/\*/g, '[^/\\\\]*')
-    .replace(/\u0000/g, '.*')
-    .replace(/\?/g, '.');
+    .replace(/\*\*\/|\*\*|\*|\?/g, (wildcard) => {
+      if (wildcard === '**/') return '(?:[^/\\\\]+/)*';
+      if (wildcard === '**') return '[\\s\\S]*';
+      return wildcard === '*' ? '[^/\\\\]*' : '[^/\\\\]';
+    });
   return new RegExp(`^${esc}$`);
 }
 

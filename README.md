@@ -8447,6 +8447,24 @@ and you want malformed ones caught before they reach your issue tracker.
 Outputs `valid-count` and `invalid-count`. The job fails if any report is
 malformed or no files match. Zero dependencies — installs in about a second.
 
+`reports-glob` matches the whole path relative to the workspace, using `/`
+as the directory separator. Matching is case-sensitive:
+
+| Pattern | Meaning |
+| --- | --- |
+| `*` | Zero or more characters within one path segment |
+| `?` | Exactly one character within one path segment |
+| `**` | Zero or more characters, including directory separators |
+| `**/` | Zero or more complete directory segments |
+
+For example, `reports/**/*.json` includes `reports/a.json`,
+`reports/nested/a.json` and deeper reports. `reports/*.json` includes only
+direct children. Neither matches `.txt` files or `reports-other/a.json`.
+Single `*` and `?` never cross `/` or `\`. Other characters, including regex
+punctuation, are literal; character classes, brace expansion, negation,
+escape syntax and multiple patterns are not supported. Dotfiles are included,
+but `.git` and `node_modules` directories are always skipped.
+
 ## Who makes it
 
 Mads Holst Jensen, a freelance web and AI developer in Denmark. bugbottle came
