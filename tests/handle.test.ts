@@ -1955,3 +1955,133 @@ test("raw timeout cleanup follows response finish, close, or a failed send", asy
     assert.equal(response.listenerCount("close"), 0);
   }
 });
+
+test("a throwing sink observer preserves storage, sink order and original errors", async () => {
+  const failure = new Error("sink failed");
+  const order: string[] = [];
+  let decisions = 0;
+  const response = await handleReport(post(body), {
+    store: () => { order.push("store"); return { id: "saved" }; },
+    sinks: [
+      () => { order.push("first"); throw failure; },
+      () => { order.push("second"); },
+    ],
+    onSinkError: (error, index) => {
+      assert.equal(error, failure);
+      assert.equal(index, 0);
+      order.push("observer");
+      throw new Error("observer failed");
+    },
+    respond: ({ sinkErrors, id }) => {
+      assert.deepEqual(sinkErrors, [failure]);
+      return Response.json({ id }, { status: 201 });
+    },
+    onDecision: () => { decisions += 1; },
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), { id: "saved" });
+  assert.deepEqual(order, ["store", "first", "observer", "second"]);
+  assert.equal(decisions, 1);
+});
+
+test("a throwing error observer preserves the generic store failure response", async () => {
+  const failure = new Error("private storage failure");
+  const observed: unknown[] = [];
+  let decisions = 0;
+  const response = await handleReport(post(body), {
+    store: () => { throw failure; },
+    onError: (error) => { observed.push(error); throw new Error("private observer failure"); },
+    onDecision: (decision) => { decisions += 1; assert.equal(decision.reason, "error"); },
+  });
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: "Could not store the report" });
+  assert.deepEqual(observed, [failure]);
+  assert.equal(decisions, 1);
+});
+
+for (const path of ["rate limit", "dedupe get", "dedupe set", "screenshot"] as const) {
+  test("a throwing error observer leaves " + path + " failures open", async () => {
+    const failure = new Error("optional storage failure");
+    const observed: unknown[] = [];
+    let decisions = 0;
+    let delivered = 0;
+    const fail = () => { throw failure; };
+    const response = await handleReport(post({ ...body, screenshotDataUrl: PNG_DATA_URL }), {
+      ...(path === "rate limit" ? {
+        rateLimit: { limit: 1, windowMs: 1000, store: { hit: fail } },
+      } : {}),
+      ...(path.startsWith("dedupe") ? {
+        dedupe: {
+          windowMs: 1000,
+          store: { get: path === "dedupe get" ? fail : () => undefined,
+            set: path === "dedupe set" ? fail : () => {} },
+        },
+      } : {}),
+      ...(path === "screenshot" ? { screenshot: fail } : {}),
+      store: () => ({ id: "saved" }),
+      sinks: [() => { delivered += 1; }],
+      onError: (error) => { observed.push(error); throw new Error("observer failed"); },
+      onDecision: (decision) => { decisions += 1; assert.equal(decision.reason, "stored"); },
+    });
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), { id: "saved" });
+    assert.deepEqual(observed, [failure]);
+    assert.equal(delivered, 1);
+    assert.equal(decisions, 1);
+  });
+}
+
+for (const stored of [false, true]) {
+  test("throwing decision and error observers preserve the answer with store=" + stored, async () => {
+    const failure = new Error("decision failed");
+    const observed: unknown[] = [];
+    let decisions = 0;
+    const response = await handleReport(post(body), {
+      ...(stored ? { store: () => ({ id: "saved" }) } : {}),
+      onDecision: () => { decisions += 1; throw failure; },
+      onError: (error) => { observed.push(error); throw new Error("observer failed"); },
+    });
+    assert.equal(response.status, stored ? 201 : 202);
+    assert.deepEqual(await response.json(), stored ? { id: "saved" } : {});
+    assert.equal(decisions, 1);
+    assert.deepEqual(observed, [failure]);
+  });
+}
+
+for (const adapter of ["Express", "Fastify"] as const) {
+  for (const diagnostic of ["parsed signature", "translation"] as const) {
+    test(adapter + " contains a throwing error observer during " + diagnostic, async () => {
+      const observed: unknown[] = [];
+      const options = {
+        ...(diagnostic === "parsed signature" ? { signature: { key: SIGNING_KEY } } : {}),
+        onError: (error: unknown) => { observed.push(error); throw new Error("observer failed"); },
+      };
+      const { state, finished, res } = fakeRes();
+      if (adapter === "Express") {
+        const req = {
+          method: "POST", url: "/api/bug-report",
+          headers: { host: "app.example.com" },
+          body: diagnostic === "translation" ? 1n : body,
+        };
+        const handler = expressHandler(options);
+        handler(req, res);
+        await finished;
+        if (diagnostic === "parsed signature") { handler(req, res); await Promise.resolve(); }
+      } else {
+        const handler = fastifyHandler(options);
+        const req = fastifyReq(diagnostic === "translation" ? 1n : body);
+        handler(req, { ...res, header: res.setHeader });
+        await finished;
+        if (diagnostic === "parsed signature") {
+          handler(req, { ...res, header: res.setHeader });
+          await Promise.resolve();
+        }
+      }
+      assert.equal(state.status, diagnostic === "parsed signature" ? 401 : 500);
+      if (diagnostic === "translation") {
+        assert.deepEqual(JSON.parse(state.body), { error: "Could not store the report" });
+      }
+      assert.equal(observed.length, 1);
+    });
+  }
+}
