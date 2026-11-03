@@ -134,7 +134,7 @@ test("custom size limit accepts a report one byte below and rejects one byte abo
   assert.doesNotMatch(r.out, /configuration error/);
 });
 
-for (const limit of ["nonsense", "10junk", "0", "-1", "NaN", "Infinity", "-Infinity", "1e309", "0.5", "1.5", "0x10", "1e3", "9007199254740992"]) {
+for (const limit of ["nonsense", "10junk", "0", "-1", "NaN", "Infinity", "-Infinity", "1e309", "0.5", "1.5", "0x10", "1e3", "9007199254740992", " ", " 1", "1\n", "+1"]) {
   test(`invalid size limit ${limit} fails before walking or reading reports`, () => {
     const r = runAction({ "reports/a.json": goodReport }, { INPUT_MAX_REPORT_SIZE_KB: limit }, true);
     assert.equal(r.code, 1);
