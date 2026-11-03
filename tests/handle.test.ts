@@ -669,6 +669,132 @@ test("a duplicate is answered 200 without storing or delivering it again", async
   resetDedupe();
 });
 
+function gate() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => { release = resolve; });
+  return { promise, release };
+}
+
+for (const keying of ["fingerprint", "custom", "scrub"] as const) {
+  test(`overlapping receiver requests coalesce by ${keying}`, async () => {
+    resetDedupe();
+    const entered = gate();
+    const pending = gate();
+    let writes = 0;
+    let deliveries = 0;
+    const options = {
+      dedupe: {
+        windowMs: 60_000,
+        ...(keying === "custom" ? { key: (report: ValidatedReport) => report.type } : {}),
+      },
+      scrub: keying === "scrub",
+      store: async () => {
+        writes += 1;
+        entered.release();
+        await pending.promise;
+        return { id: "rep_overlap" };
+      },
+      sinks: [async () => { deliveries += 1; }],
+    };
+    const firstBody = keying === "scrub" ? { ...body, message: "Failure a@example.com" } : body;
+    const nextBody = keying === "scrub" ? { ...body, message: "Failure b@example.com" }
+      : keying === "custom" ? { ...body, message: "Different message" } : body;
+    const first = handleReport(post(firstBody), options);
+    await entered.promise;
+    const second = handleReport(post(nextBody), options);
+    await new Promise((resolve) => setImmediate(resolve));
+    const writesWhilePending = writes;
+    pending.release();
+    const [created, duplicate] = await Promise.all([first, second]);
+    assert.equal(writesWhilePending, 1);
+    assert.equal(created.status, 201);
+    assert.equal(duplicate.status, 200);
+    assert.deepEqual(await created.json(), { id: "rep_overlap" });
+    assert.deepEqual(await duplicate.json(), { id: "rep_overlap", duplicate: true });
+    assert.equal(deliveries, 1);
+    resetDedupe();
+  });
+}
+
+test("overlapping failed stores return errors and release the key for retry", async () => {
+  resetDedupe();
+  const entered = gate();
+  const pending = gate();
+  let writes = 0;
+  const options = {
+    dedupe: { windowMs: 60_000 },
+    store: async () => {
+      writes += 1;
+      if (writes === 1) {
+        entered.release();
+        await pending.promise;
+        throw new Error("Storage unavailable");
+      }
+      return { id: "rep_retry" };
+    },
+  };
+  const first = handleReport(post(body), options);
+  await entered.promise;
+  const second = handleReport(post(body), options);
+  await new Promise((resolve) => setImmediate(resolve));
+  pending.release();
+  const responses = await Promise.all([first, second]);
+  assert.deepEqual(responses.map((response) => response.status), [500, 500]);
+  assert.equal(writes, 1);
+  const retry = await handleReport(post(body), options);
+  assert.equal(retry.status, 201);
+  assert.deepEqual(await retry.json(), { id: "rep_retry" });
+  resetDedupe();
+});
+
+test("dedupe expiry starts after storage and releases completed in-flight entries", async () => {
+  resetDedupe();
+  const entered = gate();
+  const pending = gate();
+  let writes = 0;
+  const options = {
+    dedupe: { windowMs: 20 },
+    store: async () => {
+      writes += 1;
+      if (writes === 1) { entered.release(); await pending.promise; }
+      return { id: "rep_expiry" };
+    },
+  };
+  const first = handleReport(post(body), options);
+  await entered.promise;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  pending.release();
+  await first;
+  assert.equal((await handleReport(post(body), options)).status, 200);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal((await handleReport(post(body), options)).status, 201);
+  assert.equal(writes, 2);
+  resetDedupe();
+});
+
+test("different dedupe keys store concurrently", async () => {
+  resetDedupe();
+  const entered = gate();
+  const pending = gate();
+  let writes = 0;
+  const options = {
+    dedupe: { windowMs: 60_000 },
+    store: async () => {
+      writes += 1;
+      if (writes === 1) { entered.release(); await pending.promise; }
+      return { id: "rep_concurrent" };
+    },
+  };
+  const first = handleReport(post(body), options);
+  await entered.promise;
+  const second = await handleReport(post({ ...body, message: "Independent report" }), options);
+  assert.equal(second.status, 201);
+  assert.equal(writes, 2);
+  pending.release();
+  await first;
+  resetDedupe();
+});
+
 test("a different report is not a duplicate, and a short window lets one through", async () => {
   resetDedupe();
   const options = { dedupe: { windowMs: 20 } };

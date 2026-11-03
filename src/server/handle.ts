@@ -661,6 +661,8 @@ export function resetRateLimits(): void {
  * limit: it stops one browser sending the same crash forty times, not two
  * instances behind a load balancer storing it twice.
  */
+type InFlightDedupeResult = { ok: true; id?: string } | { ok: false };
+const inFlightReports = new Map<string, Promise<InFlightDedupeResult>>();
 const seenReports = new Map<string, { id?: string; at: number }>();
 
 /** Exported for tests, which would otherwise leak fingerprints into each other. */
@@ -1186,6 +1188,10 @@ export async function handleReport(
     return response;
   };
 
+  let inFlightKey: string | undefined;
+  let finishInFlight: ((result: InFlightDedupeResult) => void) | undefined;
+  let inFlightResult: InFlightDedupeResult = { ok: false };
+
   try {
     if (request.method === "OPTIONS" && cors) {
       // Reflecting what was asked for is what lets a client send its own
@@ -1290,8 +1296,16 @@ export async function handleReport(
           options.onError?.(err);
         }
       } else {
+        const pending = inFlightReports.get(dedupeKey);
+        if (pending) {
+          const result = await pending;
+          if (!result.ok) {
+            return decide(json({ error: "Could not store the report" }, 500, cors), "error");
+          }
+          seen = { id: result.id };
+        }
         const remembered = seenReports.get(dedupeKey);
-        if (remembered && remembered.at + options.dedupe.windowMs > now) seen = remembered;
+        if (!seen && remembered && remembered.at + options.dedupe.windowMs > now) seen = remembered;
       }
       if (seen) {
         // 200 rather than 201: nothing was created. The reporter is still told
@@ -1306,7 +1320,11 @@ export async function handleReport(
           seen.id,
         );
       }
-      if (!dedupeStore) evictDedupe(now, options.dedupe.windowMs);
+      if (!dedupeStore) {
+        evictDedupe(now, options.dedupe.windowMs);
+        inFlightKey = dedupeKey;
+        inFlightReports.set(dedupeKey, new Promise((resolve) => { finishInFlight = resolve; }));
+      }
     }
 
     // A rejected picture is not a rejected report: the message is the valuable
@@ -1386,6 +1404,7 @@ export async function handleReport(
       }
     }
 
+    inFlightResult = { ok: true, id };
     const result: HandleReportResult = { report, id, screenshot, screenshotUrl, markdown, sinkErrors };
     // A custom `respond` picks the status, so the decision reads it back off
     // the response it built rather than assuming the 201 or 202 it replaced.
@@ -1396,6 +1415,11 @@ export async function handleReport(
     options.onError?.(err);
     // Whatever broke, its message is ours and not the reporter's to read.
     return decide(json({ error: "Could not store the report" }, 500, cors), "error");
+  } finally {
+    if (inFlightKey !== undefined) {
+      inFlightReports.delete(inFlightKey);
+      finishInFlight?.(inFlightResult);
+    }
   }
 }
 

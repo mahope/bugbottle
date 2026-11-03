@@ -16,6 +16,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Coalesce overlapping receiver requests by the built-in dedupe key into one
+  storage and delivery attempt; release failed attempts for retry (#164).
 - Reject invalid GitHub Action report size limits before reading reports,
   preserving the 4096 KB default and positive whole-KB custom limits (#154).
 

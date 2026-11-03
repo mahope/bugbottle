@@ -163,12 +163,7 @@ const buckets = new Map();
 export function resetRateLimits() {
     buckets.clear();
 }
-/**
- * The fingerprints answered so far, and the id each one was stored under.
- * Module-level for the same reason the buckets are, and with the same honest
- * limit: it stops one browser sending the same crash forty times, not two
- * instances behind a load balancer storing it twice.
- */
+const inFlightReports = new Map();
 const seenReports = new Map();
 /** Exported for tests, which would otherwise leak fingerprints into each other. */
 export function resetDedupe() {
@@ -679,6 +674,9 @@ export async function handleReport(request, options = {}) {
         }
         return response;
     };
+    let inFlightKey;
+    let finishInFlight;
+    let inFlightResult = { ok: false };
     try {
         if (request.method === "OPTIONS" && cors) {
             // Reflecting what was asked for is what lets a client send its own
@@ -781,8 +779,16 @@ export async function handleReport(request, options = {}) {
                 }
             }
             else {
+                const pending = inFlightReports.get(dedupeKey);
+                if (pending) {
+                    const result = await pending;
+                    if (!result.ok) {
+                        return decide(json({ error: "Could not store the report" }, 500, cors), "error");
+                    }
+                    seen = { id: result.id };
+                }
                 const remembered = seenReports.get(dedupeKey);
-                if (remembered && remembered.at + options.dedupe.windowMs > now)
+                if (!seen && remembered && remembered.at + options.dedupe.windowMs > now)
                     seen = remembered;
             }
             if (seen) {
@@ -790,8 +796,11 @@ export async function handleReport(request, options = {}) {
                 // it arrived, because it did — the first time.
                 return decide(json(seen.id === undefined ? { duplicate: true } : { id: seen.id, duplicate: true }, 200, cors), "duplicate", seen.id);
             }
-            if (!dedupeStore)
+            if (!dedupeStore) {
                 evictDedupe(now, options.dedupe.windowMs);
+                inFlightKey = dedupeKey;
+                inFlightReports.set(dedupeKey, new Promise((resolve) => { finishInFlight = resolve; }));
+            }
         }
         // A rejected picture is not a rejected report: the message is the valuable
         // part, and the reporter is not the one who broke the encoding.
@@ -875,6 +884,7 @@ export async function handleReport(request, options = {}) {
                 options.onSinkError?.(err, i);
             }
         }
+        inFlightResult = { ok: true, id };
         const result = { report, id, screenshot, screenshotUrl, markdown, sinkErrors };
         // A custom `respond` picks the status, so the decision reads it back off
         // the response it built rather than assuming the 201 or 202 it replaced.
@@ -887,6 +897,12 @@ export async function handleReport(request, options = {}) {
         options.onError?.(err);
         // Whatever broke, its message is ours and not the reporter's to read.
         return decide(json({ error: "Could not store the report" }, 500, cors), "error");
+    }
+    finally {
+        if (inFlightKey !== undefined) {
+            inFlightReports.delete(inFlightKey);
+            finishInFlight?.(inFlightResult);
+        }
     }
 }
 /**

@@ -6430,6 +6430,18 @@ instance: it stops one browser sending the same crash forty times, not two
 instances behind a load balancer storing it twice. *Running more than one
 instance* is how you make it the second thing.
 
+With the built-in in-memory dedupe, overlapping requests with the same effective
+key wait for one storage and sink attempt. The first request keeps its normal
+201 (or 202 without an id, or custom `respond`) response; waiters receive
+200 `{ id, duplicate: true }`, omitting `id` when none was stored. If that
+attempt fails before storage completes, waiters receive 500 too, and a later
+retry can try again. Sink failures retain the normal stored-report behavior.
+The expiry window starts when storage succeeds; in-flight entries are released
+when the attempt finishes or fails. Different keys run independently.
+This coordination is process-local and applies only without `dedupe.store`.
+The shared-store interface is unchanged: its separate `get` and `set` calls do
+not provide atomic cross-process deduplication.
+
 For Express, `expressHandler` builds the `Request` and writes the `Response`
 back:
 

@@ -144,7 +144,8 @@ the script tag, and `ui.openedByError` in all eight locales. `BugReportBoundary`
 and React 19's `createRootErrorHandlers` in `bugbottle/react`. And the shared
 `fingerprint(report)`, which `handleReport` uses for `dedupe: { windowMs }` —
 a repeat answers 200 `{ id, duplicate: true }` without storing or delivering it
-twice.
+twice. Overlapping requests now share one attempt within a process when using
+the built-in dedupe; shared-store atomicity remains outside that guarantee (#164).
 
 **0.6** — `bugbottle/vue` (`useBugReport`, a composable over refs),
 `bugbottle/svelte` (`createBugReport`, a readable store plus the actions) and
