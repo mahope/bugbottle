@@ -21,8 +21,7 @@ const DEFAULTS = {
 let buffer = [];
 let initialised = false;
 let limits = { ...DEFAULTS };
-let originalError = null;
-let originalWarn = null;
+let undoConsole = null;
 let onError = null;
 let onRejection = null;
 function serialise(args, maxLength) {
@@ -101,15 +100,25 @@ export function initConsoleBuffer(options = {}) {
         maxEntries: cap,
         maxMessageLength: options.maxMessageLength ?? DEFAULTS.maxMessageLength,
     };
-    originalError = console.error;
-    originalWarn = console.warn;
-    console.error = (...args) => {
-        push("error", args);
-        originalError?.(...args);
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    let active = true;
+    const patchedError = console.error = (...args) => {
+        if (active)
+            push("error", args);
+        originalError(...args);
     };
-    console.warn = (...args) => {
-        push("warn", args);
-        originalWarn?.(...args);
+    const patchedWarn = console.warn = (...args) => {
+        if (active)
+            push("warn", args);
+        originalWarn(...args);
+    };
+    undoConsole = () => {
+        active = false;
+        if (console.error === patchedError)
+            console.error = originalError;
+        if (console.warn === patchedWarn)
+            console.warn = originalWarn;
     };
     if (typeof window !== "undefined") {
         // Uncaught errors do not reach console.error in every browser, so they are
@@ -131,15 +140,13 @@ export function initConsoleBuffer(options = {}) {
 export function getConsoleBuffer() {
     return [...buffer];
 }
-/** Empties the buffer and restores the real console functions. */
+/** Empties the buffer and restores console functions still owned by this recorder. */
 export function resetConsoleBuffer() {
     buffer = [];
     if (!initialised)
         return;
-    if (originalError)
-        console.error = originalError;
-    if (originalWarn)
-        console.warn = originalWarn;
+    undoConsole?.();
+    undoConsole = null;
     if (typeof window !== "undefined") {
         if (onError)
             window.removeEventListener("error", onError);

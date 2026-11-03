@@ -162,8 +162,12 @@ a test can undo what it started without importing a second name:
 
 ```ts
 const stop = initConsoleBuffer();
-stop(); // the real console back, the buffer empty
+stop(); // owned console wrappers restored, the buffer empty
 ```
+
+Stopping preserves wrappers installed later by the host application. Retained
+bugbottle wrappers still forward each call, but stop recording permanently,
+including after a new recording session starts.
 
 ## window.onerror and unhandledrejection
 

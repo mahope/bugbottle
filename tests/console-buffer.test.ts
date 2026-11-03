@@ -243,18 +243,19 @@ test("a rejection with no usable stack is still recorded, without one", () => {
 });
 
 test("initConsoleBuffer returns the stop, and it is resetConsoleBuffer", () => {
-  const { result: stop } = withSilencedConsole(() => {
-    const returned = initConsoleBuffer();
+  withSilencedConsole(() => {
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    const stop = initConsoleBuffer();
     console.error("save failed");
-    return returned;
+    assert.equal(typeof stop, "function");
+    assert.equal(stop, resetConsoleBuffer, "the same function under both names");
+    assert.equal(getConsoleBuffer().length, 1);
+    stop();
+    assert.equal(getConsoleBuffer().length, 0, "the stop empties the buffer");
+    assert.equal(console.error, originalError, "and restores the original error function");
+    assert.equal(console.warn, originalWarn, "and restores the original warn function");
   });
-  assert.equal(typeof stop, "function");
-  assert.equal(stop, resetConsoleBuffer, "the same function under both names");
-  assert.equal(getConsoleBuffer().length, 1);
-  const patched = console.error;
-  stop();
-  assert.equal(getConsoleBuffer().length, 0, "the stop empties the buffer");
-  assert.notEqual(console.error, patched, "and puts the real console back");
 });
 
 test("a second initConsoleBuffer returns the stop as well", () => {

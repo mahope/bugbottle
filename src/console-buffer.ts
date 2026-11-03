@@ -41,8 +41,7 @@ const DEFAULTS: Limits = {
 let buffer: ConsoleEntry[] = [];
 let initialised = false;
 let limits: Limits = { ...DEFAULTS };
-let originalError: typeof console.error | null = null;
-let originalWarn: typeof console.warn | null = null;
+let undoConsole: (() => void) | null = null;
 let onError: ((e: ErrorEvent) => void) | null = null;
 let onRejection: ((e: PromiseRejectionEvent) => void) | null = null;
 
@@ -118,16 +117,22 @@ export function initConsoleBuffer(options: ConsoleBufferOptions = {}): () => voi
     maxMessageLength: options.maxMessageLength ?? DEFAULTS.maxMessageLength,
   };
 
-  originalError = console.error;
-  originalWarn = console.warn;
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  let active = true;
 
-  console.error = (...args: unknown[]) => {
-    push("error", args);
-    originalError?.(...args);
+  const patchedError = console.error = (...args: unknown[]) => {
+    if (active) push("error", args);
+    originalError(...args);
   };
-  console.warn = (...args: unknown[]) => {
-    push("warn", args);
-    originalWarn?.(...args);
+  const patchedWarn = console.warn = (...args: unknown[]) => {
+    if (active) push("warn", args);
+    originalWarn(...args);
+  };
+  undoConsole = () => {
+    active = false;
+    if (console.error === patchedError) console.error = originalError;
+    if (console.warn === patchedWarn) console.warn = originalWarn;
   };
 
   if (typeof window !== "undefined") {
@@ -160,12 +165,12 @@ export function getConsoleBuffer(): ConsoleEntry[] {
   return [...buffer];
 }
 
-/** Empties the buffer and restores the real console functions. */
+/** Empties the buffer and restores console functions still owned by this recorder. */
 export function resetConsoleBuffer(): void {
   buffer = [];
   if (!initialised) return;
-  if (originalError) console.error = originalError;
-  if (originalWarn) console.warn = originalWarn;
+  undoConsole?.();
+  undoConsole = null;
   if (typeof window !== "undefined") {
     if (onError) window.removeEventListener("error", onError);
     if (onRejection) window.removeEventListener("unhandledrejection", onRejection);

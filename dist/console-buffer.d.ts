@@ -37,6 +37,6 @@ export type ConsoleBufferOptions = {
 export declare function initConsoleBuffer(options?: ConsoleBufferOptions): () => void;
 /** A copy of what has been recorded so far. */
 export declare function getConsoleBuffer(): ConsoleEntry[];
-/** Empties the buffer and restores the real console functions. */
+/** Empties the buffer and restores console functions still owned by this recorder. */
 export declare function resetConsoleBuffer(): void;
 //# sourceMappingURL=console-buffer.d.ts.map
