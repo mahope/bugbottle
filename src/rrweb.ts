@@ -122,6 +122,7 @@ let windowMs = DEFAULT_REPLAY_SECONDS * 1000;
 let maxBytes = DEFAULT_REPLAY_MAX_BYTES;
 let stopRecording: (() => void) | null = null;
 let attached = false;
+let awaitingCheckout = false;
 let attachment: object | null = null;
 
 /**
@@ -145,12 +146,16 @@ function sizeOf(event: RrwebEvent): number {
 /**
  * Drops whole groups off the front: first the ones that are entirely outside
  * the window, then, while the buffer is over the cap, the oldest that is left.
- * The newest group is never dropped — a buffer with nothing in it is not an
- * improvement on one that is slightly too old.
+ * The newest group survives time trimming, but an oversized group must go:
+ * none of its dependent events can be used until a fresh full snapshot.
  */
 function trim(now: number): void {
   while (groups.length > 1 && (groups[1] as Group).start <= now - windowMs) drop();
   while (groups.length > 1 && totalBytes > maxBytes) drop();
+  if (totalBytes > maxBytes) {
+    drop();
+    awaitingCheckout = true;
+  }
 }
 
 function drop(): void {
@@ -192,14 +197,25 @@ export function attachRrweb(record: RrwebRecord, options: RrwebOptions = {}): ()
       : DEFAULT_REPLAY_MAX_BYTES;
   groups = [];
   totalBytes = 0;
+  awaitingCheckout = false;
 
   const owner = {};
   attachment = owner;
   const emit = (event: RrwebEvent, isCheckout?: boolean) => {
     if (attachment !== owner) return;
     if (typeof event !== "object" || event === null) return;
+    const resuming = awaitingCheckout && event.type === 2;
+    if (awaitingCheckout) {
+      if (event.type === 4) {
+        // rrweb emits viewport metadata immediately before its full snapshot.
+        groups = [];
+        totalBytes = 0;
+      } else if (resuming) {
+        awaitingCheckout = false;
+      } else return;
+    }
     const timestamp = typeof event.timestamp === "number" ? event.timestamp : Date.now();
-    if (isCheckout || groups.length === 0) groups.push({ start: timestamp, events: [], bytes: 0 });
+    if ((isCheckout && !resuming) || groups.length === 0) groups.push({ start: timestamp, events: [], bytes: 0 });
     const group = groups[groups.length - 1] as Group;
     group.events.push(event);
     const bytes = sizeOf(event);
@@ -232,13 +248,11 @@ export function attachRrweb(record: RrwebRecord, options: RrwebOptions = {}): ()
  * The buffer as a report field, or null when there is nothing to send. Called
  * by `buildReport` through the registry, at the moment a report is written.
  *
- * A buffer still over the cap after every droppable group has gone is answered
- * with null rather than with a truncated recording: one full snapshot larger
- * than half a megabyte is a page too big to replay, and half of it would not
- * play at all.
+ * An oversized checkout is released along with its dependent events. Capture
+ * resumes at a fresh full snapshot rather than returning a truncated replay.
  */
 export function getReplay(): ReplayCapture | null {
-  if (totalBytes > maxBytes || totalBytes > MAX_REPLAY_BYTES) return null;
+  if (awaitingCheckout || totalBytes > maxBytes || totalBytes > MAX_REPLAY_BYTES) return null;
   const events: ReplayEvent[] = [];
   for (const group of groups) for (const event of group.events) events.push(event);
   if (events.length === 0) return null;
@@ -261,6 +275,7 @@ export function resetRrweb(): void {
   const stop = stopRecording;
   stopRecording = null;
   attached = false;
+  awaitingCheckout = false;
   groups = [];
   totalBytes = 0;
   windowMs = DEFAULT_REPLAY_SECONDS * 1000;

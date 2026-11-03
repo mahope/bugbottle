@@ -23,6 +23,12 @@ attribute needs a major version, and a new entry point needs a minor one.
   still clean up and settle the selection promise within the existing UI
   bundle budget (#196).
 
+- Release an oversized rrweb checkout group and discard its dependent events
+  until a fresh full snapshot restores capture, bounding retained replay data
+  even when the recorder delays its next checkout. Preserve the recovering
+  checkout's viewport metadata with its snapshot within the same byte cap (#175).
+- Bound send failure observers to a separate one-second cleanup budget,
+  preserving the original delivery error when observers hang or reject (#187).
 - Cancel SMTP connections, TLS negotiation and command/message waits when the
   receiver context aborts, including signals aborted before entry (#166).
 - Redact sensitive query values in breadcrumb `from`/`to` URLs and console
