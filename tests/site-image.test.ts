@@ -273,11 +273,17 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
 
   const work = mkdtempSync(join(tmpdir(), "bugbottle-gitdir-"));
   try {
+    // Own the history: a caller may be a shallow clone or a linked worktree,
+    // whose `.git` is a pointer file rather than a directory.
+    const history = join(work, "history");
+    mkdirSync(history);
+    repoWithKnownHistory(history);
+
     // The working tree the image has at this point: the sources, checked out.
-    cpSync(join(root, "README.md"), join(work, "README.md"));
+    cpSync(join(history, "README.md"), join(work, "README.md"));
     mkdirSync(join(work, "site"));
-    cpSync(join(root, "site/compare.md"), join(work, "site/compare.md"));
-    cpSync(join(root, "CHANGELOG.md"), join(work, "CHANGELOG.md"));
+    cpSync(join(history, "site/compare.md"), join(work, "site/compare.md"));
+    cpSync(join(history, "CHANGELOG.md"), join(work, "CHANGELOG.md"));
 
     // The layout the COPY leaves behind, at the path it names: the *contents*
     // of `.git` inside the directory, which is what copying a directory means.
@@ -285,8 +291,8 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
     // the WORKDIR and the same prefix is stripped off GIT_DIR below.
     const root_ = builderWorkdir();
     mkdirSync(join(work, destination), { recursive: true });
-    for (const entry of readdirSync(join(root, ".git"))) {
-      cpSync(join(root, ".git", entry), join(work, destination, entry), { recursive: true });
+    for (const entry of readdirSync(join(history, ".git"))) {
+      cpSync(join(history, ".git", entry), join(work, destination, entry), { recursive: true });
     }
     writeFileSync(join(work, destination, ".dockerignore"), "");
 
@@ -306,12 +312,6 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
       failed = true;
     }
 
-    const expected = execFileSync("git", ["log", "-1", "--format=%cs", "--", "site/compare.md"], {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-
     assert.equal(
       failed,
       false,
@@ -322,9 +322,8 @@ test("the builder stage's GIT_DIR points at the history the COPY lands", () => {
     );
     assert.equal(
       out,
-      expected,
-      `the builder stage dates pages from a different commit than the repository does, ` +
-        `so the sitemap on the site and the one built here would disagree.`,
+      SHALLOW_TIP_DATE,
+      `the builder stage must read the page's known commit date from the fixture history.`,
     );
   } finally {
     rmSync(work, { recursive: true, force: true });

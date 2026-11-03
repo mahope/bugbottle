@@ -81,6 +81,7 @@ Solid adapters wrap it; server-side validators check what arrives. No UI, no bac
 | `scripts/capture-panel.mjs` | The four hero pictures: the real panel, opened on the real page over the demo section, clipped wide and narrow at 2x from `/` and again from `/da/` (where the panel speaks Danish), each under a 150 kB budget. `npm run shot:panel` | site, dist (at run time), chrome |
 | `scripts/render-og.mjs` | `site/og.png` from `site/og.svg` at 1200x630, with the two faces loaded as data URLs and `document.fonts.ready` awaited before the shutter. `npm run shot:og` | site (at run time), chrome |
 | `scripts/annotate-smoke.mjs` | The pixel proof of the blur in a real Chrome: paints a noisy picture, drags a blur and a rectangle over it, decodes the export and checks that every block in the region is flat, none of them is the original, and nothing outside changed. `npm run smoke:annotate`, and the last step of CI's `browser` job | dist (at run time), chrome |
+| `scripts/queue-idb-smoke.mjs` | Real IndexedDB queue persistence with a PNG across closing/reopening a page, concurrent two-page enqueues and successful flushes without duplicate delivery. Unique database, cleanup on failure, phase and browser diagnostics, 60-second deadline. `npm run smoke:queue-idb`, in CI's `browser` job with a two-minute step timeout | dist (at run time), chrome |
 | `scripts/measure-sinks.mjs` | The "Server bundle" column of the README's sinks table: packs the package, installs the tarball in a scratch project with the pinned esbuild, bundles one entry per sink with the recipe from `ci.yml` (`--bundle --minify --format=esm --platform=node`) and gzips each. Prints the rows and the date. Dev-only and deliberately outside `npm run check` — it wants the network and about a minute; run it after `npm run build` when a sink changes | dist (packed at run time) |
 | `scripts/api-table.mjs` | The "Every export" half of `docs/api-audit-1.0.md`, generated from the build: `package.json#exports` names the entry points, the TypeScript checker names what each exports, and the declaration each name resolves to says which `src/` file it came from. `node scripts/api-table.mjs` after a build; it rewrites everything under that heading and leaves the prose above it alone. From 1.0 that table is the API contract, so regenerate it in the same change that moves an export | dist (at run time) |
 | `scripts/measure-competitors.mjs` | The "Size in your bundle" cell for a competitor on `site/compare.md`: the one figure there that is not bugbottle's own, so it is measured rather than quoted from a bundle-size site. Installs the package in a scratch project with the pinned esbuild, bundles two entries with `ci.yml`'s recipe (`--bundle --minify --format=esm --platform=browser`), gzips each and prints the rows with the date and the installed version. Two entries on purpose, because one number would hide the decision: the bare `init` is what an application pays the day it adds the SDK, and the second adds `replayIntegration()` and `captureFeedback` — the bundle a user-feedback widget actually sits on. Pasted into the table, with the date moved in the same edit. Dev-only and outside `npm run check` like `measure-sinks.mjs`: it installs a megabyte of somebody else's package from the network, and the figure only moves when a major lands | npm (at run time) |
@@ -237,6 +238,7 @@ npx --yes @redocly/cli@2.51.2 lint dist/openapi.json  # zero errors, zero warnin
 npm run shot:panel  # re-capture the hero pictures from the current panel
 npm run shot:og     # re-render site/og.png from site/og.svg
 npm run smoke:annotate  # the blur really pixelates, in a real Chrome; needs a build first
+npm run smoke:queue-idb # IndexedDB persistence and cross-tab delivery, in real Chrome; needs a build first
 node scripts/measure-sinks.mjs  # the README's sink sizes; needs a build and the network
 node scripts/measure-competitors.mjs  # the /compare/ row for a competitor; needs the network
 node scripts/api-table.mjs      # the frozen export table in docs/api-audit-1.0.md; needs a build
@@ -522,10 +524,14 @@ have nothing to do with the page. `scripts/annotate-smoke.mjs` is the same
 procedure aimed at pixels rather than at the accessibility tree: only a real
 canvas can say whether the blur destroyed what it covered.
 
-None of the three is part of `npm run check`, because each needs a browser and
+`scripts/queue-idb-smoke.mjs` checks persistence and cross-tab queue coordination
+against real IndexedDB rather than the fast unit tests' fake. Its PNG fixture
+uses `BugReport.screenshotDataUrl`, checked in storage and delivered reports.
+
+None of these is part of `npm run check`, because each needs a browser and
 `npm run check` must run anywhere. They are not optional for that reason: the
 `browser` job in `.github/workflows/ci.yml` builds, generates the site and runs
-`npm run a11y` and `npm run smoke:annotate` on the Chrome the `ubuntu-latest`
+`npm run a11y`, `npm run smoke:annotate` and `npm run smoke:queue-idb` on the Chrome the `ubuntu-latest`
 image ships, on every push and every pull request, uploading the axe reports as
 an artifact when it fails. `scripts/chrome.mjs` is what makes the same command
 work in both places: `CHROME_BIN`, `CHROME_PATH`, then the usual Linux, macOS

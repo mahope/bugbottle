@@ -8,11 +8,20 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Added
+
+- Real Chrome coverage for IndexedDB queue persistence with screenshots,
+  concurrent tab enqueues and successful concurrent flushes. The browser CI
+  job runs the isolated localhost smoke test with a bounded timeout (#121).
+
 ### Fixed
 
 - Keep successful framework-adapter submissions sent when `onSent` throws.
   Synchronous callback exceptions are logged to `console.error` after form
   cleanup, without failing submission or queueing a duplicate (#131).
+- Give the site image's history-copy test its own dated Git repository, so it
+  works in linked worktrees and shallow clones without relying on checkout
+  history (#122).
 
 - Keep rate-limited reports (HTTP 429) in both initial submission and queued
   delivery. Queued retries honour `Retry-After` seconds or HTTP dates (including
