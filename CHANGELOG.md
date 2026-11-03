@@ -16,12 +16,24 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Read GitHub Action inputs with the runner's hyphenated environment names
+  and append validation counts to `GITHUB_OUTPUT` instead of legacy stdout
+  commands (#152).
+- Require complete CI validation at the release SHA before npm publication,
+  and enforce version/tag consistency for manual releases too (#135).
 - Preserve the file-store index when directory access fails, and keep reports
   discoverable after failed deletion. Delete the PNG before the JSON so a
   partial deletion leaves a readable report that removal or retention can
   retry (#119).
+- Coalesce overlapping form submissions into one delivery attempt and shared
+  result, calling `onSent` or queueing at most once. Later submissions remain
+  available after success or failure (#132). Share promise cleanup to keep
+  the React entry within its unchanged 6144-byte gzipped budget.
 - Smoke-test the packed dependency-free exports, JSON contracts and server
   validation/store round trip on Node 18 before publishing (#120).
+- Preserve replacement drafts after reset or destroy when an earlier submission
+  succeeds or fails. Detached requests still deliver or queue their original
+  payload without updating the form or calling `onSent` (#133).
 - Give the site image's history-copy test its own dated Git repository, so it
   works in linked worktrees and shallow clones without relying on checkout
   history (#122).

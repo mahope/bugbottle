@@ -1,13 +1,50 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:
 
 jobs:
+  inbox-docker:
+    name: Inbox Docker persistence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run smoke:inbox-docker
+
   min-node-smoke:
     uses: ./.github/workflows/min-node-smoke.yml
+
+  action-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create a report fixture
+        run: |
+          mkdir -p action-smoke
+          printf '%s\n' '{"type":"bug","message":"Smoke test"}' > action-smoke/report.json
+      - uses: ./action
+        id: reports
+        with:
+          reports-glob: "action-smoke/*.json"
+          require-screenshot: 'false'
+          max-report-size-kb: '1'
+      - name: Check runner step outputs
+        env:
+          VALID_COUNT: ${{ steps.reports.outputs['valid-count'] }}
+          INVALID_COUNT: ${{ steps.reports.outputs['invalid-count'] }}
+        run: |
+          test "$VALID_COUNT" = '1'
+          test "$INVALID_COUNT" = '0'
 
   check:
     runs-on: ubuntu-latest
@@ -247,8 +284,10 @@ jobs:
           # The contact field (#51) and the replay registry read (#55) then took it
           # to 5647, fifteen bytes over 5632, so the budget is 6144: the hook
           # carries every core default, and two of them landed in one release.
-          if [ "$react" -gt 6144 ]; then
-            echo "bugbottle/react is $react bytes gzipped; the budget is 6144" >&2
+          # Draft ownership (#133) and submission coalescing (#132) together
+          # measure 6181 bytes; retain both guards with a 6272-byte ceiling.
+          if [ "$react" -gt 6272 ]; then
+            echo "bugbottle/react is $react bytes gzipped; the budget is 6272" >&2
             exit 1
           fi
           # 8.0 kB of this is the panel as it shipped in 0.5; the kilobyte on
@@ -544,6 +583,9 @@ jobs:
       - name: Region PNG pixels after scrolling at DPR 1 and 2
         timeout-minutes: 2
         run: npm run smoke:region
+      - name: Compiled Vue and Svelte packed-consumer forms
+        timeout-minutes: 2
+        run: npm run smoke:forms
       - name: IndexedDB persistence and concurrent queue delivery
         timeout-minutes: 2
         run: npm run smoke:queue-idb

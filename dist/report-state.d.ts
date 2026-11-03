@@ -155,7 +155,9 @@ export type ReportActions = {
     cancelPick: () => void;
     removeElement: (index: number) => void;
     open: () => void;
+    /** Overlapping calls share one promise and its success/queued (true) or failure (false) result. */
     submit: () => Promise<boolean>;
+    /** Clears the draft and detaches pending submissions without aborting delivery. */
     reset: () => void;
 };
 export type ReportStateStore = {
@@ -164,7 +166,7 @@ export type ReportStateStore = {
     actions: ReportActions;
     /** Hand the store the current options. Adapters that re-render call it every time. */
     setOptions: (next: UseBugReportOptions) => void;
-    /** Aborts a pick in progress. Call when the form goes away. */
+    /** Aborts a pick and detaches pending submissions. Call when the form goes away. */
     destroy: () => void;
 };
 /**

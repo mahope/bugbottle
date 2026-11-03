@@ -22,7 +22,7 @@ export type BugReportView = ReportState & {
     statusMessage: string;
 };
 export declare function createBugReport(options: UseBugReportOptions): {
-    /** Aborts a pick in progress. Call from `onDestroy` if the form can unmount mid-pick. */
+    /** Detaches pending submissions and aborts a pick. Call from `onDestroy`. */
     destroy: () => void;
     setType: (next: ReportType) => void;
     setMessage: (next: string) => void;

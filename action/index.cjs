@@ -7,8 +7,8 @@
  * and never breaks on a transitive dependency. Kept in sync by a unit test
  * in the parent repo that compares behaviour against report-core itself.
  *
- * Memory note: @actions/core is avoided on purpose — stdout workflow commands
- * (::set-output, ::error) do the same job without the dependency.
+ * Memory note: @actions/core is avoided on purpose — runner output files and
+ * stdout error annotations need no dependency.
  */
 'use strict';
 const fs = require('fs');
@@ -22,7 +22,7 @@ const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
 const MAX_SCREENSHOT_DATA_URL_LENGTH = 2_900_000;
 
 function setInput(name, fallback) {
-  const key = 'INPUT_' + name.toUpperCase().replace(/-/g, '_');
+  const key = 'INPUT_' + name.toUpperCase();
   const v = process.env[key];
   return v === undefined || v === '' ? fallback : v;
 }
@@ -32,7 +32,9 @@ function fail(msg) {
 }
 
 function setOutput(name, value) {
-  process.stdout.write(`::set-output name=${name}::${value}\n`);
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`, 'utf8');
+  }
 }
 
 /** Mirrors normaliseMessage in report-core.ts. */
