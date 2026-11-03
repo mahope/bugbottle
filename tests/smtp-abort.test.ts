@@ -10,6 +10,7 @@ async function stalledServer(phase: string) {
   const commands: string[] = [];
   const sockets = new Set<Socket>();
   let connections = 0;
+  let deliveries = 0;
   let reached!: () => void;
   let closed!: () => void;
   const ready = new Promise<void>((resolve) => { reached = resolve; });
@@ -20,6 +21,7 @@ async function stalledServer(phase: string) {
     socket.on("error", () => {});
     socket.on("close", () => { sockets.delete(socket); closed(); });
     let buffer = "";
+    let inData = false;
     let handshake = phase === "implicit TLS";
     socket.on("data", (chunk) => {
       if (handshake) { reached(); return; }
@@ -29,6 +31,14 @@ async function stalledServer(phase: string) {
         if (end < 0) return;
         const line = buffer.slice(0, end);
         buffer = buffer.slice(end + 2);
+        if (inData) {
+          if (line === ".") {
+            inData = false;
+            if (phase === "message") reached();
+            else { deliveries++; socket.write("250 Accepted\r\n"); }
+          }
+          continue;
+        }
         commands.push(line);
         const verb = line.split(" ")[0];
         if (verb === phase && phase !== "STARTTLS") { reached(); continue; }
@@ -37,6 +47,11 @@ async function stalledServer(phase: string) {
           socket.write("220 Ready\r\n");
           handshake = true;
           return;
+        } else if (verb === "DATA") {
+          inData = true;
+          socket.write("354 Send message\r\n");
+        } else if (verb === "QUIT") {
+          socket.end("221 Bye\r\n");
         } else socket.write("250 OK\r\n");
       }
     });
@@ -50,6 +65,7 @@ async function stalledServer(phase: string) {
     options: { host: "127.0.0.1", port: address.port, from: "bugs@example.com", to: "team@example.com", timeoutMs: 1500 },
     commands, ready, ended,
     connections: () => connections,
+    deliveries: () => deliveries,
     close: async () => {
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -78,7 +94,7 @@ test("SMTP cancellation before entry opens no connection", async () => {
   } finally { await fake.close(); }
 });
 
-for (const phase of ["greeting", "MAIL", "DATA", "STARTTLS", "implicit TLS"]) {
+for (const phase of ["greeting", "MAIL", "DATA", "message", "QUIT", "STARTTLS", "implicit TLS"]) {
   test(`SMTP cancellation during ${phase} closes the transport`, async () => {
     const fake = await stalledServer(phase);
     const controller = new AbortController();
@@ -91,7 +107,7 @@ for (const phase of ["greeting", "MAIL", "DATA", "STARTTLS", "implicit TLS"]) {
       await promptly(rejected);
       await promptly(fake.ended);
       assert.deepEqual(fake.commands, before, "no later command or message was sent");
-      assert.ok(!fake.commands.includes("QUIT"));
+      assert.equal(fake.deliveries(), phase === "QUIT" ? 1 : 0);
       assert.equal(getEventListeners(controller.signal, "abort").length, 0);
     } finally { await fake.close(); await rejected; }
   });
@@ -103,11 +119,23 @@ test("handleReport times out SMTP and keeps its accepted response policy", async
   try {
     const response = await handleReport(new Request("https://app.example.com/report", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reportBody),
-    }), { sinks: [smtpSink(fake.options)], sinkTimeoutMs: 100, onError: (error) => { errors.push(error); } });
+    }), { sinks: [smtpSink(fake.options)], sinkTimeoutMs: 100, onSinkError: (error) => { errors.push(error); } });
     assert.equal(response.status, 202);
     assert.deepEqual(await response.json(), {});
     assert.equal(errors.length, 1);
     await promptly(fake.ended);
     assert.deepEqual(fake.commands, []);
+  } finally { await fake.close(); }
+});
+
+test("successful SMTP delivery removes its abort listener", async () => {
+  const fake = await stalledServer("success");
+  const controller = new AbortController();
+  try {
+    await sendReportSmtp(reportBody, fake.options, { signal: controller.signal });
+    assert.equal(fake.deliveries(), 1);
+    assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+    controller.abort();
+    await promptly(fake.ended);
   } finally { await fake.close(); }
 });

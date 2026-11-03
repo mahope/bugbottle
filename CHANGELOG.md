@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Cancel SMTP connections, TLS negotiation and command/message waits when the
+  receiver context aborts, including signals aborted before entry (#166).
+
 - Read GitHub Action inputs with the runner's hyphenated environment names
   and append validation counts to `GITHUB_OUTPUT` instead of legacy stdout
   commands (#152).
