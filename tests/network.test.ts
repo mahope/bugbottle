@@ -38,6 +38,8 @@ type FakeXhr = EventTarget & {
   status: number;
   /** How many listeners the patch has hung on this instance. */
   listeners: number;
+  openError?: Error;
+  endOnOpen: boolean;
   open(method: string, url: string): void;
   send(body?: unknown): void;
   /** Ends the request the way the browser would, through `loadend`. */
@@ -69,11 +71,18 @@ function withBrowser(fn: (env: Browser) => Promise<void> | void): Promise<void> 
     url = "";
     /** Counted, because a listener per `send` is exactly the bug to catch. */
     listeners = 0;
+    openError?: Error;
+    endOnOpen = false;
     override addEventListener(type: string, fn: EventListenerOrEventListenerObject | null): void {
       this.listeners += 1;
       super.addEventListener(type, fn);
     }
     open(method: string, url: string): void {
+      if (this.openError) throw this.openError;
+      if (this.endOnOpen) {
+        this.status = 0;
+        this.dispatchEvent(new Event("loadend"));
+      }
       this.method = method;
       this.url = url;
     }
@@ -456,6 +465,42 @@ test("a reused XMLHttpRequest records one entry per send, timed from that send",
       assert.ok(entry.ms < 200, "and not from the first one");
     }
     assert.equal(xhr.listeners, 1, "the listener is registered once per instance");
+  });
+});
+
+test("a failed reopen preserves the active XMLHttpRequest and the native exception", async () => {
+  await withBrowser(async ({ Xhr }) => {
+    initNetwork({ all: true });
+    const xhr = new Xhr();
+    xhr.open("GET", "/old");
+    xhr.send();
+    const error = new SyntaxError("Invalid method");
+    xhr.openError = error;
+    assert.throws(() => xhr.open("BAD METHOD", "/new"), (caught) => caught === error);
+    assert.deepEqual(getNetwork(), [], "a refused open supplies no evidence");
+    await xhr.finish(200);
+    assert.deepEqual(getNetwork().map(({ method, url, status }) => ({ method, url, status })), [
+      { method: "GET", url: "/old", status: 200 },
+    ]);
+  });
+});
+
+test("synchronous reopen lifecycle events belong to the old XMLHttpRequest", async () => {
+  await withBrowser(async ({ Xhr }) => {
+    initNetwork({ all: true });
+    const xhr = new Xhr();
+    xhr.open("GET", "/old");
+    xhr.send();
+    xhr.endOnOpen = true;
+    xhr.open("POST", "/new");
+    xhr.send();
+    await xhr.finish(201);
+    xhr.dispatchEvent(new Event("loadend"));
+    assert.deepEqual(getNetwork().map(({ method, url, status }) => ({ method, url, status })), [
+      { method: "GET", url: "/old", status: 0 },
+      { method: "POST", url: "/new", status: 201 },
+    ]);
+    assert.equal(xhr.listeners, 1);
   });
 });
 
