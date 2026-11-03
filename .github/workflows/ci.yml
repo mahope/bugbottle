@@ -541,6 +541,9 @@ jobs:
       # The pixels rather than the accessibility tree: a blur that did not
       # destroy what it covered fails here.
       - run: npm run smoke:annotate
+      - name: Compiled Vue and Svelte packed-consumer forms
+        timeout-minutes: 2
+        run: npm run smoke:forms
       - name: IndexedDB persistence and concurrent queue delivery
         timeout-minutes: 2
         run: npm run smoke:queue-idb

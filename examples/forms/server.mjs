@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { parse, compileScript } from '@vue/compiler-sfc';
 import { compile } from 'svelte/compiler';
@@ -40,14 +41,20 @@ export async function createFormExample(framework, port = 0) {
       document.querySelector('#unmount').onclick = () => window.unmountForm();`);
     const bundle = await build({ entryPoints: [join(dir, 'main.js')], bundle: true, write: false,
       format: 'esm', platform: 'browser', conditions: ['browser'], nodePaths: [join(root, 'node_modules')] });
-    const { handleReport } = await import(pathToFileURL(join(packageDir, 'dist/server/index.js')));
+    const consumerRequire = createRequire(join(dir, 'main.js'));
+    const { handleReport } = await import(pathToFileURL(consumerRequire.resolve('bugbottle/server')));
     const reports = [];
+    const screenshots = [];
     server = createServer(async (req, res) => {
       try {
         if (req.method === 'POST' && req.url === '/reports') {
           const response = await handleReport(new Request(`http://${req.headers.host}/reports`, {
             method: 'POST', body: req, duplex: 'half', headers: req.headers,
-          }), { store: report => { reports.push(report); return { id: `report-${reports.length}` }; } });
+          }), { store: (report, screenshot) => {
+            reports.push(report);
+            screenshots.push(screenshot);
+            return { id: `report-${reports.length}` };
+          } });
           res.writeHead(response.status, Object.fromEntries(response.headers));
           res.end(await response.text());
         } else if (req.url === '/main.js') {
@@ -55,6 +62,14 @@ export async function createFormExample(framework, port = 0) {
         } else if (req.url === '/') {
           res.writeHead(200, { 'Content-Type': 'text/html' }).end(`<!doctype html><html lang="en">
             <meta charset="utf-8"><title>${framework} report form</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 24px auto; padding: 16px; }
+              label { display: block; margin-block: 16px; }
+              input, textarea { display: block; font: inherit; max-width: 100%; box-sizing: border-box; }
+              button { font: inherit; min-height: 44px; }
+              [role="status"] { min-height: 24px; }
+            </style>
             <button id="mount">Mount form</button><button id="unmount">Unmount form</button>
             <main id="app"></main><script type="module" src="/main.js"></script></html>`);
         } else if (req.url === '/favicon.ico') res.writeHead(204).end();
@@ -62,7 +77,7 @@ export async function createFormExample(framework, port = 0) {
       } catch { res.writeHead(500).end('Example receiver failed'); }
     });
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
-    return { reports, url: `http://127.0.0.1:${server.address().port}`, close: async () => {
+    return { reports, screenshots, url: `http://127.0.0.1:${server.address().port}`, close: async () => {
       server.closeAllConnections();
       await new Promise(resolve => server.close(resolve));
       await rm(dir, { recursive: true, force: true });
