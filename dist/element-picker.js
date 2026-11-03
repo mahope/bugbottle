@@ -130,10 +130,9 @@ export function pickElement(options = {}) {
         return Promise.reject(new Error("pickElement requires a browser environment"));
     }
     const ignore = options.ignore ?? defaultIgnore;
-    const highlight = options.highlight ?? true;
     return new Promise((resolve) => {
         let box = null;
-        if (highlight) {
+        if (options.highlight !== false) {
             box = document.createElement("div");
             box.dataset.bugbottle = "highlight";
             box.setAttribute("aria-hidden", "true");
@@ -150,19 +149,32 @@ export function pickElement(options = {}) {
                 return null;
             return ignore(t) ? null : t;
         };
-        const finish = (result) => {
+        let finish = (result) => {
+            // Re-entrant observers must not complete the same pick twice.
+            finish = () => { };
             document.removeEventListener("pointermove", onMove, true);
             document.removeEventListener("click", onClick, true);
             document.removeEventListener("keydown", onKey, true);
             options.signal?.removeEventListener("abort", onAbort);
             document.documentElement.style.cursor = previousCursor;
             box?.remove();
-            options.onHover?.(null);
+            box = null;
+            try {
+                options.onHover?.(null);
+            }
+            catch {
+                // An observer must not leave the pick pending.
+            }
             resolve(result);
         };
         const onMove = (e) => {
             const el = targetOf(e);
-            options.onHover?.(el);
+            try {
+                options.onHover?.(el);
+            }
+            catch {
+                // Highlighting must continue even when the observer throws.
+            }
             if (!box)
                 return;
             if (!el) {
