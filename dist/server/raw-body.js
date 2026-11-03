@@ -37,10 +37,28 @@ export async function* timedChunks(raw, timeoutMs = DEFAULT_BODY_TIMEOUT_MS) {
             void Promise.resolve(iterator.return?.()).catch(() => { });
     }
 }
-export function stopAfterReply(response, stop) {
-    if (response?.once)
-        response.once("finish", stop);
-    else
+export function stopAfterReply(response, stop, send) {
+    let stopped = false;
+    const cleanup = () => {
+        if (stopped)
+            return;
+        stopped = true;
+        response?.removeListener?.("finish", cleanup);
+        response?.removeListener?.("close", cleanup);
         stop();
+    };
+    response?.once?.("finish", cleanup);
+    response?.once?.("close", cleanup);
+    try {
+        send();
+    }
+    catch (err) {
+        cleanup();
+        throw err;
+    }
+    finally {
+        if (!response?.once)
+            cleanup();
+    }
 }
 //# sourceMappingURL=raw-body.js.map

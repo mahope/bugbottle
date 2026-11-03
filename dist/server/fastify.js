@@ -198,12 +198,9 @@ export function fastifyHandler(options = {}) {
                 }
                 catch (err) {
                     if (err instanceof RawBodyTimeoutError) {
-                        try {
+                        stopAfterReply(reply.raw, err.stop, () => {
                             writeJson(reply, 408, { error: err.message }, options.cors);
-                        }
-                        finally {
-                            stopAfterReply(reply.raw, err.stop);
-                        }
+                        });
                         return;
                     }
                     if (!(err instanceof RawBodyTooLargeError))

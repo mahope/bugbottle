@@ -74,7 +74,8 @@ export type ExpressResponseLike = {
   set?(name: string, value: string): unknown;
   send(body?: unknown): unknown;
   end?(body?: unknown): unknown;
-  once?(event: "finish", listener: () => void): unknown;
+  once?(event: "finish" | "close", listener: () => void): unknown;
+  removeListener?(event: "finish" | "close", listener: () => void): unknown;
 };
 
 /** One header value: Node gives arrays for the repeatable ones. */
@@ -246,11 +247,9 @@ export function expressHandler(
           body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES, options.bodyTimeoutMs);
         } catch (err) {
           if (err instanceof RawBodyTimeoutError) {
-            try {
+            stopAfterReply(res, err.stop, () => {
               writeJson(res, 408, { error: err.message }, options.cors);
-            } finally {
-              stopAfterReply(res, err.stop);
-            }
+            });
             return;
           }
           if (!(err instanceof RawBodyTooLargeError)) throw err;

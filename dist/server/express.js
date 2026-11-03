@@ -191,12 +191,9 @@ export function expressHandler(options = {}) {
                 }
                 catch (err) {
                     if (err instanceof RawBodyTimeoutError) {
-                        try {
+                        stopAfterReply(res, err.stop, () => {
                             writeJson(res, 408, { error: err.message }, options.cors);
-                        }
-                        finally {
-                            stopAfterReply(res, err.stop);
-                        }
+                        });
                         return;
                     }
                     if (!(err instanceof RawBodyTooLargeError))

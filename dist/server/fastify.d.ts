@@ -76,7 +76,8 @@ export type FastifyRequestLike = {
 /** As much of a Fastify reply as the adapter writes. */
 export type FastifyReplyLike = {
     raw?: {
-        once(event: "finish", listener: () => void): unknown;
+        once(event: "finish" | "close", listener: () => void): unknown;
+        removeListener?(event: "finish" | "close", listener: () => void): unknown;
     };
     status(code: number): unknown;
     code?(code: number): unknown;

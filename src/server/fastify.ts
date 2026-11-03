@@ -85,7 +85,10 @@ export type FastifyRequestLike = {
 
 /** As much of a Fastify reply as the adapter writes. */
 export type FastifyReplyLike = {
-  raw?: { once(event: "finish", listener: () => void): unknown };
+  raw?: {
+    once(event: "finish" | "close", listener: () => void): unknown;
+    removeListener?(event: "finish" | "close", listener: () => void): unknown;
+  };
   status(code: number): unknown;
   code?(code: number): unknown;
   header(name: string, value: string): unknown;
@@ -263,11 +266,9 @@ export function fastifyHandler(
           body = await bodyText(req, options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES, options.bodyTimeoutMs);
         } catch (err) {
           if (err instanceof RawBodyTimeoutError) {
-            try {
+            stopAfterReply(reply.raw, err.stop, () => {
               writeJson(reply, 408, { error: err.message }, options.cors);
-            } finally {
-              stopAfterReply(reply.raw, err.stop);
-            }
+            });
             return;
           }
           if (!(err instanceof RawBodyTooLargeError)) throw err;

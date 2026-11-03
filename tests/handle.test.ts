@@ -1907,3 +1907,51 @@ test("raw deadline spans chunks and does not wait for a stalled iterator return"
   assert.equal(returned, 1);
   assert.equal(cleared.mock.callCount(), 1);
 });
+
+test("Fastify caps unparsed bytes and preserves split UTF-8", async () => {
+  const message = "grøn knap (æøå)";
+  const bytes = new TextEncoder().encode(JSON.stringify({ ...body, message }));
+  const cut = bytes.indexOf(0xc3) + 1;
+  for (const maxBodyBytes of [10, bytes.length]) {
+    const { state, reply, finished } = fakeReply();
+    let destroyed = false;
+    let stored: ValidatedReport | undefined;
+    fastifyHandler({
+      maxBodyBytes,
+      store: async (report) => void (stored = report),
+    })({
+      method: "POST",
+      raw: {
+        destroy() { destroyed = true; },
+        async *[Symbol.asyncIterator]() {
+          yield bytes.slice(0, cut);
+          yield bytes.slice(cut);
+        },
+      },
+    }, reply);
+    await finished;
+    assert.equal(state.status, maxBodyBytes === 10 ? 413 : 202);
+    assert.equal(destroyed, maxBodyBytes === 10);
+    if (maxBodyBytes !== 10) assert.equal(stored?.message, message);
+  }
+});
+
+test("raw timeout cleanup follows response finish, close, or a failed send", async () => {
+  const { EventEmitter } = await import("node:events");
+  const { stopAfterReply } = await import("../src/server/raw-body.ts");
+  for (const outcome of ["finish", "close", "throw"] as const) {
+    const response = new EventEmitter();
+    let stopped = 0;
+    const send = () => {
+      assert.equal(stopped, 0);
+      if (outcome === "throw") throw new Error("response is gone");
+      response.emit(outcome);
+    };
+    const write = () => stopAfterReply(response, () => { stopped += 1; }, send);
+    if (outcome === "throw") assert.throws(write, /response is gone/);
+    else write();
+    assert.equal(stopped, 1);
+    assert.equal(response.listenerCount("finish"), 0);
+    assert.equal(response.listenerCount("close"), 0);
+  }
+});
