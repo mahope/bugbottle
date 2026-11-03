@@ -4080,7 +4080,7 @@ an initial submission receiving 429 is also queued when a queue is configured.
 Other 4xx responses, including 400, 401 and 403, are permanent rejections:
 initial submissions show an error without queueing, and queued reports are dropped.
 On failed queued deliveries, `Retry-After` accepts non-negative integer seconds
-or an HTTP date (`Tue, 03 Nov 2026 00:00:03 GMT`), bounded to one second through
+or an HTTP date (IMF-fixdate, RFC 850 or asctime), bounded to one second through
 five minutes. Missing or malformed values use the exponential backoff instead.
 `timeoutMs` (30 seconds by default) bounds one attempt:
 a request that is written and then never answered is the dropped mobile

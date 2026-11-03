@@ -190,7 +190,17 @@ const MAX_BACKOFF_MS = 300_000;
 
 function retryAfterMs(value: string | null): number | undefined {
   if (value === null) return undefined;
-  const text = value.trim();
+  let text = value.trim();
+  const rfc850 = /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (\d{2})-([A-Z][a-z]{2})-(\d{2}) (\d{2}:\d{2}:\d{2}) GMT$/.exec(text);
+  const asctime = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([A-Z][a-z]{2}) ( \d|\d{2}) (\d{2}:\d{2}:\d{2}) (\d{4})$/.exec(text);
+  if (rfc850) {
+    const currentYear = new Date().getUTCFullYear();
+    let year = Math.floor(currentYear / 100) * 100 + Number(rfc850[4]);
+    if (year > currentYear + 50) year -= 100;
+    text = `${rfc850[1]!.slice(0, 3)}, ${rfc850[2]} ${rfc850[3]} ${year} ${rfc850[5]} GMT`;
+  } else if (asctime) {
+    text = `${asctime[1]}, ${asctime[3]!.trim().padStart(2, "0")} ${asctime[2]} ${asctime[5]} ${asctime[4]} GMT`;
+  }
   const delay = /^\d+$/.test(text)
     ? Number(text) * 1_000
     : new Date(text).toUTCString() === text
