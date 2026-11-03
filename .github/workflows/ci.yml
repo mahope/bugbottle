@@ -6,6 +6,9 @@ on:
   pull_request:
 
 jobs:
+  min-node-smoke:
+    uses: ./.github/workflows/min-node-smoke.yml
+
   check:
     runs-on: ubuntu-latest
     strategy:
