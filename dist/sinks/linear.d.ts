@@ -44,6 +44,8 @@ export type CreateLinearIssueOptions = {
     screenshotUrlFrom?: UrlFrom;
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
+    /** Cancels the request and response-body read. */
+    signal?: AbortSignal;
     /** Passed through to `toMarkdown` — extra facts, a heading level. */
     markdown?: MarkdownOptions;
 };

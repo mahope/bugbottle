@@ -48,6 +48,8 @@ export type CreateGithubIssueOptions = {
   screenshotUrlFrom?: UrlFrom;
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
+  /** Cancels the request and response-body read. */
+  signal?: AbortSignal;
   /** Passed through to `toMarkdown` — extra facts, a heading level. */
   markdown?: MarkdownOptions;
 };
@@ -108,9 +110,11 @@ export async function createGithubIssue(
     options.repo,
   )}/issues`;
 
+  options.signal?.throwIfAborted();
   const doFetch = options.fetch ?? globalThis.fetch;
   const response = await doFetch(url, {
     method: "POST",
+    ...(options.signal ? { signal: options.signal } : {}),
     headers: {
       Authorization: `Bearer ${options.token}`,
       Accept: "application/vnd.github+json",
@@ -124,6 +128,7 @@ export async function createGithubIssue(
   });
 
   const body = await readBody(response);
+  options.signal?.throwIfAborted();
   if (!response.ok) {
     const fallback = `GitHub refused the issue with status ${response.status}`;
     throw new SinkError(messageFromBody(body, fallback), response.status, body);

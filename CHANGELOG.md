@@ -22,6 +22,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 - Isolate throwing element-picker hover observers so clicks, Escape and abort
   still clean up and settle the selection promise within the existing UI
   bundle budget (#196).
+- Forward receiver deadlines through the Resend, webhook, GitHub and Linear
+  adapters to HTTP requests and response reads; their direct helpers now
+  accept an optional abort signal (#203). Successful webhook response bodies
+  are also consumed before delivery completes, keeping stalled 2xx responses
+  covered by the receiver deadline.
 
 - Release an oversized rrweb checkout group and discard its dependent events
   until a fresh full snapshot restores capture, bounding retained replay data

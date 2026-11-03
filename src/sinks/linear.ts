@@ -59,6 +59,8 @@ export type CreateLinearIssueOptions = {
   screenshotUrlFrom?: UrlFrom;
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
+  /** Cancels the request and response-body read. */
+  signal?: AbortSignal;
   /** Passed through to `toMarkdown` — extra facts, a heading level. */
   markdown?: MarkdownOptions;
 };
@@ -143,9 +145,11 @@ export async function createLinearIssue(
   if (options.projectId) input.projectId = options.projectId;
   if (options.labelIds && options.labelIds.length > 0) input.labelIds = options.labelIds;
 
+  options.signal?.throwIfAborted();
   const doFetch = options.fetch ?? globalThis.fetch;
   const response = await doFetch(LINEAR_API, {
     method: "POST",
+    ...(options.signal ? { signal: options.signal } : {}),
     headers: {
       Authorization: options.apiKey,
       "Content-Type": "application/json",
@@ -154,6 +158,7 @@ export async function createLinearIssue(
   });
 
   const body = await readBody(response);
+  options.signal?.throwIfAborted();
   if (!response.ok) {
     const fallback = `Linear refused the issue with status ${response.status}`;
     throw new SinkError(messageFromBody(body, fallback), response.status, body);
