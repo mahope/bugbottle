@@ -18,6 +18,10 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — real-browser IndexedDB queue coverage for screenshot
+persistence across closed pages, concurrent enqueues and concurrent delivery
+without duplicates under successful responses (#121).
+
 **Unreleased** — HTTP 429 retains reports in initial submission and queued
 delivery, with bounded `Retry-After` support on queued attempts (#116).
 

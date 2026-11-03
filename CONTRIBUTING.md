@@ -13,6 +13,9 @@ npm ci
 npm run check   # typecheck, test, build, build:docs, check:dist
 ```
 
+The site-image history tests build their own dated Git repositories, so the
+same assertions run in ordinary clones, shallow clones and linked worktrees.
+
 Node 22 or newer is needed to run the tests (they run the TypeScript source
 directly with `--experimental-strip-types`). Consumers of the package only
 need Node 18.
@@ -20,6 +23,9 @@ need Node 18.
 ## Before opening a pull request
 
 - `npm run check` is green.
+- Queue storage changes also pass `npm run smoke:queue-idb` after the build.
+  It uses Chrome and `puppeteer-core` through `scripts/chrome.mjs`, without
+  downloading a browser, and runs in CI's browser job.
 - New behaviour has a test. Anything that handles browser input has a test for
   the malformed case, not just the happy path.
 - Nothing outside `src/html-to-image.ts` imports `html-to-image`. Bundlers

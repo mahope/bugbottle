@@ -8,12 +8,21 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ## Unreleased
 
+### Added
+
+- Real Chrome coverage for IndexedDB queue persistence with screenshots,
+  concurrent tab enqueues and successful concurrent flushes. The browser CI
+  job runs the isolated localhost smoke test with a bounded timeout (#121).
+
 ### Fixed
 
 - Preserve the file-store index when directory access fails, and keep reports
   discoverable after failed deletion. Delete the PNG before the JSON so a
   partial deletion leaves a readable report that removal or retention can
   retry (#119).
+- Give the site image's history-copy test its own dated Git repository, so it
+  works in linked worktrees and shallow clones without relying on checkout
+  history (#122).
 
 - Keep rate-limited reports (HTTP 429) in both initial submission and queued
   delivery. Queued retries honour `Retry-After` seconds or HTTP dates (including
