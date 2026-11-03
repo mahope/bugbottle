@@ -58,7 +58,7 @@ export function createBugReport(options: UseBugReportOptions) {
     subscribe,
     types: REPORT_TYPES,
     ...store.actions,
-    /** Aborts a pick in progress. Call from `onDestroy` if the form can unmount mid-pick. */
+    /** Detaches pending submissions and aborts a pick. Call from `onDestroy`. */
     destroy: store.destroy,
   };
 }

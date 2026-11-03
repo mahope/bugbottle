@@ -194,3 +194,80 @@ for (const decision of ["cancel", "throw", "timeout"] as const) {
     assert.equal(queued, 0);
   });
 }
+
+for (const lifecycle of ["reset", "destroy"] as const) {
+  for (const outcome of ["success", "failure", "queued"] as const) {
+    test(`late ${outcome} after ${lifecycle} preserves the replacement draft`, async (t) => {
+      let resolve!: (response: Response) => void;
+      let reject!: (error: Error) => void;
+      const response = new Promise<Response>((yes, no) => { resolve = yes; reject = no; });
+      t.mock.method(globalThis, "fetch", () => response);
+      const queued: unknown[] = [];
+      let sent = 0;
+      const form = createReportState({
+        endpoint: "/reports",
+        onSent: () => { sent++; },
+        queue: outcome === "queued" ? {
+          enqueue: (report) => { queued.push(report); },
+          flush: async () => 0, size: () => queued.length, clear() {}, destroy() {},
+        } : undefined,
+      });
+      form.actions.setMessage("draft A");
+      form.actions.setContact("contact A");
+      const submission = form.actions.submit();
+      if (lifecycle === "reset") form.actions.reset();
+      else form.destroy();
+      form.actions.setMessage("draft B");
+      form.actions.setContact("contact B");
+      form.actions.attachScreenshot({
+        dataUrl: "data:image/png;base64,Yg==",
+        region: { mode: "area", rect: { x: 1, y: 2, width: 3, height: 4 },
+          viewport: { x: 1, y: 2, width: 3, height: 4 } },
+        element: { selector: "#replacement", tag: "button", text: "Replacement",
+          rect: { x: 1, y: 2, width: 3, height: 4 }, attributes: {} },
+      });
+      const replacement = form.getState();
+      let notifications = 0;
+      form.subscribe(() => { notifications++; });
+      if (outcome === "success") resolve(new Response('{"id":"original-id"}'));
+      else reject(new TypeError("Failed to fetch"));
+      assert.equal(await submission, outcome !== "failure");
+      assert.deepEqual(form.getState(), replacement);
+      assert.equal(notifications, 0);
+      assert.equal(sent, 0);
+      assert.equal(queued.length, outcome === "queued" ? 1 : 0);
+      if (outcome === "queued") {
+        assert.equal((queued[0] as { message: string }).message, "draft A");
+        assert.equal((queued[0] as { contact: string }).contact, "contact A");
+      }
+    });
+  }
+}
+
+for (const lifecycle of ["reset", "destroy"] as const) {
+  test(`a new submission after ${lifecycle} stays coalesced when the old one finishes`, async (t) => {
+    const responses: ((response: Response) => void)[] = [];
+    const fetch = t.mock.method(globalThis, "fetch", () =>
+      new Promise<Response>((resolve) => { responses.push(resolve); }));
+    const form = createReportState({ endpoint: "/reports" });
+    t.after(() => form.destroy());
+    form.actions.setMessage("draft A");
+    const first = form.actions.submit();
+    if (lifecycle === "reset") form.actions.reset();
+    else form.destroy();
+    form.actions.setMessage("draft B");
+    const second = form.actions.submit();
+    assert.notEqual(first, second);
+    assert.equal(fetch.mock.callCount(), 2);
+    responses[0]!(new Response("{}"));
+    assert.equal(await first, true);
+    assert.equal(form.getState().message, "draft B");
+    assert.equal(form.getState().status.kind, "sending");
+    assert.equal(form.actions.submit(), second);
+    assert.equal(fetch.mock.callCount(), 2);
+    responses[1]!(new Response("{}"));
+    assert.equal(await second, true);
+    assert.equal(form.getState().message, "");
+    assert.equal(form.getState().status.kind, "sent");
+  });
+}

@@ -348,3 +348,21 @@ test("a bundled locale reaches the reporter", async () => {
   fetchStub.restore();
   form.destroy();
 });
+
+test("reset detaches a pending submission from the next Svelte draft", async (t) => {
+  let resolve!: (response: Response) => void;
+  const response = new Promise<Response>((yes) => { resolve = yes; });
+  t.mock.method(globalThis, "fetch", () => response);
+  const form = createBugReport({ endpoint: ENDPOINT });
+  form.setMessage("draft A");
+  const submission = form.submit();
+  form.reset();
+  form.setMessage("draft B");
+  form.setContact("contact B");
+  form.attachScreenshot({ dataUrl: PNG });
+  const replacement = get(form);
+  resolve(json({ id: "original-id" }));
+  assert.equal(await submission, true);
+  assert.deepEqual(get(form), replacement);
+  form.destroy();
+});
