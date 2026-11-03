@@ -31,7 +31,7 @@ need Node 18.
   `bugbottle/react` 6 kB, `bugbottle/ui` 12800 bytes, `bugbottle/annotate` 2048
   bytes, `bugbottle/region` 6144 bytes, `bugbottle/breadcrumbs`
   1.5 kB, `bugbottle/network` 1330 bytes, `bugbottle/perf` 1536 bytes,
-  `bugbottle/queue` 1856 bytes, `bugbottle/queue-idb` 1024 bytes,
+  `bugbottle/queue` 2112 bytes, `bugbottle/queue-idb` 1024 bytes,
   `bugbottle/triggers` 1300 bytes, `bugbottle/shake` 768 bytes,
   `bugbottle/sign` 512 bytes, `bugbottle/rrweb` 1024 bytes,
   `bugbottle/locales-extra` printed but never budgeted — it is data, about

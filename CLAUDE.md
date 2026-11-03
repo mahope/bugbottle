@@ -282,8 +282,9 @@ run time, since rrweb's `record` is handed in by the application. It cost the
 core 19 bytes (1316 → 1335 measured locally) for one registry read, and the
 script tag nothing at all — the IIFE does not export it, because a page with no
 bundler has no `record` to hand in. After #116, `bugbottle/queue` is budgeted at
-1856 bytes: bounded `Retry-After` parsing and the 429 exemption take it from
-1697 to 1822 bytes with esbuild 0.28.2 and filename-free gzip. Both submission
+2112 bytes: bounded `Retry-After` parsing (including RFC 850 and asctime dates)
+and the 429 exemption measure 2052 bytes with CI's esbuild 0.24.0 and gzip
+including the filename, leaving 2.9% headroom. Both submission
 paths retain 429 reports; other 4xx responses remain permanent rejections.
 The script-tag budgets rise to 26880 and 23296 bytes for the same handling.
 Before that change, the queue measured
