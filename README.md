@@ -154,6 +154,9 @@ nothing else: no line of source is ever read or sent, so resolving it stays
 your side, with your own source maps. Entries from `console.error` carry no
 frames; the browser gives none.
 
+`getConsoleBuffer()` returns an independent snapshot, including stack arrays
+and frames. Changing a returned snapshot cannot change later reports.
+
 In a server-rendered app, make sure this runs in the browser only — it patches
 whichever `console` it finds.
 

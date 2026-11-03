@@ -20,7 +20,7 @@ const DEFAULTS = {
 };
 let buffer = [];
 let initialised = false;
-let limits = { ...DEFAULTS };
+let limits = DEFAULTS;
 let originalError = null;
 let originalWarn = null;
 let onError = null;
@@ -154,6 +154,6 @@ export function resetConsoleBuffer() {
     onError = null;
     onRejection = null;
     initialised = false;
-    limits = { ...DEFAULTS };
+    limits = DEFAULTS;
 }
 //# sourceMappingURL=console-buffer.js.map

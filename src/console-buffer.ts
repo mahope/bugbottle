@@ -40,7 +40,7 @@ const DEFAULTS: Limits = {
 
 let buffer: ConsoleEntry[] = [];
 let initialised = false;
-let limits: Limits = { ...DEFAULTS };
+let limits: Limits = DEFAULTS;
 let originalError: typeof console.error | null = null;
 let originalWarn: typeof console.warn | null = null;
 let onError: ((e: ErrorEvent) => void) | null = null;
@@ -177,5 +177,5 @@ export function resetConsoleBuffer(): void {
   onError = null;
   onRejection = null;
   initialised = false;
-  limits = { ...DEFAULTS };
+  limits = DEFAULTS;
 }
