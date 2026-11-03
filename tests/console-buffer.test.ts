@@ -9,6 +9,48 @@ import { MAX_CONSOLE_ENTRIES } from "../src/report-core.ts";
 
 afterEach(() => resetConsoleBuffer());
 
+for (const level of ["error", "warn"] as const) {
+  test(`stopping preserves later console.${level} wrappers across sessions`, () => {
+    const { seen } = withSilencedConsole(() => {
+      const retained: typeof console.error[] = [];
+      for (let cycle = 0; cycle < 3; cycle++) {
+        const stop = initConsoleBuffer();
+        const patched = console[level];
+        retained.push(patched);
+        const hostCalls: unknown[][] = [];
+        const host = (...args: unknown[]) => {
+          hostCalls.push(args);
+          patched(...args);
+        };
+        console[level] = host;
+        console[level]("active", cycle);
+        assert.deepEqual(getConsoleBuffer().map((entry) => entry.message), [`active ${cycle}`]);
+        stop();
+        assert.equal(console[level], host, "the host keeps its logging integration");
+        console[level]("stopped", cycle);
+        for (const old of retained) old("retained", cycle);
+        assert.deepEqual(getConsoleBuffer(), [], "stopped wrappers are inert");
+        initConsoleBuffer();
+        for (const old of retained) old("old session", cycle);
+        assert.deepEqual(getConsoleBuffer(), [], "old wrappers cannot record in a new session");
+        console[level]("restarted", cycle);
+        assert.deepEqual(getConsoleBuffer().map((entry) => entry.message), [`restarted ${cycle}`]);
+        resetConsoleBuffer();
+        assert.equal(console[level], host);
+        assert.deepEqual(hostCalls, [["active", cycle], ["stopped", cycle], ["restarted", cycle]]);
+      }
+    });
+    const expected: unknown[][] = [];
+    for (let cycle = 0; cycle < 3; cycle++) {
+      expected.push(["active", cycle], ["stopped", cycle]);
+      for (let i = 0; i <= cycle; i++) expected.push(["retained", cycle]);
+      for (let i = 0; i <= cycle; i++) expected.push(["old session", cycle]);
+      expected.push(["restarted", cycle]);
+    }
+    assert.deepEqual(seen, expected, "every call reaches the original exactly once");
+  });
+}
+
 /** Silences the real console while a block runs, and returns what it saw. */
 function withSilencedConsole<T>(fn: () => T): { result: T; seen: unknown[][] } {
   const seen: unknown[][] = [];
