@@ -392,6 +392,9 @@ merged into the body — an app version, a tenant id), `headers` and
 The same state machine, as refs. `type` and `message` are writable, so
 `v-model` works on them directly.
 
+Run the [compiled Vue example](examples/vue/README.md) for a local form,
+receiver and browser submission smoke test.
+
 ```vue
 <script setup lang="ts">
 import { useBugReport } from "bugbottle/vue";
@@ -401,6 +404,9 @@ const report = useBugReport({
   endpoint: "/api/feedback",
   screenshot: htmlToImage, // leave out to disable screenshots
 });
+// Top-level refs are unwrapped by Vue templates, including v-model.
+const { message, isSending, statusMessage, canScreenshot, includeScreenshot,
+  screenshot, isPicking, elements } = report;
 </script>
 
 <template>
@@ -409,30 +415,30 @@ const report = useBugReport({
       {{ t }}
     </button>
 
-    <textarea v-model="report.message" />
+    <textarea v-model="message" />
 
-    <label v-if="report.canScreenshot">
+    <label v-if="canScreenshot">
       <input
         type="checkbox"
-        :checked="report.includeScreenshot"
+        :checked="includeScreenshot"
         @change="report.toggleScreenshot(($event.target as HTMLInputElement).checked)"
       />
       Attach a picture of this page
     </label>
-    <img v-if="report.screenshot" :src="report.screenshot" alt="" />
+    <img v-if="screenshot" :src="screenshot" alt="" />
 
     <button type="button" @click="report.pickElement()">
-      {{ report.isPicking ? "Click anything to attach it — Esc to stop" : "Point at the element" }}
+      {{ isPicking ? "Click anything to attach it — Esc to stop" : "Point at the element" }}
     </button>
     <ul>
-      <li v-for="(el, i) in report.elements" :key="i">
+      <li v-for="(el, i) in elements" :key="i">
         <code>{{ el.selector }}</code> {{ el.text }}
         <button type="button" @click="report.removeElement(i)">×</button>
       </li>
     </ul>
 
-    <p role="status">{{ report.statusMessage }}</p>
-    <button :disabled="report.isSending">Send</button>
+    <p role="status">{{ statusMessage }}</p>
+    <button :disabled="isSending">Send</button>
   </form>
 </template>
 ```
@@ -446,6 +452,9 @@ peer dependency, so nothing about it reaches a project that does not use it.
 
 The same state machine, as a readable store: `$form` for the values, the
 methods on `form` for everything the reporter does.
+
+Run the [compiled Svelte example](examples/svelte/README.md) for a local form,
+receiver and browser submission smoke test.
 
 ```svelte
 <script lang="ts">
