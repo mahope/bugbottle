@@ -19,6 +19,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Return independent file-store entry snapshots from `list`, `read` and
+  `refresh`, preventing caller mutations from corrupting lookup or retention (#185).
 - Drop screenshot regions together with pictures when queue storage refuses a
   write, preserving the remaining evidence and screenshot-loss note (#186).
 

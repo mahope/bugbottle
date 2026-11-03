@@ -6574,6 +6574,10 @@ directory is walked once, on the first call that needs it, and kept up to date
 by every write and delete after that; `read(id)` then reads exactly the one
 file that was asked for, and only fetches the picture when you ask for it.
 
+Entries returned by `list()`, `refresh()` and `read().entry` are independent
+snapshots. Editing them cannot change the index, file lookup or retention;
+later writes, deletions and refreshes do not update earlier snapshots.
+
 An entry `read` finds nothing behind is dropped from the listing then and
 there, so a report deleted by something outside this process stops being a link
 that answers 404 for the rest of the run. `refresh()` is the deliberate version
