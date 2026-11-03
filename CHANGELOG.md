@@ -10,6 +10,11 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Preserve the file-store index when directory access fails, and keep reports
+  discoverable after failed deletion. Delete the PNG before the JSON so a
+  partial deletion leaves a readable report that removal or retention can
+  retry (#119).
+
 - Keep rate-limited reports (HTTP 429) in both initial submission and queued
   delivery. Queued retries honour `Retry-After` seconds or HTTP dates (including
   the obsolete RFC 850 and asctime formats), bounded
