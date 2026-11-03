@@ -155,6 +155,7 @@ export type ReportActions = {
     cancelPick: () => void;
     removeElement: (index: number) => void;
     open: () => void;
+    /** Overlapping calls share one promise and its success/queued (true) or failure (false) result. */
     submit: () => Promise<boolean>;
     reset: () => void;
 };

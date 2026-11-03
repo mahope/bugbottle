@@ -10,6 +10,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Coalesce overlapping form submissions into one delivery attempt and shared
+  result, calling `onSent` or queueing at most once. Later submissions remain
+  available after success or failure (#132).
+
 - Give the site image's history-copy test its own dated Git repository, so it
   works in linked worktrees and shallow clones without relying on checkout
   history (#122).

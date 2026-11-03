@@ -18,6 +18,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — overlapping headless form submissions share one delivery
+attempt and result, preventing duplicate sends and queue entries (#132).
+
 **Unreleased** — HTTP 429 retains reports in initial submission and queued
 delivery, with bounded `Retry-After` support on queued attempts (#116).
 
