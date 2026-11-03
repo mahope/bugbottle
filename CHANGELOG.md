@@ -20,7 +20,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 ### Fixed
 
 - Isolate throwing element-picker hover observers so clicks, Escape and abort
-  still clean up and settle the selection promise (#196).
+  still clean up and settle the selection promise within the existing UI
+  bundle budget (#196).
 
 - Cancel SMTP connections, TLS negotiation and command/message waits when the
   receiver context aborts, including signals aborted before entry (#166).

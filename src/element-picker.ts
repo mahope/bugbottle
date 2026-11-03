@@ -156,12 +156,10 @@ export function pickElement(options: PickOptions = {}): Promise<ElementRef | nul
     return Promise.reject(new Error("pickElement requires a browser environment"));
   }
   const ignore = options.ignore ?? defaultIgnore;
-  const highlight = options.highlight ?? true;
 
   return new Promise((resolve) => {
-    let finished = false;
     let box: HTMLDivElement | null = null;
-    if (highlight) {
+    if (options.highlight !== false) {
       box = document.createElement("div");
       box.dataset.bugbottle = "highlight";
       box.setAttribute("aria-hidden", "true");
@@ -179,31 +177,32 @@ export function pickElement(options: PickOptions = {}): Promise<ElementRef | nul
       return ignore(t) ? null : t;
     };
 
-    const notifyHover = (el: Element | null) => {
-      try {
-        options.onHover?.(el);
-      } catch {
-        // An observer must not interrupt highlighting or leave the pick pending.
-      }
-    };
-
-    const finish = (result: ElementRef | null) => {
-      if (finished) return;
-      finished = true;
+    let finish = (result: ElementRef | null) => {
+      // Re-entrant observers must not complete the same pick twice.
+      finish = () => {};
       document.removeEventListener("pointermove", onMove, true);
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKey, true);
       options.signal?.removeEventListener("abort", onAbort);
       document.documentElement.style.cursor = previousCursor;
       box?.remove();
-      notifyHover(null);
+      box = null;
+      try {
+        options.onHover?.(null);
+      } catch {
+        // An observer must not leave the pick pending.
+      }
       resolve(result);
     };
 
     const onMove = (e: PointerEvent) => {
       const el = targetOf(e);
-      notifyHover(el);
-      if (finished || !box) return;
+      try {
+        options.onHover?.(el);
+      } catch {
+        // Highlighting must continue even when the observer throws.
+      }
+      if (!box) return;
       if (!el) {
         box.style.display = "none";
         return;
