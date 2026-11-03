@@ -118,6 +118,29 @@ test("no matching files is an error, not a silent pass", () => {
   assert.match(r.out, /no report files matched/);
 });
 
+const globFixtures = [
+  { pattern: "reports/**/*.json", matches: ["reports/a.json"], excludes: ["reports/a.txt"] },
+  { pattern: "**/*.json", matches: ["a.json", "reports/nested/a.json"], excludes: ["a.txt", "node_modules/a.json", ".git/a.json"] },
+  { pattern: "reports/**/*.json", matches: ["reports/a.json", "reports/nested/a.json", "reports/nested/deep/a.json"], excludes: ["reports/a.txt", "reports/nested/a.json.bak", "reports-other/a.json"] },
+  { pattern: "reports/*.json", matches: ["reports/a.json", "reports/.json"], excludes: ["reports/nested/a.json", "reports/a.txt", "reports-other/a.json"] },
+  { pattern: "reports/?.json", matches: ["reports/a.json"], excludes: ["reports/.json", "reports/ab.json", "reports/x/y.json", "reports/a.txt"] },
+  { pattern: "reports?.json", matches: ["reportsa.json"], excludes: ["reports/.json", "reports.json", "reportsab.json"] },
+  { pattern: "reports/**.json", matches: ["reports/a.json", "reports/nested/deep/a.json"], excludes: ["reports/a.txt", "reports-other/a.json"] },
+  { pattern: "reports/a.+(x)[1]{$}^|.json", matches: ["reports/a.+(x)[1]{$}^|.json"], excludes: ["reports/aaax1.json", "reports/a.+(x)[1]{$}^|Xjson"] },
+  { pattern: "reports/**/*.json", matches: [], excludes: ["reports/a.txt", "reports-other/a.json", "node_modules/reports/a.json", ".git/reports/a.json"] },
+];
+
+for (const { pattern, matches, excludes } of globFixtures) {
+  test(`glob ${pattern} selects exactly ${JSON.stringify(matches)}`, () => {
+    const files = Object.fromEntries([...matches, ...excludes].map((name) => [name, goodReport]));
+    const r = runAction(files, { "INPUT_REPORTS-GLOB": pattern });
+    assert.equal(r.code, matches.length ? 0 : 1, r.out);
+    const selected = r.out.split("\n").filter((line) => line.startsWith("ok: ")).map((line) => line.slice(4));
+    assert.deepEqual(selected.sort(), [...matches].sort(), r.out);
+    if (!matches.length) assert.match(r.out, /no report files matched/);
+  });
+}
+
 test("runner max-report-size-kb input limits file size", () => {
   const r = runAction({ "reports/a.json": goodReport }, { "INPUT_MAX-REPORT-SIZE-KB": "0" });
   assert.equal(r.code, 1);

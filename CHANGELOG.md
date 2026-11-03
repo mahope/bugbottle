@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Match reports in the parent directory with Action globstars (`reports/**/*.json`),
+  and keep `?` within one path segment. Document and test the supported glob
+  dialect without adding dependencies (#153).
 - Read GitHub Action inputs with the runner's hyphenated environment names
   and append validation counts to `GITHUB_OUTPUT` instead of legacy stdout
   commands (#152).
