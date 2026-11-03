@@ -6,7 +6,7 @@ import type { BugReport } from "../src/report-core.ts";
 const R = DEFAULT_REPLACEMENT;
 
 test("query keys are decoded once for matching, preserving spelling and URL structure", () => {
-  for (const key of ["%74oken", "%54oKeN", "%61%70%69%5f%6b%65%79", "client_se%63ret", "pass%77ord", "%61uth"]) {
+  for (const key of ["%74oken", "%54oKeN", "%61%70%69%5f%6b%65%79", "client_se%63ret", "pass%77ord", "%61uth", "%74oken%", "%74oken%FF", "%FF%74oken", "%ZZ%74oken", "%74oken%E2%82"]) {
     const url = `/api?${key}=synthetic-credential&safe=a%26b&${key}=synthetic-repeat#section`;
     const expected = `/api?${key}=${R}&safe=a%26b&${key}=${R}#section`;
     assert.equal(scrubUrl(url), expected);

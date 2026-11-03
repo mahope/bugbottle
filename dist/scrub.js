@@ -49,14 +49,8 @@ function passesLuhn(digits) {
 const QUERY_PATTERN = /([?&][^?&=#\s]*=)[^&#\s]*/g;
 const redactQuery = (match, groups, replacement) => {
     // The prefix contains only the key and its surrounding query delimiters.
-    let key = groups[0] ?? "";
-    try {
-        // Sensitive names contain only unreserved letters, decoded by decodeURI.
-        key = decodeURI(key);
-    }
-    catch {
-        // Malformed escapes must not prevent literal sensitive names matching.
-    }
+    // URLSearchParams decodes once, tolerating malformed escapes and invalid UTF-8.
+    const key = new URLSearchParams(groups[0]).keys().next().value ?? "";
     return /auth|key|password|secret|token/i.test(key) ? keepPrefix(match, groups, replacement) : match;
 };
 /**

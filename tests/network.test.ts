@@ -294,9 +294,9 @@ test("encoded query credentials cannot reach a report through network evidence",
   await withBrowser(async ({ answer }) => {
     initNetwork();
     answer({ status: 500 });
-    await fetch("/api?%74oken=synthetic-credential&safe=1&%74oken=synthetic-repeat#section");
+    await fetch("/api?%74oken%=synthetic-credential&safe=1&%74oken%FF=synthetic-repeat#section");
     const report = buildReport({ type: "bug", message: "Request failed", scrub: scrubReport });
-    assert.equal(report.network?.[0]?.url, "/api?%74oken=[redacted]&safe=1&%74oken=[redacted]");
+    assert.equal(report.network?.[0]?.url, "/api?%74oken%=[redacted]&safe=1&%74oken%FF=[redacted]");
     assert.ok(!JSON.stringify(report).includes("synthetic-"));
   });
 });
