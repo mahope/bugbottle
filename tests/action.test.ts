@@ -7,8 +7,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,15 +23,28 @@ function runAction(files: Record<string,string>, env: Record<string,string> = {}
       mkdirSync(join(p, ".."), { recursive: true });
       writeFileSync(p, content);
     }
-    const out = execFileSync(process.execPath, [ACTION], {
+    const outputFile = join(dir, "github-output");
+    writeFileSync(outputFile, "existing=value\n");
+    const runnerEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      "INPUT_REPORTS-GLOB": GLOB,
+      "INPUT_REQUIRE-SCREENSHOT": "false",
+      "INPUT_MAX-REPORT-SIZE-KB": "4096",
+      GITHUB_OUTPUT: outputFile,
+      ...env,
+    };
+    if (env.GITHUB_OUTPUT === "") delete runnerEnv.GITHUB_OUTPUT;
+    const result = spawnSync(process.execPath, [ACTION], {
       cwd: dir,
-      env: { ...process.env, ...env, INPUT_REPORTS_GLOB: env.INPUT_REPORTS_GLOB ?? GLOB },
+      env: runnerEnv,
       encoding: "utf8",
     });
-    return { code: 0, out };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
-    return { code: e.status ?? 1, out: String(e.stdout ?? "") + String(e.stderr ?? "") };
+    assert.ifError(result.error);
+    return {
+      code: result.status,
+      out: result.stdout + result.stderr,
+      outputs: readFileSync(outputFile, "utf8"),
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -53,14 +66,16 @@ test("valid reports pass and exit 0", () => {
   const r = runAction({ "reports/a.json": goodReport, "reports/b.json": JSON.stringify({ type: "idea", message: "hi", context: { url: "", viewport: "", userAgent: "" } }) });
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /2 valid, 0 invalid/);
-  assert.match(r.out, /::set-output name=valid-count::2/);
+  assert.equal(r.outputs, "existing=value\nvalid-count=2\ninvalid-count=0\n");
+  assert.doesNotMatch(r.out, /::set-output/);
 });
 
 test("malformed report fails with ::error annotations", () => {
   const r = runAction({ "reports/bad.json": JSON.stringify({ type: "nope", message: "" }) });
   assert.equal(r.code, 1);
   assert.match(r.out, /::error::reports\/bad\.json: type must be one of/);
-  assert.match(r.out, /::set-output name=invalid-count::1/);
+  assert.equal(r.outputs, "existing=value\nvalid-count=0\ninvalid-count=1\n");
+  assert.doesNotMatch(r.out, /::set-output/);
 });
 
 test("non-JSON file fails cleanly", () => {
@@ -87,18 +102,35 @@ test("valid tiny PNG passes; require-screenshot enforces presence", () => {
   assert.equal(ok.code, 0, ok.out);
 
   const missing = JSON.stringify({ type: "bug", message: "m", context: {} });
-  const enforced = runAction({ "reports/s.json": missing }, { INPUT_REQUIRE_SCREENSHOT: "true" });
+  const enforced = runAction({ "reports/s.json": missing }, { "INPUT_REQUIRE-SCREENSHOT": "true" });
   assert.equal(enforced.code, 1);
   assert.match(enforced.out, /screenshot required but absent/);
 });
 
 test("glob matches only report files", () => {
-  const r = runAction({ "src/code.js": "console.log(1)", "reports/a.json": goodReport }, { INPUT_REPORTS_GLOB: "reports/*.json" });
+  const r = runAction({ "src/code.js": "console.log(1)", "reports/a.json": goodReport }, { "INPUT_REPORTS-GLOB": "reports/*.json" });
   assert.equal(r.code, 0, r.out);
 });
 
 test("no matching files is an error, not a silent pass", () => {
-  const r = runAction({}, { INPUT_REPORTS_GLOB: "reports/*.json" });
+  const r = runAction({}, { "INPUT_REPORTS-GLOB": "reports/*.json" });
   assert.equal(r.code, 1);
   assert.match(r.out, /no report files matched/);
+});
+
+test("runner max-report-size-kb input limits file size", () => {
+  const r = runAction({ "reports/a.json": goodReport }, { "INPUT_MAX-REPORT-SIZE-KB": "0" });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /file larger than 0 KB/);
+  assert.equal(r.outputs, "existing=value\nvalid-count=0\ninvalid-count=1\n");
+});
+
+test("standalone validation without GITHUB_OUTPUT keeps its exit status and summary", () => {
+  for (const [report, code] of [[goodReport, 0], ["{}", 1]] as const) {
+    const r = runAction({ "reports/a.json": report }, { GITHUB_OUTPUT: "" });
+    assert.equal(r.code, code, r.out);
+    assert.match(r.out, /bugbottle: .* report\(s\)/);
+    assert.doesNotMatch(r.out, /::set-output/);
+    assert.equal(r.outputs, "existing=value\n");
+  }
 });

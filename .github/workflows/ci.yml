@@ -38,6 +38,28 @@ jobs:
       - run: npm run build
       - run: npm run smoke:workers
 
+  action-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create a report fixture
+        run: |
+          mkdir -p action-smoke
+          printf '%s\n' '{"type":"bug","message":"Smoke test"}' > action-smoke/report.json
+      - uses: ./action
+        id: reports
+        with:
+          reports-glob: "action-smoke/*.json"
+          require-screenshot: 'false'
+          max-report-size-kb: '1'
+      - name: Check runner step outputs
+        env:
+          VALID_COUNT: ${{ steps.reports.outputs['valid-count'] }}
+          INVALID_COUNT: ${{ steps.reports.outputs['invalid-count'] }}
+        run: |
+          test "$VALID_COUNT" = '1'
+          test "$INVALID_COUNT" = '0'
+
   check:
     runs-on: ubuntu-latest
     strategy:
@@ -572,6 +594,9 @@ jobs:
       # The pixels rather than the accessibility tree: a blur that did not
       # destroy what it covered fails here.
       - run: npm run smoke:annotate
+      - name: Compiled Vue and Svelte packed-consumer forms
+        timeout-minutes: 2
+        run: npm run smoke:forms
       - name: IndexedDB persistence and concurrent queue delivery
         timeout-minutes: 2
         run: npm run smoke:queue-idb
