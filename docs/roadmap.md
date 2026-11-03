@@ -18,6 +18,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — stale whole-page captures cannot change a reset, opted-out or
+destroyed form, a newer attachment or submission status (#134).
+
 **Unreleased** — form reset and destroy detach pending submissions while
 preserving original delivery and queue ownership; Svelte adapter coverage (#133).
 

@@ -233,28 +233,31 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
 
   // Delivery belongs to its original payload; only the current draft may be updated.
   let draft = 0;
-  let capturing = false;
-  // Bumped by every picture that lands, so a capture that finishes or fails
-  // after `attachScreenshot` does not put the whole page back over the area,
-  // or turn it off.
+  let capturing: number | null = null;
+  // Only the current generation may change the form when a render settles.
   let shots = 0;
   let picking: AbortController | null = null;
+  const invalidateCapture = () => {
+    shots++;
+    capturing = null;
+  };
+  const afterCapture = () => state.status.kind === "capturing" ? { kind: "idle" } as const : state.status;
   let submitting: Promise<boolean> | null = null;
 
   const capture = async () => {
     const renderer = opts.screenshot;
-    if (!renderer || capturing) return;
-    capturing = true;
+    if (!renderer || capturing !== null) return;
     const mine = ++shots;
+    capturing = mine;
     set({ status: { kind: "capturing" } });
     try {
       const dataUrl = await captureScreenshot(renderer, { mask: opts.mask });
-      if (mine !== shots) return set({ status: { kind: "idle" } });
+      if (mine !== shots) return;
       set({ screenshot: dataUrl, screenshotRegion: null, status: { kind: "idle" } });
     } catch (err) {
       // A picture that was overtaken has failed nobody, and turning the
       // attachment off here would take the newer one off the report.
-      if (mine !== shots) return set({ status: { kind: "idle" } });
+      if (mine !== shots) return;
       // A failed picture must never block the report, so this only turns the
       // attachment off and says why.
       const tooLarge = err instanceof ScreenshotTooLargeError;
@@ -268,7 +271,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
         },
       });
     } finally {
-      capturing = false;
+      if (capturing === mine) capturing = null;
     }
   };
 
@@ -293,15 +296,23 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       if (!canShoot()) return;
       set({ includeScreenshot: checked });
       if (checked && !state.screenshot) void capture();
-      if (!checked) set({ screenshot: null, screenshotRegion: null });
+      if (!checked) {
+        invalidateCapture();
+        set({
+          screenshot: null,
+          screenshotRegion: null,
+          status: afterCapture(),
+        });
+      }
     },
 
     recapture: capture,
 
     attachScreenshot(shot) {
       if (!shot) return;
-      shots++;
+      invalidateCapture();
       set({
+        status: afterCapture(),
         screenshot: shot.dataUrl,
         screenshotRegion: shot.region ?? null,
         includeScreenshot: true,
@@ -351,6 +362,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
 
     /** Clears the form and any status, ready for a new report. */
     reset() {
+      invalidateCapture();
       draft++;
       submitting = null;
       picking?.abort();
@@ -379,6 +391,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
       return pending;
 
       async function deliver(): Promise<boolean> {
+        invalidateCapture();
         const mine = draft;
         const submissionOptions = opts;
         const ownsDraft = () => mine === draft;
@@ -477,6 +490,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     // clicks. If the form goes away mid-pick — a modal closed, a route change —
     // they must go with it, or every click on the page is eaten until Escape.
     destroy() {
+      invalidateCapture();
       draft++;
       submitting = null;
       picking?.abort();
