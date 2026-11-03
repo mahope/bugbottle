@@ -252,9 +252,7 @@ export function fileStore(options) {
         dir,
         store,
         async list() {
-            // A copy: the index is how the directory is remembered, and a caller
-            // that sorted or spliced the array it was handed would be editing it.
-            return [...(await ensureIndex())];
+            return (await ensureIndex()).map((entry) => ({ ...entry }));
         },
         async read(id, readOptions = {}) {
             if (!UUID.test(id))
@@ -276,7 +274,7 @@ export function fileStore(options) {
                 drop(id);
                 return null;
             }
-            const found = { entry, report };
+            const found = { entry: { ...entry }, report };
             if (readOptions.screenshot && entry.screenshot) {
                 try {
                     found.screenshot = await readFile(join(dir, `${entry.id}.png`));
@@ -302,7 +300,7 @@ export function fileStore(options) {
                 index.splice(0, index.length, ...fresh);
             else
                 index = fresh;
-            return [...index];
+            return index.map((entry) => ({ ...entry }));
         },
         async remove(id) {
             if (!UUID.test(id))

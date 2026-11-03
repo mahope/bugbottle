@@ -18,6 +18,11 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — file-store entry snapshots isolate caller mutations from
+lookup, deletion and retention (#185).
+**Unreleased** — packed React 18.3.1 and 19.3.0 consumers check StrictMode
+forms, pending-delivery cleanup, remount and matching TypeScript types (#156).
+
 **Unreleased** — form reset and destroy detach pending submissions while
 preserving original delivery and queue ownership; Svelte adapter coverage (#133).
 
