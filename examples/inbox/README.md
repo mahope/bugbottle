@@ -433,14 +433,18 @@ message and exact PNG bytes again. Each HTTP request has a five-second timeout;
 Docker commands have a 30-second timeout unless noted above.
 
 Failures identify the phase and report container status, exit code, OOM state,
-health status and probe timings/exit codes. Raw container logs, health output,
-environment variables and report bodies are deliberately omitted to keep
+health status and probe timings/exit codes. Docker failures distinguish timeouts,
+spawn errors, signals and exit codes. Failed builds also print the last 4096
+characters of each output stream, with generated fixture values redacted.
+Raw container logs, health output, environment variables and report bodies are
+deliberately omitted to keep
 credentials and report contents out of CI logs. The password is generated for
 each run and passed through the environment rather than command arguments.
 Containers, the named volume and the temporary image are removed on success,
 failure, SIGINT and SIGTERM. Like any cleanup handler, this cannot run after
-SIGKILL or a lost Docker daemon; resource names begin `bugbottle-inbox-smoke-`
-for identifying leftovers on a persistent runner. CI also caps the job at ten
+SIGKILL. A lost Docker daemon makes cleanup fail with a nonzero exit code rather
+than treating an unknown resource state as absence; resource names begin
+`bugbottle-inbox-smoke-` for identifying leftovers on a persistent runner. CI also caps the job at ten
 minutes.
 
 ## Please read this part

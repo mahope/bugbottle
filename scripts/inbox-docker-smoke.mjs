@@ -20,7 +20,20 @@ function docker(args, { optional = false, timeout = 30_000 } = {}) {
     maxBuffer: 8 * 1024 * 1024,
   });
   if (!optional && (result.error || result.status !== 0)) {
-    throw new SmokeError(`Docker ${args[0]} failed during ${phase} (exit ${result.status ?? "timeout/spawn error"})`);
+    const reason = result.error?.code === "ETIMEDOUT" ? `timed out after ${timeout} ms`
+      : result.error ? `spawn error ${result.error.code}`
+      : result.signal ? `signal ${result.signal}` : `exit ${result.status}`;
+    if (args[0] === "build") {
+      // Build receives no report or credentials; redact our generated fixture too.
+      for (const output of [result.stdout, result.stderr]) {
+        let safe = output || "";
+        for (const secret of [authorization, password, message, png.toString("base64")]) {
+          safe = safe.replaceAll(secret, "[redacted]");
+        }
+        if (safe) console.error(`Docker build output (last 4096 characters):\n${safe.slice(-4096)}`);
+      }
+    }
+    throw new SmokeError(`Docker ${args[0]} failed during ${phase} (${reason})`);
   }
   return result;
 }
@@ -52,7 +65,15 @@ function cleanup() {
       // Missing resources are expected after a partial startup; verify absence.
       const inspect = args[0] === "rm" ? ["container", "inspect", name]
         : [args[0], "inspect", args.at(-1)];
-      if (docker(inspect, { optional: true }).status === 0) failed = true;
+      const state = docker(inspect, { optional: true });
+      const resource = args.at(-1);
+      const kind = args[0] === "rm" ? "container" : args[0];
+      const missing = kind === "volume"
+        ? `Error response from daemon: get ${resource}: no such volume`
+        : `Error: No such ${kind}: ${resource}`;
+      const detail = state.stderr?.trim();
+      const absent = detail === missing || detail === missing.replace(/^Error:/, "Error response from daemon:");
+      if (state.error || state.status !== 1 || !absent) failed = true;
     }
   }
   if (failed) {
