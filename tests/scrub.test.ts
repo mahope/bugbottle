@@ -1,9 +1,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scrubReport, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT } from "../src/scrub.ts";
+import { scrubReport, scrubUrl, BUILTIN_SCRUBBERS, DEFAULT_REPLACEMENT } from "../src/scrub.ts";
 import type { BugReport } from "../src/report-core.ts";
 
 const R = DEFAULT_REPLACEMENT;
+
+test("query keys are decoded once for matching, preserving spelling and URL structure", () => {
+  for (const key of ["%74oken", "%54oKeN", "%61%70%69%5f%6b%65%79", "client_se%63ret", "pass%77ord", "%61uth"]) {
+    const url = `/api?${key}=synthetic-credential&safe=a%26b&${key}=synthetic-repeat#section`;
+    const expected = `/api?${key}=${R}&safe=a%26b&${key}=${R}#section`;
+    assert.equal(scrubUrl(url), expected);
+    assert.equal(scrubReport(report(url, url)).context.url, expected);
+    assert.equal(scrubReport(report(url, url)).message, url, "prose is not a URL field");
+    assert.equal(scrubUrl(url, "***"), expected.replaceAll(R, "***"));
+    assert.equal(scrubReport(report("x", url), { replacement: "***" }).context.url, expected.replaceAll(R, "***"));
+    assert.equal(scrubReport(report("x", url), { keep: ["query"] }).context.url, url);
+  }
+});
+
+test("malformed query escapes do not throw and decoding is not recursive", () => {
+  const url = "/api?bad%=ordinary&%ZZ=ordinary&token%=synthetic-credential&%2574oken=ordinary&safe=%74oken%3Dvalue#section";
+  const expected = url.replace("synthetic-credential", R);
+  assert.equal(scrubUrl(url), expected);
+  assert.equal(scrubReport(report("x", url)).context.url, expected);
+});
 
 /** A minimal valid report, with the message and url the test cares about. */
 function report(message: string, url = "/orders/42"): BugReport & Record<string, unknown> {

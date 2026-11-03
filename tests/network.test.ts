@@ -9,6 +9,7 @@ import {
 import { buildReport } from "../src/send.ts";
 import { normaliseNetwork, MAX_NETWORK_ENTRIES } from "../src/report-core.ts";
 import { toMarkdown } from "../src/markdown.ts";
+import { scrubReport } from "../src/scrub.ts";
 
 /**
  * Node has `fetch` but no `XMLHttpRequest` and no `location`, so both are
@@ -286,6 +287,17 @@ test("sensitive query values are redacted, ordinary ones are kept", async () => 
     answer({ status: 500 });
     await fetch("/api/orders?tab=notes&token=sk-live-9f2&page=2");
     assert.equal(getNetwork()[0]?.url, "/api/orders?tab=notes&token=[redacted]&page=2");
+  });
+});
+
+test("encoded query credentials cannot reach a report through network evidence", async () => {
+  await withBrowser(async ({ answer }) => {
+    initNetwork();
+    answer({ status: 500 });
+    await fetch("/api?%74oken=synthetic-credential&safe=1&%74oken=synthetic-repeat#section");
+    const report = buildReport({ type: "bug", message: "Request failed", scrub: scrubReport });
+    assert.equal(report.network?.[0]?.url, "/api?%74oken=[redacted]&safe=1&%74oken=[redacted]");
+    assert.ok(!JSON.stringify(report).includes("synthetic-"));
   });
 });
 
