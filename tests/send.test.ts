@@ -10,6 +10,60 @@ import {
 import { initConsoleBuffer, resetConsoleBuffer } from "../src/console-buffer.ts";
 import { MAX_CONSOLE_ENTRIES, utf8Length } from "../src/report-core.ts";
 
+const drainMicrotasks = async () => {
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+};
+
+for (const mode of ["network", "timeout", "cancel"] as const) {
+  test(`a hanging onError is bounded after ${mode} failure`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const controller = new AbortController();
+    const original = new TypeError("offline");
+    let observed: unknown;
+    let calls = 0;
+    let settlements = 0;
+    let rejectObserver!: (reason: unknown) => void;
+    const remove = t.mock.method(controller.signal, "removeEventListener");
+    const outcome = sendReport("/x", buildReport({ type: "bug", message: "x" }), {
+      timeoutMs: 5,
+      signal: controller.signal,
+      fetch: async (_url, init) => {
+        if (mode === "network") throw original;
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      },
+      onError: (_report, error) => {
+        calls++;
+        observed = error;
+        return new Promise<void>((_resolve, reject) => { rejectObserver = reject; });
+      },
+    }).then(() => assert.fail("delivery must fail"), (error: unknown) => {
+      settlements++;
+      return error;
+    });
+    if (mode === "cancel") controller.abort(original);
+    if (mode === "timeout") t.mock.timers.tick(5);
+    await drainMicrotasks();
+    assert.equal(calls, 1);
+    t.mock.timers.tick(999);
+    await drainMicrotasks();
+    assert.equal(settlements, 0, "cleanup gets its own budget after delivery ends");
+    t.mock.timers.tick(1);
+    await drainMicrotasks();
+    assert.equal(settlements, 1, "a hung observer cannot hold the failure forever");
+    assert.equal(await outcome, observed);
+    if (mode === "timeout") assert.ok(observed instanceof SendTimeoutError);
+    else assert.equal(observed, original);
+    assert.equal(remove.mock.callCount(), 1);
+    rejectObserver(new Error("late observer rejection"));
+    await drainMicrotasks();
+    t.mock.timers.runAll();
+    assert.equal(settlements, 1);
+    assert.equal(calls, 1);
+  });
+}
+
 afterEach(() => resetConsoleBuffer());
 
 /** A fetch stand-in that records the request and answers with the given body. */
