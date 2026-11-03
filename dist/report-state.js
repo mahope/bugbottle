@@ -260,8 +260,19 @@ export function createReportState(options) {
                         set({ status: { kind: "sent", id } });
                         if (ownsDraft())
                             clearForm();
-                        if (ownsDraft())
-                            submissionOptions.onSent?.(id);
+                        try {
+                            if (ownsDraft())
+                                submissionOptions.onSent?.(id);
+                        }
+                        catch (err) {
+                            // Host code must not turn an already delivered report into a retry.
+                            try {
+                                console.error(err);
+                            }
+                            catch {
+                                // A host-provided logger must not change the delivery result either.
+                            }
+                        }
                     }
                     return true;
                 }

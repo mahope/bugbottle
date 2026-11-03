@@ -68,7 +68,7 @@ export type UseBugReportOptions = {
     credentials?: SendOptions["credentials"];
     /** Give up on the endpoint after this long. Default 15 000 ms. */
     timeoutMs?: SendOptions["timeoutMs"];
-    /** Called after a successful submit. */
+    /** Called after a successful submit. Synchronous exceptions are logged to console.error. */
     onSent?: (id: string | undefined) => void;
     /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
     parseError?: SendOptions["parseError"];

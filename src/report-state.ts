@@ -83,7 +83,7 @@ export type UseBugReportOptions = {
   credentials?: SendOptions["credentials"];
   /** Give up on the endpoint after this long. Default 15 000 ms. */
   timeoutMs?: SendOptions["timeoutMs"];
-  /** Called after a successful submit. */
+  /** Called after a successful submit. Synchronous exceptions are logged to console.error. */
   onSent?: (id: string | undefined) => void;
   /** Turn a failed response into a message. Defaults to the body's `error`/`message`. */
   parseError?: SendOptions["parseError"];
@@ -432,7 +432,16 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           if (ownsDraft()) {
             set({ status: { kind: "sent", id } });
             if (ownsDraft()) clearForm();
-            if (ownsDraft()) submissionOptions.onSent?.(id);
+            try {
+              if (ownsDraft()) submissionOptions.onSent?.(id);
+            } catch (err) {
+              // Host code must not turn an already delivered report into a retry.
+              try {
+                console.error(err);
+              } catch {
+                // A host-provided logger must not change the delivery result either.
+              }
+            }
           }
           return true;
         } catch (err) {
