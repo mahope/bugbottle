@@ -19,6 +19,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Forward receiver deadlines through the Resend, webhook, GitHub and Linear
+  adapters to HTTP requests and response reads; their direct helpers now
+  accept an optional abort signal (#203).
+
 - Return independent file-store entry snapshots from `list`, `read` and
   `refresh`, preventing caller mutations from corrupting lookup or retention (#185).
 - Drop screenshot regions together with pictures when queue storage refuses a

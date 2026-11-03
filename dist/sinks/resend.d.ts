@@ -31,6 +31,8 @@ export type SendReportEmailOptions = {
     replyTo?: string | string[] | false;
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
+    /** Cancels the request and response-body read. */
+    signal?: AbortSignal;
     /** Decoded PNG bytes from `decodeScreenshotDataUrl`, attached as a file. */
     screenshot?: Uint8Array;
     /**

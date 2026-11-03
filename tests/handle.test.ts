@@ -2111,6 +2111,20 @@ for (const [name, makeSink] of legacyHttpSinks) {
     assert.equal(calls, 1);
   });
 
+  test(`${name} propagates cancellation while reading a provider response`, async () => {
+    const controller = new AbortController();
+    const sink = makeSink(async (_url, init) => new Response(new ReadableStream({
+      start(stream) {
+        init?.signal?.addEventListener("abort", () => stream.error(init.signal?.reason), { once: true });
+        queueMicrotask(() => controller.abort());
+      },
+    }), { status: name === "webhook" ? 400 : 200 }));
+    const report = { ...body, receivedAt: new Date().toISOString() } as ValidatedReport;
+    await assert.rejects(() => Promise.resolve(sink(report, {
+      markdown: "report", signal: controller.signal,
+    })), { name: "AbortError" });
+  });
+
   test(`${name} cancels a stalled response body at the receiver deadline and continues`, async () => {
     let cancelled = false;
     let continued = false;

@@ -89,9 +89,11 @@ export async function sendReportEmail(report, options) {
             { filename: "screenshot.png", content: bytesToBase64(options.screenshot) },
         ];
     }
+    options.signal?.throwIfAborted();
     const doFetch = options.fetch ?? globalThis.fetch;
     const response = await doFetch(RESEND_ENDPOINT, {
         method: "POST",
+        ...(options.signal ? { signal: options.signal } : {}),
         headers: {
             Authorization: `Bearer ${options.apiKey}`,
             "Content-Type": "application/json",
@@ -99,6 +101,7 @@ export async function sendReportEmail(report, options) {
         body: JSON.stringify(payload),
     });
     const body = await readBody(response);
+    options.signal?.throwIfAborted();
     if (!response.ok) {
         const fallback = `Resend refused the report with status ${response.status}`;
         throw new SinkError(messageFromBody(body, fallback), response.status, body);

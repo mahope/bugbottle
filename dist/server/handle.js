@@ -907,6 +907,7 @@ function withStoredScreenshot(options, ctx) {
 export function toResend(options) {
     return async (report, ctx) => await sendReportEmail(report, {
         ...withStoredScreenshot(options, ctx),
+        signal: ctx.signal,
         ...(ctx.screenshot ? { screenshot: ctx.screenshot } : {}),
     });
 }
@@ -914,15 +915,16 @@ export function toResend(options) {
 export function toWebhook(options) {
     return async (report, ctx) => await sendReportWebhook(report, {
         ...options,
+        signal: ctx.signal,
         markdown: { ...options.markdown, ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}) },
     });
 }
 /** Files every report as a GitHub issue, linking the stored screenshot. */
 export function toGithub(options) {
-    return async (report, ctx) => await createGithubIssue(report, withStoredScreenshot(options, ctx));
+    return async (report, ctx) => await createGithubIssue(report, { ...withStoredScreenshot(options, ctx), signal: ctx.signal });
 }
 /** Files every report as a Linear issue, linking the stored screenshot. */
 export function toLinear(options) {
-    return async (report, ctx) => await createLinearIssue(report, withStoredScreenshot(options, ctx));
+    return async (report, ctx) => await createLinearIssue(report, { ...withStoredScreenshot(options, ctx), signal: ctx.signal });
 }
 //# sourceMappingURL=handle.js.map

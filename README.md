@@ -6348,6 +6348,13 @@ connection open. `sinkTimeoutMs` (10 s by default) does the same for a
 delivery: a sink that has not answered by then is abandoned and counted in
 `sinkErrors` and `onSinkError` exactly like one that threw, and the sink is
 handed an `AbortSignal` in its context that it can pass to `fetch`.
+`toResend`, `toWebhook`, `toGithub` and `toLinear` forward that exact signal
+to their HTTP request, including response-body consumption. A timeout still
+allows later sinks to run. The direct helpers `sendReportEmail`,
+`sendReportWebhook`, `createGithubIssue` and `createLinearIssue` also accept
+an optional `signal: AbortSignal`; an already-aborted signal rejects before
+calling `fetch`. Omitting it preserves delivery without cancellation.
+An injected `fetch` must honor the signal for both the request and its body.
 
 `store` receives a `ValidatedReport` — `{ type, message, context, console,
 elements, breadcrumbs, network, extra, receivedAt }`, plus `contact` when the

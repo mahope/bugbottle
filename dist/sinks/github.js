@@ -65,9 +65,11 @@ export async function createGithubIssue(report, options) {
     if (options.labels && options.labels.length > 0)
         payload.labels = options.labels;
     const url = `${GITHUB_API}/repos/${encodeURIComponent(options.owner)}/${encodeURIComponent(options.repo)}/issues`;
+    options.signal?.throwIfAborted();
     const doFetch = options.fetch ?? globalThis.fetch;
     const response = await doFetch(url, {
         method: "POST",
+        ...(options.signal ? { signal: options.signal } : {}),
         headers: {
             Authorization: `Bearer ${options.token}`,
             Accept: "application/vnd.github+json",
@@ -80,6 +82,7 @@ export async function createGithubIssue(report, options) {
         body: JSON.stringify(payload),
     });
     const body = await readBody(response);
+    options.signal?.throwIfAborted();
     if (!response.ok) {
         const fallback = `GitHub refused the issue with status ${response.status}`;
         throw new SinkError(messageFromBody(body, fallback), response.status, body);

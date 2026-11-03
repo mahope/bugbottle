@@ -38,14 +38,17 @@ function bodyFor(report, format, markdown) {
 export async function sendReportWebhook(report, options) {
     const format = options.format ?? "json";
     const markdown = toMarkdown(report, options.markdown ?? {});
+    options.signal?.throwIfAborted();
     const doFetch = options.fetch ?? globalThis.fetch;
     const response = await doFetch(options.endpoint, {
         method: "POST",
+        ...(options.signal ? { signal: options.signal } : {}),
         headers: { "Content-Type": "application/json", ...options.headers },
         body: JSON.stringify(bodyFor(report, format, markdown)),
     });
     if (!response.ok) {
         const body = await readBody(response);
+        options.signal?.throwIfAborted();
         const fallback = `The webhook refused the report with status ${response.status}`;
         throw new SinkError(messageFromBody(body, fallback), response.status, body);
     }
