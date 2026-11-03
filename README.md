@@ -8446,7 +8446,8 @@ endpoint exports reports as JSON files (e.g. into a repository or artifact)
 and you want malformed ones caught before they reach your issue tracker.
 
 ```yaml
-- uses: mahope/bugbottle@v0
+- uses: mahope/bugbottle/action@main
+  id: reports
   with:
     reports-glob: "reports/*.json"     # required
     require-screenshot: false          # fail reports without a screenshot
@@ -8454,7 +8455,44 @@ and you want malformed ones caught before they reach your issue tracker.
 ```
 
 Outputs `valid-count` and `invalid-count`. The job fails if any report is
-malformed or no files match. Zero dependencies — installs in about a second.
+malformed or no files match. Read the counts with
+`${{ steps.reports.outputs['valid-count'] }}` and
+`${{ steps.reports.outputs['invalid-count'] }}`. Counts are appended to the
+runner-provided `GITHUB_OUTPUT` file after validation, even when reports fail.
+Zero runtime dependencies.
+
+After checkout, this repository can invoke the action with `uses: ./action`.
+For standalone use, pass the same environment names the runner supplies
+(hyphens are preserved):
+
+```bash
+env 'INPUT_REPORTS-GLOB=reports/*.json' \
+  'INPUT_REQUIRE-SCREENSHOT=false' 'INPUT_MAX-REPORT-SIZE-KB=4096' \
+  node action/index.cjs
+```
+
+Without `GITHUB_OUTPUT`, standalone validation still prints its summary and
+returns the validation exit status, but exports no step outputs. Set
+`GITHUB_OUTPUT` to a writable file path to append `valid-count=<number>` and
+`invalid-count=<number>` lines; no legacy stdout output commands are emitted.
+
+`reports-glob` matches the whole path relative to the workspace, using `/`
+as the directory separator. Matching is case-sensitive:
+
+| Pattern | Meaning |
+| --- | --- |
+| `*` | Zero or more characters within one path segment |
+| `?` | Exactly one character within one path segment |
+| `**` | Zero or more characters, including directory separators |
+| `**/` | Zero or more complete directory segments |
+
+For example, `reports/**/*.json` includes `reports/a.json`,
+`reports/nested/a.json` and deeper reports. `reports/*.json` includes only
+direct children. Neither matches `.txt` files or `reports-other/a.json`.
+Single `*` and `?` never cross `/` or `\`. Other characters, including regex
+punctuation, are literal; character classes, brace expansion, negation,
+escape syntax and multiple patterns are not supported. Dotfiles are included,
+but `.git` and `node_modules` directories are always skipped.
 
 `max-report-size-kb` defaults to `4096`, with 1 KB = 1024 bytes. Set it to a
 positive safe integer (at most `9007199254740991`), using decimal digits only.
