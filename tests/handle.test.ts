@@ -747,6 +747,31 @@ test("overlapping failed stores return errors and release the key for retry", as
   resetDedupe();
 });
 
+test("dedupe expiry starts after storage and releases completed in-flight entries", async () => {
+  resetDedupe();
+  const entered = gate();
+  const pending = gate();
+  let writes = 0;
+  const options = {
+    dedupe: { windowMs: 20 },
+    store: async () => {
+      writes += 1;
+      if (writes === 1) { entered.release(); await pending.promise; }
+      return { id: "rep_expiry" };
+    },
+  };
+  const first = handleReport(post(body), options);
+  await entered.promise;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  pending.release();
+  await first;
+  assert.equal((await handleReport(post(body), options)).status, 200);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal((await handleReport(post(body), options)).status, 201);
+  assert.equal(writes, 2);
+  resetDedupe();
+});
+
 test("different dedupe keys store concurrently", async () => {
   resetDedupe();
   const entered = gate();

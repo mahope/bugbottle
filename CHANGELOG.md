@@ -16,6 +16,8 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Coalesce overlapping receiver requests by the built-in dedupe key into one
+  storage and delivery attempt; release failed attempts for retry (#164).
 - Read GitHub Action inputs with the runner's hyphenated environment names
   and append validation counts to `GITHUB_OUTPUT` instead of legacy stdout
   commands (#152).
