@@ -1963,8 +1963,8 @@ test("a throwing sink observer preserves storage, sink order and original errors
   const response = await handleReport(post(body), {
     store: () => { order.push("store"); return { id: "saved" }; },
     sinks: [
-      () => { order.push("first"); throw failure; },
-      () => { order.push("second"); },
+      async () => { order.push("first"); throw failure; },
+      async () => { order.push("second"); },
     ],
     onSinkError: (error, index) => {
       assert.equal(error, failure);
@@ -2019,7 +2019,7 @@ for (const path of ["rate limit", "dedupe get", "dedupe set", "screenshot"] as c
       } : {}),
       ...(path === "screenshot" ? { screenshot: fail } : {}),
       store: () => ({ id: "saved" }),
-      sinks: [() => { delivered += 1; }],
+      sinks: [async () => { delivered += 1; }],
       onError: (error) => { observed.push(error); throw new Error("observer failed"); },
       onDecision: (decision) => { decisions += 1; assert.equal(decision.reason, "stored"); },
     });

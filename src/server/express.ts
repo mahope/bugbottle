@@ -27,6 +27,7 @@
  * line tells nobody anything the first did not.
  */
 
+import { notifyObserver } from "./observer.ts";
 import {
   handleReport,
   clientScheme,
@@ -223,7 +224,8 @@ export function expressHandler(
         if (signed || signature.require !== false) {
           if (!warnedAboutParsedBody) {
             warnedAboutParsedBody = true;
-            options.onError?.(
+            notifyObserver(
+              options.onError,
               new Error(
                 "bugbottle: expressHandler cannot verify a signature on a body that " +
                   "express.json() (or another parser) already turned into an object — " +
@@ -283,7 +285,7 @@ export function expressHandler(
     })().catch((err: unknown) => {
       // Only the translation can fail here — handleReport answers 500 itself —
       // but a rejected promise in a route is a crashed process in Node.
-      options.onError?.(err);
+      notifyObserver(options.onError, err);
       try {
         res.status(500);
         res.send(JSON.stringify({ error: "Could not store the report" }));
