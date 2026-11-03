@@ -16,6 +16,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Preserve replacement drafts after reset or destroy when an earlier submission
+  succeeds or fails. Detached requests still deliver or queue their original
+  payload without updating the form or calling `onSent` (#133).
+
 - Give the site image's history-copy test its own dated Git repository, so it
   works in linked worktrees and shallow clones without relying on checkout
   history (#122).

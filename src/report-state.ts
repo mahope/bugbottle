@@ -171,6 +171,7 @@ export type ReportActions = {
   removeElement: (index: number) => void;
   open: () => void;
   submit: () => Promise<boolean>;
+  /** Clears the draft and detaches pending submissions without aborting delivery. */
   reset: () => void;
 };
 
@@ -180,7 +181,7 @@ export type ReportStateStore = {
   actions: ReportActions;
   /** Hand the store the current options. Adapters that re-render call it every time. */
   setOptions: (next: UseBugReportOptions) => void;
-  /** Aborts a pick in progress. Call when the form goes away. */
+  /** Aborts a pick and detaches pending submissions. Call when the form goes away. */
   destroy: () => void;
 };
 
@@ -229,6 +230,8 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     for (const listener of listeners) listener();
   };
 
+  // Delivery belongs to its original payload; only the current draft may be updated.
+  let draft = 0;
   let capturing = false;
   // Bumped by every picture that lands, so a capture that finishes or fails
   // after `attachScreenshot` does not put the whole page back over the area,
@@ -346,6 +349,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
 
     /** Clears the form and any status, ready for a new report. */
     reset() {
+      draft++;
       picking?.abort();
       const type = firstType();
       set({
@@ -361,6 +365,9 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     },
 
     async submit() {
+      const mine = draft;
+      const submissionOptions = opts;
+      const ownsDraft = () => mine === draft;
       const m = messages();
       if (!state.message.trim()) {
         set({ status: { kind: "error", reason: "empty", message: m.empty } });
@@ -408,21 +415,25 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
           }),
           sign: opts.sign,
         });
-        set({ status: { kind: "sent", id } });
-        clearForm();
-        opts.onSent?.(id);
+        if (ownsDraft()) {
+          set({ status: { kind: "sent", id } });
+          if (ownsDraft()) clearForm();
+          if (ownsDraft()) submissionOptions.onSent?.(id);
+        }
         return true;
       } catch (err) {
-        const queue = opts.queue;
+        const queue = submissionOptions.queue;
         const rejected = err instanceof SendFailedError &&
           err.status >= 400 && err.status < 500 && err.status !== 429;
         if (queue && report && !rejected) {
           queue.enqueue(report);
-          set({ status: { kind: "queued" } });
-          clearForm();
+          if (ownsDraft()) {
+            set({ status: { kind: "queued" } });
+            if (ownsDraft()) clearForm();
+          }
           return true;
         }
-        set({
+        if (ownsDraft()) set({
           status: {
             kind: "error",
             reason: "send-failed",
@@ -451,6 +462,7 @@ export function createReportState(options: UseBugReportOptions): ReportStateStor
     // clicks. If the form goes away mid-pick — a modal closed, a route change —
     // they must go with it, or every click on the page is eaten until Escape.
     destroy() {
+      draft++;
       picking?.abort();
     },
   };
