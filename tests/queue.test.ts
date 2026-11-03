@@ -1,5 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { setTimeout as wait } from "node:timers/promises";
 import {
   createQueue,
   SCREENSHOT_NOTE,
@@ -640,6 +641,63 @@ test("an asynchronous storage that refuses a write drops the picture too", async
   assert.deepEqual(stored[0]?.body.notes, [SCREENSHOT_NOTE]);
 });
 
+for (const asynchronous of [false, true]) {
+  test(`quota fallback removes regions with pictures (${asynchronous ? "async" : "sync"})`, async () => {
+    let stored: QueuedReport[] = [];
+    let refusePictures = false;
+    let refusals = 0;
+    const storage: QueueStorage = {
+      update(change) {
+        const write = () => {
+          const next = change(stored);
+          if (refusePictures && next.some((item) => item.body.screenshotDataUrl)) {
+            refusals++;
+            throw new Error("QuotaExceededError");
+          }
+          stored = JSON.parse(JSON.stringify(next)) as QueuedReport[];
+          return stored;
+        };
+        return asynchronous ? Promise.resolve().then(write) : write();
+      },
+    };
+    const queue = makeQueue({ endpoint: "/api/feedback", storage, fetch: fakeFetch(503).fetch });
+    const pictured = {
+      ...report("the crop explains the problem"),
+      screenshotDataUrl: "data:image/png;base64,AAAA",
+      screenshotRegion: {
+        mode: "area" as const,
+        rect: { x: 10, y: 20, width: 30, height: 40 },
+        viewport: { x: 10, y: 20, width: 30, height: 40 },
+      },
+      notes: ["Existing evidence note"],
+    };
+    queue.enqueue(pictured);
+    await until(() => stored.length === 1);
+    assert.deepEqual(stored[0]?.body, pictured, "a successful write keeps picture and region");
+
+    refusePictures = true;
+    const plain = report("no picture was taken");
+    queue.enqueue(plain);
+    await until(() => stored.length === 2);
+    const { screenshotDataUrl: _picture, screenshotRegion: _region, ...evidence } = pictured;
+    const expected = { ...evidence, notes: [...pictured.notes, SCREENSHOT_NOTE] };
+    assert.deepEqual(stored[0]?.body, expected, "only picture and region are removed");
+    assert.deepEqual(stored[1]?.body, plain, "reports without pictures are unchanged");
+
+    queue.enqueue(pictured);
+    await until(() => stored.length === 3);
+    assert.equal(refusals, 2, "two separate writes invoked quota fallback");
+    assert.deepEqual(stored.map((item) => item.body), [expected, plain, expected]);
+    queue.destroy();
+
+    const { fetch, calls } = fakeFetch(200);
+    const reloaded = makeQueue({ endpoint: "/api/feedback", storage, fetch });
+    assert.equal(await reloaded.flush(), 0);
+    assert.deepEqual(calls.map((call) => call.body), [expected, plain, expected]);
+    assert.deepEqual(stored, []);
+  });
+}
+
 test("a storage need only implement update", () => {
   // `read` was in the seam and never called: every path through the queue goes
   // through `update`, because it is the one that cannot race. A storage that
@@ -700,34 +758,23 @@ test("a queued report is delivered with a signature over the bytes that were sen
   assert.equal(match[2], await hmacHex(SIGN_KEY, `${match[1]}.${seen[0]?.body}`));
 });
 
-test("a retry after the backoff signs again, with a fresh timestamp", async () => {
-  // The first attempt fails, the queue's own timer runs the second a second
-  // later, and the two headers must differ: a signature minted when the report
-  // was written would be outside the server's skew window by the time the
-  // network came back, which is every report the queue exists to save.
+test("a retry after the backoff signs again, with a fresh timestamp", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });
   const { fetch, seen } = watchHeaders(fakeFetch(503, 200).fetch);
   const queue = makeQueue({
     endpoint: "/api/feedback",
     fetch,
     sign: createSigner({ key: SIGN_KEY }),
   });
-  // The retry is armed with the queue's own backoff timer, a second at least.
-  // A loaded CI runner has been seen to miss that inside the test's deadline,
-  // so the timer is shortened here rather than waited for: what is under test
-  // is the signature the retry mints, not the length of the pause before it.
-  const realSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = ((fn: () => void, ms?: number) =>
-    realSetTimeout(fn, Math.min(Number(ms ?? 0), 5))) as unknown as typeof globalThis.setTimeout;
-  try {
-    queue.enqueue(report("the outage it describes"));
-    await queue.flush();
-    assert.equal(seen.length, 1);
-    await until(() => seen.length === 2, 5_000);
-  } finally {
-    globalThis.setTimeout = realSetTimeout;
-  }
+  queue.enqueue(report("the outage it describes"));
+  assert.equal(await queue.flush(), 1);
+  assert.equal(seen.length, 1);
+  t.mock.timers.tick(999);
+  assert.equal(seen.length, 1, "the retry must wait for the backoff");
+  t.mock.timers.tick(1);
+  const deadline = performance.now() + 5_000;
+  while (queue.size() > 0 && performance.now() < deadline) await wait(1);
   assert.equal(seen.length, 2, "the backoff retry never ran");
-  await until(() => queue.size() === 0);
   assert.equal(queue.size(), 0, "the second attempt was accepted");
   const first = /^t=(\d+),/.exec(seen[0]!.headers[DEFAULT_SIGNATURE_HEADER]!)?.[1];
   const retry = seen[1]!.headers[DEFAULT_SIGNATURE_HEADER]!;

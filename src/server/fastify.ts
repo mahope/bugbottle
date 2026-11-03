@@ -43,6 +43,7 @@
  * on the wire and should not look identical in the log.
  */
 
+import { notifyObserver } from "./observer.ts";
 import {
   handleReport,
   clientScheme,
@@ -242,7 +243,8 @@ export function fastifyHandler(
         if (signed || signature.require !== false) {
           if (!warnedAboutParsedBody) {
             warnedAboutParsedBody = true;
-            options.onError?.(
+            notifyObserver(
+              options.onError,
               new Error(
                 "bugbottle: fastifyHandler cannot verify a signature on a body Fastify's " +
                   "JSON content-type parser already turned into an object — re-serialising " +
@@ -303,7 +305,7 @@ export function fastifyHandler(
     })().catch((err: unknown) => {
       // Only the translation can fail here — handleReport answers 500 itself —
       // but a rejected promise in a route is a crashed process in Node.
-      options.onError?.(err);
+      notifyObserver(options.onError, err);
       try {
         if (reply.status) reply.status(500);
         else reply.code?.(500);

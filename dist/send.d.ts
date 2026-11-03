@@ -172,7 +172,7 @@ export type SendResult = {
     /** True when `beforeSend` returned `null`. Nothing was sent. */
     dropped?: boolean;
 };
-/** The request was aborted by `timeoutMs` before the server answered. */
+/** The send deadline elapsed before the response body was consumed. */
 export declare class SendTimeoutError extends Error {
     constructor(timeoutMs: number);
 }
