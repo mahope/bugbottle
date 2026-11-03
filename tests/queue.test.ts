@@ -1,5 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { setTimeout as wait } from "node:timers/promises";
 import {
   createQueue,
   SCREENSHOT_NOTE,
@@ -757,34 +758,25 @@ test("a queued report is delivered with a signature over the bytes that were sen
   assert.equal(match[2], await hmacHex(SIGN_KEY, `${match[1]}.${seen[0]?.body}`));
 });
 
-test("a retry after the backoff signs again, with a fresh timestamp", async () => {
-  // The first attempt fails, the queue's own timer runs the second a second
-  // later, and the two headers must differ: a signature minted when the report
-  // was written would be outside the server's skew window by the time the
-  // network came back, which is every report the queue exists to save.
+test("a retry after the backoff signs again, with a fresh timestamp", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });
   const { fetch, seen } = watchHeaders(fakeFetch(503, 200).fetch);
   const queue = makeQueue({
     endpoint: "/api/feedback",
     fetch,
     sign: createSigner({ key: SIGN_KEY }),
+    // The shortened backoff timer must not also give WebCrypto a 5 ms deadline.
+    timeoutMs: 0,
   });
-  // The retry is armed with the queue's own backoff timer, a second at least.
-  // A loaded CI runner has been seen to miss that inside the test's deadline,
-  // so the timer is shortened here rather than waited for: what is under test
-  // is the signature the retry mints, not the length of the pause before it.
-  const realSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = ((fn: () => void, ms?: number) =>
-    realSetTimeout(fn, Math.min(Number(ms ?? 0), 5))) as unknown as typeof globalThis.setTimeout;
-  try {
-    queue.enqueue(report("the outage it describes"));
-    await queue.flush();
-    assert.equal(seen.length, 1);
-    await until(() => seen.length === 2, 5_000);
-  } finally {
-    globalThis.setTimeout = realSetTimeout;
-  }
+  queue.enqueue(report("the outage it describes"));
+  assert.equal(await queue.flush(), 1);
+  assert.equal(seen.length, 1);
+  t.mock.timers.tick(999);
+  assert.equal(seen.length, 1, "the retry must wait for the backoff");
+  t.mock.timers.tick(1);
+  const deadline = performance.now() + 5_000;
+  while (queue.size() > 0 && performance.now() < deadline) await wait(1);
   assert.equal(seen.length, 2, "the backoff retry never ran");
-  await until(() => queue.size() === 0);
   assert.equal(queue.size(), 0, "the second attempt was accepted");
   const first = /^t=(\d+),/.exec(seen[0]!.headers[DEFAULT_SIGNATURE_HEADER]!)?.[1];
   const retry = seen[1]!.headers[DEFAULT_SIGNATURE_HEADER]!;

@@ -100,9 +100,11 @@ release separately. Gate fixtures run with `node --experimental-strip-types
   `bugbottle/vue`, `bugbottle/svelte` and `bugbottle/solid` 1.5 kB each *over* a bundle of
   `buildReport`/`sendReport`/`captureScreenshot`/`pickElement` (the adapters
   are small; the core they share is not), `dist/bugbottle.js` 26880 bytes and
-  `dist/bugbottle.slim.js` 23296 bytes (1.1's area and element modes took the
+  `dist/bugbottle.slim.js` 23360 bytes (the current CI limit; #187's bounded
+  failure observers measure 26846/23351 bytes for the full/slim bundles with
+  CI's `gzip -c`, within both unchanged limits). 1.1's area and element modes took the
   panel and both script tags up by about half a kilobyte and one kilobyte
-  respectively, for three buttons and five strings in eight languages). The
+  respectively, for three buttons and five strings in eight languages. The
   panel and the script tag grew with the accessibility pass, and everything
   grew by about 0.45 kB in 0.6 when stack frames and the wider page context
   landed in code every consumer of the core runs. They grew again with the

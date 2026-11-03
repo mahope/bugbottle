@@ -4262,7 +4262,17 @@ anything larger, the queue is the answer.
 
 Below the two integrations, `SendOptions` has the seam they are built on:
 `onError(report, error)` runs after a failed send, before the error reaches
-you, and is awaited.
+you, and is awaited for up to **1 second from the failure**. This cleanup
+budget is separate from `timeoutMs` and still applies after a delivery timeout
+or caller cancellation. Return an asynchronous persistence promise to wait for
+that write within the budget. Slow work is not cancelled and may finish later;
+once the budget expires, persistence is not guaranteed when the caller receives
+the original delivery error. Observer throws and rejections, including late
+rejections, are swallowed and never replace that error.
+
+`createQueue().enqueue()` returns immediately, so the example below schedules
+its write without waiting for asynchronous storage. An observer can only be
+awaited for persistence when it returns a promise for that operation.
 
 ```ts
 await sendReport("/api/feedback", report, {
@@ -7334,6 +7344,18 @@ Recipient address rejected` reaches your log as it was said — and a failure
 that never got a reply, such as a hang or a refused connection, throws one with
 a status of `0`.
 
+`sendReportSmtp(report, options, { signal })` honours cancellation during
+connection, greeting, TLS negotiation, commands and message writes. The SMTP
+sink uses the receiver's context signal, so `sinkTimeoutMs` closes the active
+transport and stops further commands. An already-aborted signal opens no
+connection. Cancellation rejects with `SinkError` status `0`; without a signal,
+the per-phase `timeoutMs` deadlines still apply.
+
+Cancellation cannot recall mail. Once the server accepts DATA, it may deliver
+the message even if cancellation interrupts the acceptance reply or QUIT.
+A failed or cancelled call therefore does not prove non-delivery; retrying can
+send a duplicate.
+
 **AUTH is refused over a connection that is not encrypted.** If the server
 offers no STARTTLS and you did not connect on an implicit-TLS port, the
 password would go to the wire in base64, which is not encryption: every hop
@@ -7853,9 +7875,17 @@ const clean = scrubReport(await request.json());
 On by default: email addresses, `Bearer <token>`, JWTs (`eyJ…`), 13 to 19 digit
 card numbers that pass the Luhn check, IBANs, and query values whose key matches
 `/token|key|secret|password|auth/i`. They are applied to `message`,
-`console[].message`, `context.url`, `elements[].text`, an element's `href` and
-`data-*` attributes, and `breadcrumbs` if you add them. The pixels of the
-screenshot are a separate job, done by the masking below.
+`console[].message`, `console[].stack[].file` and `fn`, `context.url`,
+`elements[].text` and `selector`, element attributes other than `id`, `role`
+and `type`, breadcrumb strings and their direct string properties,
+`screenshotRegion.selector`, `storage.values` strings and cookie names.
+The query pattern runs only on `context.url`, `elements[].attributes.href`,
+`breadcrumbs[].from` and `to`, and `console[].stack[].file`, including nested
+URL query parameters matched by the pattern. Ordinary parameters and stack
+frame `line`/`col` coordinates are kept. `keep: ['query']` disables query
+redaction in all these fields. The input report is never modified.
+Screenshot pixels and replay events are not scrubbed; use screenshot masking
+and the replay recorder's privacy options for those.
 
 An order number of 16 digits is kept, because it fails Luhn. Prose that happens
 to say `key=value` is kept, because the query pattern only runs on URLs.

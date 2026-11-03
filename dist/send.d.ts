@@ -134,10 +134,12 @@ export type SendOptions = {
      * sendReport(endpoint, report, { onError: (r) => queue.enqueue(r) });
      * ```
      *
-     * It runs before the error is rethrown, and it is awaited so a queue that
-     * writes to storage has finished by the time the caller sees the failure.
-     * An error thrown here is swallowed: the original failure is the one worth
-     * reporting.
+     * It runs before the error is rethrown and is awaited for up to 1 000 ms
+     * from the failure, separately from `timeoutMs` and caller cancellation.
+     * Return the persistence promise to await a queue write within that budget.
+     * Slower work may continue, but persistence is not guaranteed when the
+     * caller sees the failure. Throws and rejections (including late ones) are
+     * swallowed: the original delivery failure is always rethrown.
      */
     onError?: (report: BugReport & Record<string, unknown>, error: unknown) => void | Promise<void>;
     /**
