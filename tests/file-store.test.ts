@@ -505,6 +505,7 @@ for (const source of ["list", "read", "refresh"] as const) {
       entry.file = "changed.json";
       entry.receivedAt = entry.title === "Old" ? daysAgo(0) : daysAgo(20);
     }
+    const mutatedSnapshots = snapshots.map((entry) => ({ ...entry }));
     assert.deepEqual(await store.list(), before);
     assert.ok(await store.read(old.id), "the original id and file remain readable");
     assert.ok(await store.read(fresh.id));
@@ -513,7 +514,7 @@ for (const source of ["list", "read", "refresh"] as const) {
     assert.ok(await store.read(fresh.id));
 
     const retained = (await store.list())[0];
-    const retainedBefore = { ...retained };
+    assert.ok(retained);
     await store.refresh();
     retained.receivedAt = daysAgo(30);
     const newer = await store.store(report("Newer", daysAgo(0.5)));
@@ -524,10 +525,9 @@ for (const source of ["list", "read", "refresh"] as const) {
     assert.equal(await store.remove(newer.id), true);
     assert.equal(await store.remove(newest.id), true);
     assert.deepEqual(await store.refresh(), []);
-    assert.equal(snapshots.length, 2, "later changes do not edit earlier arrays");
+    assert.deepEqual(snapshots, mutatedSnapshots, "later operations leave snapshots unchanged");
     assert.equal(snapshots.find(({ title }) => title === "Old")!.screenshot, true,
       "deletion does not edit earlier entries");
-    assert.equal(retainedBefore.title, "Fresh");
   });
 }
 
@@ -536,6 +536,7 @@ test("mutating list entries cannot prevent removal of the original report", asyn
   const store = fileStore({ dir });
   const { id } = await store.store(report("Remove me"), PNG);
   const [entry] = await store.list();
+  assert.ok(entry);
   entry.id = "11111111-2222-3333-4444-555555555555";
   entry.file = "changed.json";
   entry.receivedAt = daysAgo(30);

@@ -16,6 +16,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Return independent file-store entry snapshots from `list`, `read` and
+  `refresh`, preventing caller mutations from corrupting lookup or retention (#185).
+
 - Ignore emissions from stopped or failed rrweb recorder attachments, keeping
   replacement sessions isolated while retaining synchronous startup snapshots (#174).
 

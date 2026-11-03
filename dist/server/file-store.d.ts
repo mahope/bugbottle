@@ -45,7 +45,7 @@ export type StoredReport = {
 };
 /** One report, read back off the disk. */
 export type StoredReportFile = {
-    /** The list entry, so a caller that already has one need not look it up. */
+    /** An independent snapshot of the list entry. */
     entry: StoredReport;
     /**
      * The JSON that was written. It was a `ValidatedReport` when it was stored;
@@ -86,7 +86,7 @@ export type FileStore = {
     store: (report: ValidatedReport, screenshot?: Uint8Array | string) => Promise<{
         id: string;
     }>;
-    /** Every stored report, newest first. */
+    /** Every stored report, newest first, as independent entry snapshots. */
     list: () => Promise<StoredReport[]>;
     /** One report by id, or null when there is no such thing. */
     read: (id: string, options?: {
@@ -109,14 +109,14 @@ export type FileStore = {
      */
     prune: () => Promise<number>;
     /**
-     * Walks the directory again and answers with what is there now.
+     * Walks the directory again and answers with independent entry snapshots.
      *
      * Nothing calls it on its own account: the index is kept up to date by every
      * write and delete, and this process is assumed to be the only writer. When
      * it is not — a backup restored underneath it, a volume remounted, a second
      * process with the same directory — this is how to say so. Reports written
-     * by something else appear and reports it deleted go, in the array every
-     * caller is already holding rather than a new one.
+     * by something else appear and reports it deleted go in the internal index.
+     * Previously returned snapshots stay unchanged.
      */
     refresh: () => Promise<StoredReport[]>;
 };
