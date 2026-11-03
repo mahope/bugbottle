@@ -98,6 +98,54 @@ beforeEach(() => {
   delete globals["localStorage"];
 });
 
+for (const asynchronous of [false, true]) {
+  for (const action of ["recover", "mixed", "clear", "destroy"] as const) {
+    test(`${asynchronous ? "asynchronous storage" : "localStorage"} wakes for abandoned claims: ${action}`, async (t) => {
+      t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });
+      let stored: QueuedReport[] = [
+        { id: "later", at: Date.now() - 3, claimedAt: Date.now(), body: report("later") },
+        { id: "earlier", at: Date.now() - 2, claimedAt: Date.now() - 10_000, body: report("earlier") },
+      ];
+      if (action === "mixed") stored.push({ id: "free", at: Date.now(), body: report("free") });
+      const storage: QueueStorage | undefined = asynchronous ? {
+        async update(change) {
+          await Promise.resolve();
+          stored = change(stored);
+          return stored;
+        },
+      } : undefined;
+      if (!asynchronous) globals["localStorage"] = fakeStorage({ [KEY]: JSON.stringify(stored) }).storage;
+      const { fetch, calls } = fakeFetch(200);
+      const queue = makeQueue({ endpoint: "/reports", storage, fetch });
+      t.after(() => queue.destroy());
+      // Drain asynchronous storage and delivery without triggering a flush.
+      const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+      await settle();
+      assert.equal(calls.length, action === "mixed" ? 1 : 0);
+      if (action !== "recover") {
+        await Promise.all(Array.from({ length: 10 }, () => queue.flush()));
+        queue[action === "mixed" ? "flush" : action]();
+        await settle();
+      }
+      t.mock.timers.tick(19_999);
+      await settle();
+      assert.equal(calls.length, action === "mixed" ? 1 : 0, "no claimed report sends early");
+      t.mock.timers.tick(1);
+      await settle();
+      const cancelled = action === "clear" || action === "destroy";
+      assert.equal(calls.length, cancelled ? 0 : action === "mixed" ? 2 : 1);
+      t.mock.timers.tick(10_000);
+      await settle();
+      assert.deepEqual(calls.map((call) => (call.body as BugReport).message),
+        cancelled ? [] : action === "mixed" ? ["free", "earlier", "later"] : ["earlier", "later"]);
+      if (!cancelled) assert.equal(queue.size(), 0);
+      t.mock.timers.tick(60_000);
+      await settle();
+      assert.equal(calls.length, cancelled ? 0 : action === "mixed" ? 3 : 2, "no duplicate sends");
+    });
+  }
+}
+
 test("a queued report is written to storage and read back by the next page load", async () => {
   const { storage, map } = fakeStorage();
   globals["localStorage"] = storage;
