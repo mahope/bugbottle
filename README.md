@@ -7770,8 +7770,15 @@ The element stays where it is either way, so the layout of the screenshot is
 unchanged. That is the difference from `exclude`, which removes the node and
 takes the layout with it.
 
-It is on by default and restored the moment the renderer returns, including
-when it throws. Narrow it or switch it off per capture:
+It is on by default and cleaned up when the renderer succeeds, rejects or times
+out. Each field value, placeholder and text node is restored only if it still
+equals the value masking wrote. Host edits made during rendering are kept;
+untouched properties regain their originals. An edit identical to the masked
+value cannot be distinguished from an untouched property. Overlays are removed
+on every outcome, and the next queued capture masks the current contents.
+Renderers should clone the masked DOM synchronously: later host edits are not
+continuously masked while an asynchronous renderer waits.
+Narrow it or switch it off per capture:
 
 ```ts
 captureScreenshot(htmlToImage, {

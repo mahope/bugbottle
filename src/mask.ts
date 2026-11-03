@@ -116,9 +116,10 @@ function bulletText(el: Node, undo: (() => void)[]): void {
       const text = child as Text;
       const original = text.data;
       if (!original.trim()) continue;
-      text.data = original.replace(/\S/g, BULLET);
+      const masked = original.replace(/\S/g, BULLET);
+      text.data = masked;
       undo.push(() => {
-        text.data = original;
+        if (text.data === masked) text.data = original;
       });
     } else if (child.nodeType === 1) {
       bulletText(child, undo);
@@ -136,9 +137,14 @@ function bulletValue(el: HTMLInputElement | HTMLTextAreaElement, undo: (() => vo
   // an empty field showing "you@example.com" says which field it is, and that
   // is exactly what the masked picture is meant not to say.
   if (placeholder) el.placeholder = "";
+  // Read back the applied value: some input types sanitise bullets to empty.
+  // Restore each property only while we still own what it contains, so a host
+  // update during an asynchronous render is not replaced with stale data.
+  const maskedValue = el.value;
+  const maskedPlaceholder = el.placeholder;
   undo.push(() => {
-    el.value = value;
-    el.placeholder = placeholder;
+    if (el.value === maskedValue) el.value = value;
+    if (el.placeholder === maskedPlaceholder) el.placeholder = placeholder;
   });
 }
 

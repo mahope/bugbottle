@@ -16,6 +16,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Preserve host input, textarea, placeholder and marked text edits made while a
+  screenshot renders. Cleanup restores only properties still holding their
+  applied mask, including after rejection or timeout; queued captures continue
+  to mask current contents (#172).
 - Match reports in the parent directory with Action globstars (`reports/**/*.json`),
   and keep `?` within one path segment. Document and test the supported glob
   dialect without adding dependencies (#153).

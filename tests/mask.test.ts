@@ -362,6 +362,75 @@ function heldRender(): {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+for (const outcome of ["success", "rejection", "timeout"] as const) {
+  test(`host edits survive a deferred capture ending in ${outcome}`, async (t) => {
+    if (outcome === "timeout") t.mock.timers.enable({ apis: ["setTimeout"] });
+    const root = page(`<input value="before" placeholder="input hint">
+      <textarea placeholder="area hint">before area</textarea>
+      <input id="untouched" value="original" placeholder="original hint">
+      <input id="empty" placeholder="empty hint">
+      <p data-bugbottle-mask>before text</p>
+      <div contenteditable="true" data-bugbottle-mask>before editable</div>
+      <div data-bugbottle-block>chart</div>`);
+    const input = field();
+    const area = document.querySelector("textarea") as HTMLTextAreaElement;
+    const untouched = document.querySelector("#untouched") as HTMLInputElement;
+    const empty = document.querySelector("#empty") as HTMLInputElement;
+    const text = document.querySelector("p")!.firstChild as Text;
+    const editable = document.querySelector("[contenteditable]")!.firstChild as Text;
+    const held = heldRender();
+    const pending = captureScreenshot(async () => {
+      await held.render();
+      if (outcome === "rejection") throw new Error("render rejected");
+      return "data:image/png;base64,AAAA";
+    }, { root });
+    const settled = outcome === "success" ? pending : assert.rejects(pending,
+      outcome === "timeout" ? /timed out/ : /render rejected/);
+    await held.started;
+    assert.equal(input.value, "•".repeat(6));
+    assert.equal(area.value, "•".repeat(11));
+    assert.equal(input.placeholder, "");
+    assert.equal(area.placeholder, "");
+    assert.equal(text.data, "•••••• ••••");
+    assert.equal(document.querySelectorAll("[data-bugbottle-mask-overlay]").length, 1);
+    input.value = "edited input";
+    area.value = "";
+    area.placeholder = "edited hint";
+    empty.value = "new value";
+    text.data = "edited text";
+    editable.data = "edited editable";
+    if (outcome === "timeout") t.mock.timers.tick(30_000);
+    else held.release();
+    await settled;
+    const assertRestored = () => {
+      assert.equal(input.value, "edited input");
+      assert.equal(input.placeholder, "input hint");
+      assert.equal(area.value, "");
+      assert.equal(area.placeholder, "edited hint");
+      assert.equal(empty.value, "new value");
+      assert.equal(empty.placeholder, "empty hint");
+      assert.equal(untouched.value, "original");
+      assert.equal(untouched.placeholder, "original hint");
+      assert.equal(text.data, "edited text");
+      assert.equal(editable.data, "edited editable");
+      assert.equal(document.querySelectorAll("[data-bugbottle-mask-overlay]").length, 0);
+    };
+    assertRestored();
+    await capture(root, () => {
+      assert.equal(input.value, "•".repeat(12));
+      assert.equal(empty.value, "•".repeat(9));
+      assert.equal(area.placeholder, "");
+      assert.equal(text.data, "•••••• ••••");
+      assert.equal(editable.data, "•••••• ••••••••");
+    });
+    assertRestored();
+    // A timed-out renderer settling late must not undo a later capture's edits.
+    held.release();
+    await Promise.resolve();
+    assertRestored();
+  });
+}
+
 test("a second capture waits until the first has put the page back", async () => {
   const root = page(
     `<input type="password" value="hunter2"><p data-bugbottle-mask>Ada</p><div data-bugbottle-block>chart</div>`,
@@ -416,6 +485,7 @@ test("a field changed while the first capture renders is masked in the second", 
   assert.doesNotMatch(secondSaw, /[^•|\s]/, `the second picture saw ${secondSaw}`);
   assert.match(secondSaw, /^•+\|•+ •+$/);
   assert.equal(marked.textContent, "Grace Hopper");
+  assert.equal(field().value, "s3cr3t!");
 });
 
 test("three queued captures with different options each mask for themselves and end on the originals", async () => {
