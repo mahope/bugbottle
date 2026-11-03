@@ -1766,3 +1766,192 @@ test("a Fastify body over the ceiling is a 413 from the adapter itself", async (
   assert.equal(state.status, 413);
   assert.deepEqual(JSON.parse(state.body), { error: "Report is too large" });
 });
+
+
+for (const adapter of ["Express", "Fastify"] as const) {
+  test(`${adapter} bounds a raw upload that sends one chunk then stalls`, { timeout: 1000 }, async () => {
+    const { Readable } = await import("node:stream");
+    const raw = new Readable({ read() {} });
+    raw.push(Buffer.from("{"));
+    const errors: unknown[] = [];
+    const options = { bodyTimeoutMs: 25, cors: true, onError: (err: unknown) => void errors.push(err) };
+    const started = Date.now();
+    if (adapter === "Express") {
+      const { state, res, finished } = fakeRes();
+      expressHandler(options)(Object.assign(raw, { headers: {}, method: "POST" }), res);
+      await finished;
+      assert.equal(state.status, 408);
+      assert.deepEqual(JSON.parse(state.body), { error: "Report took too long to arrive" });
+      assert.equal(state.headers["access-control-allow-origin"], "*");
+    } else {
+      const { state, reply, finished } = fakeReply();
+      fastifyHandler(options)({ raw, method: "POST" }, reply);
+      await finished;
+      assert.equal(state.status, 408);
+      assert.deepEqual(JSON.parse(state.body), { error: "Report took too long to arrive" });
+      assert.equal(state.headers["access-control-allow-origin"], "*");
+    }
+    assert.ok(Date.now() - started < 500);
+    assert.equal(raw.destroyed, true);
+    assert.deepEqual(errors, []);
+  });
+}
+
+for (const adapter of ["Express", "Fastify"] as const) {
+  test(`${adapter} flushes 408 before closing a stalled HTTP upload`, { timeout: 2000 }, async () => {
+    const { createServer, request } = await import("node:http");
+    const options = { bodyTimeoutMs: 25 };
+    const server = createServer((req, res) => {
+      const response = {
+        status(code: number) { res.statusCode = code; },
+        header(name: string, value: string) { res.setHeader(name, value); },
+        setHeader(name: string, value: string) { res.setHeader(name, value); },
+        send(payload?: unknown) { res.end(String(payload ?? "")); },
+        once: res.once.bind(res),
+        raw: res,
+      };
+      if (adapter === "Express") expressHandler(options)(req, response);
+      else fastifyHandler(options)({ raw: req, method: req.method }, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    let client: ReturnType<typeof request> | undefined;
+    try {
+      const result = await new Promise<{ status: number | undefined; text: string }>((resolve, reject) => {
+        client = request({ host: "127.0.0.1", port: address.port, method: "POST" }, (res) => {
+          let text = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => { text += chunk; });
+          res.on("end", () => resolve({ status: res.statusCode, text }));
+          res.on("error", reject);
+        });
+        client.on("error", reject);
+        client.write("{");
+      });
+      assert.equal(result.status, 408);
+      assert.deepEqual(JSON.parse(result.text), { error: "Report took too long to arrive" });
+    } finally {
+      client?.destroy();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+}
+
+test("raw read deadlines clear on success and disconnect and release the iterator", async (t) => {
+  const { timedChunks } = await import("../src/server/raw-body.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const disconnect of [false, true]) {
+    let returned = 0;
+    let destroyed = 0;
+    const raw = {
+      destroy() { destroyed += 1; },
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            if (disconnect) throw new Error("disconnected");
+            return { done: true as const, value: undefined };
+          },
+          async return() {
+            returned += 1;
+            return { done: true as const, value: undefined };
+          },
+        };
+      },
+    };
+    const read = async () => { for await (const _chunk of timedChunks(raw, 25)) {} };
+    if (disconnect) await assert.rejects(read, /disconnected/);
+    else await read();
+    t.mock.timers.tick(100);
+    assert.equal(returned, 1);
+    assert.equal(destroyed, 0);
+  }
+});
+
+test("raw deadline spans chunks and does not wait for a stalled iterator return", async (t) => {
+  const { timedChunks, RawBodyTimeoutError } = await import("../src/server/raw-body.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const cleared = t.mock.method(globalThis, "clearTimeout");
+  let reads = 0;
+  let returned = 0;
+  let destroyed = 0;
+  const chunks = timedChunks({
+    destroy() { destroyed += 1; },
+    [Symbol.asyncIterator]() {
+      return {
+        next() {
+          reads += 1;
+          return reads <= 2
+            ? Promise.resolve({ done: false, value: "x" })
+            : new Promise<IteratorResult<unknown>>(() => {});
+        },
+        return() {
+          returned += 1;
+          return new Promise<IteratorResult<unknown>>(() => {});
+        },
+      };
+    },
+  }, 25);
+  await chunks.next();
+  t.mock.timers.tick(15);
+  await chunks.next();
+  const pending = chunks.next();
+  t.mock.timers.tick(10);
+  await assert.rejects(pending, (err: unknown) => {
+    assert.ok(err instanceof RawBodyTimeoutError);
+    err.stop();
+    return true;
+  });
+  assert.equal(destroyed, 1);
+  assert.equal(returned, 1);
+  assert.equal(cleared.mock.callCount(), 1);
+});
+
+test("Fastify caps unparsed bytes and preserves split UTF-8", async () => {
+  const message = "grøn knap (æøå)";
+  const bytes = new TextEncoder().encode(JSON.stringify({ ...body, message }));
+  const cut = bytes.indexOf(0xc3) + 1;
+  for (const maxBodyBytes of [10, bytes.length]) {
+    const { state, reply, finished } = fakeReply();
+    let destroyed = false;
+    let stored: ValidatedReport | undefined;
+    fastifyHandler({
+      maxBodyBytes,
+      store: async (report) => void (stored = report),
+    })({
+      method: "POST",
+      raw: {
+        destroy() { destroyed = true; },
+        async *[Symbol.asyncIterator]() {
+          yield bytes.slice(0, cut);
+          yield bytes.slice(cut);
+        },
+      },
+    }, reply);
+    await finished;
+    assert.equal(state.status, maxBodyBytes === 10 ? 413 : 202);
+    assert.equal(destroyed, maxBodyBytes === 10);
+    if (maxBodyBytes !== 10) assert.equal(stored?.message, message);
+  }
+});
+
+test("raw timeout cleanup follows response finish, close, or a failed send", async () => {
+  const { EventEmitter } = await import("node:events");
+  const { stopAfterReply } = await import("../src/server/raw-body.ts");
+  for (const outcome of ["finish", "close", "throw"] as const) {
+    const response = new EventEmitter();
+    let stopped = 0;
+    const send = () => {
+      assert.equal(stopped, 0);
+      if (outcome === "throw") throw new Error("response is gone");
+      response.emit(outcome);
+    };
+    const write = () => stopAfterReply(response, () => { stopped += 1; }, send);
+    if (outcome === "throw") assert.throws(write, /response is gone/);
+    else write();
+    assert.equal(stopped, 1);
+    assert.equal(response.listenerCount("finish"), 0);
+    assert.equal(response.listenerCount("close"), 0);
+  }
+});

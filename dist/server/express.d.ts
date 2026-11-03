@@ -64,6 +64,8 @@ export type ExpressResponseLike = {
     set?(name: string, value: string): unknown;
     send(body?: unknown): unknown;
     end?(body?: unknown): unknown;
+    once?(event: "finish" | "close", listener: () => void): unknown;
+    removeListener?(event: "finish" | "close", listener: () => void): unknown;
 };
 /**
  * Turns `handleReport` into an Express handler.

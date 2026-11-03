@@ -6416,7 +6416,14 @@ It reads an already-parsed `req.body` when a parser ran and the raw stream when
 none did, so `express.json()` is convenient rather than required. A raw stream
 is counted against `maxBodyBytes` as it arrives: over the ceiling the adapter
 answers `413` and calls `req.destroy()` rather than buffering the rest of a
-body it has already refused.
+body it has already refused. Both adapters also apply `bodyTimeoutMs` (15 s
+by default) to the entire unparsed stream read, including pauses between
+chunks. A deadline produces `408` with `{ "error": "Report took too long to
+arrive" }` while the response is writable, then closes the stream after the
+response finishes. Timers and iterators are released on completion or failure.
+When Express middleware or Fastify's content-type parser reads the body before
+the adapter runs, that read's deadline remains the host framework/server's
+responsibility; configure its request/body-parser timeouts separately.
 
 Fastify gets [`fastifyHandler`](#fastify), the same translation for a Fastify
 route. Its two traps are sharper than these two, because its body parser cannot
@@ -6583,6 +6590,14 @@ not to write this yourself:
   written under a `.png` name has a PNG signature in its bytes, whatever the
   caller called it, and one that does not is dropped while the report is
   stored — screenshots fail open here as everywhere else.
+
+The JSON write decides whether a report is stored. If it fails, `store` rejects
+and adds no index entry. Once the JSON is persisted, a screenshot write or
+rename failure is tolerated: `store` returns the report's id, the message stays
+readable and listed, and its entry has `screenshot: false`. Failed writes attempt
+to remove their temporary file; a cleanup failure can leave a `.tmp` file that
+listings ignore. Retrying a successfully stored message is unnecessary even
+when its picture could not be saved.
 
 It is a directory, not a database: one process is assumed to be the only thing
 writing to it, because the index is held in memory. Two instances over one
