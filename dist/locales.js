@@ -1,16 +1,4 @@
 /**
- * Every string a reporter can see, in one shape, in several languages.
- *
- * `messages` are the status lines the hook and `bugbottle/ui` show after
- * something happens. `ui` are the labels the optional widget renders. Both are
- * plain objects: spread one and override what you like, or write your own
- * from scratch — the types tell you what is required.
- *
- *     import { da } from "bugbottle/locales";
- *     useBugReport({ endpoint, messages: da.messages });
- *     mountBugbottle({ endpoint, locale: { ...da, ui: { ...da.ui, title: "Hjælp os" } } });
- */
-/**
  * The English status messages on their own, so the React hook can fall back
  * to them without carrying the widget labels of every locale in its bundle.
  */
@@ -77,7 +65,7 @@ export const en = {
         done: "Done",
         pickElement: "Point at the element",
         picking: "Click anything to attach it — Esc to stop",
-        pickingAnnounce: "Click an element, or use Tab and arrow keys to move, Enter or Space to attach. Escape cancels.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Click an element, or use Tab and arrow keys to move, Enter or Space to attach. Escape cancels." : "Pointing mode. Click any element on the page to attach it, or press Escape to stop.",
         pickingDone: "Pointing mode ended.",
         shotModeLabel: "Screenshot of",
         shotNone: "None",
@@ -134,7 +122,7 @@ export const da = {
         done: "Færdig",
         pickElement: "Peg på elementet",
         picking: "Klik på det, der skal vedhæftes. Esc stopper.",
-        pickingAnnounce: "Klik på et element, eller flyt med Tab og piletaster. Enter eller mellemrum vedhæfter. Esc annullerer.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Klik på et element, eller flyt med Tab og piletaster. Enter eller mellemrum vedhæfter. Esc annullerer." : "Pegetilstand. Klik på et element på siden for at vedhæfte det, eller tryk på Esc for at stoppe.",
         pickingDone: "Pegetilstand er slut.",
         shotModeLabel: "Skærmbillede af",
         shotNone: "Intet",
@@ -191,7 +179,7 @@ export const sv = {
         done: "Klar",
         pickElement: "Peka på elementet",
         picking: "Klicka på det som ska bifogas — Esc för att avbryta",
-        pickingAnnounce: "Klicka på ett element eller flytta med Tab och piltangenterna. Enter eller mellanslag bifogar. Esc avbryter.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Klicka på ett element eller flytta med Tab och piltangenterna. Enter eller mellanslag bifogar. Esc avbryter." : "Pekläge. Klicka på ett element på sidan för att bifoga det, eller tryck på Esc för att avbryta.",
         pickingDone: "Pekläget är avslutat.",
         shotModeLabel: "Skärmbild av",
         shotNone: "Ingen",
@@ -248,7 +236,7 @@ export const nb = {
         done: "Ferdig",
         pickElement: "Pek på elementet",
         picking: "Klikk på det som skal legges ved — Esc for å avbryte",
-        pickingAnnounce: "Klikk på et element, eller flytt med Tab og piltastene. Enter eller mellomrom legger ved. Esc avbryter.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Klikk på et element, eller flytt med Tab og piltastene. Enter eller mellomrom legger ved. Esc avbryter." : "Pekemodus. Klikk på et element på siden for å legge det ved, eller trykk Esc for å avbryte.",
         pickingDone: "Pekemodus er avsluttet.",
         shotModeLabel: "Skjermbilde av",
         shotNone: "Ingen",
@@ -305,7 +293,7 @@ export const de = {
         done: "Fertig",
         pickElement: "Auf das Element zeigen",
         picking: "Klicken Sie auf das Element — Esc zum Abbrechen",
-        pickingAnnounce: "Klicken Sie auf ein Element oder navigieren Sie mit Tab und Pfeiltasten. Enter oder Leertaste hängt es an. Esc bricht ab.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Klicken Sie auf ein Element oder navigieren Sie mit Tab und Pfeiltasten. Enter oder Leertaste hängt es an. Esc bricht ab." : "Zeigemodus. Klicken Sie auf ein Element der Seite, um es anzuhängen, oder drücken Sie Esc zum Abbrechen.",
         pickingDone: "Zeigemodus beendet.",
         shotModeLabel: "Screenshot von",
         shotNone: "Keins",
@@ -362,7 +350,7 @@ export const nl = {
         done: "Klaar",
         pickElement: "Wijs het element aan",
         picking: "Klik op wat je wilt bijvoegen — Esc om te stoppen",
-        pickingAnnounce: "Klik op een element of navigeer met Tab en de pijltoetsen. Enter of spatie voegt het bij. Esc annuleert.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Klik op een element of navigeer met Tab en de pijltoetsen. Enter of spatie voegt het bij. Esc annuleert." : "Aanwijsmodus. Klik op een element op de pagina om het bij te voegen, of druk op Esc om te stoppen.",
         pickingDone: "Aanwijsmodus beëindigd.",
         shotModeLabel: "Screenshot van",
         shotNone: "Geen",
@@ -419,7 +407,7 @@ export const fr = {
         done: "Terminé",
         pickElement: "Désigner l'élément",
         picking: "Cliquez sur l'élément à joindre — Échap pour arrêter",
-        pickingAnnounce: "Cliquez sur un élément ou naviguez avec Tab et les flèches. Entrée ou Espace le joint. Échap annule.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Cliquez sur un élément ou naviguez avec Tab et les flèches. Entrée ou Espace le joint. Échap annule." : "Mode désignation. Cliquez sur un élément de la page pour le joindre, ou appuyez sur Échap pour arrêter.",
         pickingDone: "Mode désignation terminé.",
         shotModeLabel: "Capture de",
         shotNone: "Aucune",
@@ -476,7 +464,7 @@ export const es = {
         done: "Hecho",
         pickElement: "Señalar el elemento",
         picking: "Haz clic en lo que quieras adjuntar — Esc para cancelar",
-        pickingAnnounce: "Haz clic en un elemento o navega con Tab y las flechas. Intro o Espacio lo adjunta. Esc cancela.",
+        pickingAnnounce: (typeof __BUGBOTTLE_KEYBOARD_PICKER__ === "undefined" || __BUGBOTTLE_KEYBOARD_PICKER__) ? "Haz clic en un elemento o navega con Tab y las flechas. Intro o Espacio lo adjunta. Esc cancela." : "Modo de señalar. Haz clic en un elemento de la página para adjuntarlo, o pulsa Esc para cancelar.",
         pickingDone: "Modo de señalar finalizado.",
         shotModeLabel: "Captura de",
         shotNone: "Ninguna",

@@ -50,6 +50,6 @@ export type PickOptions = {
  * The highlight box carries `data-bugbottle`, so it never appears in a
  * screenshot and cannot be picked itself.
  */
-export declare function pickElement(options?: PickOptions): Promise<ElementRef | null>;
+export declare const pickElement: (options?: PickOptions) => Promise<ElementRef | null>;
 export {};
 //# sourceMappingURL=element-picker.d.ts.map

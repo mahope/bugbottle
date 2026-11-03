@@ -1,3 +1,6 @@
+/** Defined by the script-tag build; ESM keeps keyboard selection. */
+declare const __BUGBOTTLE_KEYBOARD_PICKER__: boolean;
+
 /**
  * An optional, ready-made report panel: a floating button and a small dialog,
  * rendered in a shadow root so your styles and its styles never meet.
@@ -931,7 +934,9 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     pickController = controller;
     // Picking an element for the picture is the picker the panel already has,
     // with a picture taken at the end, so it says the same two sentences.
-    const instructions = mode === "area" ? text("areaInstructions") : ui.pickingAnnounce;
+    const instructions = mode === "area" ? text("areaInstructions") :
+      typeof __BUGBOTTLE_KEYBOARD_PICKER__ !== "undefined" && !__BUGBOTTLE_KEYBOARD_PICKER__
+        ? ui.picking : ui.pickingAnnounce;
     live.textContent = mode === "area" ? instructions : ui.pickingAnnounce;
     panel.hidden = true;
     try {
@@ -1013,7 +1018,11 @@ export function mountBugbottle(options: MountOptions): BugbottleWidget {
     // The panel is in the way of the page while picking.
     panel.hidden = true;
     try {
-      const picked = await pickElement({ signal: pickController.signal, instructions: ui.pickingAnnounce });
+      const picked = await pickElement({
+        signal: pickController.signal,
+        ...(typeof __BUGBOTTLE_KEYBOARD_PICKER__ !== "undefined" && !__BUGBOTTLE_KEYBOARD_PICKER__
+          ? {} : { instructions: ui.pickingAnnounce }),
+      });
       if (picked) {
         elements = [...elements, picked].slice(-MAX_ELEMENTS);
         renderElements();

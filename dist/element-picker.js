@@ -10,6 +10,7 @@
  * serialisable description. `pickElement` is the interactive part: it waits
  * for the reporter to choose something with the pointer or keyboard.
  */
+import { pickElementWithPointer } from "./element-picker-pointer.js";
 import { MAX_ELEMENT_TEXT_LENGTH } from "./report-core.js";
 /** Attributes worth carrying. `data-bugbottle*` is the library's own and is skipped. */
 const ATTRIBUTES = ["id", "name", "role", "type", "href", "aria-label", "placeholder", "title"];
@@ -125,7 +126,10 @@ const defaultIgnore = (el) => el.closest("[data-bugbottle]") !== null;
  * The highlight box carries `data-bugbottle`, so it never appears in a
  * screenshot and cannot be picked itself.
  */
-export function pickElement(options = {}) {
+export const pickElement = typeof __BUGBOTTLE_KEYBOARD_PICKER__ !== "undefined" && !__BUGBOTTLE_KEYBOARD_PICKER__
+    ? pickElementWithPointer
+    : pickElementWithKeyboard;
+function pickElementWithKeyboard(options = {}) {
     if (typeof document === "undefined") {
         return Promise.reject(new Error("pickElement requires a browser environment"));
     }

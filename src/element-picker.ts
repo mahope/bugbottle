@@ -11,8 +11,12 @@
  * for the reporter to choose something with the pointer or keyboard.
  */
 
+import { pickElementWithPointer } from "./element-picker-pointer.ts";
 import type { ElementRef } from "./report-core.ts";
 import { MAX_ELEMENT_TEXT_LENGTH } from "./report-core.ts";
+
+/** Defined by the script-tag build; ESM keeps keyboard selection. */
+declare const __BUGBOTTLE_KEYBOARD_PICKER__: boolean;
 
 /** Attributes worth carrying. `data-bugbottle*` is the library's own and is skipped. */
 const ATTRIBUTES = ["id", "name", "role", "type", "href", "aria-label", "placeholder", "title"];
@@ -153,7 +157,12 @@ const defaultIgnore = (el: Element) => el.closest("[data-bugbottle]") !== null;
  * The highlight box carries `data-bugbottle`, so it never appears in a
  * screenshot and cannot be picked itself.
  */
-export function pickElement(options: PickOptions = {}): Promise<ElementRef | null> {
+export const pickElement: (options?: PickOptions) => Promise<ElementRef | null> =
+  typeof __BUGBOTTLE_KEYBOARD_PICKER__ !== "undefined" && !__BUGBOTTLE_KEYBOARD_PICKER__
+    ? pickElementWithPointer
+    : pickElementWithKeyboard;
+
+function pickElementWithKeyboard(options: PickOptions = {}): Promise<ElementRef | null> {
   if (typeof document === "undefined") {
     return Promise.reject(new Error("pickElement requires a browser environment"));
   }

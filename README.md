@@ -5702,6 +5702,10 @@ the visible text, the position on the page, and the useful attributes (`id`,
 `name`, `role`, `aria-label`, `href`, every `data-*`). Escape cancels. The click
 is swallowed, so picking a button does not also press it.
 
+Keyboard element selection is included in the full script-tag bundle and ESM
+imports. The slim script-tag bundle keeps pointer selection and Escape
+cancellation to stay within its unchanged size budget.
+
 The panel's picker button also works with the keyboard. Once it is open,
 Tab or Down/Right moves forward through rendered page elements in document
 order; Shift+Tab or Up/Left moves back, wrapping at either end. Home/End
@@ -6587,6 +6591,10 @@ report — the strings a list shows, without reading every file for them. The
 directory is walked once, on the first call that needs it, and kept up to date
 by every write and delete after that; `read(id)` then reads exactly the one
 file that was asked for, and only fetches the picture when you ask for it.
+
+Entries returned by `list()`, `refresh()` and `read().entry` are independent
+snapshots. Editing them cannot change the index, file lookup or retention;
+later writes, deletions and refreshes do not update earlier snapshots.
 
 An entry `read` finds nothing behind is dropped from the listing then and
 there, so a report deleted by something outside this process stops being a link
@@ -7859,9 +7867,17 @@ const clean = scrubReport(await request.json());
 On by default: email addresses, `Bearer <token>`, JWTs (`eyJ…`), 13 to 19 digit
 card numbers that pass the Luhn check, IBANs, and query values whose key matches
 `/token|key|secret|password|auth/i`. They are applied to `message`,
-`console[].message`, `context.url`, `elements[].text`, an element's `href` and
-`data-*` attributes, and `breadcrumbs` if you add them. The pixels of the
-screenshot are a separate job, done by the masking below.
+`console[].message`, `console[].stack[].file` and `fn`, `context.url`,
+`elements[].text` and `selector`, element attributes other than `id`, `role`
+and `type`, breadcrumb strings and their direct string properties,
+`screenshotRegion.selector`, `storage.values` strings and cookie names.
+The query pattern runs only on `context.url`, `elements[].attributes.href`,
+`breadcrumbs[].from` and `to`, and `console[].stack[].file`, including nested
+URL query parameters matched by the pattern. Ordinary parameters and stack
+frame `line`/`col` coordinates are kept. `keep: ['query']` disables query
+redaction in all these fields. The input report is never modified.
+Screenshot pixels and replay events are not scrubbed; use screenshot masking
+and the replay recorder's privacy options for those.
 
 An order number of 16 digits is kept, because it fails Luhn. Prose that happens
 to say `key=value` is kept, because the query pattern only runs on URLs.

@@ -1,7 +1,8 @@
 /**
  * Builds the two one-script-tag bundles: `dist/bugbottle.js`, which carries
  * everything, and `dist/bugbottle.slim.js`, the same panel without the
- * annotator, the timings snapshot, the shake gesture and the network log.
+ * annotator, the timings snapshot, the shake gesture, the network log and
+ * keyboard element selection.
  *
  * The ESM output in `dist/` is tsc's; this is a second artefact for pages with
  * no bundler, so it is bundled and minified here rather than shipped as
@@ -22,8 +23,8 @@ const { version } = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
 
 /**
  * The same settings for both files, down to the version define: the slim
- * build is a different entry point and nothing else, so anything that makes
- * one of them smaller makes the other smaller too.
+ * build also disables keyboard element selection at build time so its picker
+ * and locale instructions remain pointer-only.
  */
 async function bundle(entry, name) {
   const outfile = `${root}dist/${name}`;
@@ -36,7 +37,10 @@ async function bundle(entry, name) {
     platform: "browser",
     target: ["es2020"],
     legalComments: "none",
-    define: { __BUGBOTTLE_VERSION__: JSON.stringify(version) },
+    define: {
+      __BUGBOTTLE_VERSION__: JSON.stringify(version),
+      __BUGBOTTLE_KEYBOARD_PICKER__: String(entry !== "global-slim.ts"),
+    },
   });
 
   const bytes = statSync(outfile).size;
