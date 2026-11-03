@@ -92,9 +92,11 @@ export function fileStore(options) {
         try {
             files = await readdir(dir);
         }
-        catch {
+        catch (error) {
             // No directory yet is an empty inbox, not an error.
-            return [];
+            if (error.code === "ENOENT")
+                return [];
+            throw error;
         }
         const pictures = new Set(files.filter((name) => name.endsWith(".png")));
         const entries = [];
@@ -204,11 +206,16 @@ export function fileStore(options) {
         return UUID_IN_NAME.exec(entry.file)?.[1] === entry.id;
     }
     async function forget(entry) {
-        drop(entry.id);
-        if (!ownFile(entry))
+        if (!ownFile(entry)) {
+            drop(entry.id);
             return;
-        await rm(join(dir, entry.file), { force: true });
+        }
+        // Keep the JSON discoverable until both deletions succeed. If only the
+        // picture was deleted, a retry can finish from a report without a picture.
         await rm(join(dir, `${entry.id}.png`), { force: true });
+        entry.screenshot = false;
+        await rm(join(dir, entry.file), { force: true });
+        drop(entry.id);
     }
     const store = async (report, screenshot) => {
         const id = randomUUID();
