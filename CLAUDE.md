@@ -525,7 +525,8 @@ procedure aimed at pixels rather than at the accessibility tree: only a real
 canvas can say whether the blur destroyed what it covered.
 
 `scripts/queue-idb-smoke.mjs` checks persistence and cross-tab queue coordination
-against real IndexedDB rather than the fast unit tests' fake.
+against real IndexedDB rather than the fast unit tests' fake. Its PNG fixture
+uses `BugReport.screenshotDataUrl`, checked in storage and delivered reports.
 
 None of these is part of `npm run check`, because each needs a browser and
 `npm run check` must run anywhere. They are not optional for that reason: the

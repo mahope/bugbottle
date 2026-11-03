@@ -30,7 +30,7 @@ canvas.width = canvas.height = 32;
 canvas.getContext('2d').fillRect(0, 0, 32, 32);
 window.screenshot = canvas.toDataURL('image/png');
 window.enqueue = message => queue.enqueue({
-  message, screenshot, timestamp: new Date().toISOString(),
+  message, screenshotDataUrl: screenshot, timestamp: new Date().toISOString(),
   context: { url: location.origin, userAgent: 'queue-smoke', viewport: { width: 32, height: 32 } },
   console: [],
 });
@@ -93,7 +93,7 @@ async function run() {
       }, {}, [...messages].sort());
     } catch (error) {
       diagnostics.push({ expectedMessages: messages, stored: await page.evaluate(async () =>
-        (await readQueue()).map(row => ({ id: row.id, message: row.body.message, screenshotBytes: row.body.screenshot?.length ?? 0 }))),
+        (await readQueue()).map(row => ({ id: row.id, message: row.body.message, screenshotBytes: row.body.screenshotDataUrl?.length ?? 0 }))),
       });
       throw error;
     }
@@ -105,7 +105,7 @@ async function run() {
   await first.evaluate(() => queue.flush());
   const screenshot = await first.evaluate(() => { enqueue('persisted'); return window.screenshot; });
   const before = await stored(first, ["persisted"]);
-  assert.equal(before[0].body.screenshot, screenshot);
+  assert.equal(before[0].body.screenshotDataUrl, screenshot);
   await first.evaluate(() => queue.destroy());
   await first.close();
 
@@ -125,7 +125,7 @@ async function run() {
   ]);
   const rows = await stored(first, ["persisted", "tab-one", "tab-two"]);
   assert.equal(new Set(rows.map(row => row.id)).size, 3);
-  for (const row of rows) assert.equal(row.body.screenshot, screenshot);
+  for (const row of rows) assert.equal(row.body.screenshotDataUrl, screenshot);
   console.log("PASS: concurrent enqueues retain both reports in IndexedDB");
 
   phase = "flush concurrently from two pages";
@@ -135,7 +135,7 @@ async function run() {
   })));
   await stored(first, []);
   assert.deepEqual(deliveries.map(report => report.message).sort(), ["persisted", "tab-one", "tab-two"]);
-  for (const report of deliveries) assert.equal(report.screenshot, screenshot);
+  for (const report of deliveries) assert.equal(report.screenshotDataUrl, screenshot);
   // Flush again from each page: neither stale in-memory copy may resurrect a report.
   await Promise.all([first, second].map(page => page.evaluate(() => queue.flush())));
   assert.equal(deliveries.length, 3);
