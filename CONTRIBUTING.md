@@ -20,6 +20,17 @@ Node 22 or newer is needed to run the tests (they run the TypeScript source
 directly with `--experimental-strip-types`). Consumers of the package only
 need Node 18.
 
+The reusable `min-node-smoke.yml` workflow builds on Node 22, then packs and
+installs the tarball in a temporary consumer outside the checkout on Node 18.
+It installs no peers or development dependencies and runs emitted JavaScript
+through every dependency-free public entry (including the type-only Svelte
+adapter), resolves both JSON contracts, and checks `handleReport` rejection,
+validation and storage. React, Vue, Solid and html-to-image need application
+peers and are outside this runtime smoke; browser behaviour still needs the
+browser audits. Both CI and the release workflow require this job before
+publishing. To reproduce: `npm run build` on Node 22+, then
+`node scripts/smoke-packed.mjs` on Node 18. No TypeScript loader is used there.
+
 ## Before opening a pull request
 
 - `npm run check` is green.
@@ -149,7 +160,10 @@ need Node 18.
 
 ## What CI runs
 
-`.github/workflows/ci.yml` has three jobs, and a pull request needs all three:
+`.github/workflows/ci.yml` requires these checks for a pull request:
+
+- **Minimum Node consumer** — the isolated Node 18 tarball smoke described above,
+  also required by the release workflow before publishing.
 
 - **Node 22 / Node 24** — `npm run typecheck`, `npm test`, `npm run build`,
   `npm run build:docs`, `npm run check:dist` (the committed `dist/` is both

@@ -209,9 +209,10 @@ export function fileStore(options: FileStoreOptions): FileStore {
     let files: string[] = [];
     try {
       files = await readdir(dir);
-    } catch {
+    } catch (error) {
       // No directory yet is an empty inbox, not an error.
-      return [];
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
     }
     const pictures = new Set(files.filter((name) => name.endsWith(".png")));
     const entries: StoredReport[] = [];
@@ -316,10 +317,16 @@ export function fileStore(options: FileStoreOptions): FileStore {
   }
 
   async function forget(entry: StoredReport): Promise<void> {
-    drop(entry.id);
-    if (!ownFile(entry)) return;
-    await rm(join(dir, entry.file), { force: true });
+    if (!ownFile(entry)) {
+      drop(entry.id);
+      return;
+    }
+    // Keep the JSON discoverable until both deletions succeed. If only the
+    // picture was deleted, a retry can finish from a report without a picture.
     await rm(join(dir, `${entry.id}.png`), { force: true });
+    entry.screenshot = false;
+    await rm(join(dir, entry.file), { force: true });
+    drop(entry.id);
   }
 
   const store: FileStore["store"] = async (report, screenshot) => {

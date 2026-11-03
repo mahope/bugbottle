@@ -16,6 +16,12 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Preserve the file-store index when directory access fails, and keep reports
+  discoverable after failed deletion. Delete the PNG before the JSON so a
+  partial deletion leaves a readable report that removal or retention can
+  retry (#119).
+- Smoke-test the packed dependency-free exports, JSON contracts and server
+  validation/store round trip on Node 18 before publishing (#120).
 - Keep successful framework-adapter submissions sent when `onSent` throws.
   Synchronous callback exceptions are logged to `console.error` after form
   cleanup, without failing submission or queueing a duplicate (#131).
