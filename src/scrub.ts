@@ -94,7 +94,19 @@ function passesLuhn(digits: string): boolean {
  * imported then drops every other pattern, `passesLuhn` included — which is
  * what lets `bugbottle/network` scrub its URLs inside a 1.2 kB budget.
  */
-const QUERY_PATTERN = /([?&][^?&=#\s]*(?:token|key|secret|password|auth)[^?&=#\s]*=)[^&#\s]*/gi;
+const QUERY_PATTERN = /([?&][^?&=#\s]*=)[^&#\s]*/g;
+
+const redactQuery = (match: string, groups: (string | undefined)[], replacement: string): string => {
+  // The prefix contains only the key and its surrounding query delimiters.
+  let key = groups[0] ?? "";
+  try {
+    // Sensitive names contain only unreserved letters, decoded by decodeURI.
+    key = decodeURI(key);
+  } catch {
+    // Malformed escapes must not prevent literal sensitive names matching.
+  }
+  return /auth|key|password|secret|token/i.test(key) ? keepPrefix(match, groups, replacement) : match;
+};
 
 /**
  * Redacts the sensitive query values in one URL, keeping the key that named
@@ -107,7 +119,8 @@ const QUERY_PATTERN = /([?&][^?&=#\s]*(?:token|key|secret|password|auth)[^?&=#\s
 export function scrubUrl(url: string, replacement: string = DEFAULT_REPLACEMENT): string {
   if (typeof url !== "string") return url;
   QUERY_PATTERN.lastIndex = 0;
-  return url.replace(QUERY_PATTERN, (_match, prefix: string) => (prefix ?? "") + replacement);
+  return url.replace(QUERY_PATTERN, (match, prefix: string) =>
+    redactQuery(match, [prefix], replacement));
 }
 
 /**
@@ -119,7 +132,7 @@ export function scrubUrl(url: string, replacement: string = DEFAULT_REPLACEMENT)
 export const BUILTIN_SCRUBBERS: Record<ScrubberName, Scrubber> = {
   query: {
     pattern: QUERY_PATTERN,
-    replace: keepPrefix,
+    replace: redactQuery,
     urlsOnly: true,
   },
   bearer: {

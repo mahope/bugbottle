@@ -7848,7 +7848,9 @@ const clean = scrubReport(await request.json());
 
 On by default: email addresses, `Bearer <token>`, JWTs (`eyJ…`), 13 to 19 digit
 card numbers that pass the Luhn check, IBANs, and query values whose key matches
-`/token|key|secret|password|auth/i`. They are applied to `message`,
+`/token|key|secret|password|auth/i` after one percent-decoding pass. Encoded
+names such as `%74oken` are matched without rewriting keys, ordinary values
+or fragments; malformed escapes do not throw. They are applied to `message`,
 `console[].message`, `context.url`, `elements[].text`, an element's `href` and
 `data-*` attributes, and `breadcrumbs` if you add them. The pixels of the
 screenshot are a separate job, done by the masking below.
