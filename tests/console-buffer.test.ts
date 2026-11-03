@@ -70,6 +70,9 @@ for (const level of ["error", "warn"] as const) {
         console[level](...args, "x".repeat(100));
       });
       assert.equal(seen.length, 2);
+      assert.equal(seen[0]?.length, args.length);
+      assert.equal(seen[1]?.length, args.length + 1);
+      assert.equal(seen[1]?.[3], "x".repeat(100));
       for (const received of seen) {
         args.forEach((arg, i) => assert.equal(received[i], arg));
       }

@@ -18,6 +18,10 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — console argument conversion tolerates throwing getters,
+conversion hooks and revoked proxies; recorder failures preserve the original
+console call (#194).
+
 **Unreleased** — packed React 18.3.1 and 19.3.0 consumers check StrictMode
 forms, pending-delivery cleanup, remount and matching TypeScript types (#156).
 

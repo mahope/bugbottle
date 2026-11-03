@@ -19,6 +19,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Keep console errors and warnings working when argument conversion or recording
+  throws. Unreadable arguments use a bounded placeholder without losing readable
+  neighbours or bypassing the message length limit (#194).
+
 - Ignore emissions from stopped or failed rrweb recorder attachments, keeping
   replacement sessions isolated while retaining synchronous startup snapshots (#174).
 

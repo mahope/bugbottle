@@ -147,6 +147,10 @@ noisy, and in most applications they are where stray user data ends up. The
 original console functions are always called through, so nothing disappears
 from your devtools.
 
+Arguments that cannot be inspected become `[Unserialisable]` in the captured
+message; readable arguments and the message length limit are preserved.
+Recording failures never prevent the original console call.
+
 An uncaught error or a rejection also carries its stack, normalised to at most
 ten frames of `{ file, line, col, fn? }` — V8, Firefox and Safari all write it
 differently, and one small parser reads all three. A frame is a position and

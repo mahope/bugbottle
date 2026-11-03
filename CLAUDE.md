@@ -160,6 +160,9 @@ not closed and a branch is not merged with the docs lagging.
   it fail with the field named.
 - **`log` and `debug` are not recorded**, and this is a feature. They are where
   stray user data ends up.
+- **Console recording fails open.** Argument inspection, including `instanceof`
+  and Error getters, can throw. Unreadable arguments become `[Unserialisable]`;
+  the original console receives the original arguments even if recording fails (#194).
 - **`maxEntries` is resolved, never used raw.** `slice(-0)` is the whole array
   and `slice(-NaN)` is too, so an unchecked `0` *removes* a ring buffer's bound
   rather than enforcing it — and in `bugbottle/queue` that means a storage key

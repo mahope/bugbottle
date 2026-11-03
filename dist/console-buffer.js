@@ -28,17 +28,20 @@ let onRejection = null;
 function serialise(args, maxLength) {
     return args
         .map((a) => {
-        if (typeof a === "string")
-            return a;
-        if (a instanceof Error)
-            return `${a.name}: ${a.message}`;
         try {
-            return JSON.stringify(a);
+            if (typeof a === "string")
+                return a;
+            if (a instanceof Error)
+                return `${a.name}: ${a.message}`;
+            try {
+                return JSON.stringify(a);
+            }
+            catch {
+                return String(a);
+            }
         }
         catch {
-            // Circular structures and the like — a readable stand-in beats throwing
-            // from inside a console call.
-            return String(a);
+            return "[Unserialisable]";
         }
     })
         .join(" ")
@@ -104,11 +107,17 @@ export function initConsoleBuffer(options = {}) {
     originalError = console.error;
     originalWarn = console.warn;
     console.error = (...args) => {
-        push("error", args);
+        try {
+            push("error", args);
+        }
+        catch { /* Recording must never suppress the host console call. */ }
         originalError?.(...args);
     };
     console.warn = (...args) => {
-        push("warn", args);
+        try {
+            push("warn", args);
+        }
+        catch { /* Recording must never suppress the host console call. */ }
         originalWarn?.(...args);
     };
     if (typeof window !== "undefined") {
