@@ -10,6 +10,9 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Added
 
+- Isolated packed React 18.3.1 and 19.3.0 consumers covering mounted StrictMode
+  forms, pending-delivery unmount/remount and matching TypeScript types (#156).
+
 - Real Chrome coverage for IndexedDB queue persistence with screenshots,
   concurrent tab enqueues and successful concurrent flushes. The browser CI
   job runs the isolated localhost smoke test with a bounded timeout (#121).

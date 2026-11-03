@@ -135,6 +135,7 @@
     "smoke:inbox-docker": "node scripts/inbox-docker-smoke.mjs",
     "smoke:queue-idb": "node scripts/queue-idb-smoke.mjs",
     "smoke:forms": "node scripts/forms-smoke.mjs",
+    "smoke:react": "node scripts/smoke-react-packed.mjs",
     "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "check:dist": "node scripts/check-dist.mjs",
