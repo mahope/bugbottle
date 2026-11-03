@@ -134,6 +134,8 @@ not closed and a branch is not merged with the docs lagging.
 - **Screenshots fail open.** A failed or oversized picture turns the attachment
   off and explains why. It never blocks the report. The message is the
   valuable part.
+  Superseded form captures are no-ops: reset, opt-out, destroy, submission and
+  attachment invalidate their ownership without interrupting capture cleanup.
 - **The server trusts nothing.** Every field from the browser is
   attacker-controlled input about to hit storage. Validators clip lengths,
   strip null bytes (Postgres refuses them), and check the PNG signature in the

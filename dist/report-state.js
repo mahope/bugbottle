@@ -59,30 +59,33 @@ export function createReportState(options) {
         for (const listener of listeners)
             listener();
     };
-    let capturing = false;
-    // Bumped by every picture that lands, so a capture that finishes or fails
-    // after `attachScreenshot` does not put the whole page back over the area,
-    // or turn it off.
+    let capturing = null;
+    // Only the current generation may change the form when a render settles.
     let shots = 0;
     let picking = null;
+    const invalidateCapture = () => {
+        shots++;
+        capturing = null;
+    };
+    const afterCapture = () => state.status.kind === "capturing" ? { kind: "idle" } : state.status;
     const capture = async () => {
         const renderer = opts.screenshot;
-        if (!renderer || capturing)
+        if (!renderer || capturing !== null)
             return;
-        capturing = true;
         const mine = ++shots;
+        capturing = mine;
         set({ status: { kind: "capturing" } });
         try {
             const dataUrl = await captureScreenshot(renderer, { mask: opts.mask });
             if (mine !== shots)
-                return set({ status: { kind: "idle" } });
+                return;
             set({ screenshot: dataUrl, screenshotRegion: null, status: { kind: "idle" } });
         }
         catch (err) {
             // A picture that was overtaken has failed nobody, and turning the
             // attachment off here would take the newer one off the report.
             if (mine !== shots)
-                return set({ status: { kind: "idle" } });
+                return;
             // A failed picture must never block the report, so this only turns the
             // attachment off and says why.
             const tooLarge = err instanceof ScreenshotTooLargeError;
@@ -97,7 +100,8 @@ export function createReportState(options) {
             });
         }
         finally {
-            capturing = false;
+            if (capturing === mine)
+                capturing = null;
         }
     };
     const actions = {
@@ -120,15 +124,22 @@ export function createReportState(options) {
             set({ includeScreenshot: checked });
             if (checked && !state.screenshot)
                 void capture();
-            if (!checked)
-                set({ screenshot: null, screenshotRegion: null });
+            if (!checked) {
+                invalidateCapture();
+                set({
+                    screenshot: null,
+                    screenshotRegion: null,
+                    status: afterCapture(),
+                });
+            }
         },
         recapture: capture,
         attachScreenshot(shot) {
             if (!shot)
                 return;
-            shots++;
+            invalidateCapture();
             set({
+                status: afterCapture(),
                 screenshot: shot.dataUrl,
                 screenshotRegion: shot.region ?? null,
                 includeScreenshot: true,
@@ -176,6 +187,7 @@ export function createReportState(options) {
         },
         /** Clears the form and any status, ready for a new report. */
         reset() {
+            invalidateCapture();
             picking?.abort();
             const type = firstType();
             set({
@@ -190,6 +202,7 @@ export function createReportState(options) {
             });
         },
         async submit() {
+            invalidateCapture();
             const m = messages();
             if (!state.message.trim()) {
                 set({ status: { kind: "error", reason: "empty", message: m.empty } });
@@ -280,6 +293,7 @@ export function createReportState(options) {
         // clicks. If the form goes away mid-pick — a modal closed, a route change —
         // they must go with it, or every click on the page is eaten until Escape.
         destroy() {
+            invalidateCapture();
             picking?.abort();
         },
     };

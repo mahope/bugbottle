@@ -6176,6 +6176,10 @@ from your own button, hide your form while it runs, and hand the result to
 the form state (`screenshotRegion` is on it beside `screenshot`). A cancelled
 selection is `null` and changes nothing.
 
+Resetting the form, opting out of screenshots or destroying the store invalidates
+pending whole-page captures. Their late success or failure cannot change the
+current attachment or submission status. A fresh capture can start after reset.
+
 ```tsx
 const form = useBugReport({ endpoint, screenshot: htmlToImage });
 <button onClick={async () => form.attachScreenshot(await captureArea(htmlToImage))}>

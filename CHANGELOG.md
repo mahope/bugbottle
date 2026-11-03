@@ -16,6 +16,10 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Invalidate pending form screenshots on reset, opt-out, destroy and submission.
+  Superseded captures leave newer attachments, regions and statuses untouched;
+  a fresh capture can start after reset (#134).
+
 - Smoke-test the packed dependency-free exports, JSON contracts and server
   validation/store round trip on Node 18 before publishing (#120).
 
