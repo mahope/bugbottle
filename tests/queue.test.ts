@@ -131,7 +131,7 @@ test("reports are delivered oldest first", async () => {
   );
 });
 
-test("a 4xx drops the report and a 5xx keeps it", async () => {
+test("a permanent 4xx drops the report and a 5xx keeps it", async () => {
   const rejected = fakeFetch(422);
   const dropping = makeQueue({ endpoint: "/api/feedback", fetch: rejected.fetch });
   dropping.enqueue(report("malformed"));
@@ -144,6 +144,59 @@ test("a 4xx drops the report and a 5xx keeps it", async () => {
   await keeping.flush();
   assert.equal(keeping.size(), 1, "a server having a bad day is worth retrying");
 });
+
+for (const status of [400, 401, 403]) {
+  test(`queued ${status} permanently drops the report`, async () => {
+    const { fetch } = fakeFetch(status);
+    const queue = makeQueue({ endpoint: "/reports", fetch });
+    queue.enqueue(report("rejected"));
+    assert.equal(await queue.flush(), 0);
+  });
+}
+
+for (const [header, expected] of [
+  [null, 1_000],
+  ["2", 2_000],
+  ["0", 1_000],
+  ["999999999999999999999999", 300_000],
+  ["Tue, 03 Nov 2026 00:00:03 GMT", 3_000],
+  ["Tuesday, 03-Nov-26 00:02:00 GMT", 120_000],
+  ["Tue Nov  3 00:02:00 2026", 120_000],
+  ["Wednesday, 04-Nov-26 00:00:00 GMT", 300_000],
+  ["Mon Nov  2 00:00:00 2026", 1_000],
+  ["Tuesday, 31-Nov-26 00:02:00 GMT", 1_000],
+  ["Tue Nov 31 00:02:00 2026", 1_000],
+  ["Monday, 03-Nov-26 00:02:00 GMT", 1_000],
+  ["Mon Nov  3 00:02:00 2026", 1_000],
+  ["Wed, 04 Nov 2026 00:00:00 GMT", 300_000],
+  ["Mon, 02 Nov 2026 00:00:00 GMT", 1_000],
+  ["invalid", 1_000],
+  ["-1", 1_000],
+  ["1.5", 1_000],
+  ["Tue, 31 Nov 2026 00:00:00 GMT", 1_000],
+] as const) {
+  test(`429 Retry-After ${header} waits ${expected} ms then delivers`, async (t) => {
+    t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.UTC(2026, 10, 3) });
+    let calls = 0;
+    const fetch: typeof globalThis.fetch = async () => {
+      calls++;
+      return calls === 1
+        ? new Response("{}", { status: 429, headers: header === null ? {} : { "Retry-After": header } })
+        : new Response("{}", { status: 200 });
+    };
+    const queue = makeQueue({ endpoint: "/reports", fetch });
+    t.after(() => queue.destroy());
+    queue.enqueue(report("rate limited"));
+    assert.equal(await queue.flush(), 1);
+    t.mock.timers.tick(expected - 1);
+    await queue.flush();
+    assert.equal(calls, 1);
+    t.mock.timers.tick(1);
+    await queue.flush();
+    assert.equal(calls, 2);
+    assert.equal(queue.size(), 0);
+  });
+}
 
 test("a network error keeps the report and the next flush waits for the backoff", async () => {
   const { fetch, calls } = fakeFetch("network-error");

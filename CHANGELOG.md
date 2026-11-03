@@ -10,6 +10,12 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Keep rate-limited reports (HTTP 429) in both initial submission and queued
+  delivery. Queued retries honour `Retry-After` seconds or HTTP dates (including
+  the obsolete RFC 850 and asctime formats), bounded
+  to one second through five minutes, with exponential backoff as fallback.
+  Other 4xx responses remain permanent rejections (#116).
+
 - Preserve asynchronous `beforeSend` transformations when framework adapters
   and the panel queue failed reports. Storage and retries use the approved payload without
   running the hook twice; cancellation, hook errors and hook timeouts never

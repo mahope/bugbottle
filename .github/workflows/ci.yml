@@ -108,8 +108,9 @@ jobs:
           # module itself stays out, because this build ships no renderer and a
           # page that passes one can import the module from jsDelivr too. The
           # budget goes to 26624.
-          if [ "$iife" -gt 26624 ]; then
-            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 26624" >&2
+          # #116 adds bounded Retry-After parsing and retains HTTP 429 reports.
+          if [ "$iife" -gt 26880 ]; then
+            echo "dist/bugbottle.js is $iife bytes gzipped; the budget is 26880" >&2
             exit 1
           fi
       - name: The slim script-tag bundle stays under its budget
@@ -137,8 +138,9 @@ jobs:
           # The same panel change cost this build 1028 bytes (21 398 -> 22 426),
           # since it carries the same panel and the same eight languages; the
           # budget goes to 23040.
-          if [ "$slim" -gt 23040 ]; then
-            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23040" >&2
+          # The same retry handling is included in the slim build (#116).
+          if [ "$slim" -gt 23296 ]; then
+            echo "dist/bugbottle.slim.js is $slim bytes gzipped; the budget is 23296" >&2
             exit 1
           fi
       - run: npm pack --pack-destination /tmp
@@ -371,8 +373,12 @@ jobs:
           # `clearTimeout` on top of the one `fetch`, and there is no smaller
           # spelling of "stop waiting for an answer that is not coming".
           queue=$(gzip -c out-queue.js | wc -c)
-          if [ "$queue" -gt 1728 ]; then
-            echo "bugbottle/queue is $queue bytes gzipped; the budget is 1728" >&2
+          # #116 adds bounded Retry-After seconds/date parsing and the 429
+          # exemption. Strict RFC 850 and asctime support takes this to 2052
+          # bytes with this job's esbuild 0.24.0 and gzip (including filename).
+          # The 2112-byte budget leaves 2.9% headroom for the complete parser.
+          if [ "$queue" -gt 2112 ]; then
+            echo "bugbottle/queue is $queue bytes gzipped; the budget is 2112" >&2
             exit 1
           fi
           # The IndexedDB storage is its own entry so that the default pays

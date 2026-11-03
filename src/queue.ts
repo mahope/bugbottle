@@ -188,6 +188,28 @@ const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 300_000;
 
+function retryAfterMs(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  let text = value.trim();
+  const rfc850 = /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (\d{2})-([A-Z][a-z]{2})-(\d{2}) (\d{2}:\d{2}:\d{2}) GMT$/.exec(text);
+  const asctime = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([A-Z][a-z]{2}) ( \d|\d{2}) (\d{2}:\d{2}:\d{2}) (\d{4})$/.exec(text);
+  if (rfc850) {
+    const currentYear = new Date().getUTCFullYear();
+    let year = Math.floor(currentYear / 100) * 100 + Number(rfc850[4]);
+    if (year > currentYear + 50) year -= 100;
+    text = `${rfc850[1]!.slice(0, 3)}, ${rfc850[2]} ${rfc850[3]} ${year} ${rfc850[5]} GMT`;
+  } else if (asctime) {
+    text = `${asctime[1]}, ${asctime[3]!.replace(" ", "0")} ${asctime[2]} ${asctime[5]} ${asctime[4]} GMT`;
+  }
+  const delay = /^\d+$/.test(text)
+    ? Number(text) * 1_000
+    : new Date(text).toUTCString() === text
+      ? Date.parse(text) - Date.now()
+      : NaN;
+  if (Number.isNaN(delay)) return undefined;
+  return Math.max(MIN_BACKOFF_MS, Math.min(delay, MAX_BACKOFF_MS));
+}
+
 /**
  * How long a claim keeps the other tabs off a report. Long enough to cover a
  * slow POST, short enough that a tab closed mid-delivery does not strand the
@@ -448,13 +470,13 @@ export function createQueue(options: QueueOptions): Queue {
     timer = null;
   }
 
-  function retryLater(): void {
+  function retryLater(retryAfter?: number): void {
     // A destroyed queue schedules nothing. Without this a failure that arrives
     // after `destroy` starts a timer nobody will ever clear, and that timer
     // fails and schedules the next one, for ever.
     if (destroyed) return;
     failures += 1;
-    const delay = Math.min(MIN_BACKOFF_MS * 2 ** (failures - 1), MAX_BACKOFF_MS);
+    const delay = retryAfter ?? Math.min(MIN_BACKOFF_MS * 2 ** (failures - 1), MAX_BACKOFF_MS);
     nextAttempt = Date.now() + delay;
     stopTimer();
     timer = setTimeout(() => {
@@ -475,6 +497,7 @@ export function createQueue(options: QueueOptions): Queue {
       const item = await claimNext();
       if (!item) break;
       let done = false;
+      let retryAfter: number | undefined;
       try {
         const doFetch = options.fetch ?? globalThis.fetch;
         // Serialised once and signed as it is: the bytes that are signed have
@@ -502,10 +525,11 @@ export function createQueue(options: QueueOptions): Queue {
         const clock = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
         try {
           const response = await doFetch(options.endpoint, init);
-          // A 4xx is the server saying this report is not acceptable — a
-          // malformed body, a revoked token, a rejected origin. Retrying it
-          // changes nothing, so it goes. A 5xx is the server having a bad day.
-          done = response.ok || (response.status >= 400 && response.status < 500);
+          // Rate limiting is temporary; other 4xx responses reject the report
+          // permanently (a malformed body, revoked token or rejected origin).
+          done = response.ok ||
+            (response.status >= 400 && response.status < 500 && response.status !== 429);
+          if (!done) retryAfter = retryAfterMs(response.headers.get("Retry-After"));
         } finally {
           if (clock !== null) clearTimeout(clock);
         }
@@ -516,7 +540,7 @@ export function createQueue(options: QueueOptions): Queue {
         await release(item);
         // `destroy` may have been called while this request was in flight, and
         // a queue that is gone must not schedule the next attempt.
-        retryLater();
+        retryLater(retryAfter);
         return items.length;
       }
       // By id, not by position: `enqueue` and the eviction it triggers may have

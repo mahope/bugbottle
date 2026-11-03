@@ -3,6 +3,28 @@ import assert from "node:assert/strict";
 import { createReportState } from "../src/report-state.ts";
 import { createQueue, type QueuedReport } from "../src/queue.ts";
 
+for (const status of [429, 400, 401, 403]) {
+  test(`initial ${status} ${status === 429 ? "queues" : "rejects"} the report`, async (t) => {
+    t.mock.method(globalThis, "fetch", async () => new Response("{}", { status }));
+    const queued: unknown[] = [];
+    const form = createReportState({
+      endpoint: "/reports",
+      queue: {
+        enqueue: (report) => { queued.push(report); },
+        flush: async () => 0,
+        size: () => queued.length,
+        clear() {},
+        destroy() {},
+      },
+    });
+    t.after(() => form.destroy());
+    form.actions.setMessage("test report");
+    assert.equal(await form.actions.submit(), status === 429);
+    assert.equal(form.getState().status.kind, status === 429 ? "queued" : "error");
+    assert.equal(queued.length, status === 429 ? 1 : 0);
+  });
+}
+
 test("an async beforeSend copy survives storage and retry without running twice", async (t) => {
   let stored = "[]";
   const storage = {
