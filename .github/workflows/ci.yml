@@ -40,6 +40,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run smoke:frameworks
       # The generated document is what other people's tooling reads, so it has
       # to satisfy a real OpenAPI linter and not only our own tests. Pinned,
       # because a new rule in a later release would fail a build that changed

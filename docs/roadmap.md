@@ -18,6 +18,9 @@ frames and the wider context added about 0.45 kB that every consumer pays for.
 
 ## Already shipped
 
+**Unreleased** — packed-consumer localhost Express and Fastify adapter coverage
+for persistence, signatures, parser limits and OPTIONS/CORS (#155).
+
 **Unreleased** — form reset and destroy detach pending submissions while
 preserving original delivery and queue ownership; Svelte adapter coverage (#133).
 
