@@ -4052,6 +4052,10 @@ const { id } = await sendReport("/api/feedback", report);
 `sendReport` resolves on a 2xx, throws `SendFailedError` (with `status` and
 the parsed body) on anything else, gives up with `SendTimeoutError` after
 15 seconds (`timeoutMs`), and lets network errors through untouched.
+The deadline and caller cancellation also apply while reading the response body.
+Empty and non-JSON successful responses return `body: null`. A client timeout
+cannot tell you whether the receiver already stored the report; retrying may
+create a duplicate.
 `captureScreenshot` estimates from the capture area whether a full-scale render
 would be larger than a server would accept, and starts at half scale when it
 would — rendering is expensive, so a page that was never going to fit should

@@ -61,7 +61,7 @@ export const DEFAULT_SEND_TIMEOUT_MS = 15_000;
  * one rather than spending the whole allowance on the first.
  */
 export const KEEPALIVE_MAX_BYTES = 60_000;
-/** The request was aborted by `timeoutMs` before the server answered. */
+/** The send deadline elapsed before the response body was consumed. */
 export class SendTimeoutError extends Error {
     constructor(timeoutMs) {
         super(`No answer from the endpoint within ${timeoutMs} ms`);
@@ -144,7 +144,13 @@ export async function sendReport(endpoint, report, options = {}) {
         if (options.keepalive && utf8Length(serialised) < KEEPALIVE_MAX_BYTES)
             init.keepalive = true;
         const response = await doFetch(endpoint, init);
-        const body = await response.json().catch(() => null);
+        const body = await response.json().catch((error) => {
+            // Empty and non-JSON responses are valid, but cancellation and transport
+            // failures must still reach the caller, even after successful headers.
+            if (controller.signal.aborted || !(error instanceof SyntaxError))
+                throw error;
+            return null;
+        });
         if (!response.ok) {
             const fromBody = body;
             const message = options.parseError?.(response, body) ||

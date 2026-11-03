@@ -231,7 +231,7 @@ export type SendResult = {
   dropped?: boolean;
 };
 
-/** The request was aborted by `timeoutMs` before the server answered. */
+/** The send deadline elapsed before the response body was consumed. */
 export class SendTimeoutError extends Error {
   constructor(timeoutMs: number) {
     super(`No answer from the endpoint within ${timeoutMs} ms`);
@@ -320,7 +320,12 @@ export async function sendReport(
     if (options.keepalive && utf8Length(serialised) < KEEPALIVE_MAX_BYTES) init.keepalive = true;
 
     const response = await doFetch(endpoint, init);
-    const body: unknown = await response.json().catch(() => null);
+    const body: unknown = await response.json().catch((error: unknown) => {
+      // Empty and non-JSON responses are valid, but cancellation and transport
+      // failures must still reach the caller, even after successful headers.
+      if (controller.signal.aborted || !(error instanceof SyntaxError)) throw error;
+      return null;
+    });
 
     if (!response.ok) {
       const fromBody = body as { error?: unknown; message?: unknown } | null;
