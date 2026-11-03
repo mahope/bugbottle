@@ -19,6 +19,12 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Forward receiver deadlines through the Resend, webhook, GitHub and Linear
+  adapters to HTTP requests and response reads; their direct helpers now
+  accept an optional abort signal (#203). Successful webhook response bodies
+  are also consumed before delivery completes, keeping stalled 2xx responses
+  covered by the receiver deadline.
+
 - Release an oversized rrweb checkout group and discard its dependent events
   until a fresh full snapshot restores capture, bounding retained replay data
   even when the recorder delays its next checkout. Preserve the recovering

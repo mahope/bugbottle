@@ -26,6 +26,8 @@ export type SendReportWebhookTarget = {
 export type SendReportWebhookOptions = SendReportWebhookTarget & {
     /** Injected `fetch`, for tests or a runtime with its own client. */
     fetch?: FetchLike;
+    /** Cancels the request and response-body read. */
+    signal?: AbortSignal;
     /** Extra request headers — a shared token an intake endpoint expects. */
     headers?: Record<string, string>;
     /** Body shape. Default `json`. */

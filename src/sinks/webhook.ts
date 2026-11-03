@@ -31,6 +31,8 @@ export type SendReportWebhookTarget = {
 export type SendReportWebhookOptions = SendReportWebhookTarget & {
   /** Injected `fetch`, for tests or a runtime with its own client. */
   fetch?: FetchLike;
+  /** Cancels the request and response-body read. */
+  signal?: AbortSignal;
   /** Extra request headers — a shared token an intake endpoint expects. */
   headers?: Record<string, string>;
   /** Body shape. Default `json`. */
@@ -73,15 +75,18 @@ export async function sendReportWebhook(
   const format = options.format ?? "json";
   const markdown = toMarkdown(report, options.markdown ?? {});
 
+  options.signal?.throwIfAborted();
   const doFetch = options.fetch ?? globalThis.fetch;
   const response = await doFetch(options.endpoint, {
     method: "POST",
+    ...(options.signal ? { signal: options.signal } : {}),
     headers: { "Content-Type": "application/json", ...options.headers },
     body: JSON.stringify(bodyFor(report, format, markdown)),
   });
 
+  const body = await readBody(response);
+  options.signal?.throwIfAborted();
   if (!response.ok) {
-    const body = await readBody(response);
     const fallback = `The webhook refused the report with status ${response.status}`;
     throw new SinkError(messageFromBody(body, fallback), response.status, body);
   }

@@ -1421,6 +1421,7 @@ export function toResend(options: Omit<SendReportEmailOptions, "screenshot">): R
   return async (report, ctx) =>
     await sendReportEmail(report, {
       ...withStoredScreenshot(options, ctx),
+      signal: ctx.signal,
       ...(ctx.screenshot ? { screenshot: ctx.screenshot } : {}),
     });
 }
@@ -1430,6 +1431,7 @@ export function toWebhook(options: SendReportWebhookOptions): ReportSink {
   return async (report, ctx) =>
     await sendReportWebhook(report, {
       ...options,
+      signal: ctx.signal,
       markdown: { ...options.markdown, ...(ctx.screenshotUrl ? { screenshotUrl: ctx.screenshotUrl } : {}) },
     });
 }
@@ -1437,11 +1439,11 @@ export function toWebhook(options: SendReportWebhookOptions): ReportSink {
 /** Files every report as a GitHub issue, linking the stored screenshot. */
 export function toGithub(options: CreateGithubIssueOptions): ReportSink {
   return async (report, ctx) =>
-    await createGithubIssue(report, withStoredScreenshot(options, ctx));
+    await createGithubIssue(report, { ...withStoredScreenshot(options, ctx), signal: ctx.signal });
 }
 
 /** Files every report as a Linear issue, linking the stored screenshot. */
 export function toLinear(options: CreateLinearIssueOptions): ReportSink {
   return async (report, ctx) =>
-    await createLinearIssue(report, withStoredScreenshot(options, ctx));
+    await createLinearIssue(report, { ...withStoredScreenshot(options, ctx), signal: ctx.signal });
 }

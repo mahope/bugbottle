@@ -94,9 +94,11 @@ export async function createLinearIssue(report, options) {
         input.projectId = options.projectId;
     if (options.labelIds && options.labelIds.length > 0)
         input.labelIds = options.labelIds;
+    options.signal?.throwIfAborted();
     const doFetch = options.fetch ?? globalThis.fetch;
     const response = await doFetch(LINEAR_API, {
         method: "POST",
+        ...(options.signal ? { signal: options.signal } : {}),
         headers: {
             Authorization: options.apiKey,
             "Content-Type": "application/json",
@@ -104,6 +106,7 @@ export async function createLinearIssue(report, options) {
         body: JSON.stringify({ query: ISSUE_CREATE, variables: { input } }),
     });
     const body = await readBody(response);
+    options.signal?.throwIfAborted();
     if (!response.ok) {
         const fallback = `Linear refused the issue with status ${response.status}`;
         throw new SinkError(messageFromBody(body, fallback), response.status, body);

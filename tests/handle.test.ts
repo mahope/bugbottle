@@ -2110,3 +2110,71 @@ for (const adapter of ["Express", "Fastify"] as const) {
     });
   }
 }
+
+
+const legacyHttpSinks = [
+  ["Resend", (fetch: typeof globalThis.fetch) => toResend({ apiKey: "test", from: "a@example.com", to: "b@example.com", fetch })],
+  ["webhook", (fetch: typeof globalThis.fetch) => toWebhook({ endpoint: "https://hooks.example.com", fetch })],
+  ["GitHub", (fetch: typeof globalThis.fetch) => toGithub({ token: "test", owner: "example", repo: "app", fetch })],
+  ["Linear", (fetch: typeof globalThis.fetch) => toLinear({ apiKey: "test", teamId: "team", fetch })],
+] as const;
+
+for (const [name, makeSink] of legacyHttpSinks) {
+  test(`${name} forwards the exact context signal and refuses pre-aborted delivery`, async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const sink = makeSink(async (_url, init) => {
+      calls++;
+      assert.equal(init?.signal, controller.signal);
+      return new Response(JSON.stringify({ data: { issueCreate: { success: true } } }));
+    });
+    const report = { ...body, receivedAt: new Date().toISOString() } as ValidatedReport;
+    const ctx = { markdown: "report", signal: controller.signal };
+    await sink(report, ctx);
+    controller.abort();
+    await assert.rejects(() => Promise.resolve(sink(report, ctx)), { name: "AbortError" });
+    assert.equal(calls, 1);
+  });
+
+  test(`${name} propagates cancellation while reading a provider response`, async () => {
+    const controller = new AbortController();
+    const sink = makeSink(async (_url, init) => new Response(new ReadableStream({
+      start(stream) {
+        init?.signal?.addEventListener("abort", () => stream.error(init.signal?.reason), { once: true });
+        queueMicrotask(() => controller.abort());
+      },
+    }), { status: name === "webhook" ? 400 : 200 }));
+    const report = { ...body, receivedAt: new Date().toISOString() } as ValidatedReport;
+    await assert.rejects(() => Promise.resolve(sink(report, {
+      markdown: "report", signal: controller.signal,
+    })), { name: "AbortError" });
+  });
+
+  for (const status of name === "webhook" ? [200, 400] : [400]) {
+    test(`${name} cancels a stalled ${status} response body at the receiver deadline and continues`, async () => {
+      let cancelled = false;
+      let continued = false;
+      const errors: unknown[] = [];
+      const response = await handleReport(post(body), {
+        sinkTimeoutMs: 20,
+        sinks: [makeSink(async (_url, init) => {
+          const stream = new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => {
+                cancelled = true;
+                controller.error(init.signal?.reason);
+              }, { once: true });
+            },
+          });
+          return new Response(stream, { status });
+        }), async () => { continued = true; }],
+        onSinkError: (error) => errors.push(error),
+      });
+      assert.equal(response.status, 202);
+      assert.equal(cancelled, true);
+      assert.equal(continued, true);
+      assert.equal(errors.length, 1);
+      assert.equal((errors[0] as Error).name, "SinkTimeoutError");
+    });
+  }
+}
