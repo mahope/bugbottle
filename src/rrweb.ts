@@ -122,6 +122,7 @@ let windowMs = DEFAULT_REPLAY_SECONDS * 1000;
 let maxBytes = DEFAULT_REPLAY_MAX_BYTES;
 let stopRecording: (() => void) | null = null;
 let attached = false;
+let attachment: object | null = null;
 
 /**
  * What one event costs, near enough. `JSON.stringify` on every event is the
@@ -192,7 +193,10 @@ export function attachRrweb(record: RrwebRecord, options: RrwebOptions = {}): ()
   groups = [];
   totalBytes = 0;
 
+  const owner = {};
+  attachment = owner;
   const emit = (event: RrwebEvent, isCheckout?: boolean) => {
+    if (attachment !== owner) return;
     if (typeof event !== "object" || event === null) return;
     const timestamp = typeof event.timestamp === "number" ? event.timestamp : Date.now();
     if (isCheckout || groups.length === 0) groups.push({ start: timestamp, events: [], bytes: 0 });
@@ -215,8 +219,7 @@ export function attachRrweb(record: RrwebRecord, options: RrwebOptions = {}): ()
     }) ?? null;
   } catch {
     // rrweb refused to start. Nothing is attached and nothing is registered.
-    groups = [];
-    totalBytes = 0;
+    resetRrweb();
     return resetRrweb;
   }
 
@@ -254,12 +257,8 @@ export function isRrwebAttached(): boolean {
  * later report carries no replay. This is what `attachRrweb` returns.
  */
 export function resetRrweb(): void {
-  try {
-    stopRecording?.();
-  } catch {
-    // A recorder that objects to being stopped is still stopped as far as this
-    // module is concerned.
-  }
+  attachment = null;
+  const stop = stopRecording;
   stopRecording = null;
   attached = false;
   groups = [];
@@ -267,4 +266,10 @@ export function resetRrweb(): void {
   windowMs = DEFAULT_REPLAY_SECONDS * 1000;
   maxBytes = DEFAULT_REPLAY_MAX_BYTES;
   registerReplaySource(null);
+  try {
+    stop?.();
+  } catch {
+    // A recorder that objects to being stopped is still stopped as far as this
+    // module is concerned.
+  }
 }
