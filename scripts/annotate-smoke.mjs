@@ -219,6 +219,87 @@ const result = await tab.evaluate(
   BLOCK,
 );
 
+const transparentResult = await tab.evaluate(async () => {
+  const source = document.createElement("canvas");
+  source.width = 64;
+  source.height = 48;
+  const sourceContext = source.getContext("2d");
+  const pixels = sourceContext.createImageData(source.width, source.height);
+  for (let y = 0; y < source.height; y++) {
+    for (let x = 0; x < source.width; x++) {
+      const p = (y * source.width + x) * 4;
+      pixels.data[p] = (x * 19 + y * 7) % 256;
+      pixels.data[p + 1] = (x * 5 + y * 23) % 256;
+      pixels.data[p + 2] = (x * 13 + y * 11) % 256;
+      pixels.data[p + 3] = x < 24 ? 0 : x % 3 === 0 ? 128 : 255;
+    }
+  }
+  sourceContext.putImageData(pixels, 0, 0);
+  const original = source.toDataURL("image/png");
+  const canvas = document.createElement("canvas");
+  document.body.append(canvas);
+  const annotator = window.createAnnotator(canvas, original);
+  await annotator.ready;
+  canvas.style.width = `${canvas.width}px`;
+  canvas.style.height = `${canvas.height}px`;
+  const box = canvas.getBoundingClientRect();
+
+  const difference = async () => {
+    const decode = async (url) => {
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = url;
+      });
+      const scratch = document.createElement("canvas");
+      scratch.width = image.naturalWidth;
+      scratch.height = image.naturalHeight;
+      const context = scratch.getContext("2d");
+      context.drawImage(image, 0, 0);
+      return context.getImageData(0, 0, scratch.width, scratch.height).data;
+    };
+    const before = await decode(original);
+    const after = await decode(annotator.toDataUrl());
+    let changed = 0;
+    for (let i = 0; i < before.length; i++) if (before[i] !== after[i]) changed++;
+    return changed;
+  };
+
+  window.transparentAnnotator = annotator;
+  window.transparentBox = { left: box.left, top: box.top };
+  window.transparentDifference = difference;
+  return { width: canvas.width, height: canvas.height };
+});
+
+if (transparentResult.width !== 64 || transparentResult.height !== 48) {
+  throw new Error("the transparent fixture did not retain its natural dimensions");
+}
+
+async function transparentDrag(x1, y1, x2, y2) {
+  const box = await tab.evaluate(() => window.transparentBox);
+  await tab.mouse.move(box.left + x1, box.top + y1);
+  await tab.mouse.down();
+  await tab.mouse.move(box.left + (x1 + x2) / 2, box.top + (y1 + y2) / 2);
+  await tab.mouse.move(box.left + x2, box.top + y2);
+  await tab.mouse.up();
+}
+
+await transparentDrag(4, 4, 20, 20);
+const undoTransparentPixels = await tab.evaluate(() => window.transparentAnnotator.undo());
+const undoTransparentDifference = await tab.evaluate(() => window.transparentDifference());
+await transparentDrag(4, 4, 20, 20);
+await tab.evaluate(() => window.transparentAnnotator.clear());
+const clearTransparentDifference = await tab.evaluate(() => window.transparentDifference());
+const box = await tab.evaluate(() => window.transparentBox);
+await tab.mouse.move(box.left + 4, box.top + 4);
+await tab.mouse.down();
+await tab.mouse.move(box.left + 16, box.top + 16);
+await tab.mouse.move(box.left + 22, box.top + 22);
+await tab.keyboard.press("Escape");
+const previewTransparentDifference = await tab.evaluate(() => window.transparentDifference());
+await tab.evaluate(() => window.transparentAnnotator.destroy());
+
 await browser.close();
 server.close();
 
@@ -228,6 +309,13 @@ if (result.error) {
 }
 
 const failures = [];
+console.log(`transparent undo: ${undoTransparentDifference} RGBA channel differences`);
+console.log(`transparent clear: ${clearTransparentDifference} RGBA channel differences`);
+console.log(`cancelled preview: ${previewTransparentDifference} RGBA channel differences`);
+if (!undoTransparentPixels) failures.push("the transparent fixture mark was not undoable");
+if (undoTransparentDifference !== 0) failures.push("undo did not restore the original transparent RGBA pixels");
+if (clearTransparentDifference !== 0) failures.push("clear did not restore the mixed-alpha fixture exactly");
+if (previewTransparentDifference !== 0) failures.push("moving and cancelling the live preview left a trail");
 console.log(`blur region: ${result.blocks} whole ${BLOCK}px blocks checked`);
 console.log(`  ragged blocks (not one flat colour): ${result.ragged}`);
 console.log(`  blocks the blur left as they were:   ${result.unchanged}`);
