@@ -183,6 +183,7 @@ export function createAnnotator(
   /** The picture, then every shape in the order it was drawn. */
   function redraw(): void {
     if (!image) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
     for (const shape of shapes) paint(shape);
     if (drawing) paint(drawing);
