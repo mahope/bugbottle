@@ -4,6 +4,10 @@
 [![CI](https://github.com/mahope/bugbottle/actions/workflows/ci.yml/badge.svg)](https://github.com/mahope/bugbottle/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/licence-MIT-blue)](https://github.com/mahope/bugbottle/blob/main/LICENSE)
 
+> **Frozen as of 2026-11-22.** bugbottle is free open source under the MIT
+> licence. There will be no new features; issues and pull requests are read
+> when there is time.
+
 [bugbottle.dev](https://bugbottle.dev) — the page, with a live demo of the panel
 ([in Danish](https://bugbottle.dev/da/)). The full reference is
 [bugbottle.dev/docs/install/](https://bugbottle.dev/docs/install/): installing,
