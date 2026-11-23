@@ -53,6 +53,7 @@ function recorder(calls: Call[]): Record<string, unknown> {
       calls.push({ fn, args });
     };
   return {
+    clearRect: note("clearRect"),
     drawImage: note("drawImage"),
     strokeRect: note("strokeRect"),
     fillRect: note("fillRect"),
@@ -169,6 +170,27 @@ test("the picture is drawn once it loads, and the canvas takes its size", async 
   assert.equal(made("drawImage"), 1);
   assert.equal(annotator.count(), 0);
   assert.equal(annotator.getTool(), "rect", "the rectangle is the tool to begin with");
+  annotator.destroy();
+});
+
+test("every redraw clears the canvas before restoring the original image", async () => {
+  const canvas = freshCanvas();
+  const annotator = createAnnotator(canvas, PICTURE);
+  await annotator.ready;
+
+  drag(canvas, 10, 10, 40, 30);
+  annotator.undo();
+  annotator.clear();
+
+  const draws = calls
+    .map((call, index) => ({ call, index }))
+    .filter(({ call }) => call.fn === "drawImage");
+  assert.equal(draws.length, 5, "initial draw, preview, commit, undo, and clear redraw");
+  for (const { index } of draws) {
+    const clear = calls[index - 1];
+    assert.equal(clear?.fn, "clearRect", "the previous frame is cleared before the image is painted");
+    assert.deepEqual(clear?.args, [0, 0, 64, 48]);
+  }
   annotator.destroy();
 });
 

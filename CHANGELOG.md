@@ -19,6 +19,7 @@ attribute needs a major version, and a new entry point needs a minor one.
 
 ### Fixed
 
+- Clear the annotation canvas before replaying the original screenshot and retained shapes, so undo, clear and live-preview movement restore transparent and semitransparent PNG pixels without leaving trails (#225).
 - Isolate throwing element-picker hover observers so clicks, Escape and abort
   still clean up and settle the selection promise within the existing UI
   bundle budget (#196).
